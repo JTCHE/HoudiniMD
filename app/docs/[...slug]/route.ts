@@ -47,21 +47,27 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       const codeLanguage = detectLanguage(slugPath);
       const generatedMarkdown = convertToMarkdown(scraped, { codeLanguage });
 
-      // Save to GitHub (async, don't block response)
-      saveToGitHub(contentPath, generatedMarkdown).catch((err) => {
+      // Save to GitHub and update search index
+      // Must await these in serverless - function terminates after response
+      try {
+        await saveToGitHub(contentPath, generatedMarkdown);
+        console.log(`Saved to GitHub: ${contentPath}`);
+      } catch (err) {
         console.error(`Failed to save to GitHub: ${err}`);
-      });
+      }
 
-      // Update search index (async, don't block response)
-      updateSearchIndex({
-        path: slugPath,
-        title: scraped.title,
-        summary: scraped.summary,
-        category: scraped.category,
-        version: scraped.version,
-      }).catch((err) => {
+      try {
+        await updateSearchIndex({
+          path: slugPath,
+          title: scraped.title,
+          summary: scraped.summary,
+          category: scraped.category,
+          version: scraped.version,
+        });
+        console.log(`Updated search index for: ${slugPath}`);
+      } catch (err) {
         console.error(`Failed to update search index: ${err}`);
-      });
+      }
 
       return generatedMarkdown;
     });
