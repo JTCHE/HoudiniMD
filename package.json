@@ -6,7 +6,6 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "postinstall": "bunx playwright install",
     "lint": "eslint",
     "rebuild": "bun scripts/rebuild-content.ts"
   },
@@ -24,7 +23,8 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "tailwind-merge": "^3.4.0",
-    "turndown": "^7.2.2"
+    "turndown": "^7.2.2",
+    "turndown-plugin-gfm": "^1.0.2"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
