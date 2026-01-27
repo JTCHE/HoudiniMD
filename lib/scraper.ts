@@ -26,7 +26,7 @@ export async function checkPageExists(url: string): Promise<boolean> {
     const response = await fetch(url, {
       method: "HEAD",
       headers: {
-        "User-Agent": "VexLLM/1.0 (Documentation Converter; https://vexllm.dev)",
+        "User-Agent": "VexLLM/1.0 (Documentation Converter; https://vexllm.netlify.app)",
       },
     });
 
@@ -44,7 +44,7 @@ export async function checkPageExists(url: string): Promise<boolean> {
     const response = await fetch(url, {
       method: "GET",
       headers: {
-        "User-Agent": "VexLLM/1.0 (Documentation Converter; https://vexllm.dev)",
+        "User-Agent": "VexLLM/1.0 (Documentation Converter; https://vexllm.netlify.app)",
       },
     });
 
@@ -59,7 +59,7 @@ export async function checkPageExists(url: string): Promise<boolean> {
 export async function scrapeSideFXPage(url: string): Promise<ScrapedContent> {
   const browser = await launchBrowser();
   const context = await browser.newContext({
-    userAgent: "VexLLM/1.0 (Documentation Converter; https://vexllm.dev)",
+    userAgent: "VexLLM/1.0 (Documentation Converter; https://vexllm.netlify.app)",
   });
   const page = await context.newPage();
 

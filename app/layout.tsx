@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "VexLLM - Houdini Documentation for AI",
     description: "LLM-optimized documentation for SideFX Houdini following the llms.txt standard.",
-    url: "https://vexllm.dev",
+    url: "https://vexllm.netlify.app",
     siteName: "VexLLM",
     type: "website",
   },

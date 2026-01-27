@@ -17,7 +17,7 @@ export function isValidDocUrl(input: string): boolean {
 
 /**
  * Extract the slug path from a VexLLM or SideFX URL
- * @example "https://vexllm.dev/docs/houdini/vex/functions/foreach" -> "houdini/vex/functions/foreach"
+ * @example "https://vexllm.netlify.app/docs/houdini/vex/functions/foreach" -> "houdini/vex/functions/foreach"
  * @example "https://sidefx.com/docs/houdini/vex/functions/foreach.html" -> "houdini/vex/functions/foreach"
  */
 export function extractSlugFromUrl(input: string): string | null {
