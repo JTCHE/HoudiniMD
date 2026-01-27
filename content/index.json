@@ -26,5 +26,12 @@
     "summary": "Finds the largest item smaller than a target value in a sorted array.",
     "category": "VEX > VEX Functions",
     "version": "21.0"
+  },
+  {
+    "path": "houdini/vex/functions/windingnumber",
+    "title": "windingnumber VEX function",
+    "summary": "Computes the winding number of a mesh around a point.",
+    "category": "VEX > VEX Functions",
+    "version": "21.0"
   }
 ]
