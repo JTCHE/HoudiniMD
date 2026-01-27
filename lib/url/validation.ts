@@ -19,16 +19,20 @@ export function isValidDocUrl(input: string): boolean {
  * Extract the slug path from a VexLLM or SideFX URL
  * @example "https://vexllm.netlify.app/docs/houdini/vex/functions/foreach" -> "houdini/vex/functions/foreach"
  * @example "https://sidefx.com/docs/houdini/vex/functions/foreach.html" -> "houdini/vex/functions/foreach"
+ * @example "https://sidefx.com/docs/houdini/network/shortcuts.html#notes" -> "houdini/network/shortcuts"
  */
 export function extractSlugFromUrl(input: string): string | null {
+  // Strip URL fragment (hash) before processing - fragments are page anchors, not part of the path
+  const urlWithoutFragment = input.split('#')[0];
+
   // Handle VexLLM URLs
-  const vexllmMatch = input.match(/vexllm\.dev\/docs\/(.+?)(?:\.html)?(?:\.md)?$/i);
+  const vexllmMatch = urlWithoutFragment.match(/vexllm\.dev\/docs\/(.+?)(?:\.html)?(?:\.md)?$/i);
   if (vexllmMatch) {
     return vexllmMatch[1].replace(/\.html$/, '').replace(/\.md$/, '');
   }
 
   // Handle SideFX URLs
-  const sidefxMatch = input.match(/sidefx\.com\/docs\/(.+?)(?:\.html)?$/i);
+  const sidefxMatch = urlWithoutFragment.match(/sidefx\.com\/docs\/(.+?)(?:\.html)?$/i);
   if (sidefxMatch) {
     return sidefxMatch[1].replace(/\.html$/, '');
   }
