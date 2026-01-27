@@ -7,6 +7,13 @@
     "version": "21.0"
   },
   {
+    "path": "houdini/vex/functions/argsort",
+    "title": "argsort VEX function",
+    "summary": "Returns the indices of a sorted version of an array.",
+    "category": "VEX > VEX Functions",
+    "version": "21.0"
+  },
+  {
     "path": "houdini/vex/functions/cross",
     "title": "cross VEX function",
     "summary": "Returns the cross product between the two vectors.",
