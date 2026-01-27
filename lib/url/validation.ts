@@ -10,8 +10,7 @@ export function isValidDocUrl(input: string): boolean {
   if (!trimmed) return false;
 
   return (
-    /^https?:\/\/(www\.)?sidefx\.com\/docs\//i.test(trimmed) ||
-    /^https?:\/\/(www\.)?vexllm\.dev\/docs\//i.test(trimmed)
+    /^https?:\/\/(www\.)?sidefx\.com\/docs\//i.test(trimmed) || /^https?:\/\/(www\.)?vexllm\.netlify\.app\/docs\//i.test(trimmed)
   );
 }
 
@@ -23,18 +22,18 @@ export function isValidDocUrl(input: string): boolean {
  */
 export function extractSlugFromUrl(input: string): string | null {
   // Strip URL fragment (hash) before processing - fragments are page anchors, not part of the path
-  const urlWithoutFragment = input.split('#')[0];
+  const urlWithoutFragment = input.split("#")[0];
 
   // Handle VexLLM URLs
-  const vexllmMatch = urlWithoutFragment.match(/vexllm\.dev\/docs\/(.+?)(?:\.html)?(?:\.md)?$/i);
+  const vexllmMatch = urlWithoutFragment.match(/vexllm\.netlify\.app\/docs\/(.+?)(?:\.html)?(?:\.md)?$/i);
   if (vexllmMatch) {
-    return vexllmMatch[1].replace(/\.html$/, '').replace(/\.md$/, '');
+    return vexllmMatch[1].replace(/\.html$/, "").replace(/\.md$/, "");
   }
 
   // Handle SideFX URLs
   const sidefxMatch = urlWithoutFragment.match(/sidefx\.com\/docs\/(.+?)(?:\.html)?$/i);
   if (sidefxMatch) {
-    return sidefxMatch[1].replace(/\.html$/, '');
+    return sidefxMatch[1].replace(/\.html$/, "");
   }
 
   return null;
