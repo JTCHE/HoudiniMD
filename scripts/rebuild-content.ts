@@ -7,17 +7,17 @@
  *
  * Options:
  *   --dry-run    Show what would be rebuilt without making changes
- *   --local      Save files locally only (skip GitHub)
+ *   --local      Save files locally only (skip R2)
  *   --verbose    Show detailed progress
  */
 
 import { Glob } from 'bun';
 import { writeFile, mkdir } from 'fs/promises';
 import { dirname, join } from 'path';
-import { scrapeSideFXPage } from '../lib/scraper';
-import { convertToMarkdown, detectLanguage } from '../lib/markdown-converter';
-import { toSideFXUrl } from '../lib/url-normalizer';
-import { saveToGitHub, updateSearchIndex } from '../lib/git-manager';
+import { scrapeSideFXPage } from '../lib/scraping';
+import { convertToMarkdown, detectLanguage } from '../lib/markdown';
+import { toSideFXUrl } from '../lib/url';
+import { saveToR2, updateSearchIndex } from '../lib/r2';
 
 interface Options {
   dryRun: boolean;
@@ -86,13 +86,13 @@ async function rebuildFile(
     await writeFile(localPath, markdown, 'utf-8');
     log(`  Saved locally: ${contentPath}`, options, true);
 
-    // Save to GitHub (unless --local)
+    // Save to R2 (unless --local)
     if (!options.localOnly) {
       try {
-        await saveToGitHub(contentPath, markdown);
-        log(`  Pushed to GitHub: ${contentPath}`, options, true);
+        await saveToR2(contentPath, markdown);
+        log(`  Pushed to R2: ${contentPath}`, options, true);
       } catch (err) {
-        log(`  Warning: Failed to push to GitHub: ${err}`, options);
+        log(`  Warning: Failed to push to R2: ${err}`, options);
       }
 
       // Update search index
@@ -125,7 +125,7 @@ async function main() {
     console.log('Running in dry-run mode (no changes will be made)\n');
   }
   if (options.localOnly) {
-    console.log('Running in local-only mode (skipping GitHub)\n');
+    console.log('Running in local-only mode (skipping R2)\n');
   }
 
   // Find all content files

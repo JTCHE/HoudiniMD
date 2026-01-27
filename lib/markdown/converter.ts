@@ -1,7 +1,7 @@
 import { parse } from 'node-html-parser';
 import TurndownService from 'turndown';
 import { gfm } from 'turndown-plugin-gfm';
-import type { ScrapedContent } from '../scraper';
+import type { ScrapedContent } from '../scraping';
 import type { ConversionOptions } from './types';
 import { addCustomRules } from './turndown-rules';
 import { extractSeeAlso, extractTaggedLinks } from './extractors';

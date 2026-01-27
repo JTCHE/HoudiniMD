@@ -1,5 +1,5 @@
 import TurndownService from 'turndown';
-import { convertToVexLLMUrl } from '../url-normalizer';
+import { convertToVexLLMUrl } from '../url';
 import type { CodeLanguage } from './types';
 
 /**
