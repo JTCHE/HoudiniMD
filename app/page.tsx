@@ -80,6 +80,7 @@ export default function Home() {
 
       const decoder = new TextDecoder();
       let buffer = "";
+      let receivedTerminalEvent = false;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -100,11 +101,13 @@ export default function Home() {
               setProgressLog((prev) => [...prev, event]);
 
               if (event.stage === "complete" && event.detail) {
+                receivedTerminalEvent = true;
                 // Small delay to show completion message
                 setTimeout(() => {
                   router.push(event.detail!);
                 }, 300);
               } else if (event.stage === "error") {
+                receivedTerminalEvent = true;
                 setError(event.detail || event.message);
                 setIsProcessing(false);
               }
@@ -113,6 +116,19 @@ export default function Home() {
             }
           }
         }
+      }
+
+      // If stream ended without a terminal event, the connection was lost (timeout, reset, etc.)
+      if (!receivedTerminalEvent) {
+        const timeoutEvent: ProgressEvent = {
+          stage: "error",
+          message: "Connection lost",
+          detail: "The server timed out or the connection was interrupted. Please try again.",
+        };
+        setProgress(timeoutEvent);
+        setProgressLog((prev) => [...prev, timeoutEvent]);
+        setError(timeoutEvent.detail!);
+        setIsProcessing(false);
       }
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") {
