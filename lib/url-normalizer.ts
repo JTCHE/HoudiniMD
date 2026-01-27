@@ -35,7 +35,7 @@ export function convertToVexLLMUrl(relativeUrl: string, sourceUrl: string): stri
     if (relativeUrl.includes('sidefx.com/docs/')) {
       const match = relativeUrl.match(/sidefx\.com\/docs\/(.+?)(?:\.html)?$/);
       if (match) {
-        return `https://vexllm.dev/docs/${match[1].replace('.html', '')}`;
+        return `https://${process.env.ROOT_URL}/docs/${match[1].replace('.html', '')}`;
       }
     }
     return relativeUrl;
@@ -76,7 +76,7 @@ export function convertToVexLLMUrl(relativeUrl: string, sourceUrl: string): stri
   // Combine path
   const finalPath = parts.length > 0 ? `${parts.join('/')}/${targetPath}` : targetPath;
 
-  return `https://vexllm.dev/docs/${finalPath}`;
+  return `https://${process.env.ROOT_URL}/docs/${finalPath}`;
 }
 
 /**
