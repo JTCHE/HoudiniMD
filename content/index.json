@@ -8,7 +8,7 @@
   },
   {
     "path": "houdini/vex/functions/cross",
-    "title": "cross\n\n                    \n    \n        VEX function",
+    "title": "cross VEX function",
     "summary": "Returns the cross product between the two vectors.",
     "category": "VEX > VEX Functions",
     "version": "21.0"
