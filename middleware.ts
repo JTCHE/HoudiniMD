@@ -4,6 +4,23 @@ export function middleware(request: NextRequest) {
   const url = request.nextUrl.clone();
   const pathname = url.pathname;
 
+  // Handle pasted SideFX URLs: /https:/www.sidefx.com/docs/houdini/... or /https://www.sidefx.com/docs/houdini/...
+  // Browser normalizes // to / in paths, so we check for both patterns
+  const sidefxMatch = pathname.match(/^\/https?:\/?\/?(?:www\.)?sidefx\.com\/docs\/(.+)$/);
+  if (sidefxMatch) {
+    let extractedPath = sidefxMatch[1];
+    // Strip .html extension if present
+    if (extractedPath.endsWith('.html')) {
+      extractedPath = extractedPath.slice(0, -5);
+    }
+    // Remove trailing slash
+    if (extractedPath.endsWith('/')) {
+      extractedPath = extractedPath.slice(0, -1);
+    }
+    url.pathname = `/docs/${extractedPath}`;
+    return NextResponse.redirect(url, 301);
+  }
+
   // Only process /docs/* paths
   if (!pathname.startsWith('/docs/')) {
     return NextResponse.next();
@@ -43,5 +60,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: '/docs/:path*',
+  matcher: ['/docs/:path*', '/https\\::path*', '/http\\::path*'],
 };
