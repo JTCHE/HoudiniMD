@@ -1,4 +1,4 @@
-import launchBrowser from "./scraping/launch-browser";
+import launchBrowser from "./launch-browser";
 
 export interface ScrapedContent {
   title: string;
