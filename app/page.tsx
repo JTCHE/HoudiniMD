@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { isValidDocUrl, extractSlugFromUrl } from "@/lib/url-validation";
+import { isValidDocUrl, extractSlugFromUrl } from "@/lib/url";
 import { cn } from "@/lib/utils";
 import ProgressLogEntry from "@/components/root/progress-log-entry/ProgressLogEntry";
 

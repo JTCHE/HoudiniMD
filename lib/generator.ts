@@ -1,8 +1,8 @@
-import { scrapeSideFXPage, checkPageExists, PageNotFoundError } from "@/lib/scraper";
-import { convertToMarkdown, detectLanguage } from "@/lib/markdown-converter";
-import { fetchFromGitHub, saveToGitHub, updateSearchIndex } from "@/lib/git-manager";
+import { scrapeSideFXPage, checkPageExists, PageNotFoundError } from "@/lib/scraping";
+import { convertToMarkdown, detectLanguage } from "@/lib/markdown";
+import { fetchFromR2, saveToR2, updateSearchIndex } from "@/lib/r2";
 import { withLock } from "@/lib/lock-manager";
-import { toSideFXUrl } from "@/lib/url-normalizer";
+import { toSideFXUrl } from "@/lib/url";
 
 export type ProgressStage =
   | "checking-cache"
@@ -50,7 +50,7 @@ export async function generateMarkdownForSlug(
   if (!skipCache) {
     progress("checking-cache", "Checking cache", "Looking for existing content");
 
-    const cachedContent = await fetchFromGitHub(contentPath);
+    const cachedContent = await fetchFromR2(contentPath);
     if (cachedContent) {
       progress("complete", "Found in cache", `/docs/${slug}`);
       return { markdown: cachedContent, fromCache: true, slug };
@@ -67,7 +67,7 @@ export async function generateMarkdownForSlug(
   const markdown = await withLock(slug, async () => {
     // Double-check cache after acquiring lock (unless skipCache)
     if (!skipCache) {
-      const cachedAfterLock = await fetchFromGitHub(contentPath);
+      const cachedAfterLock = await fetchFromR2(contentPath);
       if (cachedAfterLock) {
         return { content: cachedAfterLock, fromCache: true };
       }
@@ -82,12 +82,12 @@ export async function generateMarkdownForSlug(
     const codeLanguage = detectLanguage(slug);
     const generatedMarkdown = convertToMarkdown(scraped, { codeLanguage });
 
-    // Stage 5: Save to GitHub
-    progress("saving", "Saving to GitHub", contentPath);
+    // Stage 5: Save to R2
+    progress("saving", "Saving to R2", contentPath);
     try {
-      await saveToGitHub(contentPath, generatedMarkdown);
+      await saveToR2(contentPath, generatedMarkdown);
     } catch (err) {
-      console.error(`Failed to save to GitHub: ${err}`);
+      console.error(`Failed to save to R2: ${err}`);
       // Continue even if save fails
     }
 

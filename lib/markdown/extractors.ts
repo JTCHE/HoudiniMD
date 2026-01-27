@@ -1,5 +1,5 @@
 import type { HTMLElement } from 'node-html-parser';
-import { convertToVexLLMUrl } from '../url-normalizer';
+import { convertToVexLLMUrl } from '../url';
 
 /**
  * Extract "See Also" links from postmeta table
