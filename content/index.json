@@ -75,5 +75,12 @@
     "summary": "How to create, move, copy, and edit nodes.",
     "category": "Networks and parameters",
     "version": "19.5"
+  },
+  {
+    "path": "houdini19.5/network/shortcuts",
+    "title": "Network editor shortcuts",
+    "summary": "A quick reference for hotkeys and user interface shortcuts in the network editor.",
+    "category": "Networks and parameters",
+    "version": "19.5"
   }
 ]
