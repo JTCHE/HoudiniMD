@@ -28,6 +28,13 @@
     "version": "21.0"
   },
   {
+    "path": "houdini/vex/functions/insert",
+    "title": "insert VEX function",
+    "summary": "Inserts an item, array, or string into an array or string.",
+    "category": "VEX > VEX Functions",
+    "version": "21.0"
+  },
+  {
     "path": "houdini/vex/functions/windingnumber",
     "title": "windingnumber VEX function",
     "summary": "Computes the winding number of a mesh around a point.",
