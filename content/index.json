@@ -1,5 +1,12 @@
 [
   {
+    "path": "houdini/vex/functions/append",
+    "title": "append\n\n                    \n    \n        VEX function",
+    "summary": "Adds an item to an array or string.",
+    "category": "VEX > VEX Functions",
+    "version": "21.0"
+  },
+  {
     "path": "houdini/vex/functions/fit",
     "title": "fit\n\n                    \n    \n        VEX function",
     "summary": "Takes the value in one range and shifts it to the corresponding value in a new range.",
