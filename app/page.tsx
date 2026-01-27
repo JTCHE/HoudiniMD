@@ -8,15 +8,7 @@ import { isValidDocUrl, extractSlugFromUrl } from "@/lib/url-validation";
 import { cn } from "@/lib/utils";
 
 // Must match ProgressStage from lib/generator.ts
-type ProgressStage =
-  | "checking-cache"
-  | "verifying"
-  | "scraping"
-  | "converting"
-  | "saving"
-  | "indexing"
-  | "complete"
-  | "error";
+type ProgressStage = "checking-cache" | "verifying" | "scraping" | "converting" | "saving" | "indexing" | "complete" | "error";
 
 interface ProgressEvent {
   stage: ProgressStage;
@@ -207,7 +199,7 @@ export default function Home() {
 
       {/* Progress Log */}
       {isProcessing && progressLog.length > 0 && (
-        <div className="mt-4 p-3 bg-muted/50 rounded-md border text-sm font-mono">
+        <div className="mt-4 p-3 bg-muted/50 rounded-md border text-sm font-mono overflow-none">
           <div className="space-y-1">
             {progressLog.map((event, i) => (
               <ProgressLogEntry
@@ -234,12 +226,10 @@ function ProgressLogEntry({ event, isLatest }: { event: ProgressEvent; isLatest:
         isLatest && !isComplete && !isError && "text-foreground",
         !isLatest && "text-muted-foreground",
         isComplete && "text-green-600 dark:text-green-400",
-        isError && "text-destructive"
+        isError && "text-destructive",
       )}
     >
-      <span className="w-4 shrink-0 text-center">
-        {isError ? "✗" : isComplete ? "✓" : isLatest ? "●" : "✓"}
-      </span>
+      <span className="w-4 shrink-0 text-center">{isError ? "✗" : isComplete ? "✓" : isLatest ? "●" : "✓"}</span>
       <span className="flex-1">
         <span className="font-medium">{event.message}</span>
         {event.detail && <span className="text-muted-foreground ml-1">— {event.detail}</span>}
