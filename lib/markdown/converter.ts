@@ -3,7 +3,7 @@ import TurndownService from 'turndown';
 import type { ScrapedContent } from '../scraper';
 import type { ConversionOptions } from './types';
 import { addCustomRules } from './turndown-rules';
-import { extractSeeAlso } from './extractors';
+import { extractSeeAlso, extractTaggedLinks } from './extractors';
 import { cleanMarkdown } from './utils';
 
 /**
@@ -32,6 +32,10 @@ export function convertToMarkdown(
 
   // Add custom rules
   addCustomRules(turndown, codeLanguage, scraped.sourceUrl);
+
+  // Extract "See Also" and tagged links sections BEFORE removing #postmeta
+  const seeAlsoMarkdown = extractSeeAlso(root, scraped.sourceUrl);
+  const taggedLinksMarkdown = extractTaggedLinks(root, scraped.sourceUrl);
 
   // Get content div
   const contentDiv = root.querySelector('#content');
@@ -72,11 +76,16 @@ export function convertToMarkdown(
   // Main content
   parts.push(bodyMarkdown);
 
-  // Extract and add "See Also" section
-  const seeAlsoMarkdown = extractSeeAlso(root, scraped.sourceUrl);
+  // Add "See Also" section (already extracted above)
   if (seeAlsoMarkdown) {
     parts.push('');
     parts.push(seeAlsoMarkdown);
+  }
+
+  // Add tagged links sections (e.g., "Array", "String")
+  if (taggedLinksMarkdown) {
+    parts.push('');
+    parts.push(taggedLinksMarkdown);
   }
 
   return parts.join('\n');
