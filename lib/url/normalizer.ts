@@ -82,7 +82,10 @@ export function convertToVexLLMUrl(relativeUrl: string, sourceUrl: string): stri
 /**
  * Convert a VexLLM path to a SideFX source URL
  * slug is the full path after /docs/, e.g., "houdini/vex/functions/foreach"
+ * Any URL fragments (hash) are stripped since they're page anchors, not part of the path
  */
 export function toSideFXUrl(slug: string): string {
-  return `https://www.sidefx.com/docs/${slug}.html`;
+  // Strip any hash fragment that might have slipped through
+  const cleanSlug = slug.split('#')[0];
+  return `https://www.sidefx.com/docs/${cleanSlug}.html`;
 }

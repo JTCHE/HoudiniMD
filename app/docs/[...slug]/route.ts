@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { generateMarkdownForSlug, PageNotFoundError } from "@/lib/generator";
+import { toSideFXUrl } from "@/lib/url";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -38,7 +39,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return new Response(
-      `# Error\n\nFailed to generate documentation for \`${slugPath}\`.\n\nError: ${errorMessage}\n\nPlease try again later or verify the page exists at: https://www.sidefx.com/docs/houdini/${slugPath}.html`,
+      `# Error\n\nFailed to generate documentation for \`${slugPath}\`.\n\nError: ${errorMessage}\n\nPlease try again later or verify the page exists at: ${toSideFXUrl(slugPath)}`,
       {
         status: 500,
         headers: {
@@ -54,6 +55,6 @@ function getHeaders(slug: string): HeadersInit {
     "Content-Type": "text/markdown; charset=utf-8",
     "Cache-Control": "public, max-age=31536000, immutable",
     "X-Content-Type-Options": "nosniff",
-    "X-Source-URL": `https://www.sidefx.com/docs/houdini/${slug}.html`,
+    "X-Source-URL": toSideFXUrl(slug),
   };
 }
