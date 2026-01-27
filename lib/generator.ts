@@ -37,7 +37,7 @@ export { PageNotFoundError };
 export async function generateMarkdownForSlug(
   slug: string,
   skipCache: boolean = false,
-  onProgress?: ProgressCallback
+  onProgress?: ProgressCallback,
 ): Promise<GenerateResult> {
   const contentPath = `content/${slug}.md`;
   const sideFXUrl = toSideFXUrl(slug);
