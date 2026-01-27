@@ -1,19 +1,17 @@
 #!/usr/bin/env bun
 /**
- * Rebuild all markdown files in the content folder by re-scraping from SideFX.
+ * Rebuild all markdown files by re-scraping from SideFX.
+ * Lists existing content from R2 bucket and regenerates each file.
  *
  * Usage:
  *   bun scripts/rebuild-content.ts [options]
  *
  * Options:
  *   --dry-run    Show what would be rebuilt without making changes
- *   --local      Save files locally only (skip R2)
  *   --verbose    Show detailed progress
  */
 
-import { Glob } from 'bun';
-import { writeFile, mkdir } from 'fs/promises';
-import { dirname, join } from 'path';
+import { S3Client, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { scrapeSideFXPage } from '../lib/scraping';
 import { convertToMarkdown, detectLanguage } from '../lib/markdown';
 import { toSideFXUrl } from '../lib/url';
@@ -21,7 +19,6 @@ import { saveToR2, updateSearchIndex } from '../lib/r2';
 
 interface Options {
   dryRun: boolean;
-  localOnly: boolean;
   verbose: boolean;
 }
 
@@ -29,7 +26,6 @@ function parseArgs(): Options {
   const args = process.argv.slice(2);
   return {
     dryRun: args.includes('--dry-run'),
-    localOnly: args.includes('--local'),
     verbose: args.includes('--verbose'),
   };
 }
@@ -39,20 +35,61 @@ function log(message: string, options: Options, verboseOnly = false) {
   console.log(message);
 }
 
-async function findContentFiles(): Promise<string[]> {
-  const contentDir = join(process.cwd(), 'content');
-  const glob = new Glob('**/*.md');
-  const files: string[] = [];
+function getR2Client(): S3Client | null {
+  const accountId = process.env.R2_ACCOUNT_ID;
+  const accessKeyId = process.env.R2_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
 
-  for await (const file of glob.scan({ cwd: contentDir })) {
-    files.push(file);
+  if (!accountId || !accessKeyId || !secretAccessKey) {
+    return null;
   }
+
+  return new S3Client({
+    region: 'auto',
+    endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+    credentials: {
+      accessKeyId,
+      secretAccessKey,
+    },
+  });
+}
+
+async function listContentFiles(): Promise<string[]> {
+  const client = getR2Client();
+  const bucketName = process.env.R2_BUCKET_NAME;
+
+  if (!client || !bucketName) {
+    throw new Error('R2 not configured. Check R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME');
+  }
+
+  const files: string[] = [];
+  let continuationToken: string | undefined;
+
+  do {
+    const response = await client.send(new ListObjectsV2Command({
+      Bucket: bucketName,
+      Prefix: 'content/',
+      ContinuationToken: continuationToken,
+    }));
+
+    if (response.Contents) {
+      for (const object of response.Contents) {
+        if (object.Key && object.Key.endsWith('.md') && object.Key !== 'content/index.json') {
+          // Remove 'content/' prefix to get relative path
+          const relativePath = object.Key.replace(/^content\//, '');
+          files.push(relativePath);
+        }
+      }
+    }
+
+    continuationToken = response.NextContinuationToken;
+  } while (continuationToken);
 
   return files.sort();
 }
 
 function pathToSlug(filePath: string): string {
-  // content/houdini/vex/functions/foreach.md -> houdini/vex/functions/foreach
+  // houdini/vex/functions/foreach.md -> houdini/vex/functions/foreach
   return filePath.replace(/\.md$/, '');
 }
 
@@ -63,7 +100,6 @@ async function rebuildFile(
   const slug = pathToSlug(filePath);
   const sideFXUrl = toSideFXUrl(slug);
   const contentPath = `content/${filePath}`;
-  const localPath = join(process.cwd(), contentPath);
 
   log(`  Scraping: ${sideFXUrl}`, options, true);
 
@@ -79,34 +115,25 @@ async function rebuildFile(
     const codeLanguage = detectLanguage(slug);
     const markdown = convertToMarkdown(scraped, { codeLanguage });
 
-    // Ensure directory exists
-    await mkdir(dirname(localPath), { recursive: true });
+    // Save to R2
+    try {
+      await saveToR2(contentPath, markdown);
+      log(`  Saved to R2: ${contentPath}`, options, true);
+    } catch (err) {
+      log(`  Warning: Failed to save to R2: ${err}`, options);
+    }
 
-    // Save locally
-    await writeFile(localPath, markdown, 'utf-8');
-    log(`  Saved locally: ${contentPath}`, options, true);
-
-    // Save to R2 (unless --local)
-    if (!options.localOnly) {
-      try {
-        await saveToR2(contentPath, markdown);
-        log(`  Pushed to R2: ${contentPath}`, options, true);
-      } catch (err) {
-        log(`  Warning: Failed to push to R2: ${err}`, options);
-      }
-
-      // Update search index
-      try {
-        await updateSearchIndex({
-          path: slug,
-          title: scraped.title,
-          summary: scraped.summary,
-          category: scraped.category,
-          version: scraped.version,
-        });
-      } catch (err) {
-        log(`  Warning: Failed to update search index: ${err}`, options);
-      }
+    // Update search index
+    try {
+      await updateSearchIndex({
+        path: slug,
+        title: scraped.title,
+        summary: scraped.summary,
+        category: scraped.category,
+        version: scraped.version,
+      });
+    } catch (err) {
+      log(`  Warning: Failed to update search index: ${err}`, options);
     }
 
     return { success: true };
@@ -124,15 +151,13 @@ async function main() {
   if (options.dryRun) {
     console.log('Running in dry-run mode (no changes will be made)\n');
   }
-  if (options.localOnly) {
-    console.log('Running in local-only mode (skipping R2)\n');
-  }
 
-  // Find all content files
-  const files = await findContentFiles();
+  // List all content files from R2
+  console.log('Fetching file list from R2...');
+  const files = await listContentFiles();
 
   if (files.length === 0) {
-    console.log('No content files found in content/ directory.');
+    console.log('No content files found in R2 bucket.');
     return;
   }
 
