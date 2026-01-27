@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "postinstall": "bunx playwright install",
-    "lint": "eslint"
+    "lint": "eslint",
+    "rebuild": "bun scripts/rebuild-content.ts"
   },
   "dependencies": {
     "@octokit/rest": "^22.0.1",
