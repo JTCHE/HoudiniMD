@@ -33,5 +33,12 @@
     "summary": "There are two forms of Perlin-style noise: a non-periodic noise which\nchanges randomly throughout N-dimensional space, and a periodic form\nwhich repeats over a given range of space.",
     "category": "VEX > VEX Functions",
     "version": "21.0"
+  },
+  {
+    "path": "houdini/vex/functions/reverse",
+    "title": "reverse VEX function",
+    "summary": "Returns an array or string in reverse order.",
+    "category": "VEX > VEX Functions",
+    "version": "21.0"
   }
 ]
