@@ -28,6 +28,13 @@
     "version": "21.0"
   },
   {
+    "path": "houdini/vex/functions/hasprimattrib",
+    "title": "hasprimattrib VEX function",
+    "summary": "Returns if a geometry prim attribute exists.",
+    "category": "VEX > VEX Functions",
+    "version": "21.0"
+  },
+  {
     "path": "houdini/vex/functions/noise",
     "title": "noise\n\n                    \n    \n        VEX function",
     "summary": "There are two forms of Perlin-style noise: a non-periodic noise which\nchanges randomly throughout N-dimensional space, and a periodic form\nwhich repeats over a given range of space.",
