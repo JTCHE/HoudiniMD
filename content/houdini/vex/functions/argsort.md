@@ -13,9 +13,9 @@ Returns a list of indices that, if applied to the given array, will give a sorte
 
 This lets sort an array by some property of the items in the array rather than by the values themselves.
 
--   [argsort](https://vexllm.dev/docs/houdini/vex/functions/argsort) and [sort](https://vexllm.dev/docs/houdini/vex/functions/sort) use a stable sort.
+-   [argsort](https://vexllm.netlify.app/docs/houdini/vex/functions/argsort) and [sort](https://vexllm.netlify.app/docs/houdini/vex/functions/sort) use a stable sort.
     
--   Use [reverse](https://vexllm.dev/docs/houdini/vex/functions/reverse) to reverse the order of the sort.
+-   Use [reverse](https://vexllm.netlify.app/docs/houdini/vex/functions/reverse) to reverse the order of the sort.
     
 
 ## Examples
