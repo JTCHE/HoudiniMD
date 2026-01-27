@@ -19,40 +19,5 @@
     "summary": "Finds the largest item smaller than a target value in a sorted array.",
     "category": "VEX > VEX Functions",
     "version": "21.0"
-  },
-  {
-    "path": "houdini/vex/functions/fit",
-    "title": "fit\n\n                    \n    \n        VEX function",
-    "summary": "Takes the value in one range and shifts it to the corresponding value in a new range.",
-    "category": "\n                            VEX\n                         > \n                            VEX Functions\n                        ",
-    "version": "21.0"
-  },
-  {
-    "path": "houdini/vex/functions/foreach",
-    "title": "foreach",
-    "summary": "Loops over the items in an array, with optional enumeration.",
-    "category": "\n                            VEX\n                         > \n                            VEX Functions\n                        ",
-    "version": "21.0"
-  },
-  {
-    "path": "houdini/vex/functions/hasprimattrib",
-    "title": "hasprimattrib VEX function",
-    "summary": "Returns if a geometry prim attribute exists.",
-    "category": "VEX > VEX Functions",
-    "version": "21.0"
-  },
-  {
-    "path": "houdini/vex/functions/noise",
-    "title": "noise\n\n                    \n    \n        VEX function",
-    "summary": "There are two forms of Perlin-style noise: a non-periodic noise which\nchanges randomly throughout N-dimensional space, and a periodic form\nwhich repeats over a given range of space.",
-    "category": "VEX > VEX Functions",
-    "version": "21.0"
-  },
-  {
-    "path": "houdini/vex/functions/reverse",
-    "title": "reverse VEX function",
-    "summary": "Returns an array or string in reverse order.",
-    "category": "VEX > VEX Functions",
-    "version": "21.0"
   }
 ]
