@@ -1,5 +1,6 @@
 import { parse } from 'node-html-parser';
 import TurndownService from 'turndown';
+import { gfm } from 'turndown-plugin-gfm';
 import type { ScrapedContent } from '../scraper';
 import type { ConversionOptions } from './types';
 import { addCustomRules } from './turndown-rules';
@@ -29,6 +30,9 @@ export function convertToMarkdown(
     emDelimiter: '*',
     strongDelimiter: '**',
   });
+
+  // Add GFM plugin for tables support
+  turndown.use(gfm);
 
   // Add custom rules
   addCustomRules(turndown, codeLanguage, scraped.sourceUrl);
