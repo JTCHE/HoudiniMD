@@ -11,20 +11,37 @@ export const maxDuration = 60;
 function createSSEStream() {
   const encoder = new TextEncoder();
   let controller: ReadableStreamDefaultController<Uint8Array>;
+  let isClosed = false;
 
   const stream = new ReadableStream<Uint8Array>({
     start(c) {
       controller = c;
     },
+    cancel() {
+      // Called when the client disconnects
+      isClosed = true;
+    },
   });
 
   const sendEvent = (event: ProgressEvent) => {
-    const data = `data: ${JSON.stringify(event)}\n\n`;
-    controller.enqueue(encoder.encode(data));
+    if (isClosed) return;
+    try {
+      const data = `data: ${JSON.stringify(event)}\n\n`;
+      controller.enqueue(encoder.encode(data));
+    } catch {
+      // Stream already closed (client disconnected or Lambda timeout)
+      isClosed = true;
+    }
   };
 
   const close = () => {
-    controller.close();
+    if (isClosed) return;
+    try {
+      controller.close();
+    } catch {
+      // Stream already closed
+    }
+    isClosed = true;
   };
 
   return { stream, sendEvent, close };
@@ -67,7 +84,10 @@ export async function GET(request: NextRequest) {
     } finally {
       close();
     }
-  })();
+  })().catch((err) => {
+    // Final safeguard: catch any errors that escape during Lambda shutdown
+    console.error(`Unhandled error in generation stream for ${slug}:`, err);
+  });
 
   return new Response(stream, {
     headers: {

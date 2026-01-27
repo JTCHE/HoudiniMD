@@ -1,11 +1,17 @@
 import { Browser } from "playwright-core";
 
+let browserInstance: Browser | null = null;
 let launchInProgress: Promise<Browser> | null = null;
 
 export default async function launchBrowser(): Promise<Browser> {
-  // Wait if another launch is in progress
+  // Return existing browser if still connected
+  if (browserInstance?.isConnected()) {
+    return browserInstance;
+  }
+
+  // Wait and return if another launch is in progress
   if (launchInProgress) {
-    await launchInProgress;
+    return await launchInProgress;
   }
 
   const isDev = process.env.IS_NETLIFY ? process.env.IS_NETLIFY === "false" : false;
@@ -29,11 +35,15 @@ export default async function launchBrowser(): Promise<Browser> {
 
   launchInProgress = launch();
   const browser = await launchInProgress;
+  browserInstance = browser;
   launchInProgress = null;
 
+  // Auto-close browser after 55 seconds (just before Lambda's 60s timeout)
+  // This ensures cleanup happens before Lambda terminates
   setTimeout(() => {
     browser.close().catch(() => {});
-  }, 30000);
+    browserInstance = null;
+  }, 55000);
 
   return browser;
 }
