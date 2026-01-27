@@ -1,87 +1,25 @@
-# VexLLM - Houdini Documentation for LLMs
+# VexLLM
 
-> LLM-optimized documentation for SideFX Houdini, covering VEX functions, Python API, HScript commands, nodes, and expressions. All content converted to clean markdown following the llms.txt standard.
+Houdini documentation as markdown for LLMs.
 
-VexLLM provides comprehensive Houdini documentation in a format optimized for AI assistants. Each page from the official SideFX documentation is available as clean markdown at predictable URLs. Documentation is generated on-demand and cached permanently.
-
-## Documentation Structure
-
-The documentation mirrors SideFX's official structure, organized by category:
-
-- **VEX Functions**: Core functions for VEX programming (vector expressions) - geometry manipulation, math, attributes, arrays, strings, noise, transforms, etc.
-- **VEX Language**: Syntax, data types, language features, operators, control flow
-- **Python API (HOM)**: Houdini Object Model - nodes, geometry, UI, rendering, parameters
-- **HScript**: Legacy scripting commands for Houdini's command-line interface
-- **Nodes**: Documentation for all node types (SOPs, DOPs, COPs, ROPs, VOPs, etc.)
-- **Expressions**: Channel expression functions and syntax
-
-## Usage
-
-Access documentation using the URL structure:
+## URL Pattern
 
 ```
-https://vexllm.netlify.app/docs/houdini/{category}/{subcategory}/{page}
+https://vexllm.netlify.app/docs/houdini/{path}
 ```
 
-Examples:
-- VEX foreach: `https://vexllm.netlify.app/docs/houdini/vex/functions/foreach`
-- Python hou.Node: `https://vexllm.netlify.app/docs/houdini/hom/hou/Node`
-- Attribute Wrangle SOP: `https://vexllm.netlify.app/docs/houdini/nodes/sop/attribwrangle`
+Path mirrors SideFX docs structure. Examples:
+- `vex/functions/foreach` - VEX foreach function
+- `hom/hou/Node` - Python hou.Node class
+- `nodes/sop/attribwrangle` - Attribute Wrangle node
 
-All URLs return markdown with `Content-Type: text/markdown`. HTML extensions (`.html`) are supported and automatically redirected.
+## Categories
 
-## VEX Functions
-
-Popular VEX functions available:
-
-- [foreach](https://vexllm.netlify.app/docs/houdini/vex/functions/foreach): Loop over array items with optional enumeration
-- [append](https://vexllm.netlify.app/docs/houdini/vex/functions/append): Add item to end of array
-- [fit](https://vexllm.netlify.app/docs/houdini/vex/functions/fit): Remap value from one range to another
-- [fit01](https://vexllm.netlify.app/docs/houdini/vex/functions/fit01): Remap 0-1 range to custom range
-- [chramp](https://vexllm.netlify.app/docs/houdini/vex/functions/chramp): Sample from parameter ramp
-- [xyzdist](https://vexllm.netlify.app/docs/houdini/vex/functions/xyzdist): Find closest point on geometry
-- [primuv](https://vexllm.netlify.app/docs/houdini/vex/functions/primuv): Sample attribute at UV coordinates
-- [cross](https://vexllm.netlify.app/docs/houdini/vex/functions/cross): Cross product of vectors
-- [normalize](https://vexllm.netlify.app/docs/houdini/vex/functions/normalize): Normalize vector to unit length
-- [setpointattrib](https://vexllm.netlify.app/docs/houdini/vex/functions/setpointattrib): Set point attribute value
-- [addpoint](https://vexllm.netlify.app/docs/houdini/vex/functions/addpoint): Create new point in geometry
-- [nearpoints](https://vexllm.netlify.app/docs/houdini/vex/functions/nearpoints): Find points within radius
-- [noise](https://vexllm.netlify.app/docs/houdini/vex/functions/noise): Generate Perlin noise
-- [curlnoise](https://vexllm.netlify.app/docs/houdini/vex/functions/curlnoise): Generate divergence-free curl noise
-
-[Browse all VEX functions](https://vexllm.netlify.app/docs/houdini/vex/functions)
-
-## VEX Language
-
-Core language concepts:
-
-- [Arrays](https://vexllm.netlify.app/docs/houdini/vex/arrays): Array syntax, operations, and manipulation
-- [Structs](https://vexllm.netlify.app/docs/houdini/vex/lang_structs): Custom data structures
-- [Attributes](https://vexllm.netlify.app/docs/houdini/vex/snippets): Reading and writing geometry attributes
-- [Data Types](https://vexllm.netlify.app/docs/houdini/vex/lang): Float, int, vector, matrix, string types
-
-## Python API (HOM)
-
-Essential Python classes:
-
-- [hou.Node](https://vexllm.netlify.app/docs/houdini/hom/hou/Node): Base class for all nodes
-- [hou.Geometry](https://vexllm.netlify.app/docs/houdini/hom/hou/Geometry): Access and manipulate geometry data
-- [hou.Vector3](https://vexllm.netlify.app/docs/houdini/hom/hou/Vector3): 3D vector operations
-- [hou.Parm](https://vexllm.netlify.app/docs/houdini/hom/hou/Parm): Node parameter access
-- [hou.Point](https://vexllm.netlify.app/docs/houdini/hom/hou/Point): Point in geometry
-
-## Nodes
-
-Popular node types:
-
-- [Attribute Wrangle](https://vexllm.netlify.app/docs/houdini/nodes/sop/attribwrangle): Run VEX code over geometry
-- [Copy to Points](https://vexllm.netlify.app/docs/houdini/nodes/sop/copytopoints): Instance geometry on points
-- [Foreach Loop](https://vexllm.netlify.app/docs/houdini/nodes/sop/block_begin): Loop over geometry pieces
-- [Solver](https://vexllm.netlify.app/docs/houdini/nodes/sop/solver): Create feedback loops
-
-## Optional
-
-Secondary resources:
-
-- [HScript Commands](https://vexllm.netlify.app/docs/houdini/ref/commands): Legacy command reference
-- [Expression Functions](https://vexllm.netlify.app/docs/houdini/ref/expression_functions): Channel expression functions
+| Path | Content |
+|------|---------|
+| `vex/functions/*` | VEX functions |
+| `vex/arrays`, `vex/lang`, `vex/snippets` | VEX language |
+| `hom/hou/*` | Python API (hou module) |
+| `nodes/{type}/*` | Nodes (sop, dop, cop, rop, vop) |
+| `ref/commands` | HScript commands |
+| `ref/expression_functions` | Expression functions |
