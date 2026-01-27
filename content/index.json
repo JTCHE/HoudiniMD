@@ -1,5 +1,12 @@
 [
   {
+    "path": "houdini/vex/functions/fit",
+    "title": "fit\n\n                    \n    \n        VEX function",
+    "summary": "Takes the value in one range and shifts it to the corresponding value in a new range.",
+    "category": "\n                            VEX\n                         > \n                            VEX Functions\n                        ",
+    "version": "21.0"
+  },
+  {
     "path": "houdini/vex/functions/foreach",
     "title": "foreach",
     "summary": "Loops over the items in an array, with optional enumeration.",
