@@ -1,4 +1,3 @@
-import { chromium, Browser } from "playwright";
 import launchBrowser from "./scraping/launch-browser";
 
 export interface ScrapedContent {
@@ -57,17 +56,6 @@ export async function checkPageExists(url: string): Promise<boolean> {
   }
 }
 
-let browserInstance: Browser | null = null;
-
-async function getBrowser(): Promise<Browser> {
-  if (!browserInstance) {
-    browserInstance = await chromium.launch({
-      headless: true,
-    });
-  }
-  return browserInstance;
-}
-
 export async function scrapeSideFXPage(url: string): Promise<ScrapedContent> {
   const browser = await launchBrowser();
   const context = await browser.newContext({
@@ -112,12 +100,5 @@ export async function scrapeSideFXPage(url: string): Promise<ScrapedContent> {
     };
   } finally {
     await context.close();
-  }
-}
-
-export async function closeBrowser(): Promise<void> {
-  if (browserInstance) {
-    await browserInstance.close();
-    browserInstance = null;
   }
 }
