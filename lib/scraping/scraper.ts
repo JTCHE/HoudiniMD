@@ -99,6 +99,7 @@ export async function scrapeSideFXPage(url: string): Promise<ScrapedContent> {
       mainHtml,
     };
   } finally {
-    await context.close();
+    // Close context gracefully, ignoring errors if browser is already closed
+    await context.close().catch(() => {});
   }
 }
