@@ -1,16 +1,21 @@
+import { normalizeInput } from './normalizer';
+
 /**
  * Client-side URL validation utilities
  */
 
 /**
- * Check if input is a valid SideFX or VexLLM documentation URL
+ * Check if input is a valid SideFX or VexLLM documentation URL.
+ * Accepts full URLs as well as shorthand forms like:
+ *   "sidefx.com/docs/houdini/nodes/sop/carve"
+ *   "/nodes/sop/carve"
  */
 export function isValidDocUrl(input: string): boolean {
-  const trimmed = input.trim();
-  if (!trimmed) return false;
+  const normalized = normalizeInput(input);
+  if (!normalized) return false;
 
   return (
-    /^https?:\/\/(www\.)?sidefx\.com\/docs\//i.test(trimmed) || /^https?:\/\/(www\.)?vexllm\.netlify\.app\/docs\//i.test(trimmed)
+    /^https?:\/\/(www\.)?sidefx\.com\/docs\//i.test(normalized) || /^https?:\/\/(www\.)?vexllm\.netlify\.app\/docs\//i.test(normalized)
   );
 }
 
@@ -21,8 +26,11 @@ export function isValidDocUrl(input: string): boolean {
  * @example "https://sidefx.com/docs/houdini/network/shortcuts.html#notes" -> "houdini/network/shortcuts"
  */
 export function extractSlugFromUrl(input: string): string | null {
+  // Normalize shorthand forms (bare domain, bare path) into full URLs first
+  const normalized = normalizeInput(input);
+
   // Strip URL fragment (hash) before processing - fragments are page anchors, not part of the path
-  const urlWithoutFragment = input.split("#")[0];
+  const urlWithoutFragment = normalized.split("#")[0];
 
   // Handle VexLLM URLs
   const vexllmMatch = urlWithoutFragment.match(/vexllm\.netlify\.app\/docs\/(.+?)(?:\.html)?(?:\.md)?$/i);
