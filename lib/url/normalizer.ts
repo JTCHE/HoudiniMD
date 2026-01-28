@@ -1,3 +1,42 @@
+const SIDEFX_DOCS_BASE = 'https://www.sidefx.com/docs';
+
+/**
+ * Coerce a variety of SideFX-style inputs into a full absolute URL.
+ *
+ * Handles:
+ *   "sidefx.com/docs/houdini/nodes/sop/carve"        -> full https URL
+ *   "www.sidefx.com/docs/houdini/nodes/sop/carve"    -> full https URL
+ *   "/nodes/sop/carve"                                -> full https URL (prefixed with houdini path)
+ *   "/houdini/nodes/sop/carve"                        -> full https URL
+ *   already-absolute URLs                             -> returned as-is
+ */
+export function normalizeInput(input: string): string {
+  const trimmed = input.trim();
+
+  // Already a full URL — pass through
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+
+  // Bare domain without protocol: "sidefx.com/docs/..." or "www.sidefx.com/docs/..."
+  const domainMatch = trimmed.match(/^(?:www\.)?sidefx\.com\/docs\/(.+)/i);
+  if (domainMatch) {
+    return `${SIDEFX_DOCS_BASE}/${domainMatch[1]}`;
+  }
+
+  // Absolute path starting with /docs/...
+  if (trimmed.startsWith('/docs/')) {
+    return `${SIDEFX_DOCS_BASE}/${trimmed.slice(6)}`;
+  }
+
+  // Bare path like /nodes/sop/carve — assume it lives under houdini/
+  if (trimmed.startsWith('/')) {
+    return `${SIDEFX_DOCS_BASE}/houdini${trimmed}`;
+  }
+
+  return trimmed;
+}
+
 /**
  * Normalize URL paths by stripping extensions and trailing slashes
  */
