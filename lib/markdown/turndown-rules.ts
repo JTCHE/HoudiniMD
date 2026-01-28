@@ -66,6 +66,34 @@ export function addCustomRules(
       return '\n\n' + markdownRows.join('\n') + '\n\n';
     },
   });
+
+  // SideFX parameter divs (not real <table> elements) — convert to markdown table
+  turndown.addRule('parameterDivs', {
+    filter: (node) => {
+      return (
+        node.nodeName === 'DIV' &&
+        node.classList.contains('parameters') &&
+        node.classList.contains('sbs-group')
+      );
+    },
+    replacement: (_content, node) => {
+      const items = Array.from((node as Element).querySelectorAll('.parameter.sbs-item'));
+      if (items.length === 0) return '';
+
+      const rows: string[] = [];
+      rows.push('| Parameter | Description |');
+      rows.push('| --- | --- |');
+
+      for (const item of items) {
+        const label = (item.querySelector('p.label')?.textContent || '').replace(/\s+/g, ' ').trim().replace(/\|/g, '\\|');
+        const content = (item.querySelector('div.content')?.textContent || '').replace(/\s+/g, ' ').trim().replace(/\|/g, '\\|');
+        rows.push(`| ${label} | ${content} |`);
+      }
+
+      return '\n\n' + rows.join('\n') + '\n\n';
+    },
+  });
+
   // Code blocks
   turndown.addRule('codeBlocks', {
     filter: (node) => {
