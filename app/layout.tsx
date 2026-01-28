@@ -8,10 +8,13 @@ export const metadata: Metadata = {
     "LLM-optimized documentation for SideFX Houdini. VEX functions, Python API, nodes, and more in clean markdown following the llms.txt standard.",
   keywords: ["Houdini", "VEX", "SideFX", "documentation", "LLM", "AI", "llms.txt", "Python API", "HOM"],
   authors: [{ name: "VexLLM" }],
+  icons: {
+    icon: "/favicon.ico",
+  },
   openGraph: {
     title: "VexLLM - Houdini Documentation for AI",
     description: "LLM-optimized documentation for SideFX Houdini following the llms.txt standard.",
-    url: "https://vexllm.netlify.app",
+    url: `https://${process.env.ROOT_URL}`,
     siteName: "VexLLM",
     type: "website",
   },
