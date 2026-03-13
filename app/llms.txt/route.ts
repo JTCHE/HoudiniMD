@@ -4,86 +4,70 @@ export async function GET() {
   const body = `# VexLLM — Houdini Docs for LLMs
 
 VexLLM provides SideFX Houdini documentation as clean, LLM-optimised markdown.
-All pages are generated on-demand from the official SideFX docs and cached indefinitely.
+All pages are generated on-demand from the official SideFX docs and cached for 30 days.
 
-## API Endpoints
+## Raw Markdown (per-page)
 
-### Search
+Every rendered page has a raw markdown equivalent at the same URL with \`.md\` appended,
+following the llmstxt.org spec:
+
+  ${root}/docs/houdini/nodes/sop/fuse       ← rendered HTML (humans)
+  ${root}/docs/houdini/nodes/sop/fuse.md    ← raw markdown  (LLMs)
+
+Pages are generated on first request (~5-10s), then cached. Use \`?regenerate=true\` to force a refresh.
+
+## Search API
+
 GET ${root}/api/search?q={query}
 
-Search indexed documentation pages with fuzzy matching.
+Fuzzy search across all indexed pages. Returns \`docs_url\` (rendered) and \`raw_url\` (markdown).
 
 Parameters:
-- q         (required) Search query string
-- category  (optional) Filter by category (e.g. "VEX Functions", "HOM", "Nodes")
-- limit     (optional) Max results to return. Default: 20. Max: 100
+- q         (required) Search query
+- category  (optional) e.g. "VEX Functions", "Nodes > Geometry nodes"
+- limit     (optional) Default: 20. Max: 100
 
-Returns JSON:
+Example response:
 {
-  "query": "abs",
-  "total": 3,
   "results": [
     {
       "path": "houdini/vex/functions/abs",
       "title": "abs",
       "summary": "Returns the absolute value of the argument.",
       "category": "VEX Functions",
-      "version": "20.5",
       "score": 0.95,
-      "docs_url": "${root}/docs/houdini/vex/functions/abs"
+      "docs_url": "${root}/docs/houdini/vex/functions/abs",
+      "raw_url":  "${root}/docs/houdini/vex/functions/abs.md"
     }
   ]
 }
 
-### Browse Index
+## Browse Index
+
 GET ${root}/api/index
 
-List all indexed documentation pages, paginated.
-
-Parameters:
-- category  (optional) Filter by category
-- page      (optional) Page number. Default: 1
-- limit     (optional) Results per page. Default: 50. Max: 200
-
-Returns JSON with fields: total, page, limit, pages, categories, entries[]
-
-### Fetch Page Content
-GET ${root}/docs/{path}
-
-Retrieve the full markdown content of a documentation page.
-Pages are generated on first request (~5-10s) then cached forever.
-
-Parameters:
-- regenerate=true  (optional) Bypass cache and re-scrape from SideFX
-
-Example: ${root}/docs/houdini/vex/functions/abs
-
-The response is plain markdown (Content-Type: text/markdown).
-The X-Source-URL header contains the original SideFX documentation URL.
+List all indexed pages. Same \`docs_url\` / \`raw_url\` fields per entry.
+Parameters: category, page, limit (max 200).
 
 ## Common Path Patterns
 
-| Category       | Path prefix                          | Example                                      |
-|----------------|--------------------------------------|----------------------------------------------|
-| VEX Functions  | houdini/vex/functions/{name}         | houdini/vex/functions/abs                    |
-| VEX Types      | houdini/vex/lang                     | houdini/vex/lang                             |
-| HOM (Python)   | houdini/hom/hou/{class}              | houdini/hom/hou/Node                         |
-| SOP nodes      | houdini/nodes/sop/{name}             | houdini/nodes/sop/sphere                     |
-| DOP nodes      | houdini/nodes/dop/{name}             | houdini/nodes/dop/rbdsolver                  |
-| Wrangle/VEX    | houdini/vex/snippets                 | houdini/vex/snippets                         |
+| Category       | Raw markdown URL pattern                          |
+|----------------|---------------------------------------------------|
+| VEX Functions  | /docs/houdini/vex/functions/{name}.md             |
+| HOM (Python)   | /docs/houdini/hom/hou/{class}.md                  |
+| SOP nodes      | /docs/houdini/nodes/sop/{name}.md                 |
+| DOP nodes      | /docs/houdini/nodes/dop/{name}.md                 |
+| VOP nodes      | /docs/houdini/nodes/vop/{name}.md                 |
 
-## Recommended Agent Workflow
+## Recommended Workflow
 
-1. Use GET ${root}/api/search?q={topic} to find relevant pages
-2. Pick the best match — results[].docs_url is an absolute URL ready to fetch
-3. GET that URL to retrieve the full markdown documentation
-4. If the exact page path is known, skip search and fetch ${root}/docs/{path} directly
+1. GET ${root}/api/search?q={topic} — find relevant pages
+2. Use raw_url from results to fetch raw markdown directly
+3. If the path is known, fetch ${root}/docs/houdini/{path}.md directly
 
 ## Notes
-- All paths are relative to the SideFX docs root (houdini/ prefix)
-- Content is from Houdini 20.5 unless otherwise noted in the version field
-- This service does NOT require authentication
-- Rate limiting is not enforced but please be reasonable
+- No authentication required
+- Content mirrors Houdini 20.5–21.0 docs from sidefx.com
 `;
 
   return new Response(body, {

@@ -42,6 +42,7 @@ export async function GET(request: NextRequest) {
   const paginated = entries.slice(offset, offset + limit).map((e) => ({
     ...e,
     docs_url: `${ROOT}/docs/${e.path}`,
+    raw_url: `${ROOT}/docs/${e.path}.md`,
   }));
 
   return Response.json(

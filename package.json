@@ -13,6 +13,7 @@
     "@aws-sdk/client-s3": "^3.975.0",
     "@radix-ui/react-slot": "^1.2.4",
     "@sparticuz/chromium": "^143.0.4",
+    "@tailwindcss/typography": "^0.5.19",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "fuse.js": "^7.1.0",
@@ -21,6 +22,8 @@
     "node-html-parser": "^7.0.2",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "tailwind-merge": "^3.4.0",
     "turndown": "^7.2.2",
     "turndown-plugin-gfm": "^1.0.2"
