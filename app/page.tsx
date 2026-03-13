@@ -200,7 +200,7 @@ export default function Home() {
   const buttonText = isProcessing && progress ? progress.message : isProcessing ? "Starting…" : "Go";
 
   return (
-    <main className="h-screen flex flex-col justify-center px-8 max-w-2xl">
+    <main className="h-screen overflow-hidden flex flex-col justify-center px-8 max-w-2xl">
       <h1 className="text-3xl font-bold tracking-tight leading-6">VexLLM</h1>
       <p className="text-muted-foreground mt-2 mb-5">
         Type a node name, VEX function, or paste a SideFX URL — get clean markdown.

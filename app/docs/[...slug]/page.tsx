@@ -51,17 +51,17 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur">
-        <div className="mx-auto flex max-w-4xl items-center justify-between px-6 py-3 text-xs text-muted-foreground">
-          <a href="/" className="font-semibold text-foreground hover:opacity-70 transition-opacity">
+        <div className="mx-auto grid max-w-4xl grid-cols-[auto_1fr_auto] items-center gap-4 px-6 py-3 text-xs text-muted-foreground">
+          <a href="/" className="font-semibold text-foreground hover:opacity-70 transition-opacity shrink-0">
             VexLLM
           </a>
-          <div className="flex items-center gap-4">
-            {breadcrumbs && <span className="hidden sm:block truncate max-w-xs">{breadcrumbs}</span>}
+          <span className="truncate text-center hidden sm:block">{breadcrumbs}</span>
+          <div className="flex items-center gap-4 shrink-0">
             <a href={sourceUrl} target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">
               SideFX ↗
             </a>
             <a href={rawUrl} className="hover:text-foreground transition-colors font-mono">
-              .md
+              raw
             </a>
           </div>
         </div>
