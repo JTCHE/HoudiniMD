@@ -248,7 +248,7 @@ export default function Home() {
       </form>
 
       {isProcessing && progressLog.length > 0 && (
-        <div className="mt-4 p-3 bg-muted/50 rounded-md border text-sm font-mono overflow-none">
+        <div className="mt-4 p-3 bg-muted/50 rounded-md border text-sm font-mono overflow-hidden">
           <div className="space-y-1">
             {progressLog.map((event, i) => (
               <ProgressLogEntry

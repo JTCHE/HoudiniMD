@@ -18,9 +18,9 @@ export default function ProgressLogEntry({ event, isLatest }: { event: ProgressE
       <span className={cn("w-4 shrink-0 text-center", isLatest && !isComplete && !isError && "animate-pulse")}>
         {isError ? "✗" : isComplete ? "✓" : isLatest ? "●" : "✓"}
       </span>
-      <span className="flex-1">
+      <span className="flex-1 min-w-0">
         <span className="font-medium">{event.message}</span>
-        {event.detail && <span className="text-muted-foreground ml-1">— {event.detail}</span>}
+        {event.detail && <span className="text-muted-foreground ml-1 break-all">— {event.detail}</span>}
       </span>
     </div>
   );
