@@ -1,5 +1,5 @@
 const SIDEFX_DOCS_BASE = "https://www.sidefx.com/docs";
-const VEXLLM_BASE = process.env.ROOT_URL ?? "https://vexllm.jchd.me";
+const VEXLLM_BASE = "";
 
 /**
  * Coerce a variety of SideFX-style inputs into a full absolute URL.
