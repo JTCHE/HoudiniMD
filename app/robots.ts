@@ -20,6 +20,7 @@ export default function robots(): MetadataRoute.Robots {
         allow: "/",
       },
     ],
-    sitemap: `https://${process.env.ROOT_URL}/sitemap.xml`,
+    sitemap: `${process.env.ROOT_URL}/sitemap.xml`,
+    host: process.env.ROOT_URL,
   };
 }

@@ -1,4 +1,5 @@
-const SIDEFX_DOCS_BASE = 'https://www.sidefx.com/docs';
+const SIDEFX_DOCS_BASE = "https://www.sidefx.com/docs";
+const VEXLLM_BASE = process.env.ROOT_URL ?? "https://vexllm.jchd.me";
 
 /**
  * Coerce a variety of SideFX-style inputs into a full absolute URL.
@@ -25,12 +26,12 @@ export function normalizeInput(input: string): string {
   }
 
   // Absolute path starting with /docs/...
-  if (trimmed.startsWith('/docs/')) {
+  if (trimmed.startsWith("/docs/")) {
     return `${SIDEFX_DOCS_BASE}/${trimmed.slice(6)}`;
   }
 
   // Bare path like /nodes/sop/carve — assume it lives under houdini/
-  if (trimmed.startsWith('/')) {
+  if (trimmed.startsWith("/")) {
     return `${SIDEFX_DOCS_BASE}/houdini${trimmed}`;
   }
 
@@ -44,20 +45,20 @@ export function normalizePath(pathname: string): string {
   let normalized = pathname;
 
   // Strip .html.md extension (llms.txt standard)
-  if (normalized.endsWith('.html.md')) {
+  if (normalized.endsWith(".html.md")) {
     normalized = normalized.slice(0, -8);
   }
   // Strip .html extension
-  else if (normalized.endsWith('.html')) {
+  else if (normalized.endsWith(".html")) {
     normalized = normalized.slice(0, -5);
   }
   // Strip .md extension
-  else if (normalized.endsWith('.md')) {
+  else if (normalized.endsWith(".md")) {
     normalized = normalized.slice(0, -3);
   }
 
   // Remove trailing slash (but not for root)
-  if (normalized.endsWith('/') && normalized.length > 1) {
+  if (normalized.endsWith("/") && normalized.length > 1) {
     normalized = normalized.slice(0, -1);
   }
 
@@ -69,19 +70,19 @@ export function normalizePath(pathname: string): string {
  */
 export function convertToVexLLMUrl(relativeUrl: string, sourceUrl: string): string {
   // Handle already absolute URLs
-  if (relativeUrl.startsWith('http://') || relativeUrl.startsWith('https://')) {
+  if (relativeUrl.startsWith("http://") || relativeUrl.startsWith("https://")) {
     // If it's a sidefx.com URL, convert it
-    if (relativeUrl.includes('sidefx.com/docs/')) {
+    if (relativeUrl.includes("sidefx.com/docs/")) {
       const match = relativeUrl.match(/sidefx\.com\/docs\/(.+?)(?:\.html)?$/);
       if (match) {
-        return `https://${process.env.ROOT_URL}/docs/${match[1].replace('.html', '')}`;
+        return `${VEXLLM_BASE}/docs/${match[1].replace(".html", "")}`;
       }
     }
     return relativeUrl;
   }
 
   // Handle anchor-only links
-  if (relativeUrl.startsWith('#')) {
+  if (relativeUrl.startsWith("#")) {
     return relativeUrl;
   }
 
@@ -92,30 +93,30 @@ export function convertToVexLLMUrl(relativeUrl: string, sourceUrl: string): stri
   }
 
   const sourcePath = sourceMatch[1];
-  const sourceDir = sourcePath.substring(0, sourcePath.lastIndexOf('/'));
+  const sourceDir = sourcePath.substring(0, sourcePath.lastIndexOf("/"));
 
   // Resolve relative path
   let targetPath = relativeUrl;
 
   // Remove .html extension
-  targetPath = targetPath.replace('.html', '');
+  targetPath = targetPath.replace(".html", "");
 
   // Handle ../ navigation
-  const parts = sourceDir.split('/');
-  while (targetPath.startsWith('../')) {
+  const parts = sourceDir.split("/");
+  while (targetPath.startsWith("../")) {
     parts.pop();
     targetPath = targetPath.slice(3);
   }
 
   // Handle ./ (current directory)
-  if (targetPath.startsWith('./')) {
+  if (targetPath.startsWith("./")) {
     targetPath = targetPath.slice(2);
   }
 
   // Combine path
-  const finalPath = parts.length > 0 ? `${parts.join('/')}/${targetPath}` : targetPath;
+  const finalPath = parts.length > 0 ? `${parts.join("/")}/${targetPath}` : targetPath;
 
-  return `https://${process.env.ROOT_URL}/docs/${finalPath}`;
+  return `${VEXLLM_BASE}/docs/${finalPath}`;
 }
 
 /**
@@ -125,6 +126,6 @@ export function convertToVexLLMUrl(relativeUrl: string, sourceUrl: string): stri
  */
 export function toSideFXUrl(slug: string): string {
   // Strip any hash fragment that might have slipped through
-  const cleanSlug = slug.split('#')[0];
+  const cleanSlug = slug.split("#")[0];
   return `https://www.sidefx.com/docs/${cleanSlug}.html`;
 }
