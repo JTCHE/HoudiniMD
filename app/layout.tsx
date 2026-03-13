@@ -34,6 +34,9 @@ export default function RootLayout({
       lang="en"
       className={geist.className}
     >
+      <head>
+        <link rel="alternate" type="text/plain" href="/llms.txt" title="API guide for AI agents" />
+      </head>
       <body className="overflow-hidden">{children}</body>
     </html>
   );

@@ -1,58 +1,66 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// Known top-level Houdini doc path segments (without the /docs/houdini/ prefix).
+// Requests to e.g. /nodes/sop/fuse get 301'd to /docs/houdini/nodes/sop/fuse.
+const HOUDINI_PATH_PREFIXES = [
+  'nodes/',
+  'vex/',
+  'hom/',
+  'expressions/',
+  'model/',
+  'copy/',
+  'crowds/',
+  'fluids/',
+  'grains/',
+  'cloth/',
+  'pyro/',
+  'destruction/',
+  'shelf/',
+  'ref/',
+  'render/',
+  'solaris/',
+  'tops/',
+  'news/',
+];
+
+function stripExtensionsAndSlash(p: string): string {
+  if (p.endsWith('.html.md')) return p.slice(0, -8);
+  if (p.endsWith('.html'))    return p.slice(0, -5);
+  if (p.endsWith('.md'))      return p.slice(0, -3);
+  if (p.endsWith('/') && p.length > 1) return p.slice(0, -1);
+  return p;
+}
+
 export function middleware(request: NextRequest) {
   const url = request.nextUrl.clone();
   const pathname = url.pathname;
 
-  // Handle pasted SideFX URLs: /https:/www.sidefx.com/docs/houdini/... or /https://www.sidefx.com/docs/houdini/...
-  // Browser normalizes // to / in paths, so we check for both patterns
+  // Handle pasted SideFX URLs: /https:/www.sidefx.com/docs/houdini/... etc.
   const sidefxMatch = pathname.match(/^\/https?:\/?\/?(?:www\.)?sidefx\.com\/docs\/(.+)$/);
   if (sidefxMatch) {
-    let extractedPath = sidefxMatch[1];
-    // Strip .html extension if present
-    if (extractedPath.endsWith('.html')) {
-      extractedPath = extractedPath.slice(0, -5);
-    }
-    // Remove trailing slash
-    if (extractedPath.endsWith('/')) {
-      extractedPath = extractedPath.slice(0, -1);
-    }
-    url.pathname = `/docs/${extractedPath}`;
+    let p = sidefxMatch[1];
+    p = stripExtensionsAndSlash(p);
+    url.pathname = `/docs/${p}`;
     return NextResponse.redirect(url, 301);
   }
 
-  // Only process /docs/* paths
+  // Redirect known Houdini path segments missing the /docs/houdini/ prefix.
+  // e.g. /nodes/sop/fuse → /docs/houdini/nodes/sop/fuse
+  const bare = pathname.slice(1); // strip leading /
+  if (HOUDINI_PATH_PREFIXES.some(prefix => bare === prefix.slice(0, -1) || bare.startsWith(prefix))) {
+    const cleaned = stripExtensionsAndSlash(pathname);
+    url.pathname = `/docs/houdini${cleaned}`;
+    return NextResponse.redirect(url, 301);
+  }
+
+  // Only normalise /docs/* from here on
   if (!pathname.startsWith('/docs/')) {
     return NextResponse.next();
   }
 
-  let newPathname = pathname;
-  let shouldRedirect = false;
-
-  // Strip .html.md extension (llms.txt standard)
-  if (newPathname.endsWith('.html.md')) {
-    newPathname = newPathname.slice(0, -8);
-    shouldRedirect = true;
-  }
-  // Strip .html extension
-  else if (newPathname.endsWith('.html')) {
-    newPathname = newPathname.slice(0, -5);
-    shouldRedirect = true;
-  }
-  // Strip .md extension
-  else if (newPathname.endsWith('.md')) {
-    newPathname = newPathname.slice(0, -3);
-    shouldRedirect = true;
-  }
-
-  // Normalize trailing slash (remove it)
-  if (newPathname.endsWith('/') && newPathname !== '/') {
-    newPathname = newPathname.slice(0, -1);
-    shouldRedirect = true;
-  }
-
-  if (shouldRedirect) {
-    url.pathname = newPathname;
+  const cleaned = stripExtensionsAndSlash(pathname);
+  if (cleaned !== pathname) {
+    url.pathname = cleaned;
     return NextResponse.redirect(url, 301);
   }
 
@@ -60,5 +68,27 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/docs/:path*', '/https\\::path*', '/http\\::path*'],
+  matcher: [
+    '/docs/:path*',
+    '/https\\::path*',
+    '/http\\::path*',
+    '/nodes/:path*',
+    '/vex/:path*',
+    '/hom/:path*',
+    '/expressions/:path*',
+    '/model/:path*',
+    '/copy/:path*',
+    '/crowds/:path*',
+    '/fluids/:path*',
+    '/grains/:path*',
+    '/cloth/:path*',
+    '/pyro/:path*',
+    '/destruction/:path*',
+    '/shelf/:path*',
+    '/ref/:path*',
+    '/render/:path*',
+    '/solaris/:path*',
+    '/tops/:path*',
+    '/news/:path*',
+  ],
 };
