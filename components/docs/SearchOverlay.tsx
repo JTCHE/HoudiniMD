@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import ProgressLogEntry from "@/components/root/progress-log-entry/ProgressLogEntry";
+import type { ProgressEvent } from "@/lib/generator";
 
 interface SearchResult {
   path: string;
@@ -11,13 +13,23 @@ interface SearchResult {
   docs_url: string;
 }
 
+interface Toast {
+  message: string;
+  type: "error" | "info";
+}
+
+const SIDEFX_URL_RE = /sidefx\.com\/docs\/(.+?)(?:\.html)?(?:#.*)?$/;
+
 export default function SearchOverlay() {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [selected, setSelected] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [toast, setToast] = useState<Toast | null>(null);
+  const [progressLog, setProgressLog] = useState<ProgressEvent[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+  const sseRef = useRef<EventSource | null>(null);
   const router = useRouter();
 
   // Open on Ctrl+K / Cmd+K
@@ -27,7 +39,9 @@ export default function SearchOverlay() {
         e.preventDefault();
         setOpen((o) => !o);
       }
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") {
+        setOpen(false);
+      }
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
@@ -43,15 +57,42 @@ export default function SearchOverlay() {
     }
   }, [open]);
 
+  // Auto-dismiss toast
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 4000);
+    return () => clearTimeout(t);
+  }, [toast]);
+
   // Live search as user types
   useEffect(() => {
-    if (!query.trim()) {
+    const q = query.trim();
+    if (!q) {
       setResults([]);
       return;
     }
+
+    // Detect SideFX URL paste — direct navigation result
+    const sideFXMatch = q.match(SIDEFX_URL_RE);
+    if (sideFXMatch) {
+      const slug = sideFXMatch[1].replace(/\.html$/, "");
+      const title = slug.split("/").pop()?.replace(/-/g, " ") ?? slug;
+      setResults([
+        {
+          path: slug,
+          title,
+          summary: "Navigate directly to this page",
+          category: "Direct link",
+          docs_url: `/docs/${slug}`,
+        },
+      ]);
+      setSelected(0);
+      return;
+    }
+
     const controller = new AbortController();
     setLoading(true);
-    fetch(`/api/search?q=${encodeURIComponent(query)}&limit=6`, { signal: controller.signal })
+    fetch(`/api/search?q=${encodeURIComponent(q)}&limit=6`, { signal: controller.signal })
       .then((r) => r.json())
       .then((d) => {
         setResults(d.results ?? []);
@@ -62,96 +103,189 @@ export default function SearchOverlay() {
     return () => controller.abort();
   }, [query]);
 
-  const navigate = useCallback(
-    async (result?: SearchResult) => {
-      setOpen(false);
-      if (result) {
-        router.push(result.docs_url);
+  const isDirect = results.length === 1 && results[0].category === "Direct link";
+
+  const streamAndNavigate = useCallback(
+    async (slug: string) => {
+      // Already on this page?
+      if (window.location.pathname === `/docs/${slug}`) {
+        setToast({ message: "Already on this page", type: "info" });
+        setOpen(false);
         return;
       }
-      // No result selected — try resolve for unindexed pages
+
+      // Check meta cache first — navigate immediately if already cached
+      try {
+        const metaRes = await fetch(`/api/meta?slug=${encodeURIComponent(slug)}`);
+        if (metaRes.ok) {
+          setOpen(false);
+          router.push(`/docs/${slug}`);
+          return;
+        }
+      } catch {
+        // fall through to SSE generation
+      }
+
+      // Not cached — stream generation as non-blocking bottom-right card
+      setOpen(false);
+      sseRef.current?.close();
+      setProgressLog([{ stage: "checking-cache", message: "Resolving…", detail: slug }]);
+
+      const sse = new EventSource(`/api/generate?slug=${encodeURIComponent(slug)}`);
+      sseRef.current = sse;
+      sse.onmessage = (e) => {
+        const event = JSON.parse(e.data) as ProgressEvent;
+        setProgressLog((prev) => [...prev, event]);
+        if (event.stage === "complete") {
+          sse.close();
+          router.push(`/docs/${slug}`);
+          setTimeout(() => setProgressLog([]), 600);
+        } else if (event.stage === "error") {
+          sse.close();
+          setProgressLog([]);
+          setToast({ message: event.detail ?? event.message, type: "error" });
+        }
+      };
+      sse.onerror = () => {
+        sse.close();
+        setProgressLog([]);
+        router.push(`/docs/${slug}`);
+      };
+    },
+    [router],
+  );
+
+  const navigate = useCallback(
+    async (result?: SearchResult) => {
+      if (result) {
+        streamAndNavigate(result.docs_url.replace(/^\/docs\//, ""));
+        return;
+      }
       if (!query.trim()) return;
-      const res = await fetch(`/api/resolve?name=${encodeURIComponent(query)}`);
+      const res = await fetch(`/api/resolve?name=${encodeURIComponent(query.trim())}`);
       if (res.ok) {
         const data = await res.json();
-        router.push(`/docs/${data.slug}`);
+        streamAndNavigate(data.slug);
+      } else {
+        setToast({ message: `Nothing found for "${query.trim()}"`, type: "error" });
       }
     },
-    [query, router],
+    [query, streamAndNavigate],
   );
 
   function onKeyDown(e: React.KeyboardEvent) {
+    const total = results.length + (isDirect ? 0 : 1);
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setSelected((s) => Math.min(s + 1, results.length - 1));
+      setSelected((s) => Math.min(s + 1, total - 1));
     }
     if (e.key === "ArrowUp") {
       e.preventDefault();
       setSelected((s) => Math.max(s - 1, 0));
     }
     if (e.key === "Enter") {
-      navigate(results[selected]);
+      if (selected < results.length) navigate(results[selected]);
+      else navigate();
     }
   }
 
-  if (!open) return null;
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-[20vh] bg-black/40 backdrop-blur-sm"
-      onClick={() => setOpen(false)}
-    >
-      <div
-        className="w-full max-w-lg mx-4 bg-background border rounded-lg shadow-2xl overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <input
-          ref={inputRef}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={onKeyDown}
-          placeholder="Search docs…"
-          className="w-full px-4 py-3 text-sm bg-transparent outline-none border-b font-mono"
-        />
-
-        {results.length > 0 && (
-          <ul className="max-h-72 overflow-y-auto">
-            {results.map((r, i) => (
-              <li key={r.path}>
-                <button
-                  className={`w-full text-left px-4 py-2.5 flex flex-col gap-0.5 transition-colors ${
-                    i === selected ? "bg-muted" : "hover:bg-muted/50"
-                  }`}
-                  onClick={() => navigate(r)}
-                  onMouseEnter={() => setSelected(i)}
-                >
-                  <span className="text-sm font-medium truncate">{r.title}</span>
-                  <span className="text-xs text-muted-foreground truncate">{r.category}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {query && !loading && results.length === 0 && (
-          <p className="px-4 py-3 text-sm text-muted-foreground">No results — press Enter to try resolving "{query}"</p>
-        )}
-
-        <div className="px-4 py-2 border-t text-xs text-muted-foreground flex gap-3 [&_span]:space-x-1 space-x-2">
-          <span>
-            <span>↑↓</span>
-            <span>navigate</span>
-          </span>
-          <span>
-            <span>↵</span>
-            <span>open</span>
-          </span>
-          <span>
-            <span>esc</span>
-            <span>close</span>
-          </span>
+    <>
+      {/* Toast */}
+      {toast && (
+        <div className="fixed top-4 inset-x-0 z-[60] flex justify-center pointer-events-none">
+          <div
+            className={`text-sm px-4 py-2 shadow-lg pointer-events-auto ${
+              toast.type === "info" ? "bg-muted text-foreground border border-border" : "bg-foreground text-background"
+            }`}
+          >
+            {toast.message}
+          </div>
         </div>
-      </div>
-    </div>
+      )}
+
+      {/* Generation progress — non-blocking bottom-right card */}
+      {progressLog.length > 0 && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[55] pointer-events-none w-96 bg-background border shadow-2xl p-3 space-y-1.5">
+          {progressLog.map((event, i) => (
+            <ProgressLogEntry
+              key={i}
+              event={event}
+              isLatest={i === progressLog.length - 1}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Search overlay */}
+      {open && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center pt-[20vh] bg-black/40 backdrop-blur-sm"
+          onClick={() => setOpen(false)}
+        >
+          <div
+            className="w-full max-w-lg mx-4 bg-background border rounded-lg shadow-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <input
+              ref={inputRef}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={onKeyDown}
+              placeholder="Search docs or paste a SideFX URL…"
+              className="w-full px-4 py-3 text-sm bg-transparent outline-none border-b font-mono"
+            />
+
+            {(results.length > 0 || (query.trim() && !isDirect)) && (
+              <ul className="max-h-80 overflow-y-auto">
+                {results.map((r, i) => (
+                  <li key={r.path}>
+                    <button
+                      className={`w-full text-left px-4 py-2.5 flex flex-col gap-0.5 transition-colors ${
+                        i === selected ? "bg-muted" : "hover:bg-muted/50"
+                      }`}
+                      onClick={() => navigate(r)}
+                      onMouseEnter={() => setSelected(i)}
+                    >
+                      <span className="text-sm font-medium truncate">{r.title}</span>
+                      <span className="text-xs text-muted-foreground truncate">{r.category}</span>
+                    </button>
+                  </li>
+                ))}
+                {!isDirect && query.trim() && (
+                  <li>
+                    <button
+                      className={`w-full text-left px-4 py-2.5 flex items-center gap-2 transition-colors text-muted-foreground ${
+                        selected === results.length ? "bg-muted" : "hover:bg-muted/50"
+                      }`}
+                      onClick={() => navigate()}
+                      onMouseEnter={() => setSelected(results.length)}
+                    >
+                      <span className="text-xs shrink-0">Search for</span>
+                      <span className="text-sm font-mono truncate">&ldquo;{query.trim()}&rdquo;</span>
+                    </button>
+                  </li>
+                )}
+              </ul>
+            )}
+
+            <div className="px-4 py-2 border-t text-xs text-muted-foreground flex gap-3 [&_span]:space-x-1 space-x-2">
+              <span>
+                <span>↑↓</span>
+                <span>navigate</span>
+              </span>
+              <span>
+                <span>↵</span>
+                <span>open</span>
+              </span>
+              <span>
+                <span>esc</span>
+                <span>close</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

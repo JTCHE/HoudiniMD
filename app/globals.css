@@ -122,3 +122,81 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* ── Syntax highlighting (hljs / rehype-highlight) ─────────────────────── */
+pre {
+  background: oklch(0.13 0 0);
+}
+
+pre code.hljs {
+  display: block;
+  padding: 1rem 1.25rem;
+  background: transparent;
+  color: oklch(0.88 0 0);
+  font-size: 0.84em;
+  line-height: 1.6;
+  overflow-x: auto;
+}
+
+.hljs-keyword                        { color: oklch(0.72 0.14 245); font-weight: 600; }
+.hljs-type                           { color: oklch(0.72 0.12 195); }
+.hljs-built_in                       { color: oklch(0.72 0.12 195); }
+.hljs-number, .hljs-literal          { color: oklch(0.80 0.13 55); }
+.hljs-string                         { color: oklch(0.74 0.12 148); }
+.hljs-comment                        { color: oklch(0.50 0 0); font-style: italic; }
+.hljs-function .hljs-title,
+.hljs-title.function_                { color: oklch(0.84 0.11 80); }
+.hljs-params, .hljs-variable         { color: oklch(0.88 0 0); }
+.hljs-operator, .hljs-punctuation    { color: oklch(0.65 0 0); }
+.hljs-attr, .hljs-attribute          { color: oklch(0.74 0.12 148); }
+
+/* ── kbd / key icon badges ──────────────────────────────────────────────── */
+kbd {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1em 0.45em;
+  background: var(--muted);
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 3px;
+  font-family: inherit;
+  font-size: 0.82em;
+  font-weight: 600;
+  color: var(--foreground);
+  white-space: nowrap;
+  line-height: 1.5;
+}
+
+/* ── Prose overrides ────────────────────────────────────────────────────── */
+.prose :where(pre):not(:where([class~="not-prose"] *)) {
+  background: oklch(0.13 0 0) !important;
+  border-radius: 0;
+  padding: 0;
+}
+
+.prose :where(code):not(:where([class~="not-prose"] *))::before,
+.prose :where(code):not(:where([class~="not-prose"] *))::after {
+  content: none;
+}
+
+/* Monospace font everywhere code appears */
+.prose code,
+.prose pre code,
+pre code.hljs {
+  font-family: ui-monospace, "Geist Mono", "Fira Code", Menlo, Consolas, monospace !important;
+}
+
+/* Tight paragraph spacing inside list items */
+.prose :where(li > p + p) {
+  margin-top: 0.15em !important;
+}
+
+/* Inline icon images — override prose display:block and max-width:100% */
+img.doc-icon {
+  display: inline !important;
+  width: 1em !important;
+  height: 1em !important;
+  max-width: none !important;
+  vertical-align: -0.15em;
+  margin: 0 0.1em;
+}
