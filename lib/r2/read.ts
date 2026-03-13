@@ -1,6 +1,9 @@
 import { GetObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { getConfig, getS3Client } from './config';
 
+/** Cached files generated before this date will be re-generated */
+const CACHE_INVALIDATE_BEFORE = new Date("2026-03-13T22:00:00Z");
+
 /**
  * Check if a file exists in R2
  */
@@ -36,7 +39,7 @@ const CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
  * Fetch file content from R2 using the public URL (faster for reads).
  * Returns null if the file is missing or older than 30 days (triggering regeneration).
  */
-export async function fetchFromR2(filePath: string): Promise<string | null> {
+export async function fetchFromR2(filePath: string, noValidate = false): Promise<string | null> {
   const config = getConfig();
   if (!config) return null;
 
@@ -60,7 +63,20 @@ export async function fetchFromR2(filePath: string): Promise<string | null> {
       }
     }
 
-    return await response.text();
+    const text = await response.text();
+
+    // Invalidate stale content based on generated_at frontmatter (skip for metadata reads)
+    if (!noValidate) {
+      const generatedAtMatch = text.match(/^---[\s\S]*?generated_at:\s*(.+?)\s*\n[\s\S]*?---/);
+      if (generatedAtMatch) {
+        const generatedAt = new Date(generatedAtMatch[1]);
+        if (generatedAt < CACHE_INVALIDATE_BEFORE) return null;
+      } else {
+        return null;
+      }
+    }
+
+    return text;
   } catch (error: unknown) {
     // Network errors or 404s
     if (error instanceof Error && error.message.includes('404')) {

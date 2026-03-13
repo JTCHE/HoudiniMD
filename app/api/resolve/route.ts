@@ -29,22 +29,30 @@ async function probeSlug(slug: string): Promise<boolean> {
 }
 
 export async function GET(request: NextRequest) {
-  const name = request.nextUrl.searchParams.get("name")?.trim().toLowerCase();
-  if (!name) {
+  const input = request.nextUrl.searchParams.get("name")?.trim().toLowerCase() ?? "";
+  if (!input) {
     return Response.json({ error: "Missing required parameter: name" }, { status: 400 });
   }
 
+  // Build name variants: hyphenated ("pyro-solver") and no-spaces ("pyrosolver")
+  const nameHyphen = input.replace(/\s+/g, "-");
+  const nameCompact = input.replace(/\s+/g, "");
+  const names = nameHyphen === nameCompact ? [nameHyphen] : [nameHyphen, nameCompact];
+
   // 1. Try the search index first (fast, no external requests)
-  const raw = await fetchFromR2("content/index.json");
-  if (raw) {
-    const entries: SearchIndexEntry[] = JSON.parse(raw);
+  const indexRaw = await fetchFromR2("content/index.json");
+  if (indexRaw) {
+    const entries: SearchIndexEntry[] = JSON.parse(indexRaw);
     const fuse = new Fuse(entries, {
       keys: [{ name: "title", weight: 0.6 }, { name: "path", weight: 0.4 }],
-      threshold: 0.3,
+      threshold: 0.4,
+      ignoreLocation: true,
     });
-    const results = fuse.search(name, { limit: 1 });
-    if (results.length > 0) {
-      return Response.json({ slug: results[0].item.path, source: "index" });
+    for (const n of names) {
+      const results = fuse.search(n, { limit: 1 });
+      if (results.length > 0) {
+        return Response.json({ slug: results[0].item.path, source: "index" });
+      }
     }
   }
 
@@ -54,17 +62,19 @@ export async function GET(request: NextRequest) {
     CANDIDATE_PATTERNS.slice(4),
   ];
 
-  for (const batch of batches) {
-    const candidates = batch.map((fn) => fn(name));
-    const results = await Promise.all(candidates.map((slug) => probeSlug(slug).then((ok) => ({ slug, ok }))));
-    const match = results.find((r) => r.ok);
-    if (match) {
-      return Response.json({ slug: match.slug, source: "probe" });
+  for (const n of names) {
+    for (const batch of batches) {
+      const candidates = batch.map((fn) => fn(n));
+      const results = await Promise.all(candidates.map((slug) => probeSlug(slug).then((ok) => ({ slug, ok }))));
+      const match = results.find((r) => r.ok);
+      if (match) {
+        return Response.json({ slug: match.slug, source: "probe" });
+      }
     }
   }
 
   return Response.json(
-    { error: `No documentation found for "${name}". Try a different spelling or paste a SideFX URL directly.` },
+    { error: `No documentation found for "${input}". Try a different spelling or paste a SideFX URL directly.` },
     { status: 404 }
   );
 }

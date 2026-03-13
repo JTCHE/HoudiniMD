@@ -44,18 +44,43 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const fuse = new Fuse(entries, {
+  const qLower = q.toLowerCase().replace(/\s+/g, "");
+
+  // Add a `slug` virtual field (last path segment) for exact node name matching
+  const indexed = entries.map((e) => ({ ...e, slug: e.path.split("/").pop() ?? e.path }));
+
+  // 1. Prefix matches — "copytop" instantly finds "copytopoints"
+  const prefixHits = new Map<string, (typeof indexed)[number]>();
+  for (const e of indexed) {
+    if (e.slug.startsWith(qLower) || e.title.toLowerCase().replace(/\s+/g, "").startsWith(qLower)) {
+      prefixHits.set(e.path, e);
+      if (prefixHits.size >= limit) break;
+    }
+  }
+
+  // 2. Fuse fuzzy fallback
+  const fuse = new Fuse(indexed, {
     keys: [
-      { name: "title", weight: 0.5 },
-      { name: "summary", weight: 0.3 },
-      { name: "path", weight: 0.2 },
+      { name: "slug", weight: 0.45 },
+      { name: "title", weight: 0.35 },
+      { name: "summary", weight: 0.1 },
+      { name: "path", weight: 0.1 },
     ],
-    threshold: 0.4,
+    threshold: 0.5,
     includeScore: true,
+    ignoreLocation: true,
   });
 
-  const results = fuse
-    .search(q, { limit })
+  const fuseHits = fuse.search(q, { limit });
+
+  // Merge: prefix matches first (score 1.0), then fuzzy (deduped)
+  const seen = new Set(prefixHits.keys());
+  const merged = [
+    ...[...prefixHits.values()].map((item) => ({ item, score: 0 })),
+    ...fuseHits.filter((r) => !seen.has(r.item.path)),
+  ].slice(0, limit);
+
+  const results = merged
     .map(({ item, score }) => ({
       path: item.path,
       title: item.title,
@@ -63,7 +88,7 @@ export async function GET(request: NextRequest) {
       category: item.category,
       version: item.version,
       score: score !== undefined ? Math.round((1 - score) * 100) / 100 : null,
-      docs_url: `${ROOT}/docs/${item.path}`,
+      docs_url: `/docs/${item.path}`,
       raw_url: `${ROOT}/docs/${item.path}.md`,
     }));
 
