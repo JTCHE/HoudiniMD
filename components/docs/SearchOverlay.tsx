@@ -45,36 +45,53 @@ export default function SearchOverlay() {
 
   // Live search as user types
   useEffect(() => {
-    if (!query.trim()) { setResults([]); return; }
+    if (!query.trim()) {
+      setResults([]);
+      return;
+    }
     const controller = new AbortController();
     setLoading(true);
     fetch(`/api/search?q=${encodeURIComponent(query)}&limit=6`, { signal: controller.signal })
       .then((r) => r.json())
-      .then((d) => { setResults(d.results ?? []); setSelected(0); })
+      .then((d) => {
+        setResults(d.results ?? []);
+        setSelected(0);
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
     return () => controller.abort();
   }, [query]);
 
-  const navigate = useCallback(async (result?: SearchResult) => {
-    setOpen(false);
-    if (result) {
-      router.push(result.docs_url);
-      return;
-    }
-    // No result selected — try resolve for unindexed pages
-    if (!query.trim()) return;
-    const res = await fetch(`/api/resolve?name=${encodeURIComponent(query)}`);
-    if (res.ok) {
-      const data = await res.json();
-      router.push(`/docs/${data.slug}`);
-    }
-  }, [query, router]);
+  const navigate = useCallback(
+    async (result?: SearchResult) => {
+      setOpen(false);
+      if (result) {
+        router.push(result.docs_url);
+        return;
+      }
+      // No result selected — try resolve for unindexed pages
+      if (!query.trim()) return;
+      const res = await fetch(`/api/resolve?name=${encodeURIComponent(query)}`);
+      if (res.ok) {
+        const data = await res.json();
+        router.push(`/docs/${data.slug}`);
+      }
+    },
+    [query, router],
+  );
 
   function onKeyDown(e: React.KeyboardEvent) {
-    if (e.key === "ArrowDown") { e.preventDefault(); setSelected((s) => Math.min(s + 1, results.length - 1)); }
-    if (e.key === "ArrowUp")   { e.preventDefault(); setSelected((s) => Math.max(s - 1, 0)); }
-    if (e.key === "Enter")     { navigate(results[selected]); }
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setSelected((s) => Math.min(s + 1, results.length - 1));
+    }
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setSelected((s) => Math.max(s - 1, 0));
+    }
+    if (e.key === "Enter") {
+      navigate(results[selected]);
+    }
   }
 
   if (!open) return null;
@@ -117,15 +134,22 @@ export default function SearchOverlay() {
         )}
 
         {query && !loading && results.length === 0 && (
-          <p className="px-4 py-3 text-sm text-muted-foreground">
-            No results — press Enter to try resolving "{query}"
-          </p>
+          <p className="px-4 py-3 text-sm text-muted-foreground">No results — press Enter to try resolving "{query}"</p>
         )}
 
-        <div className="px-4 py-2 border-t text-xs text-muted-foreground flex gap-3">
-          <span>↑↓ navigate</span>
-          <span>↵ open</span>
-          <span>esc close</span>
+        <div className="px-4 py-2 border-t text-xs text-muted-foreground flex gap-3 [&_span]:space-x-1 space-x-2">
+          <span>
+            <span>↑↓</span>
+            <span>navigate</span>
+          </span>
+          <span>
+            <span>↵</span>
+            <span>open</span>
+          </span>
+          <span>
+            <span>esc</span>
+            <span>close</span>
+          </span>
         </div>
       </div>
     </div>
