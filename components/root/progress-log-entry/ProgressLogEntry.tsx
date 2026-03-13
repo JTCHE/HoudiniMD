@@ -1,4 +1,4 @@
-import { ProgressEvent } from "@/app/page";
+import type { ProgressEvent } from "@/lib/generator";
 import { cn } from "@/lib/utils";
 
 export default function ProgressLogEntry({ event, isLatest }: { event: ProgressEvent; isLatest: boolean }) {
