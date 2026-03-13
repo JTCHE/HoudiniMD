@@ -153,22 +153,20 @@ export default function Home() {
         return;
       }
 
-      // Path 2: bare name or query — search the index first
+      // Path 2: bare name — resolve via index search then SideFX path probing
       setProgress({ stage: "checking-cache", message: "Searching…", detail: `Looking for "${trimmed}"` });
       setProgressLog([{ stage: "checking-cache", message: "Searching…", detail: `Looking for "${trimmed}"` }]);
 
-      const res = await fetch(`/api/search?q=${encodeURIComponent(trimmed)}&limit=1`);
+      const res = await fetch(`/api/resolve?name=${encodeURIComponent(trimmed)}`);
       const data = await res.json();
 
-      if (!data.results?.length) {
-        setError(`No documentation found for "${trimmed}". Try a node name, VEX function, or paste a SideFX URL.`);
+      if (!res.ok) {
+        setError(data.error ?? `No documentation found for "${trimmed}".`);
         setIsProcessing(false);
         return;
       }
 
-      const best = data.results[0];
-      // path is e.g. "houdini/nodes/sop/fuse" — feed directly to the generator
-      await streamGenerate(best.path);
+      await streamGenerate(data.slug);
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") return;
       console.error("Generation failed:", err);
