@@ -230,11 +230,11 @@ export default function Home() {
           {!url && (
             <span
               className={cn(
-                "pointer-events-none absolute inset-y-0 left-3 flex items-center font-mono text-sm text-muted-foreground/50 transition-opacity duration-300",
+                "pointer-events-none absolute inset-y-0 left-3 right-3 flex items-center font-mono text-sm text-muted-foreground/50 transition-opacity duration-300 overflow-hidden",
                 visible ? "opacity-100" : "opacity-0"
               )}
             >
-              {placeholder}
+              <span className="truncate">{placeholder}</span>
             </span>
           )}
         </div>
