@@ -15,7 +15,9 @@ export function isValidDocUrl(input: string): boolean {
   if (!normalized) return false;
 
   return (
-    /^https?:\/\/(www\.)?sidefx\.com\/docs\//i.test(normalized) || /^https?:\/\/(www\.)?vexllm\.netlify\.app\/docs\//i.test(normalized)
+    /^https?:\/\/(www\.)?sidefx\.com\/docs\//i.test(normalized) ||
+    /^https?:\/\/(www\.)?vexllm\.jchd\.me\/docs\//i.test(normalized) ||
+    /^https?:\/\/(www\.)?vexllm\.netlify\.app\/docs\//i.test(normalized)
   );
 }
 
@@ -33,7 +35,7 @@ export function extractSlugFromUrl(input: string): string | null {
   const urlWithoutFragment = normalized.split("#")[0];
 
   // Handle VexLLM URLs
-  const vexllmMatch = urlWithoutFragment.match(/vexllm\.netlify\.app\/docs\/(.+?)(?:\.html)?(?:\.md)?$/i);
+  const vexllmMatch = urlWithoutFragment.match(/vexllm\.(?:jchd\.me|netlify\.app)\/docs\/(.+?)(?:\.html)?(?:\.md)?$/i);
   if (vexllmMatch) {
     return vexllmMatch[1].replace(/\.html$/, "").replace(/\.md$/, "");
   }
