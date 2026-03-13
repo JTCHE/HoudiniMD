@@ -3,6 +3,7 @@ import { generateMarkdownForSlug, PageNotFoundError } from "@/lib/generator";
 import { toSideFXUrl } from "@/lib/url";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import SearchOverlay from "@/components/docs/SearchOverlay";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -19,14 +20,17 @@ function parseFrontmatter(md: string): { data: Record<string, string>; content: 
   return { data, content: md.slice(end + 5) };
 }
 
+function extractTitle(content: string): string {
+  const match = content.match(/^#\s+(.+)$/m);
+  return match ? match[1] : "";
+}
+
 export async function generateMetadata({ params }: { params: Promise<{ slug: string[] }> }) {
   const { slug } = await params;
   const slugPath = slug.join("/");
   return {
     title: slug[slug.length - 1].replace(/-/g, " ") + " — VexLLM",
-    alternates: {
-      types: { "text/markdown": `/${slugPath}.md` },
-    },
+    alternates: { types: { "text/markdown": `/${slugPath}.md` } },
   };
 }
 
@@ -44,12 +48,14 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
   }
 
   const { data, content } = parseFrontmatter(markdown);
-  const breadcrumbs = data.breadcrumbs ?? "";
+  const title = extractTitle(content);
+  const breadcrumbs = [data.breadcrumbs, title].filter(Boolean).join(" > ");
   const sourceUrl = data.source ?? toSideFXUrl(slugPath);
   const rawUrl = `/${slugPath}.md`;
 
   return (
     <div className="min-h-screen bg-background text-foreground">
+      <SearchOverlay />
       <header className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur">
         <div className="mx-auto grid max-w-4xl grid-cols-[auto_1fr_auto] items-center gap-4 px-6 py-3 text-xs text-muted-foreground">
           <a href="/" className="font-semibold text-foreground hover:opacity-70 transition-opacity shrink-0">
