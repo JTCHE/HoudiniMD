@@ -64,6 +64,7 @@ export async function GET(request: NextRequest) {
       version: item.version,
       score: score !== undefined ? Math.round((1 - score) * 100) / 100 : null,
       docs_url: `${ROOT}/docs/${item.path}`,
+      raw_url: `${ROOT}/docs/${item.path}.md`,
     }));
 
   return Response.json(

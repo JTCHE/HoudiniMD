@@ -12,7 +12,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
   try {
     const result = await generateMarkdownForSlug(slugPath, skipCache, (event) => {
-      // Log progress for debugging/monitoring
       console.log(`[${slugPath}] ${event.stage}: ${event.message}${event.detail ? ` - ${event.detail}` : ""}`);
     });
 
@@ -27,25 +26,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     if (error instanceof PageNotFoundError) {
       return new Response(
-        `# Page Not Found\n\nThe documentation page \`${slugPath}\` does not exist on SideFX's website.\n\nPlease verify the URL is correct. You can browse available documentation at:\n- [SideFX Houdini Docs](https://www.sidefx.com/docs/houdini/)\n- [VEX Functions](https://www.sidefx.com/docs/houdini/vex/functions/index.html)`,
-        {
-          status: 404,
-          headers: {
-            "Content-Type": "text/markdown; charset=utf-8",
-          },
-        }
+        `# Page Not Found\n\nThe documentation page \`${slugPath}\` does not exist on SideFX's website.`,
+        { status: 404, headers: { "Content-Type": "text/markdown; charset=utf-8" } }
       );
     }
 
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return new Response(
-      `# Error\n\nFailed to generate documentation for \`${slugPath}\`.\n\nError: ${errorMessage}\n\nPlease try again later or verify the page exists at: ${toSideFXUrl(slugPath)}`,
-      {
-        status: 500,
-        headers: {
-          "Content-Type": "text/markdown; charset=utf-8",
-        },
-      }
+      `# Error\n\nFailed to generate \`${slugPath}\`.\n\nError: ${errorMessage}`,
+      { status: 500, headers: { "Content-Type": "text/markdown; charset=utf-8" } }
     );
   }
 }
@@ -53,7 +42,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 function getHeaders(slug: string): HeadersInit {
   return {
     "Content-Type": "text/markdown; charset=utf-8",
-    "Cache-Control": "public, max-age=31536000, immutable",
+    "Cache-Control": "public, max-age=2592000", // 30 days, matches R2 cache TTL
     "X-Content-Type-Options": "nosniff",
     "X-Source-URL": toSideFXUrl(slug),
   };
