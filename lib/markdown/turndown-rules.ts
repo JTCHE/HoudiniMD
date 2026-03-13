@@ -4,19 +4,34 @@ import type { CodeLanguage } from './types';
 
 /**
  * Helper to get clean text content from a cell element
- * Extracts text while preserving basic formatting
+ * Preserves inline code as backtick notation
  */
-function getCellText(cell: Element): string {
-  // Clone the cell to avoid modifying the original
-  const clone = cell.cloneNode(true) as Element;
+function getCellText(cell: Element, sourceUrl: string): string {
+  // Use innerHTML (available on node-html-parser elements) to preserve code spans
+  let html = (cell as unknown as { innerHTML: string }).innerHTML ?? '';
 
-  // Get text content, collapsing whitespace
-  let text = clone.textContent || '';
+  // Preserve <code> elements as backtick inline code
+  let text = html.replace(/<code[^>]*>([^<]*)<\/code>/gi, (_, inner) => `\`${inner.trim()}\``);
 
-  // Clean up: collapse whitespace, trim
+  // Preserve images as markdown image syntax (resolve relative URLs)
+  text = text.replace(/<img\b[^>]*>/gi, (match) => {
+    const srcM = match.match(/\bsrc="([^"]*)"/i);
+    const altM = match.match(/\b(?:alt|title)="([^"]*)"/i);
+    const src = srcM?.[1] || '';
+    const alt = altM?.[1] || '';
+    if (!src) return '';
+    let abs = src;
+    if (!src.startsWith('http')) {
+      try { abs = new URL(src, sourceUrl).href; } catch { /* keep */ }
+    }
+    return `![${alt}](${abs})`;
+  });
+
+  // Strip all remaining HTML tags
+  text = text.replace(/<[^>]+>/g, ' ');
+
+  // Collapse whitespace, trim, escape pipes
   text = text.replace(/\s+/g, ' ').trim();
-
-  // Escape pipes that might break table formatting
   text = text.replace(/\|/g, '\\|');
 
   return text;
@@ -47,7 +62,7 @@ export function addCustomRules(
 
         const cellContents: string[] = [];
         for (const cell of cells) {
-          cellContents.push(getCellText(cell as Element));
+          cellContents.push(getCellText(cell as Element, sourceUrl));
         }
 
         const rowText = '| ' + cellContents.join(' | ') + ' |';
@@ -153,5 +168,57 @@ export function addCustomRules(
   turndown.addRule('varElements', {
     filter: 'var',
     replacement: (content) => `*${content}*`,
+  });
+
+  // SideFX callout/notice boxes (.notice.ind-item) → blockquote with type label
+  turndown.addRule('noticeBox', {
+    filter: (node) =>
+      node.nodeName === 'DIV' &&
+      (node as Element).classList.contains('notice') &&
+      (node as Element).classList.contains('ind-item'),
+    replacement: (_content, node) => {
+      const el = node as Element;
+      const classes = Array.from(el.classList);
+      const type = classes.find((c) => ['note', 'warning', 'tip', 'important', 'info'].includes(c)) ?? 'note';
+      const label = type.charAt(0).toUpperCase() + type.slice(1);
+      const content = (el.querySelector('.content') as Element | null)?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+      return `\n\n> **${label}:** ${content}\n\n`;
+    },
+  });
+
+  // .def items → "**Label** — description" on a single line (compact, no double-paragraph gaps)
+  turndown.addRule('defItem', {
+    filter: (node) => node.nodeName === 'DIV' && (node as Element).classList.contains('def'),
+    replacement: (_content, node) => {
+      const el = node as Element;
+      const label = el.querySelector('p.label')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+      const desc = (el.querySelector('.content') as Element | null)?.textContent?.replace(/\s+/g, ' ').trim() || '';
+      if (!label) return _content;
+      return `\n\n**${label}**  \n${desc}\n`;
+    },
+  });
+
+  // Images - resolve relative URLs to absolute SideFX; keyicons → <kbd>
+  turndown.addRule('images', {
+    filter: 'img',
+    replacement: (_content, node) => {
+      const img = node as Element;
+      const src = img.getAttribute('src') || '';
+      const title = img.getAttribute('title') || img.getAttribute('alt') || '';
+      const isKeyIcon = img.classList.contains('keyicon');
+
+      if (isKeyIcon && title) {
+        return `<kbd>${title}</kbd>`;
+      }
+
+      if (!src) return '';
+
+      let absoluteSrc = src;
+      if (!src.startsWith('http')) {
+        try { absoluteSrc = new URL(src, sourceUrl).href; } catch { /* keep original */ }
+      }
+
+      return `![${title}](${absoluteSrc})`;
+    },
   });
 }

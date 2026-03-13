@@ -22,6 +22,23 @@ export function convertToMarkdown(
     el.remove();
   });
 
+  // Remove "Load" / "Launch" example buttons (SideFX example section links)
+  root.querySelectorAll('a').forEach((el) => {
+    const text = el.textContent?.trim();
+    if (text === 'Load' || text === 'Launch') el.remove();
+  });
+
+  // Remove standalone icon <img> that immediately precedes a <link> containing the same icon
+  root.querySelectorAll('a').forEach((link) => {
+    const firstImg = link.querySelector('img');
+    if (!firstImg) return;
+    const linkSrc = firstImg.getAttribute('src');
+    const prev = link.previousElementSibling;
+    if (prev && prev.rawTagName?.toUpperCase() === 'IMG' && prev.getAttribute('src') === linkSrc) {
+      prev.remove();
+    }
+  });
+
   // Initialize Turndown with custom settings
   const turndown = new TurndownService({
     headingStyle: 'atx',
@@ -64,6 +81,7 @@ export function convertToMarkdown(
   parts.push('---');
   parts.push(`breadcrumbs: ${scraped.breadcrumbs.join(' > ')}`);
   parts.push(`source: ${scraped.sourceUrl}`);
+  parts.push(`generated_at: ${new Date().toISOString()}`);
   parts.push('---');
   parts.push('');
 
