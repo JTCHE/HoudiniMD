@@ -92,16 +92,20 @@ export default function SearchOverlay() {
 
     const controller = new AbortController();
     setLoading(true);
-    fetch(`/api/search?q=${encodeURIComponent(q)}&limit=6`, { signal: controller.signal })
-      .then((r) => r.json())
-      .then((d) => {
-        setResults(d.results ?? []);
-        setSelected(0);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-    return () => controller.abort();
-  }, [query]);
+    const timer = setTimeout(() => {
+      fetch(`/api/search?q=${encodeURIComponent(q)}&limit=6`, { signal: controller.signal })
+        .then((r) => r.json())
+        .then((d) => {
+          const res: SearchResult[] = d.results ?? [];
+          setResults(res);
+          setSelected(0);
+          res.slice(0, 3).forEach((r) => router.prefetch(`/docs/${r.path}`));
+        })
+        .catch(() => {})
+        .finally(() => setLoading(false));
+    }, 150);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [query, router]);
 
   const isDirect = results.length === 1 && results[0].category === "Direct link";
 
