@@ -6,16 +6,32 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import rehypeHighlight from "rehype-highlight";
+import Link from "next/link";
 import SearchOverlay from "@/components/docs/SearchOverlay";
 import DocLink from "@/components/docs/DocLink";
+import { fetchFromR2 } from "@/lib/r2/read";
+import type { SearchIndexEntry } from "@/lib/r2/search-index";
 
-export const revalidate = 86400;
+export const revalidate = 2592000;
 export const maxDuration = 60;
+
+// Pre-render all known routes at build time (static → full RSC prefetch, no skeleton).
+// dynamicParams=true (default) allows new/unknown slugs to be server-rendered on demand.
+export async function generateStaticParams() {
+  try {
+    const raw = await fetchFromR2("content/index.json", true);
+    if (!raw) return [];
+    const entries: SearchIndexEntry[] = JSON.parse(raw);
+    return entries.map((e) => ({ slug: e.path.split("/") }));
+  } catch {
+    return [];
+  }
+}
 
 const getCachedMarkdown = unstable_cache(
   (slugPath: string) => generateMarkdownForSlug(slugPath, false, () => {}),
   ["docs-markdown"],
-  { revalidate: 86400 },
+  { revalidate: 2592000 },
 );
 
 function parseFrontmatter(md: string): { data: Record<string, string>; content: string } {
@@ -68,12 +84,12 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
       <SearchOverlay />
       <header className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur">
         <div className="mx-auto grid max-w-4xl grid-cols-[auto_1fr_auto] items-center gap-4 px-6 py-3 text-xs text-muted-foreground">
-          <a
+          <Link
             href="/"
             className="font-semibold text-foreground hover:opacity-70 transition-opacity shrink-0"
           >
             VexLLM
-          </a>
+          </Link>
           <span className="truncate text-center hidden sm:block">{breadcrumbs}</span>
           <div className="flex items-center gap-4 shrink-0">
             <a
