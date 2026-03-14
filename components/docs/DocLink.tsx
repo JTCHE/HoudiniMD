@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 function slugToTitle(href: string): string {
   const slug = href.replace(/^\/docs\//, "");
@@ -36,7 +37,6 @@ export default function DocLink({
   function show() {
     if (!isInternal) return;
     setVisible(true);
-    router.prefetch(href!);
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
@@ -84,16 +84,26 @@ export default function DocLink({
 
   return (
     <span className="relative inline-block">
-      <a
-        href={href}
+      {/* prefetch={true} tells Next.js to fetch the full RSC payload (not just the loading
+          skeleton) when this link enters the viewport. Cached under staleTimes.static (5 min),
+          so clicking after it's been visible for even ~30ms is instant with no skeleton. */}
+      <Link
+        href={href!}
         {...props}
+        prefetch={isInternal ? true : undefined}
+        onMouseDown={(e) => {
+          // Navigate on mousedown (saves the ~100ms between mousedown and click).
+          // Only plain left click — let browser handle Ctrl/Meta/Shift (new tab etc.)
+          if (!isInternal || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+          router.push(href!);
+        }}
         onMouseEnter={show}
         onMouseLeave={hide}
         onFocus={show}
         onBlur={hide}
       >
         {children}
-      </a>
+      </Link>
       {visible && isInternal && (
         <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 z-50 w-max max-w-[16rem] bg-background border border-border shadow-lg p-2 text-xs pointer-events-none whitespace-normal">
           <span className="block font-semibold text-foreground">{displayTitle}</span>
