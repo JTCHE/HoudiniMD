@@ -1,6 +1,16 @@
 import { GetObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { getConfig, getS3Client } from './config';
 
+let indexCache: { data: string; expiry: number } | null = null;
+const INDEX_CACHE_TTL = 5 * 60 * 1000;
+
+export async function fetchIndexJson(): Promise<string | null> {
+  if (indexCache && Date.now() < indexCache.expiry) return indexCache.data;
+  const raw = await fetchFromR2("content/index.json", true); // noValidate: JSON has no frontmatter
+  if (raw) indexCache = { data: raw, expiry: Date.now() + INDEX_CACHE_TTL };
+  return raw;
+}
+
 /** Cached files generated before this date will be re-generated */
 const CACHE_INVALIDATE_BEFORE = new Date("2026-03-13T22:00:00Z");
 
