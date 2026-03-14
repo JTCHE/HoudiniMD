@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { fetchFromR2 } from "@/lib/r2/read";
+import { fetchIndexJson } from "@/lib/r2/read";
 import type { SearchIndexEntry } from "@/lib/r2/search-index";
 import Fuse from "fuse.js";
 
@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
   const names = nameHyphen === nameCompact ? [nameHyphen] : [nameHyphen, nameCompact];
 
   // 1. Try the search index first (fast, no external requests)
-  const indexRaw = await fetchFromR2("content/index.json");
+  const indexRaw = await fetchIndexJson();
   if (indexRaw) {
     const entries: SearchIndexEntry[] = JSON.parse(indexRaw);
     const fuse = new Fuse(entries, {
@@ -51,7 +51,10 @@ export async function GET(request: NextRequest) {
     for (const n of names) {
       const results = fuse.search(n, { limit: 1 });
       if (results.length > 0) {
-        return Response.json({ slug: results[0].item.path, source: "index" });
+        return Response.json(
+          { slug: results[0].item.path, source: "index" },
+          { headers: { "Cache-Control": "public, s-maxage=3600, stale-while-revalidate=86400" } },
+        );
       }
     }
   }
@@ -68,7 +71,10 @@ export async function GET(request: NextRequest) {
       const results = await Promise.all(candidates.map((slug) => probeSlug(slug).then((ok) => ({ slug, ok }))));
       const match = results.find((r) => r.ok);
       if (match) {
-        return Response.json({ slug: match.slug, source: "probe" });
+        return Response.json(
+          { slug: match.slug, source: "probe" },
+          { headers: { "Cache-Control": "public, s-maxage=3600, stale-while-revalidate=86400" } },
+        );
       }
     }
   }

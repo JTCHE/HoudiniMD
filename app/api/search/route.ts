@@ -1,7 +1,10 @@
 import { NextRequest } from "next/server";
 import Fuse from "fuse.js";
-import { fetchFromR2 } from "@/lib/r2/read";
+import { fetchIndexJson } from "@/lib/r2/read";
 import type { SearchIndexEntry } from "@/lib/r2/search-index";
+
+type IndexedEntry = SearchIndexEntry & { slug: string };
+let fuseCache: { fuse: Fuse<IndexedEntry>; indexed: IndexedEntry[]; indexExpiry: number } | null = null;
 
 const ROOT = process.env.ROOT_URL ?? "https://vexllm.jchd.me";
 
@@ -28,7 +31,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const raw = await fetchFromR2("content/index.json");
+  const raw = await fetchIndexJson();
   if (!raw) {
     return Response.json(
       { error: "Search index unavailable" },
@@ -36,21 +39,37 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  let entries: SearchIndexEntry[] = JSON.parse(raw);
+  // Rebuild Fuse only when index cache refreshes
+  if (!fuseCache || Date.now() >= fuseCache.indexExpiry) {
+    const entries: SearchIndexEntry[] = JSON.parse(raw);
+    const indexed = entries.map((e) => ({ ...e, slug: e.path.split("/").pop() ?? e.path }));
+    const fuse = new Fuse(indexed, {
+      keys: [
+        { name: "slug", weight: 0.45 },
+        { name: "title", weight: 0.35 },
+        { name: "summary", weight: 0.1 },
+        { name: "path", weight: 0.1 },
+      ],
+      threshold: 0.5,
+      includeScore: true,
+      ignoreLocation: true,
+    });
+    fuseCache = { fuse, indexed, indexExpiry: Date.now() + 5 * 60 * 1000 };
+  }
+
+  let { indexed } = fuseCache;
+  const { fuse } = fuseCache;
 
   if (category) {
-    entries = entries.filter(
+    indexed = indexed.filter(
       (e) => e.category.toLowerCase() === category.toLowerCase()
     );
   }
 
   const qLower = q.toLowerCase().replace(/\s+/g, "");
 
-  // Add a `slug` virtual field (last path segment) for exact node name matching
-  const indexed = entries.map((e) => ({ ...e, slug: e.path.split("/").pop() ?? e.path }));
-
   // 1. Prefix matches — "copytop" instantly finds "copytopoints"
-  const prefixHits = new Map<string, (typeof indexed)[number]>();
+  const prefixHits = new Map<string, IndexedEntry>();
   for (const e of indexed) {
     if (e.slug.startsWith(qLower) || e.title.toLowerCase().replace(/\s+/g, "").startsWith(qLower)) {
       prefixHits.set(e.path, e);
@@ -59,17 +78,6 @@ export async function GET(request: NextRequest) {
   }
 
   // 2. Fuse fuzzy fallback
-  const fuse = new Fuse(indexed, {
-    keys: [
-      { name: "slug", weight: 0.45 },
-      { name: "title", weight: 0.35 },
-      { name: "summary", weight: 0.1 },
-      { name: "path", weight: 0.1 },
-    ],
-    threshold: 0.5,
-    includeScore: true,
-    ignoreLocation: true,
-  });
 
   const fuseHits = fuse.search(q, { limit });
 
