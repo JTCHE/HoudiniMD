@@ -6,8 +6,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import rehypeHighlight from "rehype-highlight";
-import Link from "next/link";
-import SearchOverlay from "@/components/docs/SearchOverlay";
+import { DocsPageContent } from "@/components/docs/DocsPageContent";
 import DocLink from "@/components/docs/DocLink";
 import { fetchFromR2 } from "@/lib/r2/read";
 import type { SearchIndexEntry } from "@/lib/r2/search-index";
@@ -80,30 +79,7 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
   const rawUrl = `/${slugPath}.md`;
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <SearchOverlay />
-      <header className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur">
-        <div className="mx-auto grid max-w-4xl grid-cols-[auto_1fr_auto] items-center gap-4 px-6 py-3 text-xs text-muted-foreground">
-          <Link
-            href="/"
-            className="font-semibold text-foreground hover:opacity-70 transition-opacity shrink-0"
-          >
-            VexLLM
-          </Link>
-          <span className="truncate text-center hidden sm:block">{breadcrumbs}</span>
-          <div className="flex items-center gap-4 shrink-0">
-            <a
-              href={sourceUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:text-foreground transition-colors"
-            >
-              SideFX ↗
-            </a>
-          </div>
-        </div>
-      </header>
-
+    <DocsPageContent breadcrumbs={breadcrumbs} sourceUrl={sourceUrl}>
       <main className="mx-auto max-w-4xl px-6 py-10">
         <article className="prose prose-neutral dark:prose-invert max-w-none">
           <ReactMarkdown
@@ -171,6 +147,6 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
           </ReactMarkdown>
         </article>
       </main>
-    </div>
+    </DocsPageContent>
   );
 }

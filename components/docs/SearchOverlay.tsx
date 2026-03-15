@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
+import { flushSync } from "react-dom";
 import { useRouter } from "next/navigation";
 import ProgressLogEntry from "@/components/root/progress-log-entry/ProgressLogEntry";
 import type { ProgressEvent } from "@/lib/generator";
@@ -18,9 +19,13 @@ interface Toast {
   type: "error" | "info";
 }
 
+export interface SearchOverlayRef {
+  openSearch: () => void;
+}
+
 const SIDEFX_URL_RE = /sidefx\.com\/docs\/(.+?)(?:\.html)?(?:#.*)?$/;
 
-export default function SearchOverlay() {
+const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_, ref) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -31,6 +36,14 @@ export default function SearchOverlay() {
   const inputRef = useRef<HTMLInputElement>(null);
   const sseRef = useRef<EventSource | null>(null);
   const router = useRouter();
+
+  useImperativeHandle(ref, () => ({
+    openSearch: () => {
+      flushSync(() => setOpen(true));
+      // Focus immediately while still in the click handler
+      inputRef.current?.focus();
+    },
+  }));
 
   // Open on Ctrl+K / Cmd+K
   useEffect(() => {
@@ -53,7 +66,8 @@ export default function SearchOverlay() {
       setQuery("");
       setResults([]);
       setSelected(0);
-      setTimeout(() => inputRef.current?.focus(), 50);
+      // Focus immediately (no setTimeout) so it's in the same event loop
+      inputRef.current?.focus();
     }
   }, [open]);
 
@@ -233,6 +247,12 @@ export default function SearchOverlay() {
           >
             <input
               ref={inputRef}
+              type="search"
+              inputMode="search"
+              autoComplete="off"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck="false"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={onKeyDown}
@@ -292,4 +312,6 @@ export default function SearchOverlay() {
       )}
     </>
   );
-}
+});
+
+export default SearchOverlay;
