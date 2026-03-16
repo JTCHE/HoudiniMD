@@ -125,14 +125,14 @@
 
 /* Text selection styling */
 ::selection {
-  background: oklch(1 0 0);
-  color: oklch(0.145 0 0);
+  background: #ffffff;
+  color: #000000;
 }
 
 @media (prefers-color-scheme: dark) {
   ::selection {
-    background: oklch(0.145 0 0);
-    color: oklch(1 0 0);
+    background: #ffffff;
+    color: #000000;
   }
 }
 
