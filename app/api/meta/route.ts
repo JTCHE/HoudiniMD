@@ -16,6 +16,6 @@ export async function GET(req: Request) {
       title: titleMatch?.[1]?.trim() ?? "",
       summary: summaryMatch?.[1]?.trim() ?? "",
     },
-    { headers: { "Cache-Control": "public, s-maxage=86400, stale-while-revalidate=604800" } },
+    { headers: { "Cache-Control": "private, max-age=86400" } },
   );
 }
