@@ -136,7 +136,7 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
       try {
         const metaRes = await fetch(`/api/meta?slug=${encodeURIComponent(slug)}`);
         if (metaRes.ok) {
-          setOpen(false);
+          flushSync(() => setOpen(false));
           router.push(`/docs/${slug}`);
           return;
         }
