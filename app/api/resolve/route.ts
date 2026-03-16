@@ -49,10 +49,11 @@ export async function GET(request: NextRequest) {
       ignoreLocation: true,
     });
     for (const n of names) {
-      const results = fuse.search(n, { limit: 1 });
+      const results = fuse.search(n, { limit: 10 });
       if (results.length > 0) {
+        const best = results.find((r) => !r.item.path.includes("/examples/")) ?? results[0];
         return Response.json(
-          { slug: results[0].item.path, source: "index" },
+          { slug: best.item.path, source: "index" },
           { headers: { "Cache-Control": "private, max-age=3600" } },
         );
       }
