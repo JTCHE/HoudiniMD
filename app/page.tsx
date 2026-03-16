@@ -107,7 +107,7 @@ export default function Home() {
 
             if (event.stage === "complete" && event.detail) {
               receivedTerminalEvent = true;
-              setTimeout(() => router.push(event.detail!), 300);
+              router.push(event.detail!);
             } else if (event.stage === "error") {
               receivedTerminalEvent = true;
               setError(event.detail || event.message);
