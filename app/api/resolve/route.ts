@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
       if (results.length > 0) {
         return Response.json(
           { slug: results[0].item.path, source: "index" },
-          { headers: { "Cache-Control": "public, s-maxage=3600, stale-while-revalidate=86400" } },
+          { headers: { "Cache-Control": "private, max-age=3600" } },
         );
       }
     }
@@ -73,7 +73,7 @@ export async function GET(request: NextRequest) {
       if (match) {
         return Response.json(
           { slug: match.slug, source: "probe" },
-          { headers: { "Cache-Control": "public, s-maxage=3600, stale-while-revalidate=86400" } },
+          { headers: { "Cache-Control": "private, max-age=3600" } },
         );
       }
     }

@@ -54,6 +54,6 @@ export async function GET(request: NextRequest) {
       categories,
       entries: paginated,
     },
-    { headers: { ...CORS_HEADERS, "Cache-Control": "public, max-age=60" } }
+    { headers: { ...CORS_HEADERS, "Cache-Control": "private, max-age=60" } }
   );
 }
