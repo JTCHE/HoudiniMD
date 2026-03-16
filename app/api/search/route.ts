@@ -102,6 +102,6 @@ export async function GET(request: NextRequest) {
 
   return Response.json(
     { query: q, total: results.length, results },
-    { headers: { ...CORS_HEADERS, "Cache-Control": "public, max-age=60" } }
+    { headers: { ...CORS_HEADERS, "Cache-Control": "no-store" } }
   );
 }
