@@ -82,11 +82,14 @@ export async function GET(request: NextRequest) {
   const fuseHits = fuse.search(q, { limit });
 
   // Merge: prefix matches first (score 1.0), then fuzzy (deduped)
+  // Examples are deprioritized to the back within each group (stable sort)
   const seen = new Set(prefixHits.keys());
   const merged = [
     ...[...prefixHits.values()].map((item) => ({ item, score: 0 })),
     ...fuseHits.filter((r) => !seen.has(r.item.path)),
-  ].slice(0, limit);
+  ]
+    .sort((a, b) => +a.item.path.includes("/examples/") - +b.item.path.includes("/examples/"))
+    .slice(0, limit);
 
   const results = merged
     .map(({ item, score }) => ({
