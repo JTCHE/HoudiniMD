@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { SearchButton, SearchHint } from "./SearchButton";
+import { SearchButton } from "./SearchButton";
 import { useCallback } from "react";
 import type { SearchOverlayRef } from "./SearchOverlay";
 
@@ -40,10 +40,7 @@ export function DocsHeader({ breadcrumbs, sourceUrl, searchRef }: DocsHeaderProp
 
         <div className="flex items-center justify-end gap-3 shrink-0">
           <div className="hidden sm:block">{sideFXLink}</div>
-          <div className="flex items-center gap-2">
-            <SearchButton onOpenSearch={handleSearchClick} />
-            <SearchHint />
-          </div>
+          <SearchButton onOpenSearch={handleSearchClick} />
         </div>
       </div>
     </header>
