@@ -95,6 +95,7 @@ export default function DocLink({
           // Navigate on mousedown (saves the ~100ms between mousedown and click).
           // Only plain left click — let browser handle Ctrl/Meta/Shift (new tab etc.)
           if (!isInternal || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+          router.prefetch(href!);
           router.push(href!);
         }}
         onMouseEnter={show}
