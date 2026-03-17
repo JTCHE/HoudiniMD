@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { fetchFromR2 } from "@/lib/r2/read";
 import type { SearchIndexEntry } from "@/lib/r2/search-index";
 
-const ROOT = process.env.ROOT_URL ?? "https://vexllm.jchd.me";
+const ROOT = process.env.ROOT_URL ?? "https://houdinimd.jchd.me";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",

@@ -17,7 +17,7 @@ export class PageNotFoundError extends Error {
   }
 }
 
-const USER_AGENT = "VexLLM/1.0 (Documentation Converter; https://vexllm.netlify.app)";
+const USER_AGENT = "HoudiniMD/1.0 (Documentation Converter; https://houdinimd.jchd.me)";
 
 /**
  * Check if a SideFX documentation page exists by making a HEAD request.

@@ -1,5 +1,5 @@
 import TurndownService from 'turndown';
-import { convertToVexLLMUrl } from '../url';
+import { convertToHoudiniMDUrl } from '../url';
 import type { CodeLanguage } from './types';
 
 /**
@@ -159,8 +159,8 @@ export function addCustomRules(
       if (!href || href.startsWith('#')) {
         return content;
       }
-      const vexLLMUrl = convertToVexLLMUrl(href, sourceUrl);
-      return `[${content}](${vexLLMUrl})`;
+      const houdinimdUrl = convertToHoudiniMDUrl(href, sourceUrl);
+      return `[${content}](${houdinimdUrl})`;
     },
   });
 

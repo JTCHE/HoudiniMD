@@ -31,7 +31,7 @@ export function DocsHeader({ breadcrumbs, sourceUrl, searchRef }: DocsHeaderProp
       <div className="mx-auto grid max-w-4xl grid-cols-[auto_1fr_auto] items-center gap-4 px-6 py-3 text-xs text-muted-foreground">
         <div className="flex items-center gap-3 shrink-0">
           <Link href="/" className="font-semibold text-foreground hover:opacity-70 transition-opacity">
-            VexLLM
+            HoudiniMD
           </Link>
           <div className="sm:hidden">{sideFXLink}</div>
         </div>

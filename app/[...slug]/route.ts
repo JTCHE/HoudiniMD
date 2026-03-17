@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const ROOT = process.env.ROOT_URL ?? "https://vexllm.jchd.me";
+const ROOT = process.env.ROOT_URL ?? "https://houdinimd.jchd.me";
 
 // Catch-all for unrecognised paths (e.g. /rbdconstraintsfromrules).
 // Searches the index for the best match and redirects there.
