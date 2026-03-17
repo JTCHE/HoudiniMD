@@ -67,7 +67,10 @@ export async function scrapeSideFXPage(url: string): Promise<ScrapedContent> {
     throw new PageNotFoundError(url, response.status);
   }
 
-  const html = await response.text();
+  const rawHtml = await response.text();
+  // Escape bare << sequences that aren't valid HTML but appear in some SideFX pages
+  // (e.g. <<clip = false>> in href attributes), which break node-html-parser
+  const html = rawHtml.replace(/<</g, '&lt;&lt;');
   const doc = parse(html);
 
   // Extract metadata from header/title area
