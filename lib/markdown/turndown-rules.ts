@@ -151,7 +151,7 @@ export function addCustomRules(
     },
   });
 
-  // Links - convert to VexLLM URLs
+  // Links - convert to houdinimd URLs
   turndown.addRule('links', {
     filter: 'a',
     replacement: (content, node) => {

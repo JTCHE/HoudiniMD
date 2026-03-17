@@ -120,7 +120,7 @@ export function convertToHoudiniMDUrl(relativeUrl: string, sourceUrl: string): s
 }
 
 /**
- * Convert a VexLLM path to a SideFX source URL
+ * Convert a houdinimd path to a SideFX source URL
  * slug is the full path after /docs/, e.g., "houdini/vex/functions/foreach"
  * Any URL fragments (hash) are stripped since they're page anchors, not part of the path
  */

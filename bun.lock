@@ -3,7 +3,7 @@
   "configVersion": 0,
   "workspaces": {
     "": {
-      "name": "vexllm",
+      "name": "houdinimd",
       "dependencies": {
         "@aws-sdk/client-s3": "^3.975.0",
         "@radix-ui/react-slot": "^1.2.4",

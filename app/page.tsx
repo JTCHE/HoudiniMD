@@ -141,7 +141,7 @@ export default function Home() {
     setIsProcessing(true);
 
     try {
-      // Path 1: recognised URL or shorthand (sidefx.com, vexllm.jchd.me, /nodes/sop/…)
+      // Path 1: recognised URL or shorthand (sidefx.com, houdinimd.jchd.me, /nodes/sop/…)
       if (isValidDocUrl(trimmed)) {
         const slug = extractSlugFromUrl(trimmed);
         if (!slug) {
