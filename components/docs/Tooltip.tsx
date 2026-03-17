@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useRef } from "react";
 
 interface MetaEntry {
   title: string;
@@ -77,6 +77,19 @@ export function DocTooltip({ slug }: { slug: string }) {
   const [error, setError] = useState(false);
   const mountedRef = useRef(true);
   const sseRef = useRef<EventSource | null>(null);
+  const tooltipRef = useRef<HTMLSpanElement>(null);
+  const [clampX, setClampX] = useState(0);
+
+  useLayoutEffect(() => {
+    const el = tooltipRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const margin = 8;
+    let offset = 0;
+    if (rect.left < margin) offset = margin - rect.left;
+    else if (rect.right > window.innerWidth - margin) offset = window.innerWidth - margin - rect.right;
+    setClampX(offset);
+  }, [meta]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -149,7 +162,7 @@ export function DocTooltip({ slug }: { slug: string }) {
   if (error) return null;
 
   return (
-    <span className="[@media(hover:none)]:hidden absolute bottom-full left-1/2 -translate-x-1/2 mb-1 z-50 w-max max-w-[16rem] bg-background border border-border shadow-lg p-2 text-xs pointer-events-none whitespace-normal">
+    <span ref={tooltipRef} style={{ transform: `translateX(calc(-50% + ${clampX}px))` }} className="[@media(hover:none)]:hidden absolute bottom-full left-1/2 mb-1 z-50 w-max max-w-[16rem] bg-background border border-border shadow-lg p-2 text-xs pointer-events-none whitespace-normal">
       {meta ? (
         <>
           <span className="block font-semibold text-foreground">{meta.title}</span>
