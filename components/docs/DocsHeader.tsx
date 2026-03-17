@@ -6,7 +6,7 @@ import { useCallback } from "react";
 import type { SearchOverlayRef } from "./SearchOverlay";
 
 interface DocsHeaderProps {
-  breadcrumbs: string;
+  breadcrumbs: React.ReactNode;
   sourceUrl: string;
   searchRef: React.RefObject<SearchOverlayRef>;
 }

@@ -6,7 +6,7 @@ import { DocsHeader } from "./DocsHeader";
 import type { SearchOverlayRef } from "./SearchOverlay";
 
 interface DocsPageContentProps {
-  breadcrumbs: string;
+  breadcrumbs: React.ReactNode;
   sourceUrl: string;
   children: React.ReactNode;
 }
