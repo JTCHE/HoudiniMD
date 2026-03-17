@@ -3,8 +3,6 @@
 import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
 import { flushSync } from "react-dom";
 import { useRouter } from "next/navigation";
-import ProgressLogEntry from "@/components/root/progress-log-entry/ProgressLogEntry";
-import type { ProgressEvent } from "@/lib/generator";
 
 interface SearchResult {
   path: string;
@@ -32,9 +30,7 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
   const [selected, setSelected] = useState(0);
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
-  const [progressLog, setProgressLog] = useState<ProgressEvent[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
-  const sseRef = useRef<EventSource | null>(null);
   const router = useRouter();
 
   useImperativeHandle(ref, () => ({
@@ -124,7 +120,7 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
   const isDirect = results.length === 1 && results[0].category === "Direct link";
 
   const streamAndNavigate = useCallback(
-    async (slug: string) => {
+    (slug: string) => {
       // Already on this page?
       if (window.location.pathname === `/docs/${slug}`) {
         setToast({ message: "Already on this page", type: "info" });
@@ -132,43 +128,9 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
         return;
       }
 
-      // Check meta cache first — navigate immediately if already cached
-      try {
-        const metaRes = await fetch(`/api/meta?slug=${encodeURIComponent(slug)}`);
-        if (metaRes.ok) {
-          flushSync(() => setOpen(false));
-          router.push(`/docs/${slug}`);
-          return;
-        }
-      } catch {
-        // fall through to SSE generation
-      }
-
-      // Not cached — stream generation as non-blocking bottom-right card
-      setOpen(false);
-      sseRef.current?.close();
-      setProgressLog([{ stage: "checking-cache", message: "Resolving…", detail: slug }]);
-
-      const sse = new EventSource(`/api/generate?slug=${encodeURIComponent(slug)}`);
-      sseRef.current = sse;
-      sse.onmessage = (e) => {
-        const event = JSON.parse(e.data) as ProgressEvent;
-        setProgressLog((prev) => [...prev, event]);
-        if (event.stage === "complete") {
-          sse.close();
-          router.push(`/docs/${slug}`);
-          setTimeout(() => setProgressLog([]), 600);
-        } else if (event.stage === "error") {
-          sse.close();
-          setProgressLog([]);
-          setToast({ message: event.detail ?? event.message, type: "error" });
-        }
-      };
-      sse.onerror = () => {
-        sse.close();
-        setProgressLog([]);
-        router.push(`/docs/${slug}`);
-      };
+      // Navigate immediately — DocsPage handles missing content via GeneratingPage
+      flushSync(() => setOpen(false));
+      router.push(`/docs/${slug}`);
     },
     [router],
   );
@@ -219,19 +181,6 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
           >
             {toast.message}
           </div>
-        </div>
-      )}
-
-      {/* Generation progress — non-blocking bottom-right card */}
-      {progressLog.length > 0 && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[55] pointer-events-none w-96 bg-background border shadow-2xl p-3 space-y-1.5">
-          {progressLog.map((event, i) => (
-            <ProgressLogEntry
-              key={i}
-              event={event}
-              isLatest={i === progressLog.length - 1}
-            />
-          ))}
         </div>
       )}
 
