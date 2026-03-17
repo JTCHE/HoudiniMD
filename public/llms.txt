@@ -1,26 +1,26 @@
-# VexLLM
+# houdinimd
 
 Houdini documentation as clean markdown for LLMs.
 
-Base URL: https://vexllm.jchd.me
+Base URL: https://houdinimd.jchd.me
 
 ## Markdown Access
 
 Append `.md` to any docs URL to get clean markdown output:
 
-  https://vexllm.jchd.me/docs/houdini/{path}.md
+  https://houdinimd.jchd.me/docs/houdini/{path}.md
 
 Full SideFX URL form — auto-redirects to markdown:
 
-  https://vexllm.jchd.me/https://www.sidefx.com/docs/houdini/{path}.html.md
+  https://houdinimd.jchd.me/https://www.sidefx.com/docs/houdini/{path}.html.md
 
 The proxy resolves any valid SideFX docs URL on-demand — content is not limited to pre-indexed pages.
-A full path list is available at https://vexllm.jchd.me/sitemap.xml.
+A full path list is available at https://houdinimd.jchd.me/sitemap.xml.
 
 ## URL Pattern
 
 ```
-https://vexllm.jchd.me/docs/houdini/{path}
+https://houdinimd.jchd.me/docs/houdini/{path}
 ```
 
 Path mirrors SideFX docs structure. Examples:

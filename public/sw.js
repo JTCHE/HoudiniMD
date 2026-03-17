@@ -1,4 +1,4 @@
-const CACHE = 'vexllm-docs-v1';
+const CACHE = 'houdinimd-docs-v1';
 
 self.addEventListener('install', () => self.skipWaiting());
 

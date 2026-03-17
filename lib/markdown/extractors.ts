@@ -17,8 +17,8 @@ export function extractSeeAlso(root: HTMLElement, sourceUrl: string): string | n
     const href = link.getAttribute('href') || '';
     const text = link.textContent?.trim() || '';
     if (text && href) {
-      const vexLLMUrl = convertToHoudiniMDUrl(href, sourceUrl);
-      lines.push(`- [${text}](${vexLLMUrl})`);
+      const houdinimdUrl = convertToHoudiniMDUrl(href, sourceUrl);
+      lines.push(`- [${text}](${houdinimdUrl})`);
     }
   });
 
@@ -56,8 +56,8 @@ export function extractTaggedLinks(root: HTMLElement, sourceUrl: string): string
       const href = link.getAttribute('href') || '';
       const text = link.textContent?.trim() || '';
       if (text && href) {
-        const vexLLMUrl = convertToHoudiniMDUrl(href, sourceUrl);
-        linkLines.push(`- [${text}](${vexLLMUrl})`);
+        const houdinimdUrl = convertToHoudiniMDUrl(href, sourceUrl);
+        linkLines.push(`- [${text}](${houdinimdUrl})`);
       }
     });
 

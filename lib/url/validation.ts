@@ -18,8 +18,8 @@ export function isValidDocUrl(input: string): boolean {
     /^https?:\/\/(www\.)?sidefx\.com\/docs\//i.test(normalized) ||
     /^https?:\/\/(www\.)?houdinimd\.jchd\.me\/docs\//i.test(normalized) ||
     /^https?:\/\/(www\.)?houdinimd\.netlify\.app\/docs\//i.test(normalized) ||
-    /^https?:\/\/(www\.)?vexllm\.jchd\.me\/docs\//i.test(normalized) ||
-    /^https?:\/\/(www\.)?vexllm\.netlify\.app\/docs\//i.test(normalized)
+    /^https?:\/\/(www\.)?houdinimd\.jchd\.me\/docs\//i.test(normalized) ||
+    /^https?:\/\/(www\.)?houdinimd\.netlify\.app\/docs\//i.test(normalized)
   );
 }
 
@@ -36,8 +36,8 @@ export function extractSlugFromUrl(input: string): string | null {
   // Strip URL fragment (hash) before processing - fragments are page anchors, not part of the path
   const urlWithoutFragment = normalized.split("#")[0];
 
-  // Handle HoudiniMD URLs (new domain, keep old vexllm for redirect compat)
-  const houdinimdMatch = urlWithoutFragment.match(/(?:houdinimd|vexllm)\.(?:jchd\.me|netlify\.app)\/docs\/(.+?)(?:\.html)?(?:\.md)?$/i);
+  // Handle HoudiniMD URLs (new domain, keep old houdinimd for redirect compat)
+  const houdinimdMatch = urlWithoutFragment.match(/(?:houdinimd|houdinimd)\.(?:jchd\.me|netlify\.app)\/docs\/(.+?)(?:\.html)?(?:\.md)?$/i);
   if (houdinimdMatch) {
     return houdinimdMatch[1].replace(/\.html$/, "").replace(/\.md$/, "");
   }
