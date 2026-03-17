@@ -81,17 +81,33 @@ export async function GET(request: NextRequest) {
 
   const fuseHits = fuse.search(q, { limit });
 
+  // Sort prefix hits: title starts with query > slug-only match (both normalized)
+  const sortedPrefix = [...prefixHits.values()].sort((a, b) => {
+    const aTitle = +!a.title.toLowerCase().replace(/\s+/g, "").startsWith(qLower);
+    const bTitle = +!b.title.toLowerCase().replace(/\s+/g, "").startsWith(qLower);
+    return aTitle - bTitle;
+  });
+
   // Merge: prefix matches first (score 1.0), then fuzzy (deduped)
   // Examples are deprioritized to the back within each group (stable sort)
   const seen = new Set(prefixHits.keys());
   const merged = [
-    ...[...prefixHits.values()].map((item) => ({ item, score: 0 })),
+    ...sortedPrefix.map((item) => ({ item, score: 0 })),
     ...fuseHits.filter((r) => !seen.has(r.item.path)),
   ]
     .sort((a, b) => +a.item.path.includes("/examples/") - +b.item.path.includes("/examples/"))
     .slice(0, limit);
 
-  const results = merged
+  // Deduplicate anchor fragments: if "foo#bar" and "foo" both appear, keep only "foo"
+  const seenBase = new Set<string>();
+  const deduped = merged.filter(({ item }) => {
+    const base = item.path.split("#")[0];
+    if (seenBase.has(base)) return false;
+    seenBase.add(base);
+    return true;
+  });
+
+  const results = deduped
     .map(({ item, score }) => ({
       path: item.path,
       title: item.title,
