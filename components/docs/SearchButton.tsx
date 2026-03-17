@@ -1,10 +1,18 @@
 "use client";
 
+import { useState, useEffect } from "react";
+
 interface SearchButtonProps {
   onOpenSearch: () => void;
 }
 
 export function SearchButton({ onOpenSearch }: SearchButtonProps) {
+  const [showHint, setShowHint] = useState(false);
+
+  useEffect(() => {
+    setShowHint(window.matchMedia("(pointer: fine)").matches);
+  }, []);
+
   return (
     <button
       onClick={onOpenSearch}
@@ -25,7 +33,7 @@ export function SearchButton({ onOpenSearch }: SearchButtonProps) {
           d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
         />
       </svg>
-      <kbd className="hidden sm:inline-flex kbd-button">⌘K</kbd>
+      {showHint && <kbd className="kbd-button">⌘K</kbd>}
     </button>
   );
 }

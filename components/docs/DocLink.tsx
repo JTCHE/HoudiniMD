@@ -1,25 +1,17 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
-function slugToTitle(href: string): string {
-  const slug = href.replace(/^\/docs\//, "");
-  const parts = slug.split("/").filter(Boolean);
-  const segment =
-    parts[parts.length - 1] === "index"
-      ? (parts[parts.length - 2] ?? parts[0] ?? slug)
-      : (parts[parts.length - 1] ?? slug);
-  const words = segment
-    .replace(/([a-z])([A-Z])/g, "$1 $2")
-    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
-    .split(/[-_\s]+/)
-    .filter(Boolean);
-  return words.map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+interface MetaEntry {
+  title: string;
+  summary: string;
 }
 
-// Module-level set — don't re-trigger generation for same slug in this session
+// Module-level caches shared across all DocLink instances in this session
+const metaCache = new Map<string, MetaEntry>();
+const fetchingMeta = new Set<string>();
 const generatedSlugs = new Set<string>();
 
 export default function DocLink({
@@ -27,60 +19,86 @@ export default function DocLink({
   children,
   ...props
 }: React.AnchorHTMLAttributes<HTMLAnchorElement>) {
-  const [fetchedTitle, setFetchedTitle] = useState<string | null>(null);
-  const [summary, setSummary] = useState<string | null>(null);
+  const slug = href?.startsWith("/docs/") ? href.slice(6) : null;
+
+  const [meta, setMeta] = useState<MetaEntry | null>(() =>
+    slug ? (metaCache.get(slug) ?? null) : null
+  );
   const [visible, setVisible] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sseRef = useRef<EventSource | null>(null);
+  const mountedRef = useRef(true);
   const router = useRouter();
-  const isInternal = !!href?.startsWith("/docs/");
+  const isInternal = !!slug;
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (sseRef.current) { sseRef.current.close(); sseRef.current = null; }
+    };
+  }, []);
+
+  async function fetchMeta(s: string) {
+    if (metaCache.has(s)) { setMeta(metaCache.get(s)!); return; }
+    if (fetchingMeta.has(s)) return;
+
+    fetchingMeta.add(s);
+    try {
+      const res = await fetch(`/api/meta?slug=${encodeURIComponent(s)}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.title) {
+          const entry: MetaEntry = { title: data.title, summary: data.summary ?? "" };
+          metaCache.set(s, entry);
+          if (mountedRef.current) setMeta(entry);
+          return;
+        }
+      }
+    } finally {
+      fetchingMeta.delete(s);
+    }
+
+    // Not cached — trigger background generation once per slug per session
+    if (generatedSlugs.has(s)) return;
+    generatedSlugs.add(s);
+    const sse = new EventSource(`/api/generate?slug=${encodeURIComponent(s)}`);
+    sseRef.current = sse;
+    sse.onmessage = (e) => {
+      const event = JSON.parse(e.data);
+      if (event.stage === "complete") {
+        sse.close();
+        sseRef.current = null;
+        fetch(`/api/meta?slug=${encodeURIComponent(s)}`)
+          .then((r) => r.json())
+          .then((d) => {
+            if (d.title) {
+              const entry: MetaEntry = { title: d.title, summary: d.summary ?? "" };
+              metaCache.set(s, entry);
+              if (mountedRef.current) setMeta(entry);
+            }
+          })
+          .catch(() => {});
+      } else if (event.stage === "error") {
+        sse.close();
+        sseRef.current = null;
+      }
+    };
+    sse.onerror = () => { sse.close(); sseRef.current = null; };
+  }
 
   function show() {
     if (!isInternal) return;
     setVisible(true);
-
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(async () => {
-      const slug = href!.replace(/^\/docs\//, "");
-
-      // Try meta (works for any cached content, even pre-invalidation)
-      const metaRes = await fetch(`/api/meta?slug=${encodeURIComponent(slug)}`);
-      if (metaRes.ok) {
-        const data = await metaRes.json();
-        if (data.title) setFetchedTitle(data.title);
-        setSummary(data.summary ?? "");
-        return;
-      }
-
-      // Not in cache — trigger background generation (once per slug per session)
-      if (generatedSlugs.has(slug)) return;
-      generatedSlugs.add(slug);
-      const sse = new EventSource(`/api/generate?slug=${encodeURIComponent(slug)}`);
-      sse.onmessage = (e) => {
-        const event = JSON.parse(e.data);
-        if (event.stage === "complete") {
-          sse.close();
-          // Re-fetch meta now that content is generated
-          fetch(`/api/meta?slug=${encodeURIComponent(slug)}`)
-            .then((r) => r.json())
-            .then((d) => {
-              if (d.title) setFetchedTitle(d.title);
-              setSummary(d.summary ?? "");
-            })
-            .catch(() => {});
-        } else if (event.stage === "error") {
-          sse.close();
-        }
-      };
-      sse.onerror = () => sse.close();
-    }, 75);
+    debounceRef.current = setTimeout(() => fetchMeta(slug!), 75);
   }
 
   function hide() {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     setVisible(false);
   }
-
-  const displayTitle = fetchedTitle ?? slugToTitle(href ?? "");
 
   return (
     <span className="relative inline-block">
@@ -106,10 +124,19 @@ export default function DocLink({
         {children}
       </Link>
       {visible && isInternal && (
-        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 z-50 w-max max-w-[16rem] bg-background border border-border shadow-lg p-2 text-xs pointer-events-none whitespace-normal">
-          <span className="block font-semibold text-foreground">{displayTitle}</span>
-          {summary && (
-            <span className="block text-muted-foreground mt-0.5 line-clamp-2">{summary}</span>
+        <span className="[@media(hover:none)]:hidden absolute bottom-full left-1/2 -translate-x-1/2 mb-1 z-50 w-max max-w-[16rem] bg-background border border-border shadow-lg p-2 text-xs pointer-events-none whitespace-normal">
+          {meta ? (
+            <>
+              <span className="block font-semibold text-foreground">{meta.title}</span>
+              {meta.summary && (
+                <span className="block text-muted-foreground mt-0.5 line-clamp-2">{meta.summary}</span>
+              )}
+            </>
+          ) : (
+            <>
+              <span className="sk block h-3 w-28 rounded-sm bg-muted" />
+              <span className="sk block h-2.5 w-40 rounded-sm bg-muted mt-1.5" />
+            </>
           )}
         </span>
       )}
