@@ -1,5 +1,5 @@
 const SIDEFX_DOCS_BASE = "https://www.sidefx.com/docs";
-const VEXLLM_BASE = "";
+const HOUDINIMD_BASE = "";
 
 /**
  * Coerce a variety of SideFX-style inputs into a full absolute URL.
@@ -66,16 +66,16 @@ export function normalizePath(pathname: string): string {
 }
 
 /**
- * Convert a relative SideFX URL to an absolute VexLLM URL
+ * Convert a relative SideFX URL to an absolute HoudiniMD URL
  */
-export function convertToVexLLMUrl(relativeUrl: string, sourceUrl: string): string {
+export function convertToHoudiniMDUrl(relativeUrl: string, sourceUrl: string): string {
   // Handle already absolute URLs
   if (relativeUrl.startsWith("http://") || relativeUrl.startsWith("https://")) {
     // If it's a sidefx.com URL, convert it
     if (relativeUrl.includes("sidefx.com/docs/")) {
       const match = relativeUrl.match(/sidefx\.com\/docs\/(.+?)(?:\.html)?$/);
       if (match) {
-        return `${VEXLLM_BASE}/docs/${match[1].replace(".html", "")}`;
+        return `${HOUDINIMD_BASE}/docs/${match[1].replace(".html", "")}`;
       }
     }
     return relativeUrl;
@@ -116,7 +116,7 @@ export function convertToVexLLMUrl(relativeUrl: string, sourceUrl: string): stri
   // Combine path
   const finalPath = parts.length > 0 ? `${parts.join("/")}/${targetPath}` : targetPath;
 
-  return `${VEXLLM_BASE}/docs/${finalPath}`;
+  return `${HOUDINIMD_BASE}/docs/${finalPath}`;
 }
 
 /**

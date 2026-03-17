@@ -1,9 +1,9 @@
 export async function GET() {
-  const root = process.env.ROOT_URL ?? "https://vexllm.jchd.me";
+  const root = process.env.ROOT_URL ?? "https://houdinimd.jchd.me";
 
-  const body = `# VexLLM — Houdini Docs for LLMs
+  const body = `# HoudiniMD — Houdini Docs for LLMs
 
-VexLLM provides SideFX Houdini documentation as clean, LLM-optimised markdown.
+HoudiniMD provides SideFX Houdini documentation as clean, LLM-optimised markdown.
 All pages are generated on-demand from the official SideFX docs and cached for 30 days.
 
 ## Raw Markdown (per-page)

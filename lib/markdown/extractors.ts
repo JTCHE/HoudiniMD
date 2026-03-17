@@ -1,5 +1,5 @@
 import type { HTMLElement } from 'node-html-parser';
-import { convertToVexLLMUrl } from '../url';
+import { convertToHoudiniMDUrl } from '../url';
 
 /**
  * Extract "See Also" links from postmeta table
@@ -17,7 +17,7 @@ export function extractSeeAlso(root: HTMLElement, sourceUrl: string): string | n
     const href = link.getAttribute('href') || '';
     const text = link.textContent?.trim() || '';
     if (text && href) {
-      const vexLLMUrl = convertToVexLLMUrl(href, sourceUrl);
+      const vexLLMUrl = convertToHoudiniMDUrl(href, sourceUrl);
       lines.push(`- [${text}](${vexLLMUrl})`);
     }
   });
@@ -56,7 +56,7 @@ export function extractTaggedLinks(root: HTMLElement, sourceUrl: string): string
       const href = link.getAttribute('href') || '';
       const text = link.textContent?.trim() || '';
       if (text && href) {
-        const vexLLMUrl = convertToVexLLMUrl(href, sourceUrl);
+        const vexLLMUrl = convertToHoudiniMDUrl(href, sourceUrl);
         linkLines.push(`- [${text}](${vexLLMUrl})`);
       }
     });

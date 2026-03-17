@@ -146,7 +146,7 @@ async function rebuildFile(
 async function main() {
   const options = parseArgs();
 
-  console.log('🔄 VexLLM Content Rebuilder\n');
+  console.log('🔄 HoudiniMD Content Rebuilder\n');
 
   if (options.dryRun) {
     console.log('Running in dry-run mode (no changes will be made)\n');

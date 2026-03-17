@@ -1,2 +1,2 @@
-export { normalizeInput, normalizePath, convertToVexLLMUrl, toSideFXUrl } from './normalizer';
+export { normalizeInput, normalizePath, convertToHoudiniMDUrl, toSideFXUrl } from './normalizer';
 export { isValidDocUrl, extractSlugFromUrl } from './validation';
