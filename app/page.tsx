@@ -176,10 +176,17 @@ export default function Home() {
   }
 
   // Focus input on mount
-  useEffect(() => { inputRef.current?.focus(); }, []);
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
 
   // Cleanup abort controller
-  useEffect(() => () => { abortControllerRef.current?.abort(); }, []);
+  useEffect(
+    () => () => {
+      abortControllerRef.current?.abort();
+    },
+    [],
+  );
 
   // Global paste handler
   useEffect(() => {
@@ -207,12 +214,18 @@ export default function Home() {
       </p>
 
       {error && (
-        <p id="url-error" className="text-xs text-destructive mb-2">
+        <p
+          id="url-error"
+          className="text-xs text-destructive mb-2"
+        >
           {error}
         </p>
       )}
 
-      <form onSubmit={handleSubmit} className="flex gap-2">
+      <form
+        onSubmit={handleSubmit}
+        className="flex gap-2"
+      >
         <div className="relative flex-1">
           <Input
             ref={inputRef}
@@ -229,7 +242,7 @@ export default function Home() {
             <span
               className={cn(
                 "pointer-events-none absolute inset-y-0 left-3 right-3 flex items-center font-mono text-sm text-muted-foreground/50 transition-opacity duration-300 overflow-hidden",
-                visible ? "opacity-100" : "opacity-0"
+                visible ? "opacity-100" : "opacity-0",
               )}
             >
               <span className="truncate">{placeholder}</span>

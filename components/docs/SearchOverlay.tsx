@@ -31,6 +31,7 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
   const router = useRouter();
 
   useImperativeHandle(ref, () => ({
@@ -73,6 +74,12 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
     const t = setTimeout(() => setToast(null), 4000);
     return () => clearTimeout(t);
   }, [toast]);
+
+  // Scroll selected item into view when navigating by keyboard
+  useEffect(() => {
+    const item = listRef.current?.children[selected] as HTMLElement | undefined;
+    item?.scrollIntoView({ block: "nearest" });
+  }, [selected]);
 
   // Live search as user types
   useEffect(() => {
@@ -121,8 +128,15 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
 
   const streamAndNavigate = useCallback(
     (slug: string) => {
+      const hashIdx = slug.indexOf("#");
+      const basePath = hashIdx >= 0 ? slug.slice(0, hashIdx) : slug;
+      const anchor = hashIdx >= 0 ? slug.slice(hashIdx + 1) : "";
+
       // Already on this page?
-      if (window.location.pathname === `/docs/${slug}`) {
+      if (window.location.pathname === `/docs/${basePath}`) {
+        if (anchor) {
+          document.getElementById(anchor)?.scrollIntoView({ behavior: "smooth" });
+        }
         setToast({ message: "Already on this page", type: "info" });
         setOpen(false);
         return;
@@ -130,7 +144,7 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
 
       // Navigate immediately — DocsPage handles missing content via GeneratingPage
       flushSync(() => setOpen(false));
-      router.push(`/docs/${slug}`);
+      router.push(`/docs/${basePath}${anchor ? `#${anchor}` : ""}`);
     },
     [router],
   );
@@ -157,15 +171,15 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
     const total = results.length + (isDirect ? 0 : 1);
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setSelected((s) => Math.min(s + 1, total - 1));
+      setSelected((s) => (s + 1) % total);
     }
     if (e.key === "ArrowUp") {
       e.preventDefault();
-      setSelected((s) => Math.max(s - 1, 0));
+      setSelected((s) => (s - 1 + total) % total);
     }
     if (e.key === "Enter") {
       if (selected < results.length) navigate(results[selected]);
-      else navigate();
+      else if (!loading) navigate();
     }
   }
 
@@ -210,7 +224,7 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
             />
 
             {(results.length > 0 || (query.trim() && !isDirect)) && (
-              <ul className="max-h-80 overflow-y-auto">
+              <ul ref={listRef} className="max-h-80 overflow-y-auto">
                 {results.map((r, i) => (
                   <li key={r.path}>
                     <button
@@ -218,7 +232,7 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
                         i === selected ? "bg-muted" : "hover:bg-muted/50"
                       }`}
                       onClick={() => navigate(r)}
-                      onMouseEnter={() => setSelected(i)}
+                      onMouseMove={() => setSelected(i)}
                     >
                       <span className="text-sm font-medium truncate">{r.title}</span>
                       <span className="text-xs text-muted-foreground truncate">{r.category}</span>
@@ -232,7 +246,7 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
                         selected === results.length ? "bg-muted" : "hover:bg-muted/50"
                       }`}
                       onClick={() => navigate()}
-                      onMouseEnter={() => setSelected(results.length)}
+                      onMouseMove={() => setSelected(results.length)}
                     >
                       <span className="text-xs shrink-0">Search for</span>
                       <span className="text-sm font-mono truncate">&ldquo;{query.trim()}&rdquo;</span>
