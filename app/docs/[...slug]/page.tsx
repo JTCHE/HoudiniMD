@@ -84,13 +84,11 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
             pre: ({ children }) => <pre className="not-prose my-4 overflow-x-auto border border-border/50">{children}</pre>,
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
             code: ({ className, children, node: _node, ...props }) => {
-              const isBlock = !!className?.startsWith("language-");
+              const isBlock = !!className?.startsWith("language-") ||
+                (typeof children === "string" && children.includes("\n"));
               if (isBlock) {
-                return (
-                  <code className={`${className} block p-4 text-sm font-mono leading-relaxed`} {...props}>
-                    {children}
-                  </code>
-                );
+                // CSS in globals.css handles all block code styling
+                return <code className={className ?? ""} {...props}>{children}</code>;
               }
               return (
                 <code className="bg-muted px-1.5 py-0.5 text-sm font-mono border border-border/50" {...props}>
