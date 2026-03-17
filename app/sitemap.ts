@@ -1,32 +1,29 @@
 import type { MetadataRoute } from "next";
+import { fetchIndexJson } from "@/lib/r2/read";
+import type { SearchIndexEntry } from "@/lib/r2/search-index";
 
-export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = process.env.ROOT_URL as string;
+export const revalidate = 3600;
 
-  return [
-    {
-      url: baseUrl,
-      lastModified: new Date(),
-      changeFrequency: "monthly",
-      priority: 1,
-    },
-    {
-      url: `${baseUrl}/docs/houdini/vex/functions`,
-      lastModified: new Date(),
-      changeFrequency: "monthly",
-      priority: 0.8,
-    },
-    {
-      url: `${baseUrl}/docs/houdini/hom/hou`,
-      lastModified: new Date(),
-      changeFrequency: "monthly",
-      priority: 0.8,
-    },
-    {
-      url: `${baseUrl}/docs/houdini/nodes/sop`,
-      lastModified: new Date(),
-      changeFrequency: "monthly",
-      priority: 0.8,
-    },
+const BASE_URL = process.env.ROOT_URL ?? "https://vexllm.jchd.me";
+
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const base: MetadataRoute.Sitemap = [
+    { url: BASE_URL, lastModified: new Date(), changeFrequency: "monthly", priority: 1 },
   ];
+
+  try {
+    const raw = await fetchIndexJson();
+    if (!raw) return base;
+    const entries: SearchIndexEntry[] = JSON.parse(raw);
+    return [
+      ...base,
+      ...entries.map((e) => ({
+        url: `${BASE_URL}/docs/${e.path}`,
+        changeFrequency: "monthly" as const,
+        priority: 0.7,
+      })),
+    ];
+  } catch {
+    return base;
+  }
 }

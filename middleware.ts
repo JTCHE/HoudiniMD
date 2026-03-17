@@ -17,12 +17,14 @@ export function middleware(request: NextRequest) {
   const url = request.nextUrl.clone();
   const pathname = url.pathname;
 
-  // Handle pasted SideFX URLs
+  // Handle pasted SideFX URLs — preserve .md suffix so raw markdown is served
   const sidefxMatch = pathname.match(/^\/https?:\/?\/?(?:www\.)?sidefx\.com\/docs\/(.+)$/);
   if (sidefxMatch) {
     let p = sidefxMatch[1];
+    const wantsMarkdown = p.endsWith('.html.md') || (p.endsWith('.md') && !p.endsWith('.html'));
     p = stripExtensionsAndSlash(p);
-    url.pathname = `/docs/${p}`;
+    if (p.endsWith('.md')) p = p.slice(0, -3); // strip bare .md too
+    url.pathname = wantsMarkdown ? `/docs/${p}.md` : `/docs/${p}`;
     return NextResponse.redirect(url, 301);
   }
 
