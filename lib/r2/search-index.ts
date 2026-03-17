@@ -7,6 +7,7 @@ export interface SearchIndexEntry {
   summary: string;
   category: string;
   version: string;
+  lastModified?: string;
 }
 
 const INDEX_PATH = 'content/index.json';
@@ -52,11 +53,12 @@ export async function updateSearchIndex(entry: SearchIndexEntry): Promise<void> 
   }
 
   // Update or add entry
+  const entryWithTimestamp = { ...entry, lastModified: new Date().toISOString() };
   const existingIndex = index.findIndex((e) => e.path === entry.path);
   if (existingIndex >= 0) {
-    index[existingIndex] = entry;
+    index[existingIndex] = entryWithTimestamp;
   } else {
-    index.push(entry);
+    index.push(entryWithTimestamp);
   }
 
   // Sort alphabetically

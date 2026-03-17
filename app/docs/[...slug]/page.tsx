@@ -1,12 +1,15 @@
 import { unstable_noStore } from "next/cache";
+import type { Metadata } from "next";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import rehypeHighlight from "rehype-highlight";
 import DocLink from "@/components/docs/DocLink";
-import { fetchFromR2 } from "@/lib/r2/read";
+import { fetchFromR2, fetchIndexJson } from "@/lib/r2/read";
 import GeneratingPage from "@/components/docs/GeneratingPage";
 import type { SearchIndexEntry } from "@/lib/r2/search-index";
+
+const ROOT_URL = process.env.ROOT_URL ?? "https://houdinimd.jchd.me";
 
 export const revalidate = 2592000;
 export const maxDuration = 60;
@@ -31,12 +34,52 @@ function parseFrontmatter(md: string): { content: string } {
   return { content: md.slice(end + 5) };
 }
 
-export async function generateMetadata({ params }: { params: Promise<{ slug: string[] }> }) {
+export async function generateMetadata({ params }: { params: Promise<{ slug: string[] }> }): Promise<Metadata> {
   const { slug } = await params;
   const slugPath = slug.join("/");
+  const fallbackTitle = slug[slug.length - 1].replace(/-/g, " ");
+
+  let title = fallbackTitle;
+  let description: string | undefined;
+
+  try {
+    const raw = await fetchIndexJson();
+    if (raw) {
+      const entries: SearchIndexEntry[] = JSON.parse(raw);
+      const entry = entries.find((e) => e.path === slugPath);
+      if (entry) {
+        title = entry.title;
+        description = entry.summary || undefined;
+      }
+    }
+  } catch {
+    // fall through to fallback
+  }
+
+  const pageTitle = `${title} — HoudiniMD`;
+  const canonical = `${ROOT_URL}/docs/${slugPath}`;
+
   return {
-    title: slug[slug.length - 1].replace(/-/g, " ") + " — VexLLM",
-    alternates: { types: { "text/markdown": `/${slugPath}.md` } },
+    title: pageTitle,
+    description,
+    alternates: {
+      canonical,
+      types: { "text/markdown": `${ROOT_URL}/docs/${slugPath}.md` },
+    },
+    openGraph: {
+      title: pageTitle,
+      description,
+      url: canonical,
+      siteName: "HoudiniMD",
+      type: "article",
+      images: [`${ROOT_URL}/api/og?path=${encodeURIComponent(slugPath)}`],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: pageTitle,
+      description,
+      images: [`${ROOT_URL}/api/og?path=${encodeURIComponent(slugPath)}`],
+    },
   };
 }
 
@@ -56,8 +99,32 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
 
   const { content } = parseFrontmatter(rawMarkdown);
 
+  // Extract title and summary for JSON-LD
+  const h1Match = content.match(/^#\s+(.+)$/m);
+  const mdTitle = h1Match?.[1]?.trim() ?? slug[slug.length - 1].replace(/-/g, " ");
+  const summaryMatch = content.match(/^(?!#)[^\n]{20,}/m);
+  const mdSummary = summaryMatch?.[0]?.trim();
+  const canonical = `${ROOT_URL}/docs/${slugPath}`;
+
+  const articleJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    headline: mdTitle,
+    ...(mdSummary ? { description: mdSummary } : {}),
+    url: canonical,
+    author: { "@type": "Organization", name: "SideFX" },
+    publisher: { "@type": "Organization", name: "HoudiniMD" },
+    about: { "@type": "SoftwareApplication", name: "Houdini" },
+    image: `${ROOT_URL}/api/og?path=${encodeURIComponent(slugPath)}`,
+    mainEntityOfPage: canonical,
+  };
+
   return (
     <main className="mx-auto max-w-4xl px-6 py-10">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }}
+      />
       <article className="prose prose-neutral dark:prose-invert max-w-none">
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
