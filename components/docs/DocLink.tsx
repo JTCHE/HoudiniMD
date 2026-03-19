@@ -10,7 +10,7 @@ export default function DocLink({
   children,
   ...props
 }: React.AnchorHTMLAttributes<HTMLAnchorElement>) {
-  const slug = href?.startsWith("/docs/") ? href.slice(6) : null;
+  const slug = href?.startsWith("/docs/") ? href.slice(6).split("#")[0] : null;
   const [visible, setVisible] = useState(false);
   const router = useRouter();
   const isInternal = !!slug;

@@ -4,6 +4,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import rehypeHighlight from "rehype-highlight";
+import rehypeSlug from "rehype-slug";
 import DocLink from "@/components/docs/DocLink";
 import { fetchFromR2, fetchIndexJson } from "@/lib/r2/read";
 import GeneratingPage from "@/components/docs/GeneratingPage";
@@ -128,7 +129,7 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
       <article className="prose prose-neutral dark:prose-invert max-w-none">
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
-          rehypePlugins={[rehypeRaw, [rehypeHighlight, { aliases: { c: ["vex", "hscript"], python: ["python"] } }]]}
+          rehypePlugins={[rehypeRaw, rehypeSlug, [rehypeHighlight, { aliases: { c: ["vex", "hscript"], python: ["python"] } }]]}
           components={{
             h1: ({ children }) => (
               <h1 className="not-prose text-2xl font-bold tracking-tight border-b border-border pb-3 mb-6 mt-0">{children}</h1>
