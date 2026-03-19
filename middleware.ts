@@ -32,7 +32,8 @@ export function middleware(request: NextRequest) {
   if (pathname.startsWith('/docs/')) {
     // .md suffix → rewrite to /api/raw/ (raw markdown for LLMs, per llmstxt.org spec)
     if (pathname.endsWith('.md')) {
-      const slug = pathname.slice('/docs/'.length, -3); // strip /docs/ and .md
+      let slug = pathname.slice('/docs/'.length, -3); // strip /docs/ and .md
+      if (slug.endsWith('.html')) slug = slug.slice(0, -5); // strip .html residual from .html.md
       url.pathname = `/api/raw/${slug}`;
       return NextResponse.rewrite(url);
     }

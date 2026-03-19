@@ -4,11 +4,19 @@ import type { CodeLanguage } from './types';
 
 /**
  * Helper to get clean text content from a cell element
- * Preserves inline code as backtick notation
+ * Preserves inline code as backtick notation, links as markdown, and .def items with separators
  */
 function getCellText(cell: Element, sourceUrl: string): string {
   // Use innerHTML (available on node-html-parser elements) to preserve code spans
   let html = (cell as unknown as { innerHTML: string }).innerHTML ?? '';
+
+  // Preserve <a href> elements as markdown links (before stripping other tags)
+  html = html.replace(/<a\b[^>]*\bhref="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, (_, href, inner) => {
+    const linkText = inner.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+    if (!href || href.startsWith('#')) return linkText;
+    const url = convertToHoudiniMDUrl(href, sourceUrl);
+    return `[${linkText}](${url})`;
+  });
 
   // Preserve <code> elements as backtick inline code
   let text = html.replace(/<code[^>]*>([^<]*)<\/code>/gi, (_, inner) => `\`${inner.trim()}\``);
@@ -25,6 +33,12 @@ function getCellText(cell: Element, sourceUrl: string): string {
       try { abs = new URL(src, sourceUrl).href; } catch { /* keep */ }
     }
     return `![${alt}](${abs})`;
+  });
+
+  // Format .def label elements as bold "**Label**: " markers (separates def items visually)
+  text = text.replace(/<p\b[^>]*class="[^"]*\blabel\b[^"]*"[^>]*>([\s\S]*?)<\/p>/gi, (_, content) => {
+    const labelText = content.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+    return ` **${labelText}**: `;
   });
 
   // Strip all remaining HTML tags
@@ -195,6 +209,22 @@ export function addCustomRules(
       const desc = (el.querySelector('.content') as Element | null)?.textContent?.replace(/\s+/g, ' ').trim() || '';
       if (!label) return _content;
       return `\n\n**${label}**  \n${desc}\n`;
+    },
+  });
+
+  // Headings - preserve SideFX anchor IDs using raw HTML (rendered via rehype-raw)
+  // This enables in-page anchor scrolling for URLs like /docs/pyrosolver#shapetab
+  turndown.addRule('headingsWithId', {
+    filter: ['h2', 'h3', 'h4', 'h5', 'h6'],
+    replacement: (content, node) => {
+      const el = node as Element;
+      const level = parseInt(el.nodeName[1]);
+      const id = el.getAttribute('id');
+      const text = content.trim();
+      if (id) {
+        return `\n\n<h${level} id="${id}">${text}</h${level}>\n\n`;
+      }
+      return `\n\n${'#'.repeat(level)} ${text}\n\n`;
     },
   });
 

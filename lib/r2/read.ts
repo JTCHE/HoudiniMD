@@ -12,7 +12,7 @@ export async function fetchIndexJson(): Promise<string | null> {
 }
 
 /** Cached files generated before this date will be re-generated */
-const CACHE_INVALIDATE_BEFORE = new Date("2026-03-13T22:00:00Z");
+const CACHE_INVALIDATE_BEFORE = new Date("2026-03-18T00:00:00Z");
 
 /**
  * Check if a file exists in R2
