@@ -115,7 +115,25 @@ export function addCustomRules(
 
       for (const item of items) {
         const label = (item.querySelector('p.label')?.textContent || '').replace(/\s+/g, ' ').trim().replace(/\|/g, '\\|');
-        const content = (item.querySelector('div.content')?.textContent || '').replace(/\s+/g, ' ').trim().replace(/\|/g, '\\|');
+
+        const contentEl = item.querySelector('div.content');
+        let content = '';
+        if (contentEl) {
+          const defItems = Array.from(contentEl.querySelectorAll('.def'));
+          if (defItems.length > 0) {
+            // Leading paragraph before the .defs block
+            const leading = (contentEl.querySelector('p')?.textContent || '').replace(/\s+/g, ' ').trim();
+            const defTexts = defItems.map((def) => {
+              const defLabel = (def.querySelector('p.label')?.textContent || '').replace(/\s+/g, ' ').trim();
+              const defDesc = (def.querySelector('.content')?.textContent || '').replace(/\s+/g, ' ').trim();
+              return defLabel ? `**${defLabel}**: ${defDesc}` : defDesc;
+            });
+            content = [leading, ...defTexts].filter(Boolean).join('<br>');
+          } else {
+            content = (contentEl.textContent || '').replace(/\s+/g, ' ').trim();
+          }
+        }
+        content = content.replace(/\|/g, '\\|');
         rows.push(`| ${label} | ${content} |`);
       }
 
