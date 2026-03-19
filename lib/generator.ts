@@ -59,9 +59,18 @@ export async function generateMarkdownForSlug(
     progress("checking-cache", "Skipping cache", "Regenerating content");
   }
 
-  // Stage 2: Verify page exists
+  // Stage 2: Verify page exists — try primary URL, then /index.html fallback for category pages
   progress("verifying", "Verifying page exists", sideFXUrl);
-  await checkPageExists(sideFXUrl);
+  let resolvedUrl = sideFXUrl;
+  try {
+    await checkPageExists(sideFXUrl);
+  } catch (err) {
+    if (!(err instanceof PageNotFoundError)) throw err;
+    // Try index.html variant for directory-style slugs (e.g. houdini/nodes/sop/ → .../sop/index.html)
+    const indexUrl = `https://www.sidefx.com/docs/${slug.split("#")[0]}/index.html`;
+    await checkPageExists(indexUrl); // re-throws PageNotFoundError if also missing
+    resolvedUrl = indexUrl;
+  }
 
   // Stage 3-6: Generate with lock to prevent concurrent generation
   const markdown = await withLock(slug, async () => {
@@ -75,7 +84,7 @@ export async function generateMarkdownForSlug(
 
     // Stage 3: Scrape
     progress("scraping", "Fetching from SideFX", "Scraping page content");
-    const scraped = await scrapeSideFXPage(sideFXUrl);
+    const scraped = await scrapeSideFXPage(resolvedUrl);
 
     // Stage 4: Convert
     progress("converting", "Converting to markdown", scraped.title);

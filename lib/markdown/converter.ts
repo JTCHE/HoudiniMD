@@ -22,10 +22,10 @@ export function convertToMarkdown(
     el.remove();
   });
 
-  // Remove "Load" / "Launch" example buttons (SideFX example section links)
-  root.querySelectorAll('a').forEach((el) => {
+  // Remove "Load" / "Launch" example buttons and "Show/hide arguments" toggles
+  root.querySelectorAll('a, button, span').forEach((el) => {
     const text = el.textContent?.trim();
-    if (text === 'Load' || text === 'Launch') el.remove();
+    if (text === 'Load' || text === 'Launch' || text === 'Show/hide arguments') el.remove();
   });
 
   // Remove standalone icon <img> that immediately precedes a <link> containing the same icon
