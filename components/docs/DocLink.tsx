@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { DocTooltip, registerSlug } from "./Tooltip";
+import { showToast } from "@/components/ui/toast-notification";
 
 export default function DocLink({
   href,
@@ -11,7 +12,9 @@ export default function DocLink({
   ...props
 }: React.AnchorHTMLAttributes<HTMLAnchorElement>) {
   const slug = href?.startsWith("/docs/") ? href.slice(6).split("#")[0] : null;
+  const anchor = href?.includes("#") ? href.slice(href.indexOf("#") + 1) : null;
   const [visible, setVisible] = useState(false);
+  const preventNextClick = useRef(false);
   const router = useRouter();
   const isInternal = !!slug;
 
@@ -41,8 +44,20 @@ export default function DocLink({
           // Navigate on mousedown (saves the ~100ms between mousedown and click).
           // Only plain left click — let browser handle Ctrl/Meta/Shift (new tab etc.)
           if (!isInternal || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+          if (window.location.pathname === `/docs/${slug}`) {
+            if (anchor) document.getElementById(anchor)?.scrollIntoView({ behavior: "smooth" });
+            showToast("Already on this page");
+            preventNextClick.current = true;
+            return;
+          }
           router.prefetch(href!);
           router.push(href!);
+        }}
+        onClick={(e) => {
+          if (preventNextClick.current) {
+            e.preventDefault();
+            preventNextClick.current = false;
+          }
         }}
         onMouseEnter={show}
         onMouseLeave={hide}

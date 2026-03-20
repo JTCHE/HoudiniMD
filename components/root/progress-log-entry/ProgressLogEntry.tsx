@@ -19,8 +19,13 @@ export default function ProgressLogEntry({ event, isLatest }: { event: ProgressE
         {isError ? "✗" : isComplete ? "✓" : isLatest ? "●" : "✓"}
       </span>
       <span className="flex-1 min-w-0">
-        <span className="font-medium">{event.message}</span>
-        {event.detail && <span className="text-muted-foreground ml-1 break-all">— {event.detail}</span>}
+        <span className="font-medium break-words">{event.message}</span>
+        {event.detail && (
+          <>
+            <br />
+            <span className="text-muted-foreground break-all">{event.detail}</span>
+          </>
+        )}
       </span>
     </div>
   );

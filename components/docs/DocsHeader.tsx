@@ -23,7 +23,7 @@ export function DocsHeader({ breadcrumbs, sourceUrl, searchRef }: DocsHeaderProp
       rel="noopener noreferrer"
       className="hover:text-foreground transition-colors"
     >
-      SideFX ↗
+      {"SideFX ↗\uFE0E"}
     </a>
   );
   return (
