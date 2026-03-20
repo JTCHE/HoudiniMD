@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
 import "./globals.css";
 import ServiceWorkerRegistration from "@/components/ServiceWorker";
+import { ToastListener } from "@/components/ui/toast-notification";
 
 export const viewport: Viewport = {
   maximumScale: 1,
@@ -78,6 +79,7 @@ export default function RootLayout({
       </head>
       <body>
         <ServiceWorkerRegistration />
+        <ToastListener />
         {children}
       </body>
     </html>
