@@ -68,35 +68,46 @@ export async function GET(request: NextRequest) {
 
   const qLower = q.toLowerCase().replace(/\s+/g, "");
 
-  // 1. Prefix matches — "copytop" instantly finds "copytopoints"
-  const prefixHits = new Map<string, IndexedEntry>();
+  // 1. Exact & prefix matches — prioritized before fuzzy
+  const exactHits = new Map<string, { item: IndexedEntry; score: number }>();
+  const prefixHits = new Map<string, { item: IndexedEntry; score: number }>();
+
   for (const e of indexed) {
-    if (e.slug.startsWith(qLower) || e.title.toLowerCase().replace(/\s+/g, "").startsWith(qLower)) {
-      prefixHits.set(e.path, e);
-      if (prefixHits.size >= limit) break;
+    const titleNorm = e.title.toLowerCase().replace(/\s+/g, "");
+    const slugLower = e.slug.toLowerCase();
+
+    // Exact match: title or slug matches query exactly
+    if (titleNorm === qLower || slugLower === qLower) {
+      exactHits.set(e.path, { item: e, score: 0 });
     }
+    // Prefix match: title or slug starts with query
+    else if (titleNorm.startsWith(qLower) || slugLower.startsWith(qLower)) {
+      prefixHits.set(e.path, { item: e, score: 0.05 });
+    }
+
+    if (exactHits.size + prefixHits.size >= limit * 2) break;
   }
 
   // 2. Fuse fuzzy fallback
+  const fuseHits = fuse.search(q, { limit: limit * 2 });
 
-  const fuseHits = fuse.search(q, { limit });
-
-  // Sort prefix hits: title starts with query > slug-only match (both normalized)
+  // Sort prefix hits: title starts with query > slug-only match
   const sortedPrefix = [...prefixHits.values()].sort((a, b) => {
-    const aTitle = +!a.title.toLowerCase().replace(/\s+/g, "").startsWith(qLower);
-    const bTitle = +!b.title.toLowerCase().replace(/\s+/g, "").startsWith(qLower);
+    const aTitle = +!a.item.title.toLowerCase().replace(/\s+/g, "").startsWith(qLower);
+    const bTitle = +!b.item.title.toLowerCase().replace(/\s+/g, "").startsWith(qLower);
     return aTitle - bTitle;
   });
 
-  // Merge: prefix matches first (score 1.0), then fuzzy (deduped)
-  // Examples are deprioritized to the back within each group (stable sort)
-  const seen = new Set(prefixHits.keys());
+  // Merge: exact first, then prefix, then fuzzy (deduped), examples deprioritized within each group
+  const seen = new Set([...exactHits.keys(), ...prefixHits.keys()]);
+  const exact = [...exactHits.values()];
   const merged = [
-    ...sortedPrefix.map((item) => ({ item, score: 0 })),
-    ...fuseHits.filter((r) => !seen.has(r.item.path)),
-  ]
-    .sort((a, b) => +a.item.path.includes("/examples/") - +b.item.path.includes("/examples/"))
-    .slice(0, limit);
+    ...exact.sort((a) => +a.item.path.includes("/examples/")),
+    ...sortedPrefix.sort((a) => +a.item.path.includes("/examples/")),
+    ...fuseHits
+      .filter((r) => !seen.has(r.item.path))
+      .sort((a) => +a.item.path.includes("/examples/")),
+  ].slice(0, limit);
 
   // Deduplicate anchor fragments: if "foo#bar" and "foo" both appear, keep only "foo"
   const seenBase = new Set<string>();

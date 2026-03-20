@@ -45,15 +45,47 @@ export async function GET(request: NextRequest) {
     const entries: SearchIndexEntry[] = JSON.parse(indexRaw);
     const fuse = new Fuse(entries, {
       keys: [{ name: "title", weight: 0.6 }, { name: "path", weight: 0.4 }],
-      threshold: 0.4,
+      threshold: 0.3,
       ignoreLocation: true,
     });
+
     for (const n of names) {
+      // 1a. Try exact title match first (case-insensitive, spaces removed)
+      const nNorm = n.replace(/\s+/g, "");
+      const exactMatch = entries.find((e) =>
+        e.title.toLowerCase().replace(/\s+/g, "") === nNorm
+      );
+      if (exactMatch && !exactMatch.path.includes("/examples/")) {
+        return Response.json(
+          { slug: exactMatch.path, source: "index-exact" },
+          { headers: { "Cache-Control": "private, max-age=3600" } },
+        );
+      }
+
+      // 1b. Try prefix match on title/path (faster than fuzzy, more precise)
+      const prefixMatch = entries.find((e) => {
+        const titleNorm = e.title.toLowerCase().replace(/\s+/g, "");
+        const pathLast = e.path.split("/").pop()?.toLowerCase() ?? "";
+        return (titleNorm.startsWith(nNorm) || pathLast.startsWith(n)) &&
+               !e.path.includes("/examples/");
+      });
+      if (prefixMatch) {
+        return Response.json(
+          { slug: prefixMatch.path, source: "index-prefix" },
+          { headers: { "Cache-Control": "private, max-age=3600" } },
+        );
+      }
+
+      // 1c. Fall back to fuzzy search with scoring filter
       const results = fuse.search(n, { limit: 10 });
       if (results.length > 0) {
-        const best = results.find((r) => !r.item.path.includes("/examples/")) ?? results[0];
+        // Prefer exact/prefix matches or high-score fuzzy hits, skip examples
+        const best =
+          results.find((r) => r.score! < 0.2 && !r.item.path.includes("/examples/")) ??
+          results.find((r) => !r.item.path.includes("/examples/")) ??
+          results[0];
         return Response.json(
-          { slug: best.item.path, source: "index" },
+          { slug: best.item.path, source: "index-fuzzy" },
           { headers: { "Cache-Control": "private, max-age=3600" } },
         );
       }
