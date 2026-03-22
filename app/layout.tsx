@@ -14,10 +14,8 @@ const websiteInfo = {
     "LLM-optimized documentation for SideFX Houdini. VEX functions, Python API, nodes, and more in clean markdown following the llms.txt standard.",
 };
 
-const siteUrl: string = process.env.URL || "https://houdinimd.jchd.me";
-
 export const metadata: Metadata = {
-  metadataBase: new (globalThis.URL as any)(siteUrl),
+  metadataBase: new URL(process.env.URL || "https://houdinimd.jchd.me"),
   title: websiteInfo.title,
   description: websiteInfo.description,
   keywords: ["Houdini", "VEX", "SideFX", "documentation", "LLM", "AI", "llms.txt", "Python API", "HOM"],
@@ -43,7 +41,7 @@ const geist = Geist({
   subsets: ["latin"],
 });
 
-const URL = process.env.URL ?? "https://houdinimd.jchd.me";
+const SITE_URL = process.env.URL ?? "https://houdinimd.jchd.me";
 
 const websiteJsonLd = {
   "@context": "https://schema.org",
