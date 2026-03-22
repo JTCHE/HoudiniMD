@@ -1,5 +1,5 @@
 export async function GET() {
-  const root = process.env.ROOT_URL ?? "https://houdinimd.jchd.me";
+  const root = process.env.URL ?? "https://houdinimd.jchd.me";
 
   const body = `# HoudiniMD — Houdini Docs for LLMs
 

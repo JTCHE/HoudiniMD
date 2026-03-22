@@ -10,7 +10,7 @@ import { fetchFromR2, fetchIndexJson } from "@/lib/r2/read";
 import GeneratingPage from "@/components/docs/GeneratingPage";
 import type { SearchIndexEntry } from "@/lib/r2/search-index";
 
-const ROOT_URL = process.env.ROOT_URL ?? "https://houdinimd.jchd.me";
+const URL = process.env.URL ?? "https://houdinimd.jchd.me";
 
 export const revalidate = 2592000;
 export const maxDuration = 60;
@@ -58,14 +58,14 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   }
 
   const pageTitle = `${title} — HoudiniMD`;
-  const canonical = `${ROOT_URL}/docs/${slugPath}`;
+  const canonical = `${URL}/docs/${slugPath}`;
 
   return {
     title: pageTitle,
     description,
     alternates: {
       canonical,
-      types: { "text/markdown": `${ROOT_URL}/docs/${slugPath}.md` },
+      types: { "text/markdown": `${URL}/docs/${slugPath}.md` },
     },
     openGraph: {
       title: pageTitle,
@@ -73,13 +73,13 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
       url: canonical,
       siteName: "HoudiniMD",
       type: "article",
-      images: [`${ROOT_URL}/api/og?path=${encodeURIComponent(slugPath)}`],
+      images: [`${URL}/api/og?path=${encodeURIComponent(slugPath)}`],
     },
     twitter: {
       card: "summary_large_image",
       title: pageTitle,
       description,
-      images: [`${ROOT_URL}/api/og?path=${encodeURIComponent(slugPath)}`],
+      images: [`${URL}/api/og?path=${encodeURIComponent(slugPath)}`],
     },
   };
 }
@@ -105,7 +105,7 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
   const mdTitle = h1Match?.[1]?.trim() ?? slug[slug.length - 1].replace(/-/g, " ");
   const summaryMatch = content.match(/^(?!#)[^\n]{20,}/m);
   const mdSummary = summaryMatch?.[0]?.trim();
-  const canonical = `${ROOT_URL}/docs/${slugPath}`;
+  const canonical = `${URL}/docs/${slugPath}`;
 
   const articleJsonLd = {
     "@context": "https://schema.org",
@@ -116,7 +116,7 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
     author: { "@type": "Organization", name: "SideFX" },
     publisher: { "@type": "Organization", name: "HoudiniMD" },
     about: { "@type": "SoftwareApplication", name: "Houdini" },
-    image: `${ROOT_URL}/api/og?path=${encodeURIComponent(slugPath)}`,
+    image: `${URL}/api/og?path=${encodeURIComponent(slugPath)}`,
     mainEntityOfPage: canonical,
   };
 

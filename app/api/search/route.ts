@@ -6,7 +6,7 @@ import type { SearchIndexEntry } from "@/lib/r2/search-index";
 type IndexedEntry = SearchIndexEntry & { slug: string };
 let fuseCache: { fuse: Fuse<IndexedEntry>; indexed: IndexedEntry[]; indexExpiry: number } | null = null;
 
-const ROOT = process.env.ROOT_URL ?? "https://houdinimd.jchd.me";
+const ROOT = process.env.URL ?? "https://houdinimd.jchd.me";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
