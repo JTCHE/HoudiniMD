@@ -15,7 +15,7 @@ const websiteInfo = {
 };
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.ROOT_URL ?? "https://houdinimd.jchd.me"),
+  metadataBase: new URL(process.env.URL ?? "https://houdinimd.jchd.me"),
   title: websiteInfo.title,
   description: websiteInfo.description,
   keywords: ["Houdini", "VEX", "SideFX", "documentation", "LLM", "AI", "llms.txt", "Python API", "HOM"],
@@ -26,7 +26,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: websiteInfo.title,
     description: websiteInfo.description,
-    url: process.env.ROOT_URL,
+    url: process.env.URL,
     siteName: "HoudiniMD",
     type: "website",
   },
@@ -41,16 +41,16 @@ const geist = Geist({
   subsets: ["latin"],
 });
 
-const ROOT_URL = process.env.ROOT_URL ?? "https://houdinimd.jchd.me";
+const URL = process.env.URL ?? "https://houdinimd.jchd.me";
 
 const websiteJsonLd = {
   "@context": "https://schema.org",
   "@type": "WebSite",
   name: "HoudiniMD",
-  url: ROOT_URL,
+  url: URL,
   potentialAction: {
     "@type": "SearchAction",
-    target: `${ROOT_URL}/api/search?q={search_term_string}`,
+    target: `${URL}/api/search?q={search_term_string}`,
     "query-input": "required name=search_term_string",
   },
 };

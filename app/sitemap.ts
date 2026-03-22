@@ -4,7 +4,7 @@ import type { SearchIndexEntry } from "@/lib/r2/search-index";
 
 export const revalidate = 3600;
 
-const BASE_URL = process.env.ROOT_URL ?? "https://houdinimd.jchd.me";
+const BASE_URL = process.env.URL ?? "https://houdinimd.jchd.me";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base: MetadataRoute.Sitemap = [
