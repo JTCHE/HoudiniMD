@@ -4,6 +4,8 @@ import "./globals.css";
 import ServiceWorkerRegistration from "@/components/ServiceWorker";
 import { ToastListener } from "@/components/ui/toast-notification";
 
+const SITE_URL = process.env.URL || "https://houdinimd.jchd.me";
+
 export const viewport: Viewport = {
   maximumScale: 1,
 };
@@ -15,7 +17,7 @@ const websiteInfo = {
 };
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.URL || "https://houdinimd.jchd.me"),
+  metadataBase: new URL(SITE_URL),
   title: websiteInfo.title,
   description: websiteInfo.description,
   keywords: ["Houdini", "VEX", "SideFX", "documentation", "LLM", "AI", "llms.txt", "Python API", "HOM"],
@@ -26,7 +28,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: websiteInfo.title,
     description: websiteInfo.description,
-    url: process.env.URL,
+    url: SITE_URL,
     siteName: "HoudiniMD",
     type: "website",
   },
@@ -41,16 +43,14 @@ const geist = Geist({
   subsets: ["latin"],
 });
 
-const SITE_URL = process.env.URL ?? "https://houdinimd.jchd.me";
-
 const websiteJsonLd = {
   "@context": "https://schema.org",
   "@type": "WebSite",
   name: "HoudiniMD",
-  url: URL,
+  url: SITE_URL,
   potentialAction: {
     "@type": "SearchAction",
-    target: `${URL}/api/search?q={search_term_string}`,
+    target: `${SITE_URL}/api/search?q={search_term_string}`,
     "query-input": "required name=search_term_string",
   },
 };
