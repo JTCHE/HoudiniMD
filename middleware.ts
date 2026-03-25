@@ -13,17 +13,13 @@ function stripExtensionsAndSlash(p: string): string {
   return p;
 }
 
-// Named bots that should always receive raw markdown.
-const NAMED_BOT_RE = /\b(Googlebot|bingbot|Slurp|DuckDuckBot|Baiduspider|YandexBot|Sogou|Exabot|facebookexternalhit|Twitterbot|LinkedInBot|Applebot|GPTBot|ChatGPT-User|Claude-Web|ClaudeBot|anthropic-ai|PerplexityBot|CCBot|cohere-ai|GoogleOther|ia_archiver|archive\.org_bot|SeznamBot|MJ12bot|AhrefsBot|SemrushBot|DotBot|RogerBot|DataForSeoBot|PetalBot)\b/i;
-// Generic bot signals — only treated as a bot if no browser engine marker is present.
-const GENERIC_BOT_RE = /\b(bot|spider|crawl|scraper|fetcher|scanner)\b/i;
-const BROWSER_ENGINE_RE = /\b(Chrome|Firefox|Safari|Edg|OPR|Vivaldi)\b/;
+// Real browsers always send Mozilla/5.0 alongside a known engine token.
+// Anything that doesn't match that fingerprint (bots, CLIs, LLM agents,
+// HTTP libraries) is redirected to the .md equivalent.
+const BROWSER_RE = /Mozilla\/5\.0.+\b(Chrome|Firefox|Safari|Edg|OPR|Vivaldi)\b/;
 
 function isBot(ua: string | null): boolean {
-  if (!ua) return true;
-  if (NAMED_BOT_RE.test(ua)) return true;
-  if (GENERIC_BOT_RE.test(ua) && !BROWSER_ENGINE_RE.test(ua)) return true;
-  return false;
+  return !ua || !BROWSER_RE.test(ua);
 }
 
 export function middleware(request: NextRequest) {
