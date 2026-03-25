@@ -1,47 +1,54 @@
 import type { MetadataRoute } from "next";
 
+// HTML doc pages are intended for humans. Crawlers should use the .md equivalents
+// (same URL + .md suffix), which serve raw markdown directly.
+const docRules = {
+  disallow: "/docs/",
+  allow: "/docs/*.md",
+} as const;
+
 export default function robots(): MetadataRoute.Robots {
   return {
     rules: [
       {
         userAgent: "*",
-        allow: "/",
+        ...docRules,
       },
       {
         userAgent: "GPTBot",
-        allow: "/",
+        ...docRules,
       },
       {
         userAgent: "ChatGPT-User",
-        allow: "/",
+        ...docRules,
       },
       {
         userAgent: "Claude-Web",
-        allow: "/",
+        ...docRules,
       },
       {
         userAgent: "PerplexityBot",
-        allow: "/",
+        ...docRules,
       },
       {
         userAgent: "anthropic-ai",
-        allow: "/",
+        ...docRules,
       },
       {
         userAgent: "Applebot-Extended",
-        allow: "/",
+        ...docRules,
       },
       {
         userAgent: "GoogleOther",
-        allow: "/",
+        ...docRules,
       },
       {
         userAgent: "CCBot",
-        allow: "/",
+        ...docRules,
       },
       {
         userAgent: "cohere-ai",
-        allow: "/",
+        ...docRules,
       },
     ],
     sitemap: `${process.env.URL}/sitemap.xml`,
