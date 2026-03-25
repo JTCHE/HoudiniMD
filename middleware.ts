@@ -13,6 +13,19 @@ function stripExtensionsAndSlash(p: string): string {
   return p;
 }
 
+// Named bots that should always receive raw markdown.
+const NAMED_BOT_RE = /\b(Googlebot|bingbot|Slurp|DuckDuckBot|Baiduspider|YandexBot|Sogou|Exabot|facebookexternalhit|Twitterbot|LinkedInBot|Applebot|GPTBot|ChatGPT-User|Claude-Web|ClaudeBot|anthropic-ai|PerplexityBot|CCBot|cohere-ai|GoogleOther|ia_archiver|archive\.org_bot|SeznamBot|MJ12bot|AhrefsBot|SemrushBot|DotBot|RogerBot|DataForSeoBot|PetalBot)\b/i;
+// Generic bot signals — only treated as a bot if no browser engine marker is present.
+const GENERIC_BOT_RE = /\b(bot|spider|crawl|scraper|fetcher|scanner)\b/i;
+const BROWSER_ENGINE_RE = /\b(Chrome|Firefox|Safari|Edg|OPR|Vivaldi)\b/;
+
+function isBot(ua: string | null): boolean {
+  if (!ua) return true;
+  if (NAMED_BOT_RE.test(ua)) return true;
+  if (GENERIC_BOT_RE.test(ua) && !BROWSER_ENGINE_RE.test(ua)) return true;
+  return false;
+}
+
 export function middleware(request: NextRequest) {
   const url = request.nextUrl.clone();
   const pathname = url.pathname;
@@ -45,7 +58,19 @@ export function middleware(request: NextRequest) {
       return NextResponse.redirect(url, 301);
     }
 
-    return NextResponse.next();
+    // Bots hitting the rendered HTML page → redirect to the .md equivalent so they
+    // receive raw markdown instead of the Next.js-rendered HTML.
+    const ua = request.headers.get('user-agent');
+    if (isBot(ua)) {
+      url.pathname = `${pathname}.md`;
+      return NextResponse.redirect(url, 302);
+    }
+
+    // Human visitors: pass through but signal to search engines not to index the HTML
+    // version (the canonical content is the .md file).
+    const res = NextResponse.next();
+    res.headers.set('X-Robots-Tag', 'noindex, follow');
+    return res;
   }
 
   // Redirect known Houdini path segments missing the /docs/houdini/ prefix
