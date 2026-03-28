@@ -46,3 +46,9 @@ CLAUDE.md
 
 #vexp
 .vexp
+
+# playwright
+playwright-report/
+.playwright/
+tests/
+playwright.config.ts
