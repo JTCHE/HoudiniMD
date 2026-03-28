@@ -222,6 +222,11 @@ button:active kbd.kbd-button {
   .sk::after { animation: none; }
 }
 
+/* ── Anchor scroll offset — compensate for sticky header ────────────────── */
+:is(h1, h2, h3, h4, h5, h6)[id] {
+  scroll-margin-top: 3.5rem;
+}
+
 /* ── Prose overrides ────────────────────────────────────────────────────── */
 .prose :where(pre):not(:where([class~="not-prose"] *)) {
   background: oklch(0.13 0 0) !important;
