@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { fetchFromR2 } from "@/lib/r2/read";
 
 function parseFrontmatterData(md: string): Record<string, string> {
@@ -22,6 +23,30 @@ export default async function BreadcrumbsAsync({ slug }: { slug: string }) {
   if (!raw) return null;
   const data = parseFrontmatterData(raw);
   const title = extractTitle(raw);
-  const breadcrumbs = [data.breadcrumbs, title].filter(Boolean).join(" > ");
-  return breadcrumbs ? <>{breadcrumbs}</> : null;
+
+  const parentSegments = data.breadcrumbs ? data.breadcrumbs.split(" > ").filter(Boolean) : [];
+
+  if (!parentSegments.length && !title) return null;
+
+  const slugParts = slug.split("/");
+
+  return (
+    <span className="cursor-default">
+      {parentSegments.map((label, i) => {
+        const targetSlug = slugParts.slice(0, i + 1).join("/");
+        return (
+          <span key={targetSlug}>
+            <Link
+              href={`/docs/${targetSlug}`}
+              className="hover:text-foreground transition-colors cursor-pointer"
+            >
+              {label}
+            </Link>
+            {" > "}
+          </span>
+        );
+      })}
+      {title && <span>{title}</span>}
+    </span>
+  );
 }
