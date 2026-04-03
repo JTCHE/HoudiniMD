@@ -50,12 +50,14 @@ export async function GET(request: NextRequest) {
     });
 
     for (const n of names) {
-      // 1a. Try exact title match first (case-insensitive, spaces removed)
+      // 1a. Try exact title or path slug match first (case-insensitive, spaces removed)
       const nNorm = n.replace(/\s+/g, "");
-      const exactMatch = entries.find((e) =>
-        e.title.toLowerCase().replace(/\s+/g, "") === nNorm
-      );
-      if (exactMatch && !exactMatch.path.includes("/examples/")) {
+      const exactMatch = entries.find((e) => {
+        const titleNorm = e.title.toLowerCase().replace(/\s+/g, "");
+        const pathLast = e.path.split("/").pop()?.toLowerCase() ?? "";
+        return (titleNorm === nNorm || pathLast === n) && !e.path.includes("/examples/");
+      });
+      if (exactMatch) {
         return Response.json(
           { slug: exactMatch.path, source: "index-exact" },
           { headers: { "Cache-Control": "private, max-age=3600" } },
@@ -76,18 +78,30 @@ export async function GET(request: NextRequest) {
         );
       }
 
-      // 1c. Fall back to fuzzy search with scoring filter
+      // 1c. Fall back to fuzzy search — only return high-confidence results
       const results = fuse.search(n, { limit: 10 });
       if (results.length > 0) {
-        // Prefer exact/prefix matches or high-score fuzzy hits, skip examples
-        const best =
-          results.find((r) => r.score! < 0.2 && !r.item.path.includes("/examples/")) ??
-          results.find((r) => !r.item.path.includes("/examples/")) ??
-          results[0];
-        return Response.json(
-          { slug: best.item.path, source: "index-fuzzy" },
-          { headers: { "Cache-Control": "private, max-age=3600" } },
-        );
+        // Prioritize exact slug match within fuzzy results (handles uncrawled titles)
+        const exactSlug = results.find((r) => {
+          const pathLast = r.item.path.split("/").pop()?.toLowerCase() ?? "";
+          return pathLast === n && !r.item.path.includes("/examples/");
+        });
+        if (exactSlug) {
+          return Response.json(
+            { slug: exactSlug.item.path, source: "index-fuzzy-exact" },
+            { headers: { "Cache-Control": "private, max-age=3600" } },
+          );
+        }
+        // Only return a fuzzy result if the score is genuinely good — no loose fallback
+        // (loose fallback caused "fuse" → "diffuse" since "fuse" is a substring of "diffuse")
+        const best = results.find((r) => r.score! < 0.15 && !r.item.path.includes("/examples/"));
+        if (best) {
+          return Response.json(
+            { slug: best.item.path, source: "index-fuzzy" },
+            { headers: { "Cache-Control": "private, max-age=3600" } },
+          );
+        }
+        // No confident fuzzy match → fall through to probe stage
       }
     }
   }
