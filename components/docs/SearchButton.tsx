@@ -7,11 +7,17 @@ interface SearchButtonProps {
 }
 
 export function SearchButton({ onOpenSearch }: SearchButtonProps) {
-  const [showHint, setShowHint] = useState(false);
+  // null = not yet determined (SSR), true = pointer:fine (desktop), false = pointer:coarse (mobile)
+  const [isPointerFine, setIsPointerFine] = useState<boolean | null>(null);
 
   useEffect(() => {
-    setShowHint(window.matchMedia("(pointer: fine)").matches);
+    setIsPointerFine(window.matchMedia("(pointer: fine)").matches);
   }, []);
+
+  // On mobile (confirmed coarse), don't render kbd at all.
+  // On SSR and desktop: always render kbd (invisible until confirmed) so height is stable.
+  const showKbd = isPointerFine !== false;
+  const kbdVisible = isPointerFine === true;
 
   return (
     <button
@@ -33,7 +39,11 @@ export function SearchButton({ onOpenSearch }: SearchButtonProps) {
           d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
         />
       </svg>
-      {showHint && <kbd className="kbd-button">⌘K</kbd>}
+      {showKbd && (
+        <kbd className={`kbd-button${kbdVisible ? "" : " invisible"}`} aria-hidden={!kbdVisible}>
+          ⌘K
+        </kbd>
+      )}
     </button>
   );
 }

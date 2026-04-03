@@ -256,7 +256,7 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
     <>
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-start justify-center pt-[20vh] bg-black/40 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-start justify-center pt-4 sm:pt-[20vh] bg-black/40 backdrop-blur-sm"
           onClick={() => setOpen(false)}
         >
           <div
