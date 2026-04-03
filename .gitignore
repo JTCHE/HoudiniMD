@@ -44,8 +44,9 @@ next-env.d.ts
 .claude/settings.local.json
 CLAUDE.md
 
-#vexp
+#vexp/indexp
 .vexp
+.indexp
 
 # playwright
 playwright-report/
