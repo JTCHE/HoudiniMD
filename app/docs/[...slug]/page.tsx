@@ -98,7 +98,10 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
     return <GeneratingPage slug={slugPath} />;
   }
 
-  const { content } = parseFrontmatter(rawMarkdown);
+  const { content: rawContent } = parseFrontmatter(rawMarkdown);
+  // Escape uppercase pseudo-tags (e.g. module pattern notation like <A>, <A-B>)
+  // before rehypeRaw processes the markdown. Real HTML in these docs uses lowercase.
+  const content = rawContent.replace(/<([A-Z][^>]*?)>/g, '&lt;$1&gt;');
 
   // Extract title and summary for JSON-LD
   const h1Match = content.match(/^#\s+(.+)$/m);
@@ -171,9 +174,12 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
               }
               return <img src={src} alt={alt ?? ""} className="max-w-full h-auto my-4 block" />;
             },
-            a: ({ href, children, ...props }) => (
-              <DocLink href={href} {...props}>{children}</DocLink>
-            ),
+            a: ({ href, children, ...props }) =>
+              href ? (
+                <DocLink href={href} {...props}>{children}</DocLink>
+              ) : (
+                <span {...(props as React.HTMLAttributes<HTMLSpanElement>)}>{children}</span>
+              ),
           }}
         >
           {content}
