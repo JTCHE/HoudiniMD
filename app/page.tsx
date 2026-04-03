@@ -108,6 +108,7 @@ export default function Home() {
             if (event.stage === "complete" && event.detail) {
               receivedTerminalEvent = true;
               router.push(event.detail!);
+              setIsProcessing(false);
             } else if (event.stage === "error") {
               receivedTerminalEvent = true;
               setError(event.detail || event.message);
