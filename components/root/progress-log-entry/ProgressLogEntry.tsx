@@ -8,7 +8,7 @@ export default function ProgressLogEntry({ event, isLatest }: { event: ProgressE
   return (
     <div
       className={cn(
-        "flex items-start gap-2 text-xs",
+        "flex items-start gap-2 text-xs rounded-md",
         isLatest && !isComplete && !isError && "text-foreground",
         !isLatest && "text-muted-foreground",
         isComplete && "text-green-600 dark:text-green-400",
