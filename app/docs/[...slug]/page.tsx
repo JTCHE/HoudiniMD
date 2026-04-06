@@ -101,7 +101,7 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
   const { content: rawContent } = parseFrontmatter(rawMarkdown);
   // Escape uppercase pseudo-tags (e.g. module pattern notation like <A>, <A-B>)
   // before rehypeRaw processes the markdown. Real HTML in these docs uses lowercase.
-  const content = rawContent.replace(/<([A-Z][^>]*?)>/g, '&lt;$1&gt;');
+  const content = rawContent.replace(/<([A-Z][^>]*?)>/g, "&lt;$1&gt;");
 
   // Extract title and summary for JSON-LD
   const h1Match = content.match(/^#\s+(.+)$/m);
@@ -144,7 +144,7 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
             ),
             table: ({ children }) => (
               <div className="not-prose overflow-x-auto my-6">
-                <table className="w-full border-collapse text-sm">{children}</table>
+                <table className="w-full border-collapse text-sm ">{children}</table>
               </div>
             ),
             thead: ({ children }) => <thead>{children}</thead>,
@@ -152,17 +152,28 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
               <th className="border border-border px-3 py-2 text-left font-semibold bg-muted text-foreground">{children}</th>
             ),
             td: ({ children }) => <td className="border border-border px-3 py-2 align-top text-foreground">{children}</td>,
-            pre: ({ children }) => <pre className="not-prose my-4 overflow-x-auto border border-border/50">{children}</pre>,
+            pre: ({ children }) => (
+              <pre className="not-prose rounded-lg my-4 overflow-x-auto border border-border/50">{children}</pre>
+            ),
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
             code: ({ className, children, node: _node, ...props }) => {
-              const isBlock = !!className?.startsWith("language-") ||
-                (typeof children === "string" && children.includes("\n"));
+              const isBlock = !!className?.startsWith("language-") || (typeof children === "string" && children.includes("\n"));
               if (isBlock) {
                 // CSS in globals.css handles all block code styling
-                return <code className={className ?? ""} {...props}>{children}</code>;
+                return (
+                  <code
+                    className={className ?? ""}
+                    {...props}
+                  >
+                    {children}
+                  </code>
+                );
               }
               return (
-                <code className="bg-muted px-1.5 py-0.5 text-sm font-mono border border-border/50" {...props}>
+                <code
+                  className="bg-muted px-1.5 py-0.5 text-sm font-mono border border-border/50 rounded-sm"
+                  {...props}
+                >
                   {children}
                 </code>
               );
@@ -170,13 +181,30 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
             img: ({ src, alt }) => {
               if (!src || typeof src !== "string") return null;
               if (src.includes("/icons/")) {
-                return <img src={src} alt={alt ?? ""} className="doc-icon" />;
+                return (
+                  <img
+                    src={src}
+                    alt={alt ?? ""}
+                    className="doc-icon"
+                  />
+                );
               }
-              return <img src={src} alt={alt ?? ""} className="max-w-full h-auto my-4 block" />;
+              return (
+                <img
+                  src={src}
+                  alt={alt ?? ""}
+                  className="max-w-full h-auto my-4 block"
+                />
+              );
             },
             a: ({ href, children, ...props }) =>
               href ? (
-                <DocLink href={href} {...props}>{children}</DocLink>
+                <DocLink
+                  href={href}
+                  {...props}
+                >
+                  {children}
+                </DocLink>
               ) : (
                 <span {...(props as React.HTMLAttributes<HTMLSpanElement>)}>{children}</span>
               ),

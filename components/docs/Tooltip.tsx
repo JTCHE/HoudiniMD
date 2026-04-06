@@ -25,13 +25,19 @@ function drainQueue() {
     activeGenerations++;
 
     const sse = new EventSource(`/api/generate?slug=${encodeURIComponent(slug)}`);
-    const done = () => { sse.close(); activeGenerations--; drainQueue(); };
+    const done = () => {
+      sse.close();
+      activeGenerations--;
+      drainQueue();
+    };
     sse.onmessage = (e) => {
       const event = JSON.parse(e.data);
       if (event.stage === "complete") {
         fetch(`/api/meta?slug=${encodeURIComponent(slug)}`)
           .then((r) => r.json())
-          .then((d) => { if (d.title) metaCache.set(slug, { title: d.title, summary: d.summary ?? "" }); })
+          .then((d) => {
+            if (d.title) metaCache.set(slug, { title: d.title, summary: d.summary ?? "" });
+          })
           .catch(() => {})
           .finally(done);
       } else if (event.stage === "error") {
@@ -162,13 +168,15 @@ export function DocTooltip({ slug }: { slug: string }) {
   if (error) return null;
 
   return (
-    <span ref={tooltipRef} style={{ transform: `translateX(calc(-50% + ${clampX}px))` }} className="[@media(hover:none)]:hidden absolute bottom-full left-1/2 mb-1 z-50 w-max max-w-[16rem] bg-background border border-border shadow-lg p-2 text-xs pointer-events-none whitespace-normal">
+    <span
+      ref={tooltipRef}
+      style={{ transform: `translateX(calc(-50% + ${clampX}px))` }}
+      className="[@media(hover:none)]:hidden rounded-sm absolute bottom-full left-1/2 mb-1 z-50 w-max max-w-[16rem] bg-background border border-border shadow-lg p-2 text-xs pointer-events-none whitespace-normal"
+    >
       {meta ? (
         <>
           <span className="block font-semibold text-foreground">{meta.title}</span>
-          {meta.summary && (
-            <span className="block text-muted-foreground mt-0.5 line-clamp-2">{meta.summary}</span>
-          )}
+          {meta.summary && <span className="block text-muted-foreground mt-0.5 line-clamp-2">{meta.summary}</span>}
         </>
       ) : (
         <>
