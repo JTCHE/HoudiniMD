@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { fetchFromR2 } from "@/lib/r2/read";
+import { fetchIndexJson } from "@/lib/r2/read";
 import type { SearchIndexEntry } from "@/lib/r2/search-index";
 
 const ROOT = process.env.URL ?? "https://houdinimd.jchd.me";
@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
   const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
   const limit = Math.min(parseInt(searchParams.get("limit") ?? "50", 10), 200);
 
-  const raw = await fetchFromR2("content/index.json");
+  const raw = await fetchIndexJson();
   if (!raw) {
     return Response.json(
       { error: "Index unavailable" },
