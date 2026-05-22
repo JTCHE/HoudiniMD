@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, startTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { DocTooltip, registerSlug } from "./Tooltip";
@@ -50,8 +50,7 @@ export default function DocLink({
             preventNextClick.current = true;
             return;
           }
-          router.prefetch(href!);
-          router.push(href!);
+          startTransition(() => router.push(href!));
         }}
         onClick={(e) => {
           if (preventNextClick.current) {

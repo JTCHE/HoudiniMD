@@ -23,7 +23,7 @@ export default function DocsSkeleton() {
         </div>
 
         {/* Code block */}
-        <div className="sk my-5 h-36 w-full bg-card" />
+        <div className="sk my-5 h-36 w-full bg-muted" />
 
         <div className="space-y-2 mb-5">
           <div className="sk bg-muted h-4 w-full" />
@@ -40,7 +40,7 @@ export default function DocsSkeleton() {
         </div>
 
         {/* Another code block */}
-        <div className="sk my-5 h-24 w-full bg-card" />
+        <div className="sk my-5 h-24 w-full bg-muted" />
 
         <div className="space-y-2">
           <div className="sk bg-muted h-4 w-full" />

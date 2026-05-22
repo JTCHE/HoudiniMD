@@ -24,6 +24,8 @@ export default function GeneratingPage({ slug }: { slug: string }) {
       if (event.stage === "complete") {
         sse.close();
         router.refresh();
+        // Fallback: if router.refresh() doesn't navigate away within 3s, force a full reload
+        setTimeout(() => window.location.reload(), 3000);
       } else if (event.stage === "error") {
         sse.close();
         setError(event.detail ?? event.message);

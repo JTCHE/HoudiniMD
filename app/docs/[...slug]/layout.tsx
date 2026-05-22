@@ -1,8 +1,8 @@
 import { Suspense } from "react";
-import { toSideFXUrl } from "@/lib/url";
 import { DocsPageContent } from "@/components/docs/DocsPageContent";
 import BreadcrumbsAsync from "@/components/docs/BreadcrumbsAsync";
 import { ScrollReset } from "@/components/docs/ScrollReset";
+import { toSideFXUrl } from "@/lib/url";
 
 export default async function DocsLayout({
   children,
