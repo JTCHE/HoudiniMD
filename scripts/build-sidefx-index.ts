@@ -9,9 +9,10 @@
  *   bun scripts/regenerate.ts --from-sidefx scripts/data/sidefx-pages.json --missing
  *
  * Usage:
- *   bun scripts/build-sidefx-index.ts                       # crawl /docs/houdini/
+ *   bun scripts/build-sidefx-index.ts                       # crawl /docs/houdini/ (no page cap)
  *   bun scripts/build-sidefx-index.ts --root nodes/sop      # crawl a subtree
- *   bun scripts/build-sidefx-index.ts --max-pages 5000
+ *   bun scripts/build-sidefx-index.ts --limit 5000          # cap at 5000 pages
+ *   bun scripts/build-sidefx-index.ts --limit 0             # explicit "no cap" (same as default)
  *   bun scripts/build-sidefx-index.ts --concurrency 8
  *   bun scripts/build-sidefx-index.ts --out custom.json
  */
@@ -102,7 +103,8 @@ async function crawl(opts: CrawlOptions): Promise<{ slugs: string[]; visited: nu
   // BFS with bounded concurrency: take up to `concurrency` URLs off the queue,
   // fetch them in parallel, enqueue any new links, repeat.
   while (queue.length > 0 && visited < opts.maxPages) {
-    const batch = queue.splice(0, opts.concurrency).slice(0, opts.maxPages - visited);
+    const remaining = Number.isFinite(opts.maxPages) ? opts.maxPages - visited : opts.concurrency;
+    const batch = queue.splice(0, Math.min(opts.concurrency, remaining));
     const htmls = await Promise.all(batch.map(fetchHtml));
 
     for (let i = 0; i < batch.length; i++) {
@@ -144,7 +146,7 @@ async function main() {
 
 Options:
   --root <slug>        Crawl root, default "houdini" (corresponds to /docs/houdini/)
-  --max-pages <N>      Cap total pages crawled, default 10000
+  --limit <N>          Cap total pages crawled; 0 = no cap (default: no cap)
   --concurrency <N>    Parallel requests, default 6
   --out <file>         Output path, default scripts/data/sidefx-pages.json
   --verbose            Log every URL crawled
@@ -153,14 +155,16 @@ Options:
   }
 
   const rootSlug = getString(args, "root", "houdini");
-  const maxPages = getNumber(args, "max-pages", 10000);
+  // --limit 0 or omitted → no cap (Infinity). Any positive N → hard cap.
+  const limitRaw = getNumber(args, "limit", 0);
+  const maxPages = limitRaw === 0 ? Infinity : limitRaw;
   const concurrency = getNumber(args, "concurrency", 6);
   const out = getString(args, "out", "scripts/data/sidefx-pages.json");
   const verbose = args.flags.has("verbose");
 
   console.log(c.bold("Crawling SideFX docs"));
   console.log(`  root          ${SIDEFX_ORIGIN}/docs/${rootSlug}/`);
-  console.log(`  max-pages     ${maxPages}`);
+  console.log(`  limit         ${Number.isFinite(maxPages) ? maxPages : "unlimited"}`);
   console.log(`  concurrency   ${concurrency}`);
   console.log("");
 
