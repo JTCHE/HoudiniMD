@@ -218,6 +218,13 @@ button:active kbd.kbd-button {
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.15);
 }
 
+/* Hide ⌘K hint on touch/coarse pointer devices — CSS-only, no JS state, no layout shift */
+@media (pointer: coarse) {
+  .search-kbd-hint {
+    display: none;
+  }
+}
+
 /* ── Skeleton shimmer ────────────────────────────────────────────────────── */
 @keyframes sk-shimmer {
   to {
@@ -271,6 +278,19 @@ pre code.hljs {
 /* Tight paragraph spacing inside list items */
 .prose :where(li > p + p) {
   margin-top: 0.15em !important;
+}
+
+/* Line-break spacing in table cells — give second+ lines a small top margin */
+.not-prose table td br,
+.not-prose table th br {
+  display: block;
+  margin-top: 1em;
+}
+
+/* Links inside not-prose tables — restore underline that prose would normally add */
+.not-prose table a {
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 /* Inline icon images — override prose display:block and max-width:100% */
