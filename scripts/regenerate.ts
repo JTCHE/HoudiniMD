@@ -3,6 +3,7 @@
  * Regenerate markdown pages into the R2 cache.
  *
  * Sources of slugs (pick ONE):
+ *   --url <url>            Re-scrape a single SideFX URL and save it to R2
  *   --all                  Re-scrape every page currently in R2 (forces refresh)
  *   --missing              Pages listed in a SideFX index file but absent from R2
  *   --stale <days>         Pages in R2 whose lastModified is older than N days
@@ -33,6 +34,7 @@ import {
 } from "./lib/regen";
 import { parseArgs, getNumber, c } from "./lib/cli";
 import { CACHE_INVALIDATE_BEFORE } from "../lib/r2/read";
+import { extractSlugFromUrl } from "../lib/url";
 
 async function loadSidefxIndex(path: string): Promise<string[]> {
   if (!existsSync(path)) {
@@ -55,6 +57,13 @@ async function loadCacheMisses(path: string): Promise<string[]> {
 }
 
 async function pickSlugs(args: ReturnType<typeof parseArgs>): Promise<{ slugs: string[]; mode: string }> {
+  const urlArg = args.values.get("url");
+  if (urlArg) {
+    const slug = extractSlugFromUrl(urlArg);
+    if (!slug) throw new Error(`Could not extract a slug from URL: ${urlArg}`);
+    return { slugs: [slug], mode: `--url ${urlArg}` };
+  }
+
   if (args.flags.has("all")) {
     const slugs = await listR2Slugs();
     return { slugs, mode: `--all (${slugs.length} pages in R2)` };
@@ -165,6 +174,7 @@ async function main() {
     console.log(`Usage: bun scripts/regenerate.ts [source] [options]
 
 Sources (pick one):
+  --url <url>              Re-scrape a single SideFX URL and save it to R2
   --all                    Re-scrape every page currently in R2
   --stale [days]           Pages older than N days (no arg = use CACHE_INVALIDATE_BEFORE)
   --cache-misses <file>    Newline-delimited slug list (e.g. from audit-perf.ts)
