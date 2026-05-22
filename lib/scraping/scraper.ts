@@ -87,10 +87,22 @@ export async function scrapeSideFXPage(url: string): Promise<ScrapedContent> {
   const rawSummary = doc.querySelector("#title p.summary")?.textContent || "";
   const summary = rawSummary.replace(/\s+/g, " ").trim();
 
-  // Extract main content HTML
-  const mainElement = doc.querySelector("main");
+  // Extract main content HTML.
+  // node-html-parser can misparse certain SideFX index pages, placing body content
+  // as direct children of <html> instead of nesting under <main>/<body>. When that
+  // happens, parse just the <main> block in isolation — it reliably works there.
+  let mainElement = doc.querySelector("main");
   if (!mainElement) {
-    throw new Error("Could not find main content on page");
+    const mainStart = html.indexOf("<main");
+    const mainEnd = html.lastIndexOf("</main>");
+    if (mainStart === -1 || mainEnd === -1) {
+      throw new Error("Could not find main content on page");
+    }
+    const isolatedDoc = parse(html.slice(mainStart, mainEnd + 7));
+    mainElement = isolatedDoc.querySelector("main");
+    if (!mainElement) {
+      throw new Error("Could not find main content on page");
+    }
   }
   const mainHtml = mainElement.innerHTML;
 
