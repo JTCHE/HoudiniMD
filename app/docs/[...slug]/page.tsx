@@ -99,9 +99,14 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
   }
 
   const { content: rawContent } = parseFrontmatter(rawMarkdown);
-  // Escape uppercase pseudo-tags (e.g. module pattern notation like <A>, <A-B>)
-  // before rehypeRaw processes the markdown. Real HTML in these docs uses lowercase.
-  const content = rawContent.replace(/<([A-Z][^>]*?)>/g, "&lt;$1&gt;");
+  // Escape pseudo-tags before rehypeRaw processes the markdown.
+  // Real HTML tag names only contain [a-zA-Z0-9-]. We escape two invalid patterns:
+  //   1. Uppercase-starting: <A>, <A-B>, <Key>
+  //   2. Underscore-containing (with or without markdown backslash-escape before _):
+  //      <unmodified_key>, <unmodified\_key>  — both throw React "Invalid tag"
+  const content = rawContent
+    .replace(/<([A-Z][^>]*?)>/g, "&lt;$1&gt;")
+    .replace(/<(\/?[a-z][a-z0-9-]*(?:\\?_[a-z0-9_\\-]*)+)>/g, "&lt;$1&gt;");
 
   // Extract title and summary for JSON-LD
   const h1Match = content.match(/^#\s+(.+)$/m);
