@@ -293,6 +293,26 @@ pre code.hljs {
   text-underline-offset: 2px;
 }
 
+/* Lists inside not-prose table cells — restore bullet/number styling stripped by not-prose */
+.not-prose table td ul,
+.not-prose table th ul {
+  list-style-type: disc;
+  padding-left: 1.25em;
+  margin: 0.25em 0;
+}
+
+.not-prose table td ol,
+.not-prose table th ol {
+  list-style-type: decimal;
+  padding-left: 1.25em;
+  margin: 0.25em 0;
+}
+
+.not-prose table td li + li,
+.not-prose table th li + li {
+  margin-top: 0.5em;
+}
+
 /* Inline icon images — override prose display:block and max-width:100% */
 img.doc-icon {
   display: inline !important;
