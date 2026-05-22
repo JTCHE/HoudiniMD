@@ -35,17 +35,37 @@ function getCellText(cell: Element, sourceUrl: string): string {
     return `![${alt}](${abs})`;
   });
 
+  // Convert <ul>/<ol> lists to real HTML list elements.
+  // rehype-raw (enabled on the docs page) will render them as proper <ul>/<li> nodes.
+  // Do this BEFORE the .def-label step so <p class="label"> inside <li> is not misread.
+  // Links/code are already converted above, so stripping remaining tags yields clean item text.
+  text = text.replace(/<(ul|ol)\b[^>]*>([\s\S]*?)<\/\1>/gi, (_, tag, listContent) => {
+    const items: string[] = [];
+    const liRe = /<li\b[^>]*>([\s\S]*?)<\/li>/gi;
+    let m: RegExpExecArray | null;
+    while ((m = liRe.exec(listContent)) !== null) {
+      const itemText = m[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      if (itemText) items.push(`<li>${itemText}</li>`);
+    }
+    return items.length ? `<${tag}>${items.join('')}</${tag}>` : '';
+  });
+
   // Format .def label elements as bold "**Label**: " markers (separates def items visually)
   text = text.replace(/<p\b[^>]*class="[^"]*\blabel\b[^"]*"[^>]*>([\s\S]*?)<\/p>/gi, (_, content) => {
     const labelText = content.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
     return ` **${labelText}**: `;
   });
 
-  // Strip all remaining HTML tags
-  text = text.replace(/<[^>]+>/g, ' ');
+  // Strip all remaining tags, but preserve the ones we want rendered:
+  //   <br> for paragraph line-breaks, <ul>/<ol>/<li> for lists (all via rehype-raw).
+  text = text.replace(/<(?!\/?(?:br|ul|ol|li)\b)[^>]+>/gi, ' ');
 
-  // Collapse whitespace, trim, escape pipes
-  text = text.replace(/\s+/g, ' ').trim();
+  // Collapse whitespace within each <br>-separated segment; trim around list tags
+  text = text
+    .split('<br>')
+    .map(seg => seg.replace(/\s{2,}/g, ' ').trim())
+    .filter(Boolean)
+    .join('<br>');
   text = text.replace(/\|/g, '\\|');
 
   return text;
@@ -130,7 +150,13 @@ export function addCustomRules(
             });
             content = [leading, ...defTexts].filter(Boolean).join('<br>');
           } else {
-            content = (contentEl.textContent || '').replace(/\s+/g, ' ').trim();
+            // Join multiple paragraphs with <br> to preserve line breaks in cells
+            const paragraphs = Array.from(contentEl.querySelectorAll('p'))
+              .map((p) => (p.textContent || '').replace(/\s+/g, ' ').trim())
+              .filter(Boolean);
+            content = paragraphs.length > 1
+              ? paragraphs.join('<br>')
+              : (contentEl.textContent || '').replace(/\s+/g, ' ').trim();
           }
         }
         content = content.replace(/\|/g, '\\|');
@@ -224,8 +250,20 @@ export function addCustomRules(
     replacement: (_content, node) => {
       const el = node as Element;
       const label = el.querySelector('p.label')?.textContent?.replace(/\s+/g, ' ').trim() || '';
-      const desc = (el.querySelector('.content') as Element | null)?.textContent?.replace(/\s+/g, ' ').trim() || '';
+      const contentEl = el.querySelector('.content') as Element | null;
       if (!label) return _content;
+      let desc = '';
+      if (contentEl) {
+        let html = (contentEl as unknown as { innerHTML: string }).innerHTML ?? '';
+        // Preserve links before stripping tags
+        html = html.replace(/<a\b[^>]*\bhref="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, (_, href, inner) => {
+          const linkText = inner.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+          if (!href || href.startsWith('#')) return linkText;
+          const url = convertToHoudiniMDUrl(href, sourceUrl);
+          return `[${linkText}](${url})`;
+        });
+        desc = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      }
       return `\n\n**${label}**  \n${desc}\n`;
     },
   });
