@@ -7,7 +7,6 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "rebuild": "bun scripts/rebuild-content.ts",
     "regen": "bun scripts/regenerate.ts",
     "audit:perf": "bun scripts/audit-perf.ts",
     "sidefx:index": "bun scripts/build-sidefx-index.ts",
