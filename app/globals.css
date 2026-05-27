@@ -117,6 +117,8 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
+    scrollbar-width: thin;
+    scrollbar-color: gray transparent;
   }
   body {
     @apply bg-background text-foreground;
