@@ -8,10 +8,11 @@ import type { SearchOverlayRef } from "./SearchOverlay";
 interface DocsPageContentProps {
   breadcrumbs: React.ReactNode;
   sourceUrl: string;
+  markdownUrl: string;
   children: React.ReactNode;
 }
 
-export function DocsPageContent({ breadcrumbs, sourceUrl, children }: DocsPageContentProps) {
+export function DocsPageContent({ breadcrumbs, sourceUrl, markdownUrl, children }: DocsPageContentProps) {
   const searchRef = useRef<SearchOverlayRef>(null) as React.RefObject<SearchOverlayRef>;
 
   return (
@@ -20,6 +21,7 @@ export function DocsPageContent({ breadcrumbs, sourceUrl, children }: DocsPageCo
       <DocsHeader
         breadcrumbs={breadcrumbs}
         sourceUrl={sourceUrl}
+        markdownUrl={markdownUrl}
         searchRef={searchRef}
       />
       {children}
