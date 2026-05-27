@@ -14,12 +14,20 @@ function stripExtensionsAndSlash(p: string): string {
 }
 
 // Real browsers always send Mozilla/5.0 alongside a known engine token.
-// Anything that doesn't match that fingerprint (bots, CLIs, LLM agents,
-// HTTP libraries) is redirected to the .md equivalent.
 const BROWSER_RE = /Mozilla\/5\.0.+\b(Chrome|Firefox|Safari|Edg|OPR|Vivaldi)\b/;
 
-function isBot(ua: string | null): boolean {
-  return !ua || !BROWSER_RE.test(ua);
+// Search-engine and social-preview crawlers we WANT to receive the rendered
+// HTML (and index it / build link previews). These are NOT redirected to .md.
+// AI training/answer bots (GPTBot, ClaudeBot, …) are deliberately absent —
+// they're disallowed from /docs/ HTML in robots.ts and steered to .md below.
+const HTML_CRAWLER_RE =
+  /\b(Googlebot|Storebot-Google|Google-InspectionTool|Bingbot|Slurp|DuckDuckBot|Baiduspider|YandexBot|Applebot|facebookexternalhit|Twitterbot|LinkedInBot|Discordbot|Slackbot)\b/i;
+
+// Programmatic / AI fetchers: not a browser and not a known HTML crawler
+// (curl, python-requests, GPTBot, ClaudeBot, …). These get steered to raw .md.
+function wantsMarkdown(ua: string | null): boolean {
+  if (!ua) return true;
+  return !BROWSER_RE.test(ua) && !HTML_CRAWLER_RE.test(ua);
 }
 
 export function middleware(request: NextRequest) {
@@ -54,19 +62,19 @@ export function middleware(request: NextRequest) {
       return NextResponse.redirect(url, 301);
     }
 
-    // Bots hitting the rendered HTML page → redirect to the .md equivalent so they
-    // receive raw markdown instead of the Next.js-rendered HTML.
+    // AI agents / programmatic fetchers → redirect to the .md equivalent so they
+    // receive raw markdown instead of the Next.js-rendered HTML. Search and
+    // social crawlers fall through to the HTML below.
     const ua = request.headers.get('user-agent');
-    if (isBot(ua)) {
+    if (wantsMarkdown(ua)) {
       url.pathname = `${pathname}.md`;
       return NextResponse.redirect(url, 302);
     }
 
-    // Human visitors: pass through but signal to search engines not to index the HTML
-    // version (the canonical content is the .md file).
-    const res = NextResponse.next();
-    res.headers.set('X-Robots-Tag', 'noindex, follow');
-    return res;
+    // Humans + search/social crawlers: serve the HTML and allow indexing.
+    // (canonical points to this HTML URL; the .md twin is advertised via
+    // <link rel="alternate" type="text/markdown"> in the page metadata.)
+    return NextResponse.next();
   }
 
   // Redirect known Houdini path segments missing the /docs/houdini/ prefix
