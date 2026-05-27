@@ -6,6 +6,7 @@ import rehypeRaw from "rehype-raw";
 import rehypeHighlight from "rehype-highlight";
 import rehypeSlug from "rehype-slug";
 import DocLink from "@/components/docs/DocLink";
+import { MarkdownActions } from "@/components/docs/MarkdownActions";
 import { fetchFromR2, fetchIndexJson } from "@/lib/r2/read";
 import GeneratingPage from "@/components/docs/GeneratingPage";
 import type { SearchIndexEntry } from "@/lib/r2/search-index";
@@ -113,6 +114,11 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
   const mdTitle = h1Match?.[1]?.trim() ?? slug[slug.length - 1].replace(/-/g, " ");
   const summaryMatch = content.match(/^(?!#)[^\n]{20,}/m);
   const mdSummary = summaryMatch?.[0]?.trim();
+
+  // The H1 is rendered in the page header row (alongside the Copy button) so
+  // it can share a row with action controls. Strip it from the markdown body
+  // to avoid a duplicate render.
+  const bodyContent = h1Match ? content.replace(/^#\s+.+\r?\n+/m, "") : content;
   const canonical = `${URL}/docs/${slugPath}`;
 
   const articleJsonLd = {
@@ -134,6 +140,14 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }}
       />
+      <header className="not-prose flex flex-wrap items-start justify-between gap-x-8 gap-y-3 border-b border-border pb-3 mb-6">
+        <h1 className="text-2xl font-bold tracking-tight leading-tight m-0 min-w-0 break-words">
+          {mdTitle}
+        </h1>
+        <div className="shrink-0 pt-0.5">
+          <MarkdownActions slug={slugPath} />
+        </div>
+      </header>
       <article className="prose prose-neutral dark:prose-invert max-w-none">
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
@@ -215,7 +229,7 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
               ),
           }}
         >
-          {content}
+          {bodyContent}
         </ReactMarkdown>
       </article>
     </main>
