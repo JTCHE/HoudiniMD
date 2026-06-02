@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { DocTooltip, registerSlug } from "./Tooltip";
 import { showToast } from "@/components/ui/toast-notification";
+import { LATEST_NEWS_INDEX_SLUGS } from "@/lib/houdini";
 
 export default function DocLink({
   href,
@@ -44,7 +45,8 @@ export default function DocLink({
           // Navigate on mousedown (saves the ~100ms between mousedown and click).
           // Only plain left click — let browser handle Ctrl/Meta/Shift (new tab etc.)
           if (!isInternal || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
-          if (window.location.pathname === `/docs/${slug}`) {
+          const resolvedSlug = LATEST_NEWS_INDEX_SLUGS.includes(slug!) ? "houdini" : slug;
+          if (window.location.pathname === `/docs/${resolvedSlug}`) {
             if (anchor) document.getElementById(anchor)?.scrollIntoView({ behavior: "smooth" });
             showToast("Already on this page");
             preventNextClick.current = true;
