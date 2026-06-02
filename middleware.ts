@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { LATEST_NEWS_INDEX_SLUGS } from './lib/houdini';
 
 const HOUDINI_PATH_PREFIXES = [
   'nodes/', 'vex/', 'hom/', 'expressions/', 'model/', 'copy/',
@@ -47,6 +48,17 @@ export function middleware(request: NextRequest) {
 
   // /docs/ paths
   if (pathname.startsWith('/docs/')) {
+    // The latest Houdini version's "What's new" page mirrors the current,
+    // unversioned docs root, so send it to our /docs/houdini instead of
+    // mirroring a duplicate. Match the bare slug (any .md/.html/slash variant).
+    let bareSlug = pathname.slice('/docs/'.length);
+    if (bareSlug.endsWith('.md')) bareSlug = bareSlug.slice(0, -3);
+    bareSlug = stripExtensionsAndSlash(bareSlug);
+    if (LATEST_NEWS_INDEX_SLUGS.includes(bareSlug)) {
+      url.pathname = '/docs/houdini';
+      return NextResponse.redirect(url, 302);
+    }
+
     // .md suffix → rewrite to /api/raw/ (raw markdown for LLMs, per llmstxt.org spec)
     if (pathname.endsWith('.md')) {
       let slug = pathname.slice('/docs/'.length, -3); // strip /docs/ and .md
