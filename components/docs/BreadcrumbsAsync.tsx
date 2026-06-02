@@ -24,9 +24,20 @@ export default async function BreadcrumbsAsync({ slug }: { slug: string }) {
   const data = parseFrontmatterData(raw);
   const title = extractTitle(raw);
 
-  const parentSegments = data.breadcrumbs ? data.breadcrumbs.split(" > ").filter(Boolean) : [];
+  const rawSegments = data.breadcrumbs ? data.breadcrumbs.split(" > ").filter(Boolean) : [];
+  // Collapse consecutive duplicate labels (SideFX index pages emit e.g.
+  // "Houdini 21.0 > Houdini 21.0"). Compare trimmed + case-insensitively.
+  const parentSegments = rawSegments.filter(
+    (label, i) => i === 0 || label.trim().toLowerCase() !== rawSegments[i - 1].trim().toLowerCase(),
+  );
 
-  if (!parentSegments.length && !title) return null;
+  // On index pages the page title repeats the final breadcrumb — drop it so we
+  // don't render "… > Houdini 21.0 > Houdini 21.0".
+  const lastSegment = parentSegments[parentSegments.length - 1];
+  const showTitle =
+    !!title && title.trim().toLowerCase() !== (lastSegment ?? "").trim().toLowerCase();
+
+  if (!parentSegments.length && !showTitle) return null;
 
   const slugParts = slug.split("/");
 
@@ -34,6 +45,7 @@ export default async function BreadcrumbsAsync({ slug }: { slug: string }) {
     <span className="cursor-default">
       {parentSegments.map((label, i) => {
         const targetSlug = slugParts.slice(0, i + 1).join("/");
+        const isLastShown = !showTitle && i === parentSegments.length - 1;
         return (
           <span key={targetSlug}>
             <Link
@@ -42,11 +54,11 @@ export default async function BreadcrumbsAsync({ slug }: { slug: string }) {
             >
               {label}
             </Link>
-            {" > "}
+            {!isLastShown && " > "}
           </span>
         );
       })}
-      {title && <span>{title}</span>}
+      {showTitle && <span>{title}</span>}
     </span>
   );
 }

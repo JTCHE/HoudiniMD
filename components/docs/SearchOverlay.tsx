@@ -256,27 +256,46 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
     <>
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-start justify-center pt-4 sm:pt-[20vh] bg-black/40 backdrop-blur-sm"
+          className="fixed inset-0 z-[60] flex items-start justify-center pt-4 sm:pt-[20vh] bg-black/40 backdrop-blur-sm"
           onClick={() => setOpen(false)}
         >
           <div
             className="w-full max-w-lg mx-4 bg-background border rounded-lg shadow-2xl overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <input
-              ref={inputRef}
-              type="search"
-              inputMode="search"
-              autoComplete="off"
-              autoCapitalize="off"
-              autoCorrect="off"
-              spellCheck="false"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={onKeyDown}
-              placeholder="Search docs or paste a SideFX URL…"
-              className="w-full px-4 py-3 text-sm bg-transparent outline-none border-b font-mono"
-            />
+            <div className="relative border-b">
+              <input
+                ref={inputRef}
+                type="search"
+                inputMode="search"
+                autoComplete="off"
+                autoCapitalize="off"
+                autoCorrect="off"
+                spellCheck="false"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={onKeyDown}
+                placeholder="Search docs or paste a SideFX URL…"
+                // [&::-webkit-search-cancel-button]:appearance-none hides the
+                // native macOS/iOS blue clear glyph; we render our own thin X.
+                className="w-full px-4 py-3 pr-11 text-sm bg-transparent outline-none font-mono [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:appearance-none"
+              />
+              {query && (
+                <button
+                  type="button"
+                  aria-label="Clear search"
+                  onClick={() => {
+                    setQuery("");
+                    inputRef.current?.focus();
+                  }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center size-6 rounded text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M18 6 6 18M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
 
             {showList && (
               <ul ref={listRef} className="max-h-80 overflow-y-auto">

@@ -59,6 +59,11 @@ export function DocsHeader({ breadcrumbs, sourceUrl, markdownUrl, searchRef }: D
           <SearchButton onOpenSearch={handleSearchClick} />
         </div>
       </div>
+
+      {/* Mobile breadcrumbs — own row so they don't crowd the brand/search row */}
+      <div className="mx-auto max-w-4xl px-6 pb-2 text-xs text-muted-foreground sm:hidden">
+        <div className="truncate">{breadcrumbs}</div>
+      </div>
     </header>
   );
 }
