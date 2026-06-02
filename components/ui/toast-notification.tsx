@@ -12,7 +12,7 @@ interface ToastProps {
 // Pure visual component — safe to render anywhere at root level
 export function ToastNotification({ message, type }: ToastProps) {
   return (
-    <div className="fixed top-4 inset-x-0 z-[100] flex justify-center pointer-events-none">
+    <div className="fixed top-4 inset-x-0 z-100 flex justify-center pointer-events-none">
       <div
         className={`text-sm px-4 py-2 shadow-lg pointer-events-auto ${
           type === "info"
