@@ -315,6 +315,110 @@ pre code.hljs {
   margin-top: 0.5em;
 }
 
+/* Callouts: single source of truth. ONE element-agnostic component. A block
+   callout is a blockquote.callout; an in-cell callout is a span.callout emitted
+   by the converter (markdown table cells cannot hold a blockquote). Both are the
+   same component: same surface, rim, icon, title, accents. Type modifiers
+   (callout-note/-tip/-warning/-important/-caution) only set the callout-color
+   and callout-icon tokens; everything else is shared. */
+.callout {
+  /* default = note */
+  --callout-color: oklch(0.62 0.13 250);
+  --callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 16v-4'/%3E%3Cpath d='M12 8h.01'/%3E%3C/svg%3E");
+  --callout-surface: color-mix(in oklab, var(--callout-color) 4%, var(--card));
+  display: block;
+  margin: 1.25rem 0;
+  padding: 0.85rem 1rem;
+  border: none;
+  border-radius: var(--radius-lg);
+  background: var(--callout-surface);
+  font-size: 0.9rem;
+  color: var(--card-foreground);
+  /* Even rim: faint hairline all around + a whisper of top-left light. */
+  box-shadow:
+    inset 0 0 0 1px color-mix(in oklab, white 5%, transparent),
+    inset 1px 1px 0 0 color-mix(in oklab, white 3%, transparent),
+    inset -1px -1px 0 0 color-mix(in oklab, black 3%, transparent),
+    0 1px 2px 0 color-mix(in oklab, black 4%, transparent);
+}
+
+.callout .callout-title {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0 0 0.4rem;
+  font-weight: 600;
+  font-size: 0.82rem;
+  letter-spacing: 0.01em;
+  color: var(--callout-color);
+}
+
+.callout .callout-title::before {
+  content: "";
+  flex: none;
+  width: 1.05rem;
+  height: 1.05rem;
+  background-color: var(--callout-color);
+  -webkit-mask: var(--callout-icon) center / contain no-repeat;
+  mask: var(--callout-icon) center / contain no-repeat;
+}
+
+.callout > :not(.callout-title):first-of-type {
+  margin-top: 0;
+}
+.callout > :last-child {
+  margin-bottom: 0;
+}
+.callout p {
+  margin: 0.4rem 0;
+}
+.callout a {
+  color: var(--callout-color);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.callout code {
+  background: color-mix(in oklab, var(--callout-color) 12%, var(--background));
+}
+
+/* Type modifiers — tokens only, element-agnostic. */
+.callout-tip {
+  --callout-color: oklch(0.6 0.14 150);
+  --callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5'/%3E%3Cpath d='M9 18h6'/%3E%3Cpath d='M10 22h4'/%3E%3C/svg%3E");
+}
+.callout-warning {
+  --callout-color: oklch(0.7 0.15 75);
+  --callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z'/%3E%3Cpath d='M12 9v4'/%3E%3Cpath d='M12 17h.01'/%3E%3C/svg%3E");
+}
+.callout-important {
+  --callout-color: oklch(0.6 0.18 300);
+  --callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7.9 20A9 9 0 1 0 4 16.1L2 22Z'/%3E%3Cpath d='M12 8v4'/%3E%3Cpath d='M12 16h.01'/%3E%3C/svg%3E");
+}
+.callout-caution {
+  --callout-color: oklch(0.62 0.2 25);
+  --callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15.3 2a2 2 0 0 1 1.4.6l4.7 4.7a2 2 0 0 1 .6 1.4v6.6a2 2 0 0 1-.6 1.4l-4.7 4.7a2 2 0 0 1-1.4.6H8.7a2 2 0 0 1-1.4-.6l-4.7-4.7a2 2 0 0 1-.6-1.4V8.7a2 2 0 0 1 .6-1.4l4.7-4.7A2 2 0 0 1 8.7 2z'/%3E%3Cpath d='M12 8v4'/%3E%3Cpath d='M12 16h.01'/%3E%3C/svg%3E");
+}
+
+/* In-cell variant: identical component, just tighter to fit a table cell. */
+.not-prose table .callout {
+  margin: 0.5rem 0 0;
+  padding: 0.5rem 0.65rem;
+  font-size: 0.92em;
+}
+.not-prose table .callout:first-child {
+  margin-top: 0;
+}
+
+/* ── Code blocks inside table cells (raw <pre> from the scraper) ─────────── */
+.not-prose table td pre,
+.not-prose table th pre {
+  margin: 0.25rem 0;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  overflow-x: auto;
+  white-space: pre;
+}
+
 /* Inline icon images — override prose display:block and max-width:100% */
 img.doc-icon {
   display: inline !important;
