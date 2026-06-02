@@ -5,18 +5,30 @@
 
 export interface ParsedArgs {
   flags: Set<string>;
+  /** Last value seen for each key (backwards-compatible). */
   values: Map<string, string>;
+  /** All values seen for each key, in order (for repeated flags like --url). */
+  multiValues: Map<string, string[]>;
   positional: string[];
 }
 
 /**
  * Parse argv into `--flag` (boolean) and `--key=value` / `--key value` pairs.
  * Anything that doesn't start with `--` is positional.
+ * Repeated flags (e.g. --url a --url b) are collected in `multiValues`.
  */
 export function parseArgs(argv: string[]): ParsedArgs {
   const flags = new Set<string>();
   const values = new Map<string, string>();
+  const multiValues = new Map<string, string[]>();
   const positional: string[] = [];
+
+  const push = (key: string, val: string) => {
+    values.set(key, val);
+    const arr = multiValues.get(key);
+    if (arr) arr.push(val);
+    else multiValues.set(key, [val]);
+  };
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -27,19 +39,19 @@ export function parseArgs(argv: string[]): ParsedArgs {
     const key = arg.slice(2);
     const eq = key.indexOf("=");
     if (eq !== -1) {
-      values.set(key.slice(0, eq), key.slice(eq + 1));
+      push(key.slice(0, eq), key.slice(eq + 1));
       continue;
     }
     const next = argv[i + 1];
     if (next !== undefined && !next.startsWith("--")) {
-      values.set(key, next);
+      push(key, next);
       i++;
     } else {
       flags.add(key);
     }
   }
 
-  return { flags, values, positional };
+  return { flags, values, multiValues, positional };
 }
 
 export function getNumber(args: ParsedArgs, key: string, fallback: number): number {
