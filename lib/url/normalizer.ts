@@ -66,57 +66,38 @@ export function normalizePath(pathname: string): string {
 }
 
 /**
- * Convert a relative SideFX URL to an absolute HoudiniMD URL
+ * Convert a relative SideFX URL to an absolute HoudiniMD URL.
+ *
+ * Relative links are resolved with the standard `URL` algorithm against
+ * `sourceUrl`, which honours trailing slashes. This matters for SideFX section
+ * index pages (e.g. `.../houdini/news/`): their children are authored as
+ * `21/index.html` and only resolve to `houdini/news/21/index` when the source is
+ * treated as a directory. The scraper supplies a trailing-slash `sourceUrl` for
+ * such pages (see scrapeSideFXPage).
  */
 export function convertToHoudiniMDUrl(relativeUrl: string, sourceUrl: string): string {
-  // Handle already absolute URLs
-  if (relativeUrl.startsWith("http://") || relativeUrl.startsWith("https://")) {
-    // If it's a sidefx.com URL, convert it
-    if (relativeUrl.includes("sidefx.com/docs/")) {
-      const match = relativeUrl.match(/sidefx\.com\/docs\/(.+?)(?:\.html)?$/);
-      if (match) {
-        return `${HOUDINIMD_BASE}/docs/${match[1].replace(".html", "")}`;
-      }
-    }
-    return relativeUrl;
-  }
-
-  // Handle anchor-only links
+  // Anchor-only links stay as-is (in-page navigation).
   if (relativeUrl.startsWith("#")) {
     return relativeUrl;
   }
 
-  // Parse the source URL to get the base path
-  const sourceMatch = sourceUrl.match(/sidefx\.com\/docs\/(.+?)(?:\.html)?$/);
-  if (!sourceMatch) {
+  // Resolve to an absolute URL (handles ../, ./, bare paths, and absolute URLs).
+  let absolute: URL;
+  try {
+    absolute = new URL(relativeUrl, sourceUrl);
+  } catch {
     return relativeUrl;
   }
 
-  const sourcePath = sourceMatch[1];
-  const sourceDir = sourcePath.substring(0, sourcePath.lastIndexOf("/"));
-
-  // Resolve relative path
-  let targetPath = relativeUrl;
-
-  // Remove .html extension
-  targetPath = targetPath.replace(".html", "");
-
-  // Handle ../ navigation
-  const parts = sourceDir.split("/");
-  while (targetPath.startsWith("../")) {
-    parts.pop();
-    targetPath = targetPath.slice(3);
+  // Only rewrite SideFX docs links; anything else stays an external absolute URL.
+  const host = absolute.hostname.replace(/^www\./, "");
+  const docsMatch = absolute.pathname.match(/^\/docs\/(.+)$/);
+  if (host !== "sidefx.com" || !docsMatch) {
+    return absolute.href;
   }
 
-  // Handle ./ (current directory)
-  if (targetPath.startsWith("./")) {
-    targetPath = targetPath.slice(2);
-  }
-
-  // Combine path
-  const finalPath = parts.length > 0 ? `${parts.join("/")}/${targetPath}` : targetPath;
-
-  return `${HOUDINIMD_BASE}/docs/${finalPath}`;
+  const path = docsMatch[1].replace(/\.html$/i, "").replace(/\/$/, "");
+  return `${HOUDINIMD_BASE}/docs/${path}${absolute.hash}`;
 }
 
 /**
