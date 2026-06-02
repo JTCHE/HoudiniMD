@@ -81,6 +81,9 @@ export function convertToMarkdown(
   parts.push('---');
   parts.push(`breadcrumbs: ${scraped.breadcrumbs.join(' > ')}`);
   parts.push(`source: ${scraped.sourceUrl}`);
+  if (scraped.since) parts.push(`since: ${scraped.since}`);
+  if (scraped.icon) parts.push(`icon: ${scraped.icon}`);
+  if (scraped.deprecation) parts.push('deprecated: true');
   parts.push(`generated_at: ${new Date().toISOString()}`);
   parts.push('---');
   parts.push('');
@@ -92,6 +95,17 @@ export function convertToMarkdown(
   // Summary as blockquote
   if (scraped.summary) {
     parts.push(`> ${scraped.summary}`);
+    parts.push('');
+  }
+
+  // Deprecation callout — rendered as a coloured warning admonition.
+  if (scraped.deprecation) {
+    const { reason, version } = scraped.deprecation;
+    const bits = ['This node is deprecated and is scheduled to be removed in a future version of Houdini.'];
+    if (reason) bits.push(reason.endsWith('.') ? reason : `${reason}.`);
+    if (version) bits.push(`(Deprecated since version ${version}.)`);
+    parts.push('> [!WARNING]');
+    parts.push(`> ${bits.join(' ')}`);
     parts.push('');
   }
 
