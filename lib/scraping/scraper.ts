@@ -78,23 +78,14 @@ export async function scrapeSideFXPage(url: string): Promise<ScrapedContent> {
     throw new PageNotFoundError(url, response.status);
   }
 
-  // SideFX section index pages (e.g. .../houdini/news) are directories served
-  // without a trailing slash. Their child links (`21/index.html`) only resolve
-  // correctly when the base is treated as a directory, so probe the
-  // trailing-slash form: if it 200s, use it as the effective source URL so
-  // relative-link resolution in the converter keeps the directory segment.
-  let effectiveUrl = url;
-  if (!url.endsWith("/") && !/\.html?$/i.test(url)) {
-    try {
-      const probe = await fetch(`${url}/`, {
-        method: "HEAD",
-        headers: { "User-Agent": USER_AGENT },
-      });
-      if (probe.ok) effectiveUrl = `${url}/`;
-    } catch {
-      // Network hiccup — keep file semantics (no trailing slash).
-    }
-  }
+  // Use response.url (final URL after any server redirects) as the base for
+  // relative-link resolution. SideFX redirects directory URLs like
+  // `/docs/houdini` → `/docs/houdini/`, and without the trailing slash a
+  // relative link `licensing/index.html` resolves one level too high
+  // (to `/docs/licensing/…` instead of `/docs/houdini/licensing/…`).
+  // response.url already reflects the redirect destination, so it's always
+  // the correct base — no separate probe needed.
+  const effectiveUrl = response.url || url;
 
   const rawHtml = await response.text();
   // Escape bare << sequences that aren't valid HTML but appear in some SideFX pages

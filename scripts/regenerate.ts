@@ -3,7 +3,14 @@
  * Regenerate markdown pages into the R2 cache.
  *
  * Sources of slugs (pick ONE):
- *   --url <url>            Re-scrape a single SideFX URL and save it to R2
+ *   --url <url|path|glob>  Re-scrape one or more pages. Accepts full URLs,
+ *                         /docs/… paths, bare slugs, or glob patterns with *.
+ *                         Repeat --url to pass multiple values.
+ *                         Examples:
+ *                           --url /docs/houdini/licensing/index
+ *                           --url houdini/licensing/index
+ *                           --url "/docs/houdini/*"
+ *                           --url houdini/nodes/sop --url houdini/nodes/dop
  *   --all                  Re-scrape every page currently in R2 (forces refresh)
  *   --missing              Pages listed in a SideFX index file but absent from R2
  *   --stale <days>         Pages in R2 whose lastModified is older than N days
@@ -56,12 +63,61 @@ async function loadCacheMisses(path: string): Promise<string[]> {
     .filter((l) => l && !l.startsWith("#"));
 }
 
+/**
+ * Coerce a --url argument to a slug or glob pattern.
+ * Handles: full URLs, /docs/… paths, bare slugs, and any of the above with * wildcards.
+ */
+function urlArgToSlugPattern(input: string): string {
+  const trimmed = input.trim();
+  // Strip /docs/ or docs/ prefix (with or without leading slash)
+  if (trimmed.startsWith("/docs/")) return trimmed.slice(6);
+  if (trimmed.startsWith("docs/")) return trimmed.slice(5);
+  // Strip leading / (bare path like /houdini/nodes/sop/*)
+  if (trimmed.startsWith("/")) return trimmed.slice(1);
+  // Full URL (may contain *) — try extractSlugFromUrl on the non-wildcard prefix,
+  // but for wildcards just strip the URL base if present
+  if (trimmed.includes("*")) {
+    return trimmed
+      .replace(/^https?:\/\/(?:www\.)?sidefx\.com\/docs\//i, "")
+      .replace(/^(?:www\.)?sidefx\.com\/docs\//i, "");
+  }
+  // Full URL or bare slug — let extractSlugFromUrl handle it, fall back to raw value
+  return extractSlugFromUrl(trimmed) ?? trimmed;
+}
+
+/** Match a slug against a glob pattern that may contain one or more `*` segments. */
+function matchesGlob(slug: string, pattern: string): boolean {
+  // Convert glob pattern to a regex: * matches any non-empty path segment(s)
+  const regexSrc = pattern
+    .replace(/[.+^${}()|[\]\\]/g, "\\$&") // escape regex meta chars (not * /)
+    .replace(/\*/g, "[^/]+(?:/[^/]+)*"); // * → one or more path segments
+  return new RegExp(`^${regexSrc}$`).test(slug);
+}
+
 async function pickSlugs(args: ReturnType<typeof parseArgs>): Promise<{ slugs: string[]; mode: string }> {
-  const urlArg = args.values.get("url");
-  if (urlArg) {
-    const slug = extractSlugFromUrl(urlArg);
-    if (!slug) throw new Error(`Could not extract a slug from URL: ${urlArg}`);
-    return { slugs: [slug], mode: `--url ${urlArg}` };
+  const urlArgs = args.multiValues.get("url");
+  if (urlArgs && urlArgs.length > 0) {
+    const patterns = urlArgs.map(urlArgToSlugPattern);
+    const hasWildcard = patterns.some((p) => p.includes("*"));
+
+    if (!hasWildcard && patterns.length === 1) {
+      // Fast path: single exact slug
+      return { slugs: [patterns[0]], mode: `--url ${urlArgs[0]}` };
+    }
+
+    if (hasWildcard) {
+      // Expand wildcards against all slugs in R2
+      const allSlugs = await listR2Slugs();
+      const matched = allSlugs.filter((slug) =>
+        patterns.some((p) => (p.includes("*") ? matchesGlob(slug, p) : slug === p))
+      );
+      const label = urlArgs.length === 1 ? urlArgs[0] : `${urlArgs.length} patterns`;
+      return { slugs: matched, mode: `--url "${label}" (${matched.length} of ${allSlugs.length} matched)` };
+    }
+
+    // Multiple exact slugs (no wildcards)
+    const label = urlArgs.length === 1 ? urlArgs[0] : `${urlArgs.length} URLs`;
+    return { slugs: patterns, mode: `--url ${label}` };
   }
 
   if (args.flags.has("all")) {
@@ -114,7 +170,7 @@ async function pickSlugs(args: ReturnType<typeof parseArgs>): Promise<{ slugs: s
   }
 
   throw new Error(
-    `No source selected. Pass one of: --all, --stale <days>, --cache-misses <file>, --from-sidefx <file>`,
+    `No source selected. Pass one of: --url <url|path|glob>, --all, --stale <days>, --cache-misses <file>, --from-sidefx <file>`,
   );
 }
 
@@ -174,7 +230,13 @@ async function main() {
     console.log(`Usage: bun scripts/regenerate.ts [source] [options]
 
 Sources (pick one):
-  --url <url>              Re-scrape a single SideFX URL and save it to R2
+  --url <url|path|glob>    Re-scrape one or more pages. Accepts full URLs,
+                           /docs/… paths, bare slugs, or glob patterns with *.
+                           Repeat --url to pass multiple values.
+                             --url /docs/houdini/licensing/index
+                             --url houdini/licensing/index
+                             --url "/docs/houdini/*"
+                             --url houdini/nodes/sop --url houdini/nodes/dop
   --all                    Re-scrape every page currently in R2
   --stale [days]           Pages older than N days (no arg = use CACHE_INVALIDATE_BEFORE)
   --cache-misses <file>    Newline-delimited slug list (e.g. from audit-perf.ts)
