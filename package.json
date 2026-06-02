@@ -11,6 +11,7 @@
     "audit:perf": "bun scripts/audit-perf.ts",
     "sidefx:index": "bun scripts/build-sidefx-index.ts",
     "cleanup:slugs": "bun scripts/cleanup-slugs.ts",
+    "test:unit": "bun test",
     "test": "playwright test",
     "test:ui": "playwright test --ui",
     "test:debug": "playwright test --debug"
