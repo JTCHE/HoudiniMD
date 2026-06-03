@@ -1,4 +1,3 @@
-import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getConfig, getS3Client } from './config';
 
 export interface SearchIndexEntry {
@@ -17,11 +16,13 @@ const INDEX_PATH = 'content/index.json';
  */
 export async function updateSearchIndex(entry: SearchIndexEntry): Promise<void> {
   const config = getConfig();
-  const client = getS3Client();
+  const client = await getS3Client();
   if (!config || !client) {
     console.log(`[dev] R2 not configured, skipping search index update for: ${entry.path}`);
     return;
   }
+
+  const { GetObjectCommand, PutObjectCommand } = await import('@aws-sdk/client-s3');
 
   let index: SearchIndexEntry[] = [];
 
