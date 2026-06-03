@@ -2,9 +2,21 @@ import { NextRequest } from "next/server";
 import Fuse from "fuse.js";
 import { fetchIndexJson } from "@/lib/r2/read";
 import type { SearchIndexEntry } from "@/lib/r2/search-index";
+import {
+  toIndexed,
+  rankResults,
+  FUSE_OPTIONS,
+  type IndexedEntry,
+} from "@/lib/search/ranking";
 
-type IndexedEntry = SearchIndexEntry & { slug: string };
-let fuseCache: { fuse: Fuse<IndexedEntry>; indexed: IndexedEntry[]; indexExpiry: number } | null = null;
+// Module-level caches survive across requests on a WARM isolate. The Fuse index
+// is the expensive thing to construct (tokenizing ~10.5k entries), so we build
+// it at most once per isolate AND only when a query actually needs the fuzzy
+// fallback — exact/prefix queries (the common case) never build it. This is
+// what keeps the route under the 10ms CPU limit on most requests. The
+// user-facing overlay now searches client-side, so this endpoint is primarily
+// for external API callers.
+let cache: { indexed: IndexedEntry[]; fuse: Fuse<IndexedEntry> | null; expiry: number } | null = null;
 
 const ROOT = process.env.URL ?? "https://houdinimd.jchd.me";
 
@@ -39,99 +51,31 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // Rebuild Fuse only when index cache refreshes
-  if (!fuseCache || Date.now() >= fuseCache.indexExpiry) {
+  if (!cache || Date.now() >= cache.expiry) {
     const entries: SearchIndexEntry[] = JSON.parse(raw);
-    const indexed = entries.map((e) => ({ ...e, slug: e.path.split("/").pop() ?? e.path }));
-    const fuse = new Fuse(indexed, {
-      keys: [
-        { name: "slug", weight: 0.45 },
-        { name: "title", weight: 0.35 },
-        { name: "summary", weight: 0.1 },
-        { name: "path", weight: 0.1 },
-      ],
-      threshold: 0.5,
-      includeScore: true,
-      ignoreLocation: true,
-    });
-    fuseCache = { fuse, indexed, indexExpiry: Date.now() + 5 * 60 * 1000 };
+    cache = { indexed: toIndexed(entries), fuse: null, expiry: Date.now() + 5 * 60 * 1000 };
   }
+  const { indexed } = cache;
+  const makeFuse = () => {
+    if (!cache!.fuse) cache!.fuse = new Fuse(indexed, FUSE_OPTIONS);
+    return cache!.fuse;
+  };
 
-  let { indexed } = fuseCache;
-  const { fuse } = fuseCache;
-
-  if (category) {
-    indexed = indexed.filter(
-      (e) => e.category.toLowerCase() === category.toLowerCase()
-    );
-  }
-
-  const qLower = q.toLowerCase().replace(/\s+/g, "");
-
-  // 1. Exact & prefix matches — prioritized before fuzzy
-  const exactHits = new Map<string, { item: IndexedEntry; score: number }>();
-  const prefixHits = new Map<string, { item: IndexedEntry; score: number }>();
-
-  for (const e of indexed) {
-    const titleNorm = e.title.toLowerCase().replace(/\s+/g, "");
-    const slugLower = e.slug.toLowerCase();
-
-    // Exact match: title or slug matches query exactly
-    if (titleNorm === qLower || slugLower === qLower) {
-      exactHits.set(e.path, { item: e, score: 0 });
-    }
-    // Prefix match: title or slug starts with query
-    else if (titleNorm.startsWith(qLower) || slugLower.startsWith(qLower)) {
-      prefixHits.set(e.path, { item: e, score: 0.05 });
-    }
-
-    if (exactHits.size + prefixHits.size >= limit * 2) break;
-  }
-
-  // 2. Fuse fuzzy fallback
-  const fuseHits = fuse.search(q, { limit: limit * 2 });
-
-  // Sort prefix hits: title starts with query > slug-only match
-  const sortedPrefix = [...prefixHits.values()].sort((a, b) => {
-    const aTitle = +!a.item.title.toLowerCase().replace(/\s+/g, "").startsWith(qLower);
-    const bTitle = +!b.item.title.toLowerCase().replace(/\s+/g, "").startsWith(qLower);
-    return aTitle - bTitle;
-  });
-
-  // Merge: exact first, then prefix, then fuzzy (deduped), examples deprioritized within each group
-  const seen = new Set([...exactHits.keys(), ...prefixHits.keys()]);
-  const exact = [...exactHits.values()];
-  const merged = [
-    ...exact.sort((a) => +a.item.path.includes("/examples/")),
-    ...sortedPrefix.sort((a) => +a.item.path.includes("/examples/")),
-    ...fuseHits
-      .filter((r) => !seen.has(r.item.path))
-      .sort((a) => +a.item.path.includes("/examples/")),
-  ].slice(0, limit);
-
-  // Deduplicate anchor fragments: if "foo#bar" and "foo" both appear, keep only "foo"
-  const seenBase = new Set<string>();
-  const deduped = merged.filter(({ item }) => {
-    const base = item.path.split("#")[0];
-    if (seenBase.has(base)) return false;
-    seenBase.add(base);
-    return true;
-  });
-
-  const results = deduped
-    .map(({ item, score }) => ({
-      path: item.path,
-      title: item.title,
-      summary: item.summary,
-      category: item.category,
-      version: item.version,
-      score: score !== undefined ? Math.round((1 - score) * 100) / 100 : null,
-      docs_url: `/docs/${item.path}`,
-      raw_url: `${ROOT}/docs/${item.path}.md`,
-    }));
+  const ranked = rankResults(indexed, q, limit, makeFuse, category);
+  const results = ranked.map((r) => ({
+    ...r,
+    docs_url: `/docs/${r.path}`,
+    raw_url: `${ROOT}/docs/${r.path}.md`,
+  }));
 
   return Response.json(
     { query: q, total: results.length, results },
-    { headers: { ...CORS_HEADERS, "Cache-Control": "no-store" } }
+    {
+      headers: {
+        ...CORS_HEADERS,
+        // Edge-cache identical queries so repeats never reach the Worker.
+        "Cache-Control": "public, max-age=60, s-maxage=86400, stale-while-revalidate=604800",
+      },
+    }
   );
 }

@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHand
 import { flushSync } from "react-dom";
 import { useRouter } from "next/navigation";
 import { showToast } from "@/components/ui/toast-notification";
+import { searchClient, prewarmSearchIndex } from "@/lib/search/client";
 
 interface SearchResult {
   path: string;
@@ -53,9 +54,9 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
   const [selected, setSelected] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
-  // Refs to cancel in-flight search when Enter is pressed
+  // Cancels the debounced search when Enter is pressed (so stale results don't
+  // flash in after navigation). Search runs client-side now — no network abort.
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const searchAbortRef = useRef<AbortController | null>(null);
   // Always-current query value — avoids stale closure in navigate()
   const queryRef = useRef("");
   queryRef.current = query;
@@ -93,6 +94,8 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
       setRecentSearches(
         getRecentSearches().filter((r) => r.path !== currentSlug),
       );
+      // Start downloading the index now so the first keystroke is instant.
+      prewarmSearchIndex();
       inputRef.current?.focus();
     }
   }, [open]);
@@ -129,15 +132,19 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
       return;
     }
 
-    const controller = new AbortController();
-    searchAbortRef.current = controller;
-
+    let cancelled = false;
     const timer = setTimeout(() => {
       searchTimerRef.current = null;
-      fetch(`/api/search?q=${encodeURIComponent(q)}&limit=6`, { signal: controller.signal })
-        .then((r) => r.json())
-        .then((d) => {
-          const res: SearchResult[] = d.results ?? [];
+      searchClient(q, 6)
+        .then((ranked) => {
+          if (cancelled) return;
+          const res: SearchResult[] = ranked.map((r) => ({
+            path: r.path,
+            title: r.title,
+            summary: r.summary,
+            category: r.category,
+            docs_url: `/docs/${r.path}`,
+          }));
           setResults(res);
           setSelected(0);
           res.slice(0, 3).forEach((r) => router.prefetch(`/docs/${r.path}`));
@@ -147,9 +154,9 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
 
     searchTimerRef.current = timer;
     return () => {
+      cancelled = true;
       clearTimeout(timer);
       searchTimerRef.current = null;
-      controller.abort();
     };
   }, [query, router]);
 
@@ -222,7 +229,6 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
       clearTimeout(searchTimerRef.current);
       searchTimerRef.current = null;
     }
-    searchAbortRef.current?.abort();
     setResults([]);
   }
 
