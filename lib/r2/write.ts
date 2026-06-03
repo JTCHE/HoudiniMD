@@ -1,4 +1,3 @@
-import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { getConfig, getS3Client } from './config';
 
 /**
@@ -9,12 +8,13 @@ export async function saveToR2(
   content: string,
 ): Promise<void> {
   const config = getConfig();
-  const client = getS3Client();
+  const client = await getS3Client();
   if (!config || !client) {
     console.log(`[dev] R2 not configured, skipping save for: ${filePath}`);
     return;
   }
 
+  const { PutObjectCommand } = await import('@aws-sdk/client-s3');
   try {
     await client.send(new PutObjectCommand({
       Bucket: config.bucketName,

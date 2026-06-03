@@ -1,4 +1,9 @@
-import { S3Client } from '@aws-sdk/client-s3';
+// Type-only import: erased at compile time, so the heavy @aws-sdk/client-s3
+// module is NOT evaluated at Worker cold-start. The real module is pulled in
+// lazily via dynamic import() inside getS3Client(), which only runs on the
+// rare S3 paths (fallback reads, writes, index updates) — never on the hot
+// path of serving a cached page.
+import type { S3Client } from '@aws-sdk/client-s3';
 
 export interface R2Config {
   accountId: string;
@@ -38,7 +43,7 @@ export function getConfig(): R2Config | null {
   return cachedConfig;
 }
 
-export function getS3Client(): S3Client | null {
+export async function getS3Client(): Promise<S3Client | null> {
   if (cachedClient !== undefined) {
     return cachedClient;
   }
@@ -49,6 +54,7 @@ export function getS3Client(): S3Client | null {
     return null;
   }
 
+  const { S3Client } = await import('@aws-sdk/client-s3');
   cachedClient = new S3Client({
     region: 'auto',
     endpoint: `https://${config.accountId}.r2.cloudflarestorage.com`,
