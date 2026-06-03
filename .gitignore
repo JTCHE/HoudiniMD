@@ -53,3 +53,11 @@ playwright-report/
 .playwright/
 tests/
 playwright.config.ts
+
+# OpenNext
+.open-next
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
