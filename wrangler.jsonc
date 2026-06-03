@@ -1,0 +1,70 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "main": ".open-next/worker.js",
+  "name": "houdinimd",
+  "compatibility_date": "2026-06-02",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS",
+  },
+  "observability": {
+    "enabled": false,
+    "head_sampling_rate": 1,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "persist": true,
+      "invocation_logs": true,
+    },
+    "traces": {
+      "enabled": true,
+      "persist": true,
+      "head_sampling_rate": 1,
+    },
+  },
+  "r2_buckets": [
+    {
+      // R2 bucket used for ISR/SSG page cache.
+      // Create with: npx wrangler r2 bucket create houdinimd-cache
+      "binding": "NEXT_INC_CACHE_R2_BUCKET",
+      "bucket_name": "houdinimd-cache",
+    },
+  ],
+  // Durable Object that runs ISR revalidation in the background (off the request
+  // path). Configured via `queue: doQueue` in open-next.config.ts. SQLite-backed
+  // (see the migration below), which is available on the Workers free plan.
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "NEXT_CACHE_DO_QUEUE",
+        "class_name": "DOQueueHandler",
+      },
+    ],
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["DOQueueHandler"],
+    },
+  ],
+  "routes": [
+    {
+      "pattern": "houdinimd.jchd.me/*",
+      "zone_name": "jchd.me",
+    },
+  ],
+  "services": [
+    {
+      // Self-reference service binding, the service name must match the worker name
+      // see https://opennext.js.org/cloudflare/caching
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "houdinimd",
+    },
+  ],
+  "images": {
+    // Enable image optimization
+    // see https://opennext.js.org/cloudflare/howtos/image
+    "binding": "IMAGES",
+  },
+}
