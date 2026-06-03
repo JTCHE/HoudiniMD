@@ -1,5 +1,3 @@
-import { parse } from "node-html-parser";
-
 export interface DeprecationInfo {
   reason?: string;
   version?: string;
@@ -70,12 +68,27 @@ export async function checkPageExists(url: string): Promise<boolean> {
  * No browser/JavaScript required since SideFX docs are static HTML.
  */
 export async function scrapeSideFXPage(url: string): Promise<ScrapedContent> {
-  const response = await fetch(url, {
+  // SideFX URL behaviour varies by page type:
+  //   section/index pages: trailing slash required — without it, a stale page is served
+  //   leaf pages: trailing slash causes 404 — must omit it
+  // Always fetch with a trailing slash first (correct for section pages). When that 404s,
+  // retry without — handles leaf pages. Keeps toSideFXUrl clean (no slash, canonical display).
+  const slashUrl = url.endsWith('/') ? url : `${url}/`;
+  let response = await fetch(slashUrl, {
     headers: { "User-Agent": USER_AGENT },
   });
 
   if (!response.ok) {
-    throw new PageNotFoundError(url, response.status);
+    const noSlashUrl = slashUrl.slice(0, -1);
+    const retry = await fetch(noSlashUrl, { headers: { "User-Agent": USER_AGENT } });
+    if (retry.ok) {
+      response = retry;
+      url = noSlashUrl;
+    } else {
+      throw new PageNotFoundError(url, response.status);
+    }
+  } else {
+    url = slashUrl;
   }
 
   // Use response.url (final URL after any server redirects) as the base for
@@ -91,6 +104,9 @@ export async function scrapeSideFXPage(url: string): Promise<ScrapedContent> {
   // Escape bare << sequences that aren't valid HTML but appear in some SideFX pages
   // (e.g. <<clip = false>> in href attributes), which break node-html-parser
   const html = rawHtml.replace(/<</g, '&lt;&lt;');
+  // Lazy-loaded so node-html-parser stays out of the Worker cold-start path;
+  // scraping only happens when generating a new (uncached) page.
+  const { parse } = await import("node-html-parser");
   const doc = parse(html);
 
   // Extract metadata from header/title area
