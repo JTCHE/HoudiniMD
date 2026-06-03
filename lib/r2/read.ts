@@ -1,4 +1,3 @@
-import { GetObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { getConfig, getS3Client } from './config';
 
 let indexCache: { data: string; expiry: number } | null = null;
@@ -19,9 +18,10 @@ export const CACHE_INVALIDATE_BEFORE = new Date("2026-03-18T12:00:00Z");
  */
 export async function fileExistsInR2(filePath: string): Promise<boolean> {
   const config = getConfig();
-  const client = getS3Client();
+  const client = await getS3Client();
   if (!config || !client) return false;
 
+  const { HeadObjectCommand } = await import('@aws-sdk/client-s3');
   try {
     await client.send(new HeadObjectCommand({
       Bucket: config.bucketName,
@@ -102,9 +102,10 @@ export async function fetchFromR2(filePath: string, noValidate = false): Promise
  */
 async function fetchFromR2WithS3Api(filePath: string): Promise<string | null> {
   const config = getConfig();
-  const client = getS3Client();
+  const client = await getS3Client();
   if (!config || !client) return null;
 
+  const { GetObjectCommand } = await import('@aws-sdk/client-s3');
   try {
     const response = await client.send(new GetObjectCommand({
       Bucket: config.bucketName,

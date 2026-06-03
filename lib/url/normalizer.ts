@@ -101,13 +101,11 @@ export function convertToHoudiniMDUrl(relativeUrl: string, sourceUrl: string): s
 }
 
 /**
- * Convert a houdinimd path to a SideFX source URL
+ * Convert a houdinimd path to a canonical SideFX display URL (no trailing slash).
  * slug is the full path after /docs/, e.g., "houdini/vex/functions/foreach"
  * Any URL fragments (hash) are stripped since they're page anchors, not part of the path.
- * No .html extension — SideFX redirects to the canonical trailing-slash URL automatically.
  */
 export function toSideFXUrl(slug: string): string {
-  // Strip any hash fragment that might have slipped through
   const cleanSlug = slug.split("#")[0];
   return `https://www.sidefx.com/docs/${cleanSlug}`;
 }
