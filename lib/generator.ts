@@ -89,7 +89,7 @@ export async function generateMarkdownForSlug(
     // Stage 4: Convert
     progress("converting", "Converting to markdown", scraped.title);
     const codeLanguage = detectLanguage(slug);
-    const generatedMarkdown = convertToMarkdown(scraped, { codeLanguage });
+    const generatedMarkdown = await convertToMarkdown(scraped, { codeLanguage });
 
     // Stage 5: Save to R2
     progress("saving", "Saving to R2", contentPath);

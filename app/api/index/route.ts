@@ -4,6 +4,10 @@ import type { SearchIndexEntry } from "@/lib/r2/search-index";
 
 const ROOT = process.env.URL ?? "https://houdinimd.jchd.me";
 
+// Cache the parsed index per warm isolate so only the first request pays the
+// ~2.9MB JSON.parse (the cold-start cost that can brush the 10ms CPU limit).
+let entriesCache: { entries: SearchIndexEntry[]; expiry: number } | null = null;
+
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, OPTIONS",
@@ -28,7 +32,10 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  let entries: SearchIndexEntry[] = JSON.parse(raw);
+  if (!entriesCache || Date.now() >= entriesCache.expiry) {
+    entriesCache = { entries: JSON.parse(raw), expiry: Date.now() + 5 * 60 * 1000 };
+  }
+  let entries: SearchIndexEntry[] = entriesCache.entries;
 
   if (category) {
     entries = entries.filter(
@@ -54,6 +61,6 @@ export async function GET(request: NextRequest) {
       categories,
       entries: paginated,
     },
-    { headers: { ...CORS_HEADERS, "Cache-Control": "private, max-age=60" } }
+    { headers: { ...CORS_HEADERS, "Cache-Control": "public, max-age=60, s-maxage=86400, stale-while-revalidate=604800" } }
   );
 }

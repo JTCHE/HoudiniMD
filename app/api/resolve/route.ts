@@ -19,6 +19,13 @@ const CANDIDATE_PATTERNS = [
 
 const SIDEFX_BASE = "https://www.sidefx.com/docs";
 
+// Warm-isolate caches. Parsing the ~2.9MB index and (especially) building the
+// Fuse index are the expensive steps; cache both so only the first request on
+// an isolate pays, and build Fuse lazily — exact/prefix matches (the common
+// case) resolve without ever constructing it.
+let entriesCache: { entries: SearchIndexEntry[]; expiry: number } | null = null;
+let fuseCache: Fuse<SearchIndexEntry> | null = null;
+
 async function probeSlug(slug: string): Promise<boolean> {
   try {
     const res = await fetch(`${SIDEFX_BASE}/${slug}.html`, { method: "HEAD" });
@@ -42,12 +49,18 @@ export async function GET(request: NextRequest) {
   // 1. Try the search index first (fast, no external requests)
   const indexRaw = await fetchIndexJson();
   if (indexRaw) {
-    const entries: SearchIndexEntry[] = JSON.parse(indexRaw);
-    const fuse = new Fuse(entries, {
-      keys: [{ name: "title", weight: 0.6 }, { name: "path", weight: 0.4 }],
-      threshold: 0.3,
-      ignoreLocation: true,
-    });
+    if (!entriesCache || Date.now() >= entriesCache.expiry) {
+      entriesCache = { entries: JSON.parse(indexRaw), expiry: Date.now() + 5 * 60 * 1000 };
+      fuseCache = null; // index changed — drop the stale Fuse
+    }
+    const { entries } = entriesCache;
+    // Built lazily, only when the fuzzy fallback is actually reached.
+    const getFuse = () =>
+      (fuseCache ??= new Fuse(entries, {
+        keys: [{ name: "title", weight: 0.6 }, { name: "path", weight: 0.4 }],
+        threshold: 0.3,
+        ignoreLocation: true,
+      }));
 
     for (const n of names) {
       // 1a. Try exact title or path slug match first (case-insensitive, spaces removed)
@@ -79,7 +92,7 @@ export async function GET(request: NextRequest) {
       }
 
       // 1c. Fall back to fuzzy search — only return high-confidence results
-      const results = fuse.search(n, { limit: 10 });
+      const results = getFuse().search(n, { limit: 10 });
       if (results.length > 0) {
         // Prioritize exact slug match within fuzzy results (handles uncrawled titles)
         const exactSlug = results.find((r) => {

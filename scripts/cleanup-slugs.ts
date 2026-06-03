@@ -23,7 +23,7 @@ function isBadSlug(slug: string): boolean {
 
 async function deleteR2Object(key: string): Promise<void> {
   const config = getConfig();
-  const client = getS3Client();
+  const client = await getS3Client();
   if (!config || !client) throw new Error("R2 not configured");
   await client.send(new DeleteObjectCommand({ Bucket: config.bucketName, Key: key }));
 }
