@@ -1,6 +1,18 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import hljs from "highlight.js/lib/core";
+import c from "highlight.js/lib/languages/c";
+import python from "highlight.js/lib/languages/python";
+
+// Syntax highlighting runs on the CLIENT (not server-side via rehype-highlight)
+// so the cached/prerendered HTML stays small and the Worker render stays cheap
+// enough to fit the 10ms free-tier CPU limit. Only the languages we actually
+// emit are registered, keeping the client bundle minimal. vex/hscript reuse the
+// C grammar — matching the previous rehype-highlight aliases.
+hljs.registerLanguage("c", c);
+hljs.registerLanguage("python", python);
+hljs.registerAliases(["vex", "hscript"], { languageName: "c" });
 
 /**
  * Renders a fenced code block with a snappy "Copy" button in the top-right
@@ -11,6 +23,16 @@ export function CodeBlock({ children }: { children: React.ReactNode }) {
   const preRef = useRef<HTMLPreElement>(null);
   const [copied, setCopied] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Highlight in useLayoutEffect (synchronous, before the browser paints the
+  // hydrated tree) so there's no visible flash from plain → coloured code once
+  // React takes over on the client.
+  useLayoutEffect(() => {
+    const code = preRef.current?.querySelector("code");
+    if (code && !(code as HTMLElement).dataset.highlighted) {
+      hljs.highlightElement(code as HTMLElement);
+    }
+  }, []);
 
   const handleCopy = useCallback(async () => {
     const text = preRef.current?.innerText ?? "";

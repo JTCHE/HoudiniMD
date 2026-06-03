@@ -1,6 +1,3 @@
-import { parse } from 'node-html-parser';
-import TurndownService from 'turndown';
-import { gfm } from 'turndown-plugin-gfm';
 import type { ScrapedContent } from '../scraping';
 import type { ConversionOptions } from './types';
 import { addCustomRules } from './turndown-rules';
@@ -8,12 +5,23 @@ import { extractSeeAlso, extractTaggedLinks } from './extractors';
 import { cleanMarkdown } from './utils';
 
 /**
- * Convert scraped HTML content to llms.txt-compliant markdown
+ * Convert scraped HTML content to llms.txt-compliant markdown.
+ *
+ * The heavy parsing libraries (node-html-parser, turndown) are loaded via
+ * dynamic import() so they stay out of the Worker cold-start path — this
+ * function only runs when generating a brand-new (uncached) page, which is
+ * rare. Serving a cached page never touches this module.
  */
-export function convertToMarkdown(
+export async function convertToMarkdown(
   scraped: ScrapedContent,
   options: ConversionOptions = {}
-): string {
+): Promise<string> {
+  const [{ parse }, { default: TurndownService }, { gfm }] = await Promise.all([
+    import('node-html-parser'),
+    import('turndown'),
+    import('turndown-plugin-gfm'),
+  ]);
+
   const root = parse(scraped.mainHtml);
   const codeLanguage = options.codeLanguage || 'vex';
 
@@ -28,15 +36,32 @@ export function convertToMarkdown(
     if (text === 'Load' || text === 'Launch' || text === 'Show/hide arguments') el.remove();
   });
 
-  // Remove standalone icon <img> that immediately precedes a <link> containing the same icon
-  root.querySelectorAll('a').forEach((link) => {
-    const firstImg = link.querySelector('img');
-    if (!firstImg) return;
-    const linkSrc = firstImg.getAttribute('src');
-    const prev = link.previousElementSibling;
-    if (prev && prev.rawTagName?.toUpperCase() === 'IMG' && prev.getAttribute('src') === linkSrc) {
-      prev.remove();
+  // For subtopic list items (.with-icon), merge the .g icon into the label link and
+  // remove the .g div. Two HTML patterns on SideFX:
+  //   nodes-style: <div class="g"><img/></div> + <a><img/>text</a>  → icon already in link, .g is duplicate
+  //   lop-style:   <div class="g"><a><img/></a></div> + <a>text</a>  → icon separate from text, need to merge
+  root.querySelectorAll('li.with-icon').forEach((li) => {
+    const gDiv = li.querySelector('div.g');
+    if (!gDiv) return;
+
+    const gImg = gDiv.querySelector('img');
+    if (!gImg) { gDiv.remove(); return; }
+
+    const imgSrc = gImg.getAttribute('src') || '';
+    const labelAnchor = li.querySelector('p.label a');
+
+    if (labelAnchor && imgSrc) {
+      const hasIcon = !!labelAnchor.querySelector('img');
+      if (!hasIcon) {
+        // lop-style: prepend the icon into the label anchor so it renders inline with text
+        const existingHtml = (labelAnchor as unknown as { innerHTML: string }).innerHTML;
+        (labelAnchor as unknown as { set_content: (c: string) => void }).set_content(
+          `<img src="${imgSrc}" />` + existingHtml
+        );
+      }
     }
+
+    gDiv.remove();
   });
 
   // Initialize Turndown with custom settings
