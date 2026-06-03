@@ -60,7 +60,7 @@ function keyToSlug(key: string): string {
 /** List every markdown file currently in the R2 bucket. */
 export async function listR2Slugs(): Promise<string[]> {
   const config = getConfig();
-  const client = getS3Client();
+  const client = await getS3Client();
   if (!config || !client) {
     throw new Error(
       "R2 not configured. Set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME, R2_PUBLIC_URL in .env.local",
@@ -91,7 +91,7 @@ export async function listR2Slugs(): Promise<string[]> {
 /** Read the current search index from R2 (or empty array if missing). */
 export async function fetchSearchIndex(): Promise<SearchIndexEntry[]> {
   const config = getConfig();
-  const client = getS3Client();
+  const client = await getS3Client();
   if (!config || !client) return [];
 
   try {
@@ -116,7 +116,7 @@ export async function fetchSearchIndex(): Promise<SearchIndexEntry[]> {
 /** Single bulk write of the search index — far cheaper than N per-entry updates. */
 export async function putSearchIndex(entries: SearchIndexEntry[]): Promise<void> {
   const config = getConfig();
-  const client = getS3Client();
+  const client = await getS3Client();
   if (!config || !client) {
     throw new Error("R2 not configured — cannot write search index");
   }
@@ -158,7 +158,7 @@ async function regenerateOnce(
     }
   }
 
-  const markdown = convertToMarkdown(scraped, { codeLanguage: detectLanguage(slug) });
+  const markdown = await convertToMarkdown(scraped, { codeLanguage: detectLanguage(slug) });
   await saveToR2(`content/${slug}.md`, markdown);
 
   return {
