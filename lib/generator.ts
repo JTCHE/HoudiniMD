@@ -59,17 +59,22 @@ export async function generateMarkdownForSlug(
     progress("checking-cache", "Skipping cache", "Regenerating content");
   }
 
-  // Stage 2: Verify page exists — try primary URL, then /index.html fallback for category pages
+  // Stage 2: Verify page exists — try primary URL, then fallbacks for two patterns:
+  //   - slug ends with /index (e.g. houdini/chop/index):  try .html extension → index.html
+  //   - directory slug (e.g. houdini/nodes/sop):           try /index.html
   progress("verifying", "Verifying page exists", sideFXUrl);
   let resolvedUrl = sideFXUrl;
   try {
     await checkPageExists(sideFXUrl);
   } catch (err) {
     if (!(err instanceof PageNotFoundError)) throw err;
-    // Try index.html variant for directory-style slugs (e.g. houdini/nodes/sop/ → .../sop/index.html)
-    const indexUrl = `https://www.sidefx.com/docs/${slug.split("#")[0]}/index.html`;
-    await checkPageExists(indexUrl); // re-throws PageNotFoundError if also missing
-    resolvedUrl = indexUrl;
+    const slugBase = slug.split("#")[0];
+    // ponytail: slug ending /index means the file IS index.html, not a subdirectory
+    const fallbackUrl = slugBase.endsWith("/index")
+      ? `https://www.sidefx.com/docs/${slugBase}.html`
+      : `https://www.sidefx.com/docs/${slugBase}/index.html`;
+    await checkPageExists(fallbackUrl); // re-throws PageNotFoundError if also missing
+    resolvedUrl = fallbackUrl;
   }
 
   // Stage 3-6: Generate with lock to prevent concurrent generation
