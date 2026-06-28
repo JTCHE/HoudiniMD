@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { DocsPageContent } from "@/components/docs/DocsPageContent";
 import BreadcrumbsAsync from "@/components/docs/BreadcrumbsAsync";
 import { ScrollReset } from "@/components/docs/ScrollReset";
+import { fetchFromR2 } from "@/lib/r2/read";
 import { toSideFXUrl } from "@/lib/url";
 
 export default async function DocsLayout({
@@ -13,7 +14,14 @@ export default async function DocsLayout({
 }) {
   const { slug } = await params;
   const slugPath = slug.join("/");
-  const sourceUrl = toSideFXUrl(slugPath);
+
+  // Use the `source:` field from the stored markdown as the canonical SideFX URL.
+  // The scraper sets this to the effective URL after following redirects, including
+  // trailing slashes for section/index pages (e.g. houdini/nodes → nodes/).
+  // Falls back to toSideFXUrl() while the page is still being generated.
+  const raw = await fetchFromR2(`content/${slugPath}.md`);
+  const sourceUrl = raw?.match(/\nsource:\s*(\S+)/)?.[1] ?? toSideFXUrl(slugPath);
+
   const markdownUrl = `/docs/${slugPath}.md`;
 
   return (
