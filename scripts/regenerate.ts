@@ -22,6 +22,7 @@
  *   --limit <N>            Cap total pages processed (useful for smoke tests)
  *   --dry-run              List what would be regenerated, don't fetch/save
  *   --verbose              One line per page (default: live progress on a single line)
+ *   --skip-indexnow        Don't notify IndexNow/Bing about the pages just regenerated
  *
  * Examples:
  *   bun scripts/regenerate.ts --all --concurrency 6
@@ -42,6 +43,24 @@ import {
 import { parseArgs, getNumber, c } from "./lib/cli";
 import { CACHE_INVALIDATE_BEFORE } from "../lib/r2/read";
 import { extractSlugFromUrl } from "../lib/url";
+import { submitToIndexNow } from "../lib/indexnow";
+
+const BASE_URL = process.env.URL ?? "https://houdinimd.jchd.me";
+
+async function notifyIndexNow(slugs: string[]) {
+  const host = new URL(BASE_URL).host;
+  const urls = slugs.map((slug) => `${BASE_URL}/docs/${slug}`);
+  console.log(`\n${c.bold("IndexNow")}  notifying ${urls.length} page(s) on ${host}...`);
+  try {
+    const results = await submitToIndexNow(host, urls);
+    for (const r of results) {
+      const status = r.ok ? c.green(`${r.status}`) : c.red(`${r.status || "ERR"}`);
+      console.log(`  ${status}  ${r.endpoint}${r.error ? c.dim(` — ${r.error}`) : ""}`);
+    }
+  } catch (err) {
+    console.log(`  ${c.red("skipped")} — ${err instanceof Error ? err.message : err}`);
+  }
+}
 
 async function loadSidefxIndex(path: string): Promise<string[]> {
   if (!existsSync(path)) {
@@ -249,6 +268,7 @@ Options:
   --limit <N>              Cap pages processed
   --dry-run                List what would be done
   --verbose                One line per page
+  --skip-indexnow          Don't notify IndexNow/Bing about regenerated pages
 `);
     return;
   }
@@ -279,6 +299,11 @@ Options:
   });
 
   printSummary(results, mode, dryRun);
+
+  const okSlugs = results.filter((r) => r.status === "ok").map((r) => r.slug);
+  if (!dryRun && !args.flags.has("skip-indexnow") && okSlugs.length > 0) {
+    await notifyIndexNow(okSlugs);
+  }
 
   const failed = results.filter((r) => r.status === "error").length;
   process.exit(failed > 0 ? 1 : 0);
