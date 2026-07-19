@@ -43,11 +43,9 @@ export async function fileExistsInR2(filePath: string): Promise<boolean> {
   }
 }
 
-const CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
-
 /**
  * Fetch file content from R2 using the public URL (faster for reads).
- * Returns null if the file is missing or older than 30 days (triggering regeneration).
+ * Returns null if the file is missing or its content predates CACHE_INVALIDATE_BEFORE.
  */
 export async function fetchFromR2(filePath: string, noValidate = false): Promise<string | null> {
   const config = getConfig();
@@ -63,14 +61,6 @@ export async function fetchFromR2(filePath: string, noValidate = false): Promise
         return null;
       }
       throw new Error(`Failed to fetch from R2: ${response.status} ${response.statusText}`);
-    }
-
-    const lastModified = response.headers.get('last-modified');
-    if (lastModified) {
-      const age = Date.now() - new Date(lastModified).getTime();
-      if (age > CACHE_MAX_AGE_MS) {
-        return null;
-      }
     }
 
     const text = await response.text();
