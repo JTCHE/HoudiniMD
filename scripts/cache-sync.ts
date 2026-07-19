@@ -205,21 +205,26 @@ async function main() {
   }
 
   // Uploads
+  const UPLOAD_RETRIES = 3;
   let uploaded = 0;
   let failed = 0;
   await pool(toUpload, CONCURRENCY, async (a) => {
-    try {
-      await client.send(
-        new PutObjectCommand({
-          Bucket: BUCKET,
-          Key: a.key,
-          Body: readFileSync(a.fullPath),
-        }),
-      );
-      if (++uploaded % 1000 === 0) console.log(c.dim(`    uploaded ${uploaded}/${toUpload.length}`));
-    } catch (e) {
-      failed++;
-      console.error(c.red(`    upload failed ${a.key}: ${e instanceof Error ? e.message : e}`));
+    const body = readFileSync(a.fullPath);
+    for (let attempt = 1; attempt <= UPLOAD_RETRIES; attempt++) {
+      try {
+        await client.send(new PutObjectCommand({ Bucket: BUCKET, Key: a.key, Body: body }));
+        if (++uploaded % 1000 === 0) console.log(c.dim(`    uploaded ${uploaded}/${toUpload.length}`));
+        return;
+      } catch (e) {
+        // Under CONCURRENCY parallel uploads, large bodies are the most likely
+        // to hit a transient socket/timeout error — retry before giving up.
+        if (attempt === UPLOAD_RETRIES) {
+          failed++;
+          console.error(c.red(`    upload failed ${a.key} (${body.length}B): ${e instanceof Error ? e.message : e}`));
+        } else {
+          await new Promise((r) => setTimeout(r, 500 * attempt));
+        }
+      }
     }
   });
   console.log(`  uploaded ${uploaded}/${toUpload.length}${failed ? c.red(` (${failed} failed)`) : ""}`);
