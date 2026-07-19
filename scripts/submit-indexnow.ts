@@ -64,12 +64,17 @@ async function main() {
     return;
   }
 
-  const results = await submitToIndexNow(host, list);
+  const MAX_URLS_PER_SUBMISSION = 10_000;
   let failed = 0;
-  for (const r of results) {
-    const status = r.ok ? c.green(`${r.status}`) : c.red(`${r.status || "ERR"}`);
-    console.log(`  ${status}  ${r.endpoint}${r.error ? c.dim(` — ${r.error}`) : ""}`);
-    if (!r.ok) failed++;
+  for (let i = 0; i < list.length; i += MAX_URLS_PER_SUBMISSION) {
+    const chunk = list.slice(i, i + MAX_URLS_PER_SUBMISSION);
+    if (list.length > MAX_URLS_PER_SUBMISSION) console.log(c.dim(`  batch ${i / MAX_URLS_PER_SUBMISSION + 1} (${chunk.length} urls)`));
+    const results = await submitToIndexNow(host, chunk);
+    for (const r of results) {
+      const status = r.ok ? c.green(`${r.status}`) : c.red(`${r.status || "ERR"}`);
+      console.log(`  ${status}  ${r.endpoint}${r.error ? c.dim(` — ${r.error}`) : ""}`);
+      if (!r.ok) failed++;
+    }
   }
 
   process.exit(failed > 0 ? 1 : 0);
