@@ -41,8 +41,7 @@ yarn-error.log*
 next-env.d.ts
 
 # claude
-.claude
-CLAUDE.md
+.claude/*
 
 #vexp/indexp
 .vexp
@@ -61,3 +60,5 @@ playwright.config.ts
 .wrangler
 .dev.vars*
 !.dev.vars.example
+
+.vscode
