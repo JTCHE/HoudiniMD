@@ -140,8 +140,8 @@
     "scripts/submit-indexnow.ts": "81c19f003d7d19276edb1f36a411d74c9b3d6ffd079068a445b843bc8f655e22",
     "types/turndown-plugin-gfm.d.ts": "9d604c1b9c50f8591cdc2747584fdebed6371a684e311379e384d02a836dce38"
   },
-  "indexed_at_commit": "bc5a58cb7d98e01bbfac51331804c0413b6ccc3f",
-  "indexed_at_timestamp": "2026-07-20T16:49:01.312118+00:00",
+  "indexed_at_commit": "16e306b2c420ccb133c9bc11e478dd4ea6707085",
+  "indexed_at_timestamp": "2026-07-20T16:49:06.537609+00:00",
   "schema_version": 3,
   "stats": {
     "total_edges": 2151,
