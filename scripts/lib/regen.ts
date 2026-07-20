@@ -169,6 +169,7 @@ async function regenerateOnce(
       summary: scraped.summary,
       category: scraped.category,
       version: scraped.version,
+      icon: scraped.icon,
       lastModified: new Date().toISOString(),
     },
   };

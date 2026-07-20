@@ -114,6 +114,7 @@ export async function generateMarkdownForSlug(
         summary: scraped.summary,
         category: scraped.category,
         version: scraped.version,
+        icon: scraped.icon,
       });
     } catch (err) {
       console.error(`Failed to update search index: ${err}`);
