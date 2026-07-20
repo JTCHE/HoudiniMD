@@ -14,7 +14,7 @@ import { convertToMarkdown, detectLanguage } from "../../lib/markdown";
 import { toSideFXUrl } from "../../lib/url";
 import { saveToR2 } from "../../lib/r2";
 import { getConfig, getS3Client } from "../../lib/r2/config";
-import type { SearchIndexEntry } from "../../lib/r2/search-index";
+import { putLiteIndex, type SearchIndexEntry } from "../../lib/r2/search-index";
 
 const INDEX_PATH = "content/index.json";
 
@@ -126,10 +126,11 @@ export async function putSearchIndex(entries: SearchIndexEntry[]): Promise<void>
     new PutObjectCommand({
       Bucket: config.bucketName,
       Key: INDEX_PATH,
-      Body: JSON.stringify(sorted, null, 2),
+      Body: JSON.stringify(sorted),
       ContentType: "application/json; charset=utf-8",
     }),
   );
+  await putLiteIndex(client, config.bucketName, sorted);
 }
 
 /**
