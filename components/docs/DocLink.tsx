@@ -13,7 +13,11 @@ import { LATEST_NEWS_INDEX_SLUGS } from "@/lib/houdini";
 // of on mount — mounting alone used to queue speculative /api/generate calls
 // (the most expensive endpoint in the app) for every link on the page.
 let linkObserver: IntersectionObserver | null = null;
-const observedSlugs = new WeakMap<Element, string>();
+const observedSlugs = new WeakMap<Element, { slug: string; href: string }>();
+// Single app router instance, stashed by whichever DocLink mounts first, so the
+// shared module-level observer can call .prefetch() without needing one router
+// reference per link.
+let routerRef: ReturnType<typeof useRouter> | null = null;
 
 function getLinkObserver() {
   if (linkObserver) return linkObserver;
@@ -21,8 +25,14 @@ function getLinkObserver() {
     (entries) => {
       for (const entry of entries) {
         if (!entry.isIntersecting) continue;
-        const slug = observedSlugs.get(entry.target);
-        if (slug) registerSlug(slug);
+        const info = observedSlugs.get(entry.target);
+        if (info) {
+          registerSlug(info.slug);
+          if (!prefetchedHrefs.has(info.href)) {
+            prefetchedHrefs.add(info.href);
+            queuePrefetch(() => routerRef?.prefetch(info.href));
+          }
+        }
         linkObserver!.unobserve(entry.target);
         observedSlugs.delete(entry.target);
       }
@@ -32,11 +42,9 @@ function getLinkObserver() {
   return linkObserver;
 }
 
-// ponytail: viewport-triggered auto-prefetch was tried and reverted — even
-// throttled to 4 concurrent, live rapid-navigation testing on the 10ms-CPU-capped
-// Workers Free plan still cascaded (isolate teardown killing unrelated in-flight
-// requests, see plans/handoff-bottleneck-loop.md). Prefetch now only fires on
-// hover/focus (real intent, one link at a time), which is proven cascade-free.
+// Now on Workers Paid (30s CPU vs. the free tier's 10ms), the isolate-cascade
+// risk that caused the earlier revert (see plans/handoff-bottleneck-loop.md) is
+// far less likely — but still capped at 4 concurrent to keep it well-behaved.
 const MAX_CONCURRENT_PREFETCH = 4;
 const PREFETCH_SLOT_MS = 250;
 let activePrefetches = 0;
@@ -81,10 +89,14 @@ export default function DocLink({
   const isInternal = !!slug;
 
   useEffect(() => {
+    routerRef = router;
+  }, [router]);
+
+  useEffect(() => {
     if (!slug || !linkRef.current) return;
     const el = linkRef.current;
     const observer = getLinkObserver();
-    observedSlugs.set(el, slug);
+    observedSlugs.set(el, { slug, href: href! });
     observer.observe(el);
     return () => {
       observer.unobserve(el);
