@@ -1,7 +1,27 @@
-# HoudiniMD 
+# HoudiniMD
 
-HoudiniMD is A blazing fast, clutter-free & LLM-optimized alternative to SideFX's official documentation for Houdini, mirroring all pages into clean markdown content, following the llms.txt standard.
+![The SideFX Box node docs page (left) beside HoudiniMD's clean rendering (right)](public/cover.png)
 
-By mirroring the official docs, this project aims to deliver a more responsive interface to quickly browse the Houdini docs, almost at the speed of light.
+<div style="font-size:2rem; line-height:110%; letter-spacing: -2%; font-weight: bold;">A blazing-fast, clutter free, clean Markdown mirror of the Houdini docs. <br><br> Built for humans to read, and agents to understand.<br><br></div>
 
-With the rise in popularity of MCPs, but the niche nature of Houdini work, agents aren't necessarily aware of all the tools the software offers, or precisely how they operate. This project supports the official llms.txt standard, automatically redirecting agents to raw markdown files to limit context bloat and serve the right information, at the right time.
+[↗ HoudiniMD](https://houdinimd.jchd.me) · Compatible with [Houdini MCP](https://github.com/JTCHE/houdini-mcp)
+
+---
+
+HoudiniMD mirrors SideFX's official Houdini documentation into clean markdown, served through a minimal, near-instant interface. Same content, displayed inside a clean and responsive interface.
+
+It follows the [llms.txt](https://llmstxt.org) standard. AI agents are automatically redirected to raw markdown instead of scraping cluttered HTML. They get accurate, low-noise context about Houdini's nodes and functions; exactly the kind of niche knowledge even frontier models still lack. 
+
+## Features
+
+- **Fast** — pages load instantly. <kbd>⌘K</kbd> to search, <kbd>⌘C</kbd> to copy as Markdown
+- **Full Mirror, Clean Markdown** — every current and future doc page under `sidefx.com/docs` mirrored to readable markdown, dark mode included.
+- **Instant search** — find any node, VEX function, or niche HOM API. You can even paste full SideFX links directly.
+- **llms.txt native** — agents get raw markdown, not scraped HTML, cutting context bloat.
+- **Houdini Integration** — After setting it as the default source, press <kbd>F1</kbd> to bring up HoudiniMD directly inside Houdini
+- **AI Native & MCP Integration** — Paired with my [Houdini MCP](https://github.com/JTCHE/houdini-mcp) fork, agents can query pure markdown directly from HoudiniMD to inform their decisions and actions inside Houdini. Accurate info, at the right time, without context bloat.
+
+
+## Credits & license
+
+Built by [John C](https://jchd.me). The documentation content is mirrored from SideFX and remains their intellectual property and © SideFX. All rights to the actual docs content belong to them. HoudiniMD is an unofficial, independent project and is not affiliated with or endorsed by SideFX.
