@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
 import { flushSync } from "react-dom";
 import { useRouter } from "next/navigation";
 import { showToast } from "@/components/ui/toast-notification";
-import { searchClient, prewarmSearchIndex } from "@/lib/search/client";
+import { useDebouncedSearch } from "@/lib/search/useDebouncedSearch";
+import { SearchResultRow } from "@/components/search/SearchResultRow";
 
 interface SearchResult {
   path: string;
@@ -12,6 +13,7 @@ interface SearchResult {
   summary: string;
   category: string;
   docs_url: string;
+  icon?: string;
 }
 
 export interface SearchOverlayRef {
@@ -54,9 +56,6 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
   const [selected, setSelected] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
-  // Cancels the debounced search when Enter is pressed (so stale results don't
-  // flash in after navigation). Search runs client-side now — no network abort.
-  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Always-current query value — avoids stale closure in navigate()
   const queryRef = useRef("");
   queryRef.current = query;
@@ -94,8 +93,6 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
       setRecentSearches(
         getRecentSearches().filter((r) => r.path !== currentSlug),
       );
-      // Start downloading the index now so the first keystroke is instant.
-      prewarmSearchIndex();
       inputRef.current?.focus();
     }
   }, [open]);
@@ -106,16 +103,19 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
     item?.scrollIntoView({ block: "nearest" });
   }, [selected]);
 
-  // Live search as user types (debounced 150ms)
+  // Detect SideFX URL paste — direct navigation result, bypasses the search index
+  const trimmedQuery = query.trim();
+  const sideFXMatch = useMemo(() => trimmedQuery.match(SIDEFX_URL_RE), [trimmedQuery]);
+
+  // Shared debounced search (same source as the homepage search field)
+  const liveResults = useDebouncedSearch(sideFXMatch ? "" : query);
+
   useEffect(() => {
-    const q = query.trim();
-    if (!q) {
+    if (!trimmedQuery) {
       setResults([]);
       return;
     }
 
-    // Detect SideFX URL paste — direct navigation result
-    const sideFXMatch = q.match(SIDEFX_URL_RE);
     if (sideFXMatch) {
       const slug = sideFXMatch[1].replace(/\.html$/, "");
       const title = slug.split("/").pop()?.replace(/-/g, " ") ?? slug;
@@ -132,33 +132,18 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
       return;
     }
 
-    let cancelled = false;
-    const timer = setTimeout(() => {
-      searchTimerRef.current = null;
-      searchClient(q, 6)
-        .then((ranked) => {
-          if (cancelled) return;
-          const res: SearchResult[] = ranked.map((r) => ({
-            path: r.path,
-            title: r.title,
-            summary: r.summary,
-            category: r.category,
-            docs_url: `/docs/${r.path}`,
-          }));
-          setResults(res);
-          setSelected(0);
-          res.slice(0, 3).forEach((r) => router.prefetch(`/docs/${r.path}`));
-        })
-        .catch(() => {});
-    }, 150);
-
-    searchTimerRef.current = timer;
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-      searchTimerRef.current = null;
-    };
-  }, [query, router]);
+    const res: SearchResult[] = liveResults.map((r) => ({
+      path: r.path,
+      title: r.title,
+      summary: r.summary,
+      category: r.category,
+      docs_url: `/docs/${r.path}`,
+      icon: r.icon,
+    }));
+    setResults(res);
+    setSelected(0);
+    res.slice(0, 3).forEach((r) => router.prefetch(`/docs/${r.path}`));
+  }, [trimmedQuery, sideFXMatch, liveResults, router]);
 
   const isQueryEmpty = !query.trim();
   const isDirect = !isQueryEmpty && results.length === 1 && results[0].category === "Direct link";
@@ -224,14 +209,6 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
     [streamAndNavigate],
   );
 
-  function cancelSearch() {
-    if (searchTimerRef.current !== null) {
-      clearTimeout(searchTimerRef.current);
-      searchTimerRef.current = null;
-    }
-    setResults([]);
-  }
-
   function onKeyDown(e: React.KeyboardEvent) {
     const total = isQueryEmpty
       ? recentSearches.length
@@ -249,8 +226,6 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
       if (selected < displayResults.length) {
         navigate(displayResults[selected]);
       } else if (!isQueryEmpty) {
-        // Cancel the debounced search so results don't flash in after we navigate
-        cancelSearch();
         navigate();
       }
     }
@@ -312,16 +287,14 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
                 )}
                 {displayResults.map((r, i) => (
                   <li key={r.path}>
-                    <button
-                      className={`w-full text-left px-4 py-2.5 flex flex-col gap-0.5 transition-colors ${
-                        i === selected ? "bg-muted" : "hover:bg-muted/50"
-                      }`}
+                    <SearchResultRow
+                      title={r.title}
+                      category={r.category}
+                      icon={r.icon}
+                      active={i === selected}
                       onClick={() => navigate(r)}
                       onMouseMove={() => setSelected(i)}
-                    >
-                      <span className="text-sm font-medium truncate">{r.title}</span>
-                      <span className="text-xs text-muted-foreground truncate">{r.category}</span>
-                    </button>
+                    />
                   </li>
                 ))}
                 {showSearchForItem && query.trim() && (
@@ -330,7 +303,7 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
                       className={`w-full text-left px-4 py-2.5 flex items-center gap-2 transition-colors text-muted-foreground ${
                         selected === displayResults.length ? "bg-muted" : "hover:bg-muted/50"
                       }`}
-                      onClick={() => { cancelSearch(); navigate(); }}
+                      onClick={() => navigate()}
                       onMouseMove={() => setSelected(displayResults.length)}
                     >
                       <span className="text-xs shrink-0">Search for</span>

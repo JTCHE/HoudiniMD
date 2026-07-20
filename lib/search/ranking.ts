@@ -21,6 +21,7 @@ export interface RankedResult {
   summary: string;
   category: string;
   version: string;
+  icon?: string;
   score: number | null;
 }
 
@@ -117,6 +118,7 @@ export function rankResults(
     summary: item.summary,
     category: item.category,
     version: item.version,
+    icon: item.icon,
     score: score !== undefined ? Math.round((1 - score) * 100) / 100 : null,
   }));
 }

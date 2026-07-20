@@ -6,6 +6,8 @@ export interface SearchIndexEntry {
   summary: string;
   category: string;
   version: string;
+  /** Absolute URL of the page icon (from .pageicon img), if the page has one. */
+  icon?: string;
   lastModified?: string;
 }
 
