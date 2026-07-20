@@ -1,3 +1,1 @@
-# Project Information
-
-Available at @README.md
+@AGENTS.md
