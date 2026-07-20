@@ -50,7 +50,13 @@ export async function GET(req: NextRequest) {
     breadcrumb,
   });
 
-  const rendered = new ImageResponse(jsx, { width: 1200, height: 630 });
+  let rendered: ImageResponse;
+  try {
+    rendered = new ImageResponse(jsx, { width: 1200, height: 630 });
+  } catch {
+    // Generation failed — fall back to the static cover image (don't cache it).
+    return Response.redirect(new URL("/cover.png", req.url).toString(), 302);
+  }
   const response = new Response(await rendered.arrayBuffer(), {
     headers: {
       "Content-Type": "image/png",
