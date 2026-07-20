@@ -64,3 +64,5 @@ playwright.config.ts
 .vscode
 
 .codex
+
+.open-next*
