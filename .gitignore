@@ -62,3 +62,5 @@ playwright.config.ts
 !.dev.vars.example
 
 .vscode
+
+.codex
