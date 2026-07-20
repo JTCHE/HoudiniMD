@@ -209,8 +209,8 @@ export default function Home() {
   const buttonText = isProcessing && progress ? progress.message : isProcessing ? "Starting…" : "Go";
 
   return (
-    <main className="relative h-screen overflow-hidden flex flex-col justify-center px-8">
-      <div className="max-w-4xl mx-auto w-full">
+    <main className="relative h-screen overflow-hidden flex flex-col justify-center">
+      <div className="px-6 max-w-4xl mx-auto w-full">
         <h1 className="text-3xl font-bold tracking-tight leading-6">HoudiniMD</h1>
         <p className="text-muted-foreground mt-2 mb-5">
           Blazing fast, LLM-optimized documentation for SideFX Houdini. <br />
