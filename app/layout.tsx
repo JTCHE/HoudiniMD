@@ -31,11 +31,13 @@ export const metadata: Metadata = {
     url: SITE_URL,
     siteName: "HoudiniMD",
     type: "website",
+    images: ["/cover.png"],
   },
   twitter: {
     card: "summary_large_image",
     title: websiteInfo.title,
     description: websiteInfo.description,
+    images: ["/cover.png"],
   },
 };
 
