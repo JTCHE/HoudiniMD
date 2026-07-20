@@ -22,6 +22,7 @@
  *   --limit <N>            Cap total pages processed (useful for smoke tests)
  *   --dry-run              List what would be regenerated, don't fetch/save
  *   --verbose              One line per page (default: live progress on a single line)
+ *   --skip-warm             Don't pre-render regenerated pages into the ISR cache
  *   --skip-indexnow        Don't notify IndexNow/Bing about the pages just regenerated
  *
  * Examples:
@@ -46,6 +47,27 @@ import { extractSlugFromUrl } from "../lib/url";
 import { submitToIndexNow } from "../lib/indexnow";
 
 const BASE_URL = process.env.URL ?? "https://houdinimd.jchd.me";
+const WARM_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
+
+// Renders each page once so the ISR cache is populated before a real visitor
+// can hit a cold miss (and eat the render's CPU cost on their own request).
+async function warmCache(slugs: string[], concurrency: number) {
+  console.log(`\n${c.bold("Cache warm")}  rendering ${slugs.length} page(s)...`);
+  let ok = 0, failed = 0, cursor = 0;
+  const workers = Array.from({ length: Math.min(concurrency, slugs.length) }, async () => {
+    while (cursor < slugs.length) {
+      const slug = slugs[cursor++];
+      try {
+        const res = await fetch(`${BASE_URL}/docs/${slug}`, { headers: { "User-Agent": WARM_UA } });
+        if (res.ok) ok++; else failed++;
+      } catch {
+        failed++;
+      }
+    }
+  });
+  await Promise.all(workers);
+  console.log(`  ${c.green(`${ok} warmed`)}${failed ? `, ${c.red(`${failed} failed`)}` : ""}`);
+}
 
 async function notifyIndexNow(slugs: string[]) {
   const host = new URL(BASE_URL).host;
@@ -268,6 +290,7 @@ Options:
   --limit <N>              Cap pages processed
   --dry-run                List what would be done
   --verbose                One line per page
+  --skip-warm              Don't pre-render regenerated pages into the ISR cache
   --skip-indexnow          Don't notify IndexNow/Bing about regenerated pages
 `);
     return;
@@ -301,6 +324,9 @@ Options:
   printSummary(results, mode, dryRun);
 
   const okSlugs = results.filter((r) => r.status === "ok").map((r) => r.slug);
+  if (!dryRun && !args.flags.has("skip-warm") && okSlugs.length > 0) {
+    await warmCache(okSlugs, concurrency);
+  }
   if (!dryRun && !args.flags.has("skip-indexnow") && okSlugs.length > 0) {
     await notifyIndexNow(okSlugs);
   }

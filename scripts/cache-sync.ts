@@ -32,7 +32,7 @@
  */
 
 import { createHash } from "node:crypto";
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import {
   S3Client,
@@ -123,8 +123,8 @@ function makeClient(): S3Client {
   });
 }
 
-/** List every object under PREFIX, returning key -> etag (md5, unquoted). */
-async function listRemote(client: S3Client): Promise<Map<string, string>> {
+/** List every object under a prefix, returning key -> etag (md5, unquoted). */
+async function listRemote(client: S3Client, prefix: string): Promise<Map<string, string>> {
   const map = new Map<string, string>();
   let token: string | undefined;
   let calls = 0;
@@ -132,7 +132,7 @@ async function listRemote(client: S3Client): Promise<Map<string, string>> {
     const res = await client.send(
       new ListObjectsV2Command({
         Bucket: BUCKET,
-        Prefix: `${PREFIX}/`,
+        Prefix: prefix,
         ContinuationToken: token,
       }),
     );
@@ -144,6 +144,57 @@ async function listRemote(client: S3Client): Promise<Map<string, string>> {
   } while (token);
   console.log(c.dim(`  listed ${map.size} remote objects in ${calls} list call(s)`));
   return map;
+}
+
+// --- static chunk archive (P1 defense-in-depth against deleted-chunk 404s) ---
+// Content-hashed /_next/static/{chunks,css,media} files, archived under
+// static-archive/ so worker.ts can serve old-deploy chunks that a
+// still-being-revalidated stale HTML/RSC response references but Workers
+// Assets (current-deploy-only) no longer has. Immutable filenames — existence
+// check is enough, no etag diff or pruning needed (see worker.ts).
+const STATIC_ASSETS_DIR = path.join(process.cwd(), ".open-next", "assets", "_next", "static");
+const STATIC_ARCHIVE_PREFIX = "static-archive/_next/static";
+const STATIC_ARCHIVE_SUBDIRS = ["chunks", "css", "media"];
+
+interface StaticAsset {
+  fullPath: string;
+  key: string;
+}
+
+function collectStaticAssets(): StaticAsset[] {
+  const assets: StaticAsset[] = [];
+  for (const sub of STATIC_ARCHIVE_SUBDIRS) {
+    const dir = path.join(STATIC_ASSETS_DIR, sub);
+    let entries: string[];
+    try {
+      entries = readdirSync(dir, { recursive: true, encoding: "utf8" });
+    } catch {
+      continue; // subdir may not exist for every build
+    }
+    for (const rel of entries) {
+      const fullPath = path.join(dir, rel);
+      if (!statSync(fullPath).isFile()) continue;
+      const relPath = rel.split(path.sep).join("/");
+      assets.push({ fullPath, key: `${STATIC_ARCHIVE_PREFIX}/${sub}/${relPath}` });
+    }
+  }
+  return assets;
+}
+
+async function syncStaticArchive(client: S3Client) {
+  console.log("");
+  console.log(c.bold("Static chunk archive"));
+  const assets = collectStaticAssets();
+  console.log(`  local assets ${assets.length}`);
+  const remote = await listRemote(client, `${STATIC_ARCHIVE_PREFIX}/`);
+  const toUpload = assets.filter((a) => !remote.has(a.key));
+  console.log(`  ${c.green("upload")}  ${toUpload.length} / ${assets.length} new (content-hashed, existing ones are immutable)`);
+  let uploaded = 0;
+  await pool(toUpload, CONCURRENCY, async (a) => {
+    await client.send(new PutObjectCommand({ Bucket: BUCKET, Key: a.key, Body: readFileSync(a.fullPath) }));
+    uploaded++;
+  });
+  console.log(`  archived ${uploaded}/${toUpload.length}`);
 }
 
 /** Run async tasks with bounded concurrency. */
@@ -173,7 +224,7 @@ async function main() {
   const client = makeClient();
   const assets = collectAssets();
   console.log(`  local assets ${assets.length}`);
-  const remote = await listRemote(client);
+  const remote = await listRemote(client, `${PREFIX}/`);
 
   // Diff. An asset needs upload if remote is missing it or the etag differs.
   // (A multipart etag contains "-"; our objects are single-part, so any "-"
@@ -242,6 +293,8 @@ async function main() {
     deleted += batch.length;
     console.log(c.dim(`    deleted ${deleted}/${toDelete.length}`));
   }
+
+  await syncStaticArchive(client);
 
   console.log("");
   console.log(c.bold(`Done. ${uploaded} uploaded, ${deleted} deleted.`));
