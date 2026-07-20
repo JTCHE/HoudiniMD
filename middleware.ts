@@ -86,6 +86,10 @@ export function middleware(request: NextRequest) {
     // Humans + search/social crawlers: serve the HTML and allow indexing.
     // (canonical points to this HTML URL; the .md twin is advertised via
     // <link rel="alternate" type="text/markdown"> in the page metadata.)
+    // Note: Cache-Control for these responses is fixed up in worker.ts, not
+    // here — OpenNext's ISR cache-hit path (fixISRHeaders) stamps its own
+    // stale-while-revalidate header *after* middleware runs, so anything set
+    // on this response object gets overwritten before the client sees it.
     return NextResponse.next();
   }
 
