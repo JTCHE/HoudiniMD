@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 
 const ROOT = process.env.URL ?? "https://houdinimd.jchd.me";
 
+// Matches static-asset-shaped paths (stale /_next/static/chunks/*.js references
+// after a deploy, favicon requests, etc). These aren't doc-slug lookups — running
+// the full-index Fuse search on them just burns CPU for a guaranteed miss, and on
+// Workers Free that alone can trip the 10ms limit. Bail out before the fetch.
+const NOT_A_SLUG = /^_next\/|\.[a-z0-9]{1,5}$/i;
+
 // Catch-all for unrecognised paths (e.g. /rbdconstraintsfromrules).
 // Searches the index for the best match and redirects there.
 export async function GET(
@@ -10,6 +16,10 @@ export async function GET(
 ) {
   const { slug } = await params;
   const query = slug.join(" ");
+
+  if (NOT_A_SLUG.test(slug.join("/"))) {
+    return new Response("Not found", { status: 404 });
+  }
 
   const searchUrl = new URL(`${ROOT}/api/search`);
   searchUrl.searchParams.set("q", query);

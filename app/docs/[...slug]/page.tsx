@@ -8,7 +8,7 @@ import DocLink from "@/components/docs/DocLink";
 import { MarkdownActions } from "@/components/docs/MarkdownActions";
 import { CodeBlock } from "@/components/docs/CodeBlock";
 import { remarkCallouts } from "@/lib/markdown/remark-callouts";
-import { fetchFromR2, fetchIndexJson } from "@/lib/r2/read";
+import { fetchFromR2 } from "@/lib/r2/read";
 import GeneratingPage from "@/components/docs/GeneratingPage";
 import type { SearchIndexEntry } from "@/lib/r2/search-index";
 
@@ -50,22 +50,25 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   let title = fallbackTitle;
   let description: string | undefined;
 
-  try {
-    const raw = await fetchIndexJson();
-    if (raw) {
-      const entries: SearchIndexEntry[] = JSON.parse(raw);
-      const entry = entries.find((e) => e.path === slugPath);
-      if (entry) {
-        title = entry.title;
-        description = entry.summary || undefined;
-      }
-    }
-  } catch {
-    // fall through to fallback
+  // Derive metadata from the page's own markdown (already fetched by the page
+  // component below — Next.js dedupes identical fetch() calls in one request)
+  // instead of parsing the ~3MB search index, which was expensive enough to
+  // brush the Workers 10ms CPU limit on every request, including MISSes.
+  const rawMarkdown = await fetchFromR2(`content/${slugPath}.md`);
+  if (rawMarkdown) {
+    const { content } = parseFrontmatter(rawMarkdown);
+    const h1Match = content.match(/^#[ \t]+(\S[^\n]*)$/m);
+    if (h1Match) title = h1Match[1].trim();
+    const bodyAfterH1 = h1Match ? content.replace(/^#[ \t]+\S[^\n]*\r?\n+/m, "") : content;
+    const summaryMatch = bodyAfterH1.match(/^\s*>[ \t]+(?!\[!)([^\n]+)\n+/);
+    if (summaryMatch) description = summaryMatch[1].trim();
   }
 
   const pageTitle = `${title} — HoudiniMD`;
   const canonical = `${URL}/docs/${slugPath}`;
+  const ogParams = new URLSearchParams({ path: slugPath, title });
+  if (description) ogParams.set("summary", description);
+  const ogImage = `${URL}/api/og?${ogParams.toString()}`;
 
   return {
     title: pageTitle,
@@ -80,13 +83,13 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
       url: canonical,
       siteName: "HoudiniMD",
       type: "article",
-      images: [`${URL}/api/og?path=${encodeURIComponent(slugPath)}`],
+      images: [ogImage],
     },
     twitter: {
       card: "summary_large_image",
       title: pageTitle,
       description,
-      images: [`${URL}/api/og?path=${encodeURIComponent(slugPath)}`],
+      images: [ogImage],
     },
   };
 }
@@ -131,19 +134,19 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
   // Extract title and summary for JSON-LD.
   // Title is pulled from the RAW (pre-escape) markdown and entity-decoded, so a
   // generic node like "Add<T>" renders as text instead of literal "Add&lt;T&gt;".
-  const rawH1Match = rawContent.match(/^#\s+(.+)$/m);
+  const rawH1Match = rawContent.match(/^#[ \t]+(\S[^\n]*)$/m);
   const mdTitle = (rawH1Match?.[1]?.trim() ?? slug[slug.length - 1].replace(/-/g, " "))
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&amp;/g, "&")
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'");
-  const h1Match = content.match(/^#\s+(.+)$/m);
+  const h1Match = content.match(/^#[ \t]+(\S[^\n]*)$/m);
 
   // The H1 is rendered in the page header row (alongside the Copy button) so
   // it can share a row with action controls. Strip it from the markdown body
   // to avoid a duplicate render.
-  let bodyContent = h1Match ? content.replace(/^#\s+.+\r?\n+/m, "") : content;
+  let bodyContent = h1Match ? content.replace(/^#[ \t]+\S[^\n]*\r?\n+/m, "") : content;
 
   // SideFX page summary is emitted as a leading blockquote (converter.ts). Lift
   // it into the header — above the separator, beneath the title — instead of
@@ -176,7 +179,7 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
     author: { "@type": "Organization", name: "SideFX" },
     publisher: { "@type": "Organization", name: "HoudiniMD" },
     about: { "@type": "SoftwareApplication", name: "Houdini" },
-    image: `${URL}/api/og?path=${encodeURIComponent(slugPath)}`,
+    image: `${URL}/api/og?${new URLSearchParams({ path: slugPath, title: mdTitle, ...(mdSummary ? { summary: mdSummary } : {}) }).toString()}`,
     mainEntityOfPage: canonical,
   };
 
@@ -242,7 +245,7 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
             },
             table: ({ children }) => (
               <div className="not-prose overflow-x-auto my-6 rounded-lg border border-border">
-                <table className="w-full border-collapse text-sm [&_tr:last-child_td]:border-b-0">{children}</table>
+                <table className="w-full border-collapse text-sm [&_tr:last-child_td]:border-b-0 [&_td_code]:whitespace-nowrap">{children}</table>
               </div>
             ),
             thead: ({ children }) => <thead>{children}</thead>,
