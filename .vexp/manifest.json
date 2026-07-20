@@ -59,7 +59,7 @@
     ".open-next/server-functions/default/patchedAsyncStorage.cjs": "bc463d2bba43d13c03e3ba15fa2eb85563ae237743ae932431576f5e54a1298f",
     ".open-next/worker.js": "a33c0042749ff5024341e0a6138212cf358f4024efe5bfbc90b0d49f5cbaf02b",
     "CLAUDE.md": "b75f56bea14a89108ac0c64bbd04fb398301115e75bea6f1e03bba946ef0c090",
-    "README.md": "0dd849a949c2d1f438d078dec02d61e921c1c497dead595ce9fa44f38cb411ff",
+    "README.md": "cb3b1ae22f6ce1a944af20e4a0470c71c3a7c159bf801fffdac2068535d6f530",
     "app/[...slug]/route.ts": "60a1a4deac1e31f8db8f1081de2158536ee49597e784282f86c0b8faeff68cff",
     "app/api/generate/route.ts": "c05d6d1f16211099167359e95279af6a8479a74af845e2f636c7dc48f6cd3278",
     "app/api/index/route.ts": "51d9972c5b51d1f12e341e46c69412a9875240565ad5940eb9fd2a52412b3fdf",
@@ -76,7 +76,7 @@
     "app/layout.tsx": "707972d67688dccaa289aa7e8553fb9237e2dd9b0b4aa031fd2229ee9857d5f3",
     "app/llms.txt/route.ts": "b6bc0beab16047ef7464abe7fa9567f72591738d9c0d6ed76e679f859d4818b7",
     "app/opengraph-image.tsx": "d2148ad0476e2d89e6a2acf2fd964c771f340c4ded2a212c9a31adf981118fca",
-    "app/page.tsx": "b5880acdd4b79d3343517c8db84510b5083033ed642d1bb42fbe3e526cda1bd6",
+    "app/page.tsx": "db5cc7d8af462c5843c00d2aec22f19f237beebabcb709bada936c6cc8c302fe",
     "app/robots.ts": "5644621fa16c72c66abee525c198c918838bf6934691747ed909b0f01cd9b39d",
     "app/sitemap.ts": "aeee07062d1a392c532b6f50c9760e932e833e8538ddadd6f70c961472bc6bae",
     "components/ServiceWorker.tsx": "a3e397963438e0c7964b8ee98ce5ec55d1ce906148d5e2ca374fe55284b8042e",
@@ -140,13 +140,13 @@
     "scripts/submit-indexnow.ts": "81c19f003d7d19276edb1f36a411d74c9b3d6ffd079068a445b843bc8f655e22",
     "types/turndown-plugin-gfm.d.ts": "9d604c1b9c50f8591cdc2747584fdebed6371a684e311379e384d02a836dce38"
   },
-  "indexed_at_commit": "b973cd2c5095e0ffbe8d192d5acf0fb563fbe5e6",
-  "indexed_at_timestamp": "2026-07-20T17:05:09.983689+00:00",
+  "indexed_at_commit": "9f2f0807b8b1948cffdcb01084c9e3f5ad175af9",
+  "indexed_at_timestamp": "2026-07-20T20:57:15.904178+00:00",
   "schema_version": 3,
   "stats": {
-    "total_edges": 2151,
+    "total_edges": 2157,
     "total_files": 139,
-    "total_nodes": 2351
+    "total_nodes": 2357
   },
   "vexp_version": "2.2.2"
 }
