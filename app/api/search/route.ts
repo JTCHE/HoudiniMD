@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import Fuse from "fuse.js";
 import { fetchIndexJson } from "@/lib/r2/read";
 import type { SearchIndexEntry } from "@/lib/r2/search-index";
+import { stageLogger } from "@/lib/perf-log";
 import {
   toIndexed,
   rankResults,
@@ -43,7 +44,12 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  const mark = stageLogger("search", q);
+  mark("start");
+
+  mark("fetch-index:start");
   const raw = await fetchIndexJson();
+  mark("fetch-index:done");
   if (!raw) {
     return Response.json(
       { error: "Search index unavailable" },
@@ -52,16 +58,28 @@ export async function GET(request: NextRequest) {
   }
 
   if (!cache || Date.now() >= cache.expiry) {
+    mark("parse-index:start");
     const entries: SearchIndexEntry[] = JSON.parse(raw);
+    mark("parse-index:done");
+    mark("to-indexed:start");
     cache = { indexed: toIndexed(entries), fuse: null, expiry: Date.now() + 5 * 60 * 1000 };
+    mark("to-indexed:done");
+  } else {
+    mark("cache-hit");
   }
   const { indexed } = cache;
   const makeFuse = () => {
-    if (!cache!.fuse) cache!.fuse = new Fuse(indexed, FUSE_OPTIONS);
+    if (!cache!.fuse) {
+      mark("fuse-build:start");
+      cache!.fuse = new Fuse(indexed, FUSE_OPTIONS);
+      mark("fuse-build:done");
+    }
     return cache!.fuse;
   };
 
+  mark("rank:start");
   const ranked = rankResults(indexed, q, limit, makeFuse, category);
+  mark("rank:done");
   const results = ranked.map((r) => ({
     ...r,
     docs_url: `/docs/${r.path}`,
