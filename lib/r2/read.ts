@@ -1,4 +1,5 @@
 import { getConfig, getS3Client } from './config';
+import type { SearchIndexEntry } from './search-index';
 
 let indexCache: { data: string; expiry: number } | null = null;
 const INDEX_CACHE_TTL = 5 * 60 * 1000;
@@ -8,6 +9,21 @@ export async function fetchIndexJson(): Promise<string | null> {
   const raw = await fetchFromR2("content/index.json", true); // noValidate: JSON has no frontmatter
   if (raw) indexCache = { data: raw, expiry: Date.now() + INDEX_CACHE_TTL };
   return raw;
+}
+
+// Warm-isolate cache of the parsed (not just raw-string) index. Parsing the
+// ~2.9MB index is the expensive step (can brush the 10ms CPU limit on its
+// own) — share this across any route that needs entries by path, so only the
+// first request per warm isolate pays it.
+let parsedIndexCache: { entries: SearchIndexEntry[]; expiry: number } | null = null;
+
+export async function fetchIndexEntries(): Promise<SearchIndexEntry[] | null> {
+  if (parsedIndexCache && Date.now() < parsedIndexCache.expiry) return parsedIndexCache.entries;
+  const raw = await fetchIndexJson();
+  if (!raw) return null;
+  const entries: SearchIndexEntry[] = JSON.parse(raw);
+  parsedIndexCache = { entries, expiry: Date.now() + INDEX_CACHE_TTL };
+  return entries;
 }
 
 /** Cached files generated before this date will be re-generated */
