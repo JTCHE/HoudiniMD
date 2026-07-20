@@ -3,6 +3,7 @@
 import { useRef } from "react";
 import SearchOverlay from "./SearchOverlay";
 import { DocsHeader } from "./DocsHeader";
+import { Footer } from "@/components/Footer";
 import type { SearchOverlayRef } from "./SearchOverlay";
 
 interface DocsPageContentProps {
@@ -25,6 +26,7 @@ export function DocsPageContent({ breadcrumbs, sourceUrl, markdownUrl, children 
         searchRef={searchRef}
       />
       {children}
+      <Footer />
     </div>
   );
 }
