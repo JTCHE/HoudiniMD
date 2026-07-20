@@ -212,7 +212,7 @@ export default function Home() {
       <div className="w-fit">
         <h1 className="text-3xl font-bold tracking-tight leading-6">HoudiniMD</h1>
         <p className="text-muted-foreground mt-2 mb-5">
-          LLM-optimized documentation for SideFX Houdini. <br />
+          Blazing fast, LLM-optimized documentation for SideFX Houdini. <br />
           Type a node name, VEX function, or paste a SideFX URL, and get clean markdown.
         </p>
         {error && (

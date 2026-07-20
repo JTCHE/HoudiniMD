@@ -76,7 +76,7 @@
     "app/layout.tsx": "707972d67688dccaa289aa7e8553fb9237e2dd9b0b4aa031fd2229ee9857d5f3",
     "app/llms.txt/route.ts": "b6bc0beab16047ef7464abe7fa9567f72591738d9c0d6ed76e679f859d4818b7",
     "app/opengraph-image.tsx": "d2148ad0476e2d89e6a2acf2fd964c771f340c4ded2a212c9a31adf981118fca",
-    "app/page.tsx": "d849e4d18494c69fd366b63d18ae386798ccb553fafa4c7ff87f5b397451a098",
+    "app/page.tsx": "b5880acdd4b79d3343517c8db84510b5083033ed642d1bb42fbe3e526cda1bd6",
     "app/robots.ts": "5644621fa16c72c66abee525c198c918838bf6934691747ed909b0f01cd9b39d",
     "app/sitemap.ts": "aeee07062d1a392c532b6f50c9760e932e833e8538ddadd6f70c961472bc6bae",
     "components/ServiceWorker.tsx": "a3e397963438e0c7964b8ee98ce5ec55d1ce906148d5e2ca374fe55284b8042e",
@@ -140,8 +140,8 @@
     "scripts/submit-indexnow.ts": "81c19f003d7d19276edb1f36a411d74c9b3d6ffd079068a445b843bc8f655e22",
     "types/turndown-plugin-gfm.d.ts": "9d604c1b9c50f8591cdc2747584fdebed6371a684e311379e384d02a836dce38"
   },
-  "indexed_at_commit": "4519c4b79c79c9d3ff2d347c936e554af0663ae1",
-  "indexed_at_timestamp": "2026-07-20T14:48:13.428627+00:00",
+  "indexed_at_commit": "77f1666a6dbdd27aa4a0f547e624a5fff94d7a21",
+  "indexed_at_timestamp": "2026-07-20T14:49:59.685522+00:00",
   "schema_version": 3,
   "stats": {
     "total_edges": 2151,
