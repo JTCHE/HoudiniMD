@@ -2,14 +2,6 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "main": "worker.ts",
   "name": "houdinimd",
-  // Runs before every `wrangler deploy`, so the git-push → Cloudflare Workers
-  // Build path produces `.open-next/` (worker.js + assets) even though its build
-  // command is only `next build`. Without this, deploy fails instantly:
-  // "assets.directory .open-next/assets does not exist". The local `npm run
-  // deploy` script builds first too, so this just makes wrangler self-sufficient.
-  "build": {
-    "command": "npx opennextjs-cloudflare build",
-  },
   "compatibility_date": "2026-06-02",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "assets": {
