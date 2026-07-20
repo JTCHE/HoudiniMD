@@ -208,71 +208,70 @@ export default function Home() {
   const buttonText = isProcessing && progress ? progress.message : isProcessing ? "Starting…" : "Go";
 
   return (
-    <main className="h-screen overflow-hidden flex flex-col justify-center px-8 max-w-2xl">
-      <h1 className="text-3xl font-bold tracking-tight leading-6">HoudiniMD</h1>
-      <p className="text-muted-foreground mt-2 mb-5">
-        LLM-optimized documentation for SideFX Houdini. <br />
-        Type a node name, VEX function, or paste a SideFX URL, and get clean markdown.
-      </p>
-
-      {error && (
-        <p
-          id="url-error"
-          className="text-xs text-destructive mb-2"
-        >
-          {error}
+    <main className="h-screen overflow-hidden flex flex-col items-center justify-center px-8">
+      <div className="w-fit">
+        <h1 className="text-3xl font-bold tracking-tight leading-6">HoudiniMD</h1>
+        <p className="text-muted-foreground mt-2 mb-5">
+          LLM-optimized documentation for SideFX Houdini. <br />
+          Type a node name, VEX function, or paste a SideFX URL, and get clean markdown.
         </p>
-      )}
-
-      <form
-        onSubmit={handleSubmit}
-        className="flex gap-2"
-      >
-        <div className="relative flex-1">
-          <Input
-            ref={inputRef}
-            type="text"
-            value={url}
-            onChange={(e) => handleInputChange(e.target.value)}
-            placeholder=""
-            className="flex-1 font-mono text-sm w-full"
-            disabled={isProcessing}
-            aria-invalid={!!error}
-            aria-describedby={error ? "url-error" : undefined}
-          />
-          {!url && (
-            <span
-              className={cn(
-                "pointer-events-none absolute inset-y-0 left-3 right-3 flex items-center font-mono text-sm text-muted-foreground/50 transition-opacity duration-300 overflow-hidden",
-                visible ? "opacity-100" : "opacity-0",
-              )}
-            >
-              <span className="truncate">{placeholder}</span>
-            </span>
-          )}
-        </div>
-        <Button
-          type="submit"
-          disabled={isProcessing || !url.trim()}
-          className={cn("min-w-20 transition-all", isProcessing ? "cursor-wait" : "cursor-pointer")}
+        {error && (
+          <p
+            id="url-error"
+            className="text-xs text-destructive mb-2"
+          >
+            {error}
+          </p>
+        )}
+        <form
+          onSubmit={handleSubmit}
+          className="flex gap-2 w-full"
         >
-          {buttonText}
-        </Button>
-      </form>
-
-      {isProcessing && progressLog.length > 0 && (
-        <div className="mt-4 p-3 bg-muted/50 rounded-md border text-sm font-mono overflow-hidden">
-          <div className="space-y-1">
-            {progressLog.map((event, i) => (
-              <ProgressLogEntry
-                key={i}
-                event={event}
-                isLatest={i === progressLog.length - 1}
-              />
-            ))}
+          <div className="relative flex-1">
+            <Input
+              ref={inputRef}
+              type="text"
+              value={url}
+              onChange={(e) => handleInputChange(e.target.value)}
+              placeholder=""
+              className="flex-1 font-mono text-sm w-full"
+              disabled={isProcessing}
+              aria-invalid={!!error}
+              aria-describedby={error ? "url-error" : undefined}
+            />
+            {!url && (
+              <span
+                className={cn(
+                  "pointer-events-none absolute inset-y-0 left-3 right-3 flex items-center font-mono text-sm text-muted-foreground/50 transition-opacity duration-300 overflow-hidden",
+                  visible ? "opacity-100" : "opacity-0",
+                )}
+              >
+                <span className="truncate">{placeholder}</span>
+              </span>
+            )}
           </div>
-        </div>
-      )}
+          <Button
+            type="submit"
+            disabled={isProcessing || !url.trim()}
+            className={cn("min-w-20 transition-all", isProcessing ? "cursor-wait" : "cursor-pointer")}
+          >
+            {buttonText}
+          </Button>
+        </form>
+        {isProcessing && progressLog.length > 0 && (
+          <div className="mt-4 p-3 bg-muted/50 rounded-md border text-sm font-mono overflow-hidden">
+            <div className="space-y-1">
+              {progressLog.map((event, i) => (
+                <ProgressLogEntry
+                  key={i}
+                  event={event}
+                  isLatest={i === progressLog.length - 1}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </main>
   );
 }
