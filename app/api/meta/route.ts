@@ -8,8 +8,8 @@ export async function GET(req: Request) {
   const content = await fetchFromR2(`content/${slug}.md`, true);
   if (!content) return Response.json({ error: "Not found" }, { status: 404 });
 
-  const titleMatch = content.match(/^#\s+(.+)$/m);
-  const summaryMatch = content.match(/^>\s+(.+)$/m);
+  const titleMatch = content.match(/^#[ \t]+(\S[^\n]*)$/m);
+  const summaryMatch = content.match(/^>[ \t]+(\S[^\n]*)$/m);
 
   return Response.json(
     {
