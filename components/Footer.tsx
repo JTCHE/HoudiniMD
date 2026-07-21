@@ -9,8 +9,15 @@ interface FooterProps {
 export function Footer({ className }: FooterProps) {
   return (
     <footer className={cn("border-t bg-background text-muted-foreground text-xs py-4", className)}>
-      <div className="max-w-4xl mx-auto px-6">
+      <div className="max-w-4xl mx-auto px-page-x">
         <div className="flex flex-wrap gap-x-2 gap-y-1">
+          <span className="hidden print:inline font-semibold text-foreground/80">HoudiniMD</span>
+          <span
+            className="hidden print:inline text-muted-foreground/40"
+            aria-hidden
+          >
+            ·
+          </span>
           <span>
             Built by{" "}
             <a
@@ -37,7 +44,7 @@ export function Footer({ className }: FooterProps) {
             <span>Docs &copy; SideFX</span>
           </a>
           <span
-            className="text-muted-foreground/40"
+            className="text-muted-foreground/40 print:hidden"
             aria-hidden
           >
             ·
@@ -46,12 +53,12 @@ export function Footer({ className }: FooterProps) {
             href={KOFI_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-foreground/80 hover:text-foreground transition-colors underline-offset-4 hover:underline"
+            className="print:hidden text-foreground/80 hover:text-foreground transition-colors underline-offset-4 hover:underline"
           >
             Donate
           </a>
           <span
-            className="text-muted-foreground/40"
+            className="text-muted-foreground/40 print:hidden"
             aria-hidden
           >
             ·
@@ -60,7 +67,7 @@ export function Footer({ className }: FooterProps) {
             href={"mailto:hi@jchd.me?subject=HoudiniMD Feedback"}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-foreground/80 hover:text-foreground transition-colors underline-offset-4 hover:underline"
+            className="print:hidden text-foreground/80 hover:text-foreground transition-colors underline-offset-4 hover:underline"
           >
             Feedback
           </a>

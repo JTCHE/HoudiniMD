@@ -1,9 +1,9 @@
 // Content-only skeleton — the header lives in layout.tsx and never unmounts.
-// Mirrors <main className="mx-auto max-w-4xl px-6 py-10"> from page.tsx.
+// Mirrors <main className="mx-auto max-w-4xl px-page-x py-10"> from page.tsx.
 
 export default function DocsSkeleton() {
   return (
-    <main className="mx-auto max-w-4xl px-6 py-10" role="status" aria-label="Loading…">
+    <main className="mx-auto max-w-4xl px-page-x py-10" role="status" aria-label="Loading…">
       <article>
         {/* h1: text-2xl font-bold tracking-tight border-b pb-3 mb-6 */}
         <div className="border-b border-border pb-3 mb-6">

@@ -42,7 +42,7 @@ export default function GeneratingPage({ slug }: { slug: string }) {
 
   if (error) {
     return (
-      <main className="mx-auto max-w-4xl px-6 py-10">
+      <main className="mx-auto max-w-4xl px-page-x py-10">
         <p className="text-sm text-destructive">{error}</p>
       </main>
     );

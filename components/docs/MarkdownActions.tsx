@@ -48,7 +48,7 @@ export function MarkdownActions({ slug }: MarkdownActionsProps) {
       type="button"
       onClick={handleCopy}
       title="Copy as Markdown (⌘C / Ctrl+C)"
-      className="inline-flex items-center gap-1.5 h-8 px-3 text-xs font-medium text-foreground bg-background border border-border rounded-md shadow-xs transition-colors hover:bg-accent hover:text-accent-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/40 cursor-pointer"
+      className="print:hidden inline-flex items-center gap-1.5 h-8 px-3 text-xs font-medium text-foreground bg-background border border-border rounded-md shadow-xs transition-colors hover:bg-accent hover:text-accent-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/40 cursor-pointer"
     >
       <Copy className="size-3.5 text-muted-foreground" />
       Copy as Markdown

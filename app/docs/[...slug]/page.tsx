@@ -184,7 +184,7 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
   };
 
   return (
-    <main className="mx-auto max-w-4xl px-6 py-10">
+    <main className="mx-auto max-w-4xl px-page-x py-10">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }}
