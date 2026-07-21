@@ -5,9 +5,9 @@
 <div style="font-size:2rem; line-height:110%; letter-spacing: -2%; font-weight: bold;">A blazing-fast, clutter free, clean Markdown mirror of the Houdini docs. <br><br> Built for humans to read, and agents to understand.<br><br></div>
 
 <div align="center">
-  <a href="https://houdinimd.jchd.me"><img src="public/badges/website.svg" height="42" alt="Open HoudiniMD"></a>
-  <a href="https://github.com/JTCHE/houdini-mcp"><img src="public/badges/mcp.svg" height="42" alt="Houdini MCP"></a>
-  <a href="https://ko-fi.com/A0R223KA7G"><img src="public/badges/kofi.svg" height="42" alt="Buy me a coffee on Ko-fi"></a>
+  <a target="_blank" href="https://houdinimd.jchd.me"><img src="public/badges/website.svg" height="42" alt="Open HoudiniMD"></a>
+  <a target="_blank" href="https://github.com/JTCHE/houdini-mcp"><img src="public/badges/mcp.svg" height="42" alt="Houdini MCP"></a>
+  <a target="_blank" href="https://ko-fi.com/A0R223KA7G"><img src="public/badges/kofi.svg" height="42" alt="Buy me a coffee on Ko-fi"></a>
 </div>
 
 HoudiniMD mirrors SideFX's official Houdini documentation into clean markdown, served through a minimal, near-instant interface. Same content, displayed inside a clean and responsive interface.
