@@ -108,7 +108,13 @@ export async function scrapeSideFXPage(url: string): Promise<ScrapedContent> {
   const rawHtml = await response.text();
   // Escape bare << sequences that aren't valid HTML but appear in some SideFX pages
   // (e.g. <<clip = false>> in href attributes), which break node-html-parser
-  const html = rawHtml.replace(/<</g, '&lt;&lt;');
+  // Also escape unescaped generic-type markers in APEX node names (e.g. Abs<T>,
+  // Add<SrcT, DesT>) — node-html-parser treats <T> as a real (unknown) tag,
+  // which corrupts the surrounding <li>/<a> structure for that node and often
+  // the ones after it.
+  const html = rawHtml
+    .replace(/<</g, '&lt;&lt;')
+    .replace(/<([A-Z][A-Za-z0-9]*(?:,\s*[A-Z][A-Za-z0-9]*)*)>/g, '&lt;$1&gt;');
   // Lazy-loaded so node-html-parser stays out of the Worker cold-start path;
   // scraping only happens when generating a new (uncached) page.
   const { parse } = await import("node-html-parser");
