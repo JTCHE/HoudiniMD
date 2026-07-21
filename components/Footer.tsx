@@ -50,6 +50,20 @@ export function Footer({ className }: FooterProps) {
           >
             Donate
           </a>
+          <span
+            className="text-muted-foreground/40"
+            aria-hidden
+          >
+            ·
+          </span>
+          <a
+            href={"mailto:hi@jchd.me?subject=HoudiniMD Feedback"}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-foreground/80 hover:text-foreground transition-colors underline-offset-4 hover:underline"
+          >
+            Feedback
+          </a>
         </div>
         <p className="mt-1.5 text-[11px] leading-tight text-muted-foreground/60">
           HoudiniMD is an unofficial, independent project, and isn't affiliated with or endorsed by SideFX.
