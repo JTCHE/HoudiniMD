@@ -6,6 +6,7 @@ import rehypeRaw from "rehype-raw";
 import rehypeSlug from "rehype-slug";
 import DocLink from "@/components/docs/DocLink";
 import { MarkdownActions } from "@/components/docs/MarkdownActions";
+import { PrintPagination } from "@/components/docs/PrintPagination";
 import { CodeBlock } from "@/components/docs/CodeBlock";
 import { remarkCallouts } from "@/lib/markdown/remark-callouts";
 import { fetchFromR2 } from "@/lib/r2/read";
@@ -185,6 +186,7 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
 
   return (
     <main className="mx-auto max-w-4xl px-page-x py-10">
+      <PrintPagination />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }}
@@ -283,7 +285,7 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
             },
             img: ({ src, alt }) => {
               if (!src || typeof src !== "string") return null;
-              if (src.includes("/icons/")) {
+              if (/icons\//.test(src)) {
                 return (
                   <img
                     src={src}
