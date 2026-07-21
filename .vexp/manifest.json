@@ -88,7 +88,6 @@
     "app/docs/[...slug]/page.tsx": "843e6db320e1b20e35f12b2c7730040cba1b9e595d5fcad68ec8488012f59028",
     "app/layout.tsx": "707972d67688dccaa289aa7e8553fb9237e2dd9b0b4aa031fd2229ee9857d5f3",
     "app/llms.txt/route.ts": "b6bc0beab16047ef7464abe7fa9567f72591738d9c0d6ed76e679f859d4818b7",
-    "app/opengraph-image.tsx": "d2148ad0476e2d89e6a2acf2fd964c771f340c4ded2a212c9a31adf981118fca",
     "app/page.tsx": "6186c4615cf781ad2e7b20e9dbe496d96c0f2b9821181116598e034d4233c16d",
     "app/robots.ts": "5644621fa16c72c66abee525c198c918838bf6934691747ed909b0f01cd9b39d",
     "app/sitemap.ts": "aeee07062d1a392c532b6f50c9760e932e833e8538ddadd6f70c961472bc6bae",
@@ -153,13 +152,13 @@
     "scripts/submit-indexnow.ts": "81c19f003d7d19276edb1f36a411d74c9b3d6ffd079068a445b843bc8f655e22",
     "types/turndown-plugin-gfm.d.ts": "9d604c1b9c50f8591cdc2747584fdebed6371a684e311379e384d02a836dce38"
   },
-  "indexed_at_commit": "d7ac3907111ed1cc4e3a25e0adee41c1d170650e",
-  "indexed_at_timestamp": "2026-07-21T07:49:19.415256+00:00",
+  "indexed_at_commit": "4d159584f3aab68393904ecf1b5d4e87814d00c9",
+  "indexed_at_timestamp": "2026-07-21T08:22:30.079754+00:00",
   "schema_version": 3,
   "stats": {
-    "total_edges": 2536,
-    "total_files": 152,
-    "total_nodes": 2012
+    "total_edges": 2535,
+    "total_files": 151,
+    "total_nodes": 2011
   },
   "vexp_version": "2.2.2"
 }
