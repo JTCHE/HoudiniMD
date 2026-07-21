@@ -23,8 +23,7 @@ export function buildOgImageJsx({
   siteUrl = "houdinimd.jchd.me",
 }: OgImageProps) {
   const displayTitle = title.length > 42 ? title.slice(0, 39) + "…" : title;
-  const displaySummary =
-    summary && summary.length > 140 ? summary.slice(0, 137) + "…" : summary;
+  const displaySummary = summary && summary.length > 140 ? summary.slice(0, 137) + "…" : summary;
 
   return (
     <div
@@ -40,9 +39,7 @@ export function buildOgImageJsx({
       }}
     >
       {/* Brand */}
-      <div style={{ color: MUTED, fontSize: 20, fontWeight: 400 }}>
-        HoudiniMD
-      </div>
+      <div style={{ color: MUTED, fontSize: 20, fontWeight: 400 }}>HoudiniMD</div>
 
       {/* Main content */}
       <div style={{ display: "flex", flexDirection: "column" }}>
@@ -58,9 +55,7 @@ export function buildOgImageJsx({
             }}
           >
             {breadcrumb && <span>{breadcrumb}</span>}
-            {breadcrumb && category && (
-              <span style={{ color: DIM }}>/</span>
-            )}
+            {breadcrumb && category && <span style={{ color: DIM }}>/</span>}
             {category && <span>{category}</span>}
           </div>
         )}
