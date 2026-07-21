@@ -292,7 +292,7 @@ export function HomeSearchField() {
           )}
 
           {dropdownOpen && (
-            <ul className="absolute z-10 top-full left-0 right-0 mt-1 bg-background border rounded-md shadow-2xl overflow-hidden max-h-72 overflow-y-auto">
+            <ul className="absolute z-10 top-full left-0 right-0 mt-1 bg-background border rounded-md shadow-2xl overflow-y-auto max-h-80 pb-2">
               {results.map((r, i) => (
                 <li key={r.path}>
                   <SearchResultRow
