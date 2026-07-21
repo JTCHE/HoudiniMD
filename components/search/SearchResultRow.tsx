@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 /**
  * A single result row (icon + title + category) shared by the docs search
  * overlay and the homepage search field, so both render results identically.
@@ -19,21 +21,29 @@ export function SearchResultRow({
   onClick: () => void;
   onMouseMove: () => void;
 }) {
+  const [loaded, setLoaded] = useState(false);
+
   return (
     <button
       type="button"
-      className={`w-full text-left px-4 py-2.5 flex items-center gap-3 transition-colors ${
+      className={`w-full text-left px-4 py-2.5 flex items-center transition-colors ${icon ? "gap-3" : ""} ${
         active ? "bg-muted" : "hover:bg-muted/50"
       }`}
       onClick={onClick}
       onMouseMove={onMouseMove}
     >
-      {icon ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={icon} alt="" aria-hidden="true" className="size-5 shrink-0 select-none" />
-      ) : (
-        // Reserve the icon's space so titles stay left-aligned across rows
-        <span className="size-5 shrink-0" aria-hidden="true" />
+      {icon && (
+        <span className="relative size-5 shrink-0">
+          {!loaded && <span className="absolute inset-0 rounded-sm bg-muted-foreground/20 animate-pulse" aria-hidden="true" />}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={icon}
+            alt=""
+            aria-hidden="true"
+            className={`size-5 shrink-0 select-none transition-opacity ${loaded ? "opacity-100" : "opacity-0"}`}
+            onLoad={() => setLoaded(true)}
+          />
+        </span>
       )}
       <span className="flex flex-col gap-0.5 min-w-0">
         <span className="text-sm font-medium truncate">{title}</span>
