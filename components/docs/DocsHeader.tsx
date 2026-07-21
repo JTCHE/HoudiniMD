@@ -45,24 +45,21 @@ export function DocsHeader({ breadcrumbs, sourceUrl, markdownUrl, searchRef }: D
   return (
     <header className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur print:static print:bg-background">
       <div className="mx-auto grid max-w-4xl grid-cols-[auto_1fr_auto] items-center gap-4 px-page-x py-3 text-xs text-muted-foreground">
-        <div className="flex items-center gap-3 shrink-0">
-          <Link href="/" className="font-semibold text-foreground hover:opacity-70 transition-opacity print:hidden">
-            HoudiniMD
-          </Link>
-          <div className="sm:hidden">{externalLinks}</div>
-        </div>
+        <Link
+          href="/"
+          className="shrink-0 font-semibold text-foreground hover:opacity-70 transition-opacity"
+        >
+          HoudiniMD
+        </Link>
 
-        <span className="hidden sm:block truncate text-center print:block">{breadcrumbs}</span>
+        <span className="min-w-0 truncate text-right before:content-['·'] before:mr-2 before:text-muted-foreground/30 max-sm:before:content-none">
+          {breadcrumbs}
+        </span>
 
         <div className="flex items-center justify-end gap-3 shrink-0 print:hidden">
           <div className="hidden sm:block">{externalLinks}</div>
           <SearchButton onOpenSearch={handleSearchClick} />
         </div>
-      </div>
-
-      {/* Mobile breadcrumbs — own row so they don't crowd the brand/search row */}
-      <div className="mx-auto max-w-4xl px-page-x pb-2 text-xs text-muted-foreground sm:hidden print:hidden">
-        <div className="truncate">{breadcrumbs}</div>
       </div>
     </header>
   );

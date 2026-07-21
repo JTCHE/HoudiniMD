@@ -83,7 +83,7 @@
     "app/api/resolve/route.ts": "65cedeff70d1703729374572087277ef0f1d03a7c036aed442da1b038e206c02",
     "app/api/search-index/route.ts": "264a1f92de30a0ea4d293b3e7e9dda69557eafa92e60fc3e3fb31eb1ffdb0503",
     "app/api/search/route.ts": "fc70332a8aac6c9941e0bb70acff1a54bf28adfd8b15e570a0c4726b4498fd56",
-    "app/docs/[...slug]/layout.tsx": "88d3d8e1861b8660437e8cfcc6222421eb1c622276529e35a26e65af45db4a2c",
+    "app/docs/[...slug]/layout.tsx": "995ecdb54dae48d3fa3bdc4920f58d612594aff89352f7eae0b626c05a22ca55",
     "app/docs/[...slug]/loading.tsx": "d748630debc0cd0ac27df4383236eaaa7d3a24d9d22fe35db78ba073cbcef763",
     "app/docs/[...slug]/page.tsx": "843e6db320e1b20e35f12b2c7730040cba1b9e595d5fcad68ec8488012f59028",
     "app/layout.tsx": "707972d67688dccaa289aa7e8553fb9237e2dd9b0b4aa031fd2229ee9857d5f3",
@@ -95,7 +95,7 @@
     "components/docs/BreadcrumbsAsync.tsx": "09feea603739c9958c89d94086289e28da9770c31ab14e314c67d9732836ce4a",
     "components/docs/CodeBlock.tsx": "5969e3bd1fe9f4d01f8523a90a77df767c90254a4db659857f8a00ffcca0c750",
     "components/docs/DocLink.tsx": "bbe035bc5bb9b0a568d8d7e02c7f989ccd3a9b1c7c2be9822bc979f93e842847",
-    "components/docs/DocsHeader.tsx": "23c40bd62d9fff8ed4d666d008f5a814864c7b22ddc1591b56e8e34d9daa28dd",
+    "components/docs/DocsHeader.tsx": "27bae0788d9e594a39415d2bbcdbcdb0b685f78d98601745b7931f5220f46da5",
     "components/docs/DocsPageContent.tsx": "34c55e9a63237ce9aa6b3f8b90d31a15f0da2d339b4857979c982b7171c8bd13",
     "components/docs/DocsSkeleton.tsx": "08ea5bbefa6ede2db4e45b8b82230cce04017e39f3691fdc7bd8ab1c34c91bb4",
     "components/docs/GeneratingPage.tsx": "5bfcb9f7a8a2c9d00719a1b320f05ea800ade52995115fa9f242afed998d0cfb",
@@ -152,8 +152,8 @@
     "scripts/submit-indexnow.ts": "81c19f003d7d19276edb1f36a411d74c9b3d6ffd079068a445b843bc8f655e22",
     "types/turndown-plugin-gfm.d.ts": "9d604c1b9c50f8591cdc2747584fdebed6371a684e311379e384d02a836dce38"
   },
-  "indexed_at_commit": "edbf47e2a8b6021fec75a762f1f929aa91b71a8f",
-  "indexed_at_timestamp": "2026-07-21T10:24:11.060743+00:00",
+  "indexed_at_commit": "f13e483527f5f927446036f135ea042687127778",
+  "indexed_at_timestamp": "2026-07-21T10:45:42.717066+00:00",
   "schema_version": 3,
   "stats": {
     "total_edges": 2534,

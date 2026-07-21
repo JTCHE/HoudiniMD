@@ -3,7 +3,7 @@ import { Footer } from "@/components/Footer";
 
 export default function Home() {
   return (
-    <main className="relative h-screen overflow-hidden flex flex-col justify-center">
+    <main className="relative h-dvh overflow-hidden flex flex-col justify-center">
       <div className="px-6 max-w-4xl mx-auto w-full">
         <h1 className="text-3xl font-bold tracking-tight leading-6">HoudiniMD</h1>
         <p className="text-muted-foreground mt-2 mb-5">

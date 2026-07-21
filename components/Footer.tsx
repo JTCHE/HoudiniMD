@@ -8,7 +8,12 @@ interface FooterProps {
 
 export function Footer({ className }: FooterProps) {
   return (
-    <footer className={cn("border-t bg-background text-muted-foreground text-xs py-4", className)}>
+    <footer
+      className={cn(
+        "border-t bg-background text-muted-foreground text-xs py-4 print:py-1.5",
+        className,
+      )}
+    >
       <div className="max-w-4xl mx-auto px-page-x">
         <div className="flex flex-wrap gap-x-2 gap-y-1">
           <span className="hidden print:inline font-semibold text-foreground/80">HoudiniMD</span>

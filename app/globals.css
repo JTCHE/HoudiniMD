@@ -4,8 +4,8 @@
 
 @theme inline {
   /* Page gutter — SSoT for horizontal padding on page-width containers.
-     Same `px-page-x` class everywhere; only the value shifts per media query. */
-  --spacing-page-x: 1.5rem;
+     Same `px-page-x` class everywhere; only --page-x below shifts per media query. */
+  --spacing-page-x: var(--page-x);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -47,6 +47,7 @@
 }
 
 :root {
+  --page-x: 1.5rem;
   --radius: 6px;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
@@ -265,8 +266,7 @@ button:active kbd.kbd-button {
 
 @media print {
   :root {
-    /* Wider gutter than screen so text doesn't crowd the A4 page margin */
-    --spacing-page-x: 0.5rem;
+    --page-x: 0.75in;
   }
 
   .prose :where(li) {
