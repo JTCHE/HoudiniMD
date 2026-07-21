@@ -44,7 +44,7 @@ export function DocsHeader({ breadcrumbs, sourceUrl, markdownUrl, searchRef }: D
 
   return (
     <header className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur print:static print:bg-background">
-      <div className="mx-auto grid max-w-4xl grid-cols-[auto_1fr_auto] items-center gap-4 px-page-x py-3 text-xs text-muted-foreground">
+      <div className="mx-auto grid max-w-4xl grid-cols-[auto_1fr_auto] items-center gap-2 px-page-x py-3 text-xs text-muted-foreground">
         <Link
           href="/"
           className="shrink-0 font-semibold text-foreground hover:opacity-70 transition-opacity"
@@ -52,7 +52,7 @@ export function DocsHeader({ breadcrumbs, sourceUrl, markdownUrl, searchRef }: D
           HoudiniMD
         </Link>
 
-        <span className="min-w-0 truncate text-right before:content-['·'] before:mr-2 before:text-muted-foreground/30 max-sm:before:content-none">
+        <span className="min-w-0 truncate text-left before:content-['·'] before:mr-2 before:text-muted-foreground/30 max-sm:before:content-none">
           {breadcrumbs}
         </span>
 
