@@ -83,7 +83,7 @@
     "app/api/resolve/route.ts": "65cedeff70d1703729374572087277ef0f1d03a7c036aed442da1b038e206c02",
     "app/api/search-index/route.ts": "264a1f92de30a0ea4d293b3e7e9dda69557eafa92e60fc3e3fb31eb1ffdb0503",
     "app/api/search/route.ts": "fc70332a8aac6c9941e0bb70acff1a54bf28adfd8b15e570a0c4726b4498fd56",
-    "app/docs/[...slug]/layout.tsx": "995ecdb54dae48d3fa3bdc4920f58d612594aff89352f7eae0b626c05a22ca55",
+    "app/docs/[...slug]/layout.tsx": "fe9517b7c941ae6ef49ec93bff5772a14b7a8f0c9f8af98efbae4aa2d1fa99d8",
     "app/docs/[...slug]/loading.tsx": "d748630debc0cd0ac27df4383236eaaa7d3a24d9d22fe35db78ba073cbcef763",
     "app/docs/[...slug]/page.tsx": "843e6db320e1b20e35f12b2c7730040cba1b9e595d5fcad68ec8488012f59028",
     "app/layout.tsx": "707972d67688dccaa289aa7e8553fb9237e2dd9b0b4aa031fd2229ee9857d5f3",
@@ -151,8 +151,8 @@
     "scripts/submit-indexnow.ts": "81c19f003d7d19276edb1f36a411d74c9b3d6ffd079068a445b843bc8f655e22",
     "types/turndown-plugin-gfm.d.ts": "9d604c1b9c50f8591cdc2747584fdebed6371a684e311379e384d02a836dce38"
   },
-  "indexed_at_commit": "2948b0673be9335d33153fd032f8c39d003c1e82",
-  "indexed_at_timestamp": "2026-07-21T19:53:41.464090+00:00",
+  "indexed_at_commit": "55570d87be9ad8da2f2054063a3d598116d8be78",
+  "indexed_at_timestamp": "2026-07-21T19:56:45.231201+00:00",
   "schema_version": 3,
   "stats": {
     "total_edges": 2534,
