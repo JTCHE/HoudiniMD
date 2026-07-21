@@ -71,7 +71,7 @@
     ".open-next/server-functions/default/index.mjs": "de5c92550dee5d0081309cab9379dead2bf483fd9aae53030b77b1f78be0d070",
     ".open-next/server-functions/default/open-next.config.mjs": "6c023c9a6c104ce3ac4b463a3924ee27c683f6f03165c2b06edb47e0c3d44355",
     ".open-next/worker.js": "a33c0042749ff5024341e0a6138212cf358f4024efe5bfbc90b0d49f5cbaf02b",
-    "CLAUDE.md": "5992a272d9d82585069697f70a91e6e5499409de8d7493743a2c454b5ac3f259",
+    "CLAUDE.md": "fa158020ceec7e7596044393e2cf423903585b2bab2859865cdad551e1f753fe",
     "README.md": "5dd1ec0c328a0b322782ab4df84440aab73014afe0cfbd4387a65a8582cc9d3d",
     "app/[...slug]/route.ts": "60a1a4deac1e31f8db8f1081de2158536ee49597e784282f86c0b8faeff68cff",
     "app/api/generate/route.ts": "c05d6d1f16211099167359e95279af6a8479a74af845e2f636c7dc48f6cd3278",
@@ -151,8 +151,8 @@
     "scripts/submit-indexnow.ts": "81c19f003d7d19276edb1f36a411d74c9b3d6ffd079068a445b843bc8f655e22",
     "types/turndown-plugin-gfm.d.ts": "9d604c1b9c50f8591cdc2747584fdebed6371a684e311379e384d02a836dce38"
   },
-  "indexed_at_commit": "1d20127c1ca2d8c05d431906fdf69d8608f6a531",
-  "indexed_at_timestamp": "2026-07-21T12:14:45.367030+00:00",
+  "indexed_at_commit": "a7465f102fb90121fd146cc245088c779670dcc9",
+  "indexed_at_timestamp": "2026-07-21T12:15:32.328685+00:00",
   "schema_version": 3,
   "stats": {
     "total_edges": 2534,
