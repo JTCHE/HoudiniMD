@@ -277,9 +277,14 @@ pre code.hljs {
   font-family: ui-monospace, "Geist Mono", "Fira Code", Menlo, Consolas, monospace !important;
 }
 
-/* Tight paragraph spacing inside list items */
+/* Tight paragraph spacing inside list items — keep the link/description pair
+   close together so the gap between li siblings reads as the real hierarchy */
+.prose :where(li > p) {
+  margin-bottom: 0.2em !important;
+}
+
 .prose :where(li > p + p) {
-  margin-top: 0.15em !important;
+  margin-top: 0.2em !important;
 }
 
 /* Line-break spacing in table cells — give second+ lines a small top margin */
