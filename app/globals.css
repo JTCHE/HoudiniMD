@@ -3,6 +3,9 @@
 @plugin "@tailwindcss/typography";
 
 @theme inline {
+  /* Page gutter — SSoT for horizontal padding on page-width containers.
+     Same `px-page-x` class everywhere; only the value shifts per media query. */
+  --spacing-page-x: 1.5rem;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -251,6 +254,48 @@ button:active kbd.kbd-button {
 @media (prefers-reduced-motion: reduce) {
   .sk::after {
     animation: none;
+  }
+}
+
+/* ── Print — A4 page box, tighter listicles/headings, no dangling breaks ── */
+@page {
+  size: A4;
+  margin: 14mm 24mm;
+}
+
+@media print {
+  :root {
+    /* Wider gutter than screen so text doesn't crowd the A4 page margin */
+    --spacing-page-x: 0.5rem;
+  }
+
+  .prose :where(li) {
+    margin-top: 0.15em !important;
+    margin-bottom: 0.15em !important;
+    break-inside: avoid;
+  }
+
+  .prose :where(li > p) {
+    margin-bottom: 0.1em !important;
+  }
+
+  .prose :where(li > p + p) {
+    margin-top: 0.1em !important;
+  }
+
+  .prose :where(h1, h2, h3, h4, h5, h6) {
+    margin-top: 0.9em !important;
+    margin-bottom: 0.4em !important;
+  }
+
+  .prose :where(ul, ol) {
+    margin-top: 0.4em !important;
+    margin-bottom: 0.4em !important;
+  }
+
+  .prose :where(p) {
+    margin-top: 0.4em !important;
+    margin-bottom: 0.4em !important;
   }
 }
 

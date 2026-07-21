@@ -21,7 +21,7 @@ export function DocsHeader({ breadcrumbs, sourceUrl, markdownUrl, searchRef }: D
   // .md goes first as the canonical/internal representation; SideFX is the
   // upstream source. Both new-tab so the reader doesn't lose their place.
   const externalLinks = (
-    <span className="flex items-center gap-3">
+    <span className="flex items-center gap-3 print:hidden">
       <a
         href={markdownUrl}
         target="_blank"
@@ -43,25 +43,25 @@ export function DocsHeader({ breadcrumbs, sourceUrl, markdownUrl, searchRef }: D
   );
 
   return (
-    <header className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur">
-      <div className="mx-auto grid max-w-4xl grid-cols-[auto_1fr_auto] items-center gap-4 px-6 py-3 text-xs text-muted-foreground">
+    <header className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur print:static print:bg-background">
+      <div className="mx-auto grid max-w-4xl grid-cols-[auto_1fr_auto] items-center gap-4 px-page-x py-3 text-xs text-muted-foreground">
         <div className="flex items-center gap-3 shrink-0">
-          <Link href="/" className="font-semibold text-foreground hover:opacity-70 transition-opacity">
+          <Link href="/" className="font-semibold text-foreground hover:opacity-70 transition-opacity print:hidden">
             HoudiniMD
           </Link>
           <div className="sm:hidden">{externalLinks}</div>
         </div>
 
-        <span className="hidden sm:block truncate text-center">{breadcrumbs}</span>
+        <span className="hidden sm:block truncate text-center print:block">{breadcrumbs}</span>
 
-        <div className="flex items-center justify-end gap-3 shrink-0">
+        <div className="flex items-center justify-end gap-3 shrink-0 print:hidden">
           <div className="hidden sm:block">{externalLinks}</div>
           <SearchButton onOpenSearch={handleSearchClick} />
         </div>
       </div>
 
       {/* Mobile breadcrumbs — own row so they don't crowd the brand/search row */}
-      <div className="mx-auto max-w-4xl px-6 pb-2 text-xs text-muted-foreground sm:hidden">
+      <div className="mx-auto max-w-4xl px-page-x pb-2 text-xs text-muted-foreground sm:hidden print:hidden">
         <div className="truncate">{breadcrumbs}</div>
       </div>
     </header>
