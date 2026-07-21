@@ -34,7 +34,6 @@ export default async function DocsLayout({
         </Suspense>
       }
     >
-      <ScrollReset />
       {children}
     </DocsPageContent>
   );
