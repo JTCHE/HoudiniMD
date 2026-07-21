@@ -4,13 +4,15 @@
 
 <div style="font-size:2rem; line-height:110%; letter-spacing: -2%; font-weight: bold;">A blazing-fast, clutter free, clean Markdown mirror of the Houdini docs. <br><br> Built for humans to read, and agents to understand.<br><br></div>
 
-[↗ HoudiniMD](https://houdinimd.jchd.me) · Compatible with [Houdini MCP](https://github.com/JTCHE/houdini-mcp)
-
----
+<div align="center">
+  <a href="https://houdinimd.jchd.me"><img src="public/badges/website.svg" height="42" alt="Open HoudiniMD"></a>
+  <a href="https://github.com/JTCHE/houdini-mcp"><img src="public/badges/mcp.svg" height="42" alt="Houdini MCP"></a>
+  <a href="https://ko-fi.com/A0R223KA7G"><img src="public/badges/kofi.svg" height="42" alt="Buy me a coffee on Ko-fi"></a>
+</div>
 
 HoudiniMD mirrors SideFX's official Houdini documentation into clean markdown, served through a minimal, near-instant interface. Same content, displayed inside a clean and responsive interface.
 
-It follows the [llms.txt](https://llmstxt.org) standard. AI agents are automatically redirected to raw markdown instead of scraping cluttered HTML. They get accurate, low-noise context about Houdini's nodes and functions; exactly the kind of niche knowledge even frontier models still lack. 
+It follows the [llms.txt](https://llmstxt.org) standard. AI agents are automatically redirected to raw markdown instead of scraping cluttered HTML. They get accurate, low-noise context about Houdini's nodes and functions; exactly the kind of niche knowledge even frontier models still lack.
 
 ## Features
 
@@ -20,7 +22,6 @@ It follows the [llms.txt](https://llmstxt.org) standard. AI agents are automatic
 - **llms.txt native** — agents get raw markdown, not scraped HTML, cutting context bloat.
 - **Houdini Integration** — After setting it as the default source, press <kbd>F1</kbd> to bring up HoudiniMD directly inside Houdini
 - **AI Native & MCP Integration** — Paired with my [Houdini MCP](https://github.com/JTCHE/houdini-mcp) fork, agents can query pure markdown directly from HoudiniMD to inform their decisions and actions inside Houdini. Accurate info, at the right time, without context bloat.
-
 
 ## Credits & license
 
