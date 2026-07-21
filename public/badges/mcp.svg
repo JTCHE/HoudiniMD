@@ -5,7 +5,7 @@
       <stop offset="1" stop-color="#24292E"/>
     </linearGradient>
     <filter id="mShadow" x="-20%" y="-40%" width="140%" height="200%">
-      <feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#6B7686" flood-opacity="0.5"/>
+      <feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="hsl(0, 0%, 12%)" flood-opacity="0.45"/>
     </filter>
   </defs>
   <g filter="url(#mShadow)">
