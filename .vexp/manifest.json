@@ -153,8 +153,8 @@
     "scripts/submit-indexnow.ts": "81c19f003d7d19276edb1f36a411d74c9b3d6ffd079068a445b843bc8f655e22",
     "types/turndown-plugin-gfm.d.ts": "9d604c1b9c50f8591cdc2747584fdebed6371a684e311379e384d02a836dce38"
   },
-  "indexed_at_commit": "20b3ac9be39f449bfd3110315856cd4c99078953",
-  "indexed_at_timestamp": "2026-07-21T07:48:04.480517+00:00",
+  "indexed_at_commit": "d7ac3907111ed1cc4e3a25e0adee41c1d170650e",
+  "indexed_at_timestamp": "2026-07-21T07:49:19.415256+00:00",
   "schema_version": 3,
   "stats": {
     "total_edges": 2536,
