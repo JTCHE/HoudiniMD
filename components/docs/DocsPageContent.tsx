@@ -17,7 +17,7 @@ export function DocsPageContent({ breadcrumbs, sourceUrl, markdownUrl, children 
   const searchRef = useRef<SearchOverlayRef>(null) as React.RefObject<SearchOverlayRef>;
 
   return (
-    <div className="min-h-screen flex flex-col bg-background text-foreground">
+    <div className="docs-shell min-h-screen flex flex-col bg-background text-foreground">
       <SearchOverlay ref={searchRef} />
       <DocsHeader
         breadcrumbs={breadcrumbs}
