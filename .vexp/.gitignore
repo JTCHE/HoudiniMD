@@ -1,7 +1,0 @@
-# vexp — index.db is rebuilt from manifest.json on checkout
-index.db
-index.db-wal
-index.db-shm
-vexp.log
-daemon.sock
-daemon.pid
