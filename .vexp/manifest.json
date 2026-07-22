@@ -64,7 +64,7 @@
     ".open-next/cloudflare/next-env.mjs": "6957696b86e22f97180202a0e0177d788fd3cfe9a0cc810c6c8bd9ab8503600d",
     ".open-next/cloudflare/skew-protection.js": "f5e92810f028f31a59139e9e9151a89279a9171f697d3aa6b9e1e5a7bd53b3a6",
     ".open-next/dynamodb-provider/open-next.config.mjs": "df1901c4abe5bb59026651d5e0d739d750832fb4e67bbac3381b751d3fbffdfe",
-    ".open-next/middleware/handler.mjs": "166f0a96ee554eec040e889dccc01c9d4dbe4be7fdaf9e0debf9d27a038df82b",
+    ".open-next/middleware/handler.mjs": "81a74e19b60e67c38bf6e19443de3f6d1579aa94788c524f4dce9ebb1e0ca898",
     ".open-next/middleware/open-next.config.mjs": "6c023c9a6c104ce3ac4b463a3924ee27c683f6f03165c2b06edb47e0c3d44355",
     ".open-next/server-functions/default/cache.cjs": "7af59fbcdd03a06d93e4606aabdd922a220e9dbc02900f0ba11f920c2b23090e",
     ".open-next/server-functions/default/composable-cache.cjs": "8aeb4ca41c5a6771109a69f242492a9dd41dd2cf212d9ddd13fc066dd071ef1d",
@@ -151,11 +151,11 @@
     "scripts/submit-indexnow.ts": "81c19f003d7d19276edb1f36a411d74c9b3d6ffd079068a445b843bc8f655e22",
     "types/turndown-plugin-gfm.d.ts": "9d604c1b9c50f8591cdc2747584fdebed6371a684e311379e384d02a836dce38"
   },
-  "indexed_at_commit": "55570d87be9ad8da2f2054063a3d598116d8be78",
-  "indexed_at_timestamp": "2026-07-21T19:56:45.231201+00:00",
+  "indexed_at_commit": "a86873eddb08834ef053777c3e78fa1fc1b2b09a",
+  "indexed_at_timestamp": "2026-07-22T06:06:03.830436+00:00",
   "schema_version": 3,
   "stats": {
-    "total_edges": 2534,
+    "total_edges": 2391,
     "total_files": 150,
     "total_nodes": 2010
   },
