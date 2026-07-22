@@ -18,9 +18,9 @@
     "test:debug": "playwright test --debug",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "cache:sync": "bun scripts/cache-sync.ts",
-    "deploy": "opennextjs-cloudflare build && bun scripts/cache-sync.ts --apply && OPEN_NEXT_DEPLOY=true wrangler deploy",
-    "deploy:full": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
-    "upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
+    "deploy": "bun scripts/check-env.ts && opennextjs-cloudflare build && bun scripts/cache-sync.ts --apply && OPEN_NEXT_DEPLOY=true wrangler deploy",
+    "deploy:full": "bun scripts/check-env.ts && opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "upload": "bun scripts/check-env.ts && opennextjs-cloudflare build && opennextjs-cloudflare upload",
     "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"
   },
   "dependencies": {

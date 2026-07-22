@@ -1,6 +1,5 @@
 import type { MetadataRoute } from "next";
-import { fetchIndexJson } from "@/lib/r2/read";
-import type { SearchIndexEntry } from "@/lib/r2/search-index";
+import { fetchIndexEntries } from "@/lib/r2/read";
 
 export const revalidate = 3600;
 
@@ -12,9 +11,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ];
 
   try {
-    const raw = await fetchIndexJson();
-    if (!raw) return base;
-    const entries: SearchIndexEntry[] = JSON.parse(raw);
+    // fetchIndexEntries (not fetchIndexJson) so this shares the warm-isolate
+    // parsed-index cache with other routes instead of re-parsing the full
+    // ~2.9MB index every time — sitemap.xml is requested rarely enough that
+    // it was almost always paying that parse cold, brushing the 10ms CPU
+    // limit and silently falling back to just this homepage entry.
+    const entries = await fetchIndexEntries();
+    if (!entries) return base;
     return [
       ...base,
       ...entries.map((e) => ({
@@ -24,7 +27,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         priority: 0.7,
       })),
     ];
-  } catch {
+  } catch (error) {
+    console.error("sitemap: failed to build entries, falling back to homepage only", error);
     return base;
   }
 }
