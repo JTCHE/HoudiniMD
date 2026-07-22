@@ -2,7 +2,7 @@
 
 ![The SideFX Box node docs page (left) beside HoudiniMD's clean rendering (right)](public/cover.png)
 
-<div style="font-size:2rem; line-height:110%; letter-spacing: -2%; font-weight: bold;">A blazing-fast, clutter free, clean Markdown mirror of the Houdini docs. <br><br> Built for humans to read, and agents to understand.<br><br></div>
+## A blazing-fast, clutter free, clean Markdown mirror of the Houdini docs. <br><br> Built for humans to read, and agents to understand.<br>
 
 <div align="center">
   <a target="_blank" href="https://houdinimd.jchd.me"><img src="public/badges/website.svg" height="42" alt="Open HoudiniMD"></a>
