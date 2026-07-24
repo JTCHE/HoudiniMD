@@ -153,9 +153,13 @@ export function PrintPagination() {
       // Deliberately excludes inline tags (a, code, strong, span, …) — a
       // spacer forced before one of those mid-sentence would break the
       // inline flow it sits in.
+      // The page's <header> (title/icon/actions row + summary) now lives
+      // inside article.prose for reader-mode's benefit, but it isn't real
+      // article body flow — excluded here so its layout divs and summary
+      // <p> never get a pagination spacer forced into their flex row.
       const units = Array.from(
         article.querySelectorAll("h2, h3, h4, h5, h6, tbody > tr, li, p, pre, blockquote, img, hr, table, ul, ol, dl, div"),
-      );
+      ).filter((el) => !el.closest("header"));
 
       // Position of the top of the *current* real page. NOT tracked via
       // `docTop(unit) % USABLE_HEIGHT_PX` — that assumes every page break

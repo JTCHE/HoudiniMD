@@ -191,32 +191,37 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }}
       />
-      <header className="not-prose flex flex-wrap items-start justify-between gap-x-8 gap-y-3 border-b border-border pb-3 mb-6">
-        <div className="flex items-start gap-3 min-w-0">
-          {pageIcon && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={pageIcon}
-              alt=""
-              className="size-8 shrink-0 mt-0.5 select-none"
-              aria-hidden="true"
-            />
-          )}
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 min-w-0">
-            <h1 className="text-2xl font-bold tracking-tight leading-tight m-0 wrap-break-word">{mdTitle}</h1>
-            {since && (
-              <span className="inline-flex items-center rounded-md border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                Since {since}
-              </span>
-            )}
-          </div>
-        </div>
-        <div className="shrink-0 pt-0.5">
-          <MarkdownActions slug={slugPath} />
-        </div>
-        {summary && <p className="w-full basis-full m-0 text-sm italic text-muted-foreground">{summary}</p>}
-      </header>
+      {/* The H1 title lives inside <article>, alongside the markdown body, so
+          the page has one content landmark holding both the heading and the
+          body flow content. Reader-mode heuristics (e.g. Safari Reader) key
+          on this: a title outside the article, with the body as the only
+          content inside it, reads as "no content" to them. */}
       <article className="prose prose-neutral dark:prose-invert max-w-none">
+        <header className="not-prose flex flex-wrap items-start justify-between gap-x-8 gap-y-3 border-b border-border pb-3 mb-6">
+          <div className="flex items-start gap-3 min-w-0">
+            {pageIcon && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={pageIcon}
+                alt=""
+                className="size-8 shrink-0 mt-0.5 select-none"
+                aria-hidden="true"
+              />
+            )}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 min-w-0">
+              <h1 className="text-2xl font-bold tracking-tight leading-tight m-0 wrap-break-word">{mdTitle}</h1>
+              {since && (
+                <span className="inline-flex items-center rounded-md border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                  Since {since}
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="shrink-0 pt-0.5">
+            <MarkdownActions slug={slugPath} />
+          </div>
+          {summary && <p className="w-full basis-full m-0 text-sm italic text-muted-foreground">{summary}</p>}
+        </header>
         <ReactMarkdown
           remarkPlugins={[remarkGfm, remarkCallouts]}
           rehypePlugins={[rehypeRaw, rehypeSlug]}

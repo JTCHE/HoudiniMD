@@ -4,7 +4,14 @@
 export default function DocsSkeleton() {
   return (
     <main className="mx-auto max-w-4xl px-page-x py-10" role="status" aria-label="Loading…">
-      <article>
+      {/* Plain div, not <article> — this is a placeholder, not real document
+          content. While Next streams in the real page, this and the real
+          `<article className="prose">` from page.tsx can be in the DOM at
+          the same time (the real one behind `hidden` until React reveals
+          it). Two `<article>` landmarks confuses reader-mode heuristics
+          (Safari Reader, etc.), which expect exactly one — so the fake one
+          stays a `<div>`. */}
+      <div>
         {/* h1: text-2xl font-bold tracking-tight border-b pb-3 mb-6 */}
         <div className="border-b border-border pb-3 mb-6">
           <div className="sk bg-muted h-7 w-2/5" />
@@ -46,7 +53,7 @@ export default function DocsSkeleton() {
           <div className="sk bg-muted h-4 w-full" />
           <div className="sk bg-muted h-4 w-4/5" />
         </div>
-      </article>
+      </div>
 
       <span className="sr-only">Loading…</span>
     </main>
