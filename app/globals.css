@@ -551,3 +551,45 @@ img.doc-icon {
   margin: 0 0.5em 0 0;
 }
 
+/* ── Shelf tool cards (shelf/index one-off component) ─────────────────────
+   `.shelftab` groups of `.shelftool` cards, converted to this markup by the
+   `shelfCards` turndown rule: a plain markdown list wrapped in one raw div,
+   so a missing icon or summary just leaves out that line — no empty box, no
+   dangling separator. */
+.shelf-grid ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.75rem;
+  margin: 1.5rem 0;
+  padding: 0;
+  list-style: none;
+}
+.shelf-grid li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--card);
+}
+.shelf-grid li > p {
+  margin: 0;
+}
+.shelf-grid li > p:first-child {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  color: var(--card-foreground);
+}
+.shelf-grid li > p:last-child:not(:first-child) {
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+}
+.shelf-grid img.doc-icon {
+  width: 1.75rem !important;
+  height: 1.75rem !important;
+  margin: 0 !important;
+}
+
