@@ -22,17 +22,21 @@ export function SearchResultRow({
   onMouseMove: () => void;
 }) {
   const [loaded, setLoaded] = useState(false);
+  const [errored, setErrored] = useState(false);
+  // Treat a broken icon URL as "no icon" so the row falls back to left-aligned
+  // text instead of pulsing a skeleton forever.
+  const showIconSlot = Boolean(icon) && !errored;
 
   return (
     <button
       type="button"
-      className={`w-full text-left px-4 py-2.5 flex items-center transition-colors ${icon ? "gap-3" : ""} ${
+      className={`w-full text-left px-4 py-2.5 flex items-center transition-colors ${showIconSlot ? "gap-3" : ""} ${
         active ? "bg-muted" : "hover:bg-muted/50"
       }`}
       onClick={onClick}
       onMouseMove={onMouseMove}
     >
-      {icon && (
+      {showIconSlot && (
         <span className="relative size-5 shrink-0">
           {!loaded && <span className="absolute inset-0 rounded-sm bg-muted-foreground/20 animate-pulse" aria-hidden="true" />}
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -42,6 +46,7 @@ export function SearchResultRow({
             aria-hidden="true"
             className={`size-5 shrink-0 select-none transition-opacity ${loaded ? "opacity-100" : "opacity-0"}`}
             onLoad={() => setLoaded(true)}
+            onError={() => setErrored(true)}
           />
         </span>
       )}
