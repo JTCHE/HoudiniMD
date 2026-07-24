@@ -27,7 +27,7 @@ export async function fetchIndexEntries(): Promise<SearchIndexEntry[] | null> {
 }
 
 /** Cached files generated before this date will be re-generated */
-export const CACHE_INVALIDATE_BEFORE = new Date("2026-03-18T12:00:00Z");
+export const CACHE_INVALIDATE_BEFORE = new Date("2026-07-24T18:00:00Z");
 
 /**
  * Check if a file exists in R2
