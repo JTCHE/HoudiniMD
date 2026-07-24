@@ -157,10 +157,12 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
       const anchor = hashIdx >= 0 ? slug.slice(hashIdx + 1) : "";
 
       if (window.location.pathname === `/docs/${basePath}`) {
-        if (anchor) {
-          document.getElementById(anchor)?.scrollIntoView({ behavior: "smooth" });
+        const target = anchor ? document.getElementById(anchor) : null;
+        if (target) {
+          target.scrollIntoView({ behavior: "smooth" });
+        } else {
+          showToast("Already on this page");
         }
-        showToast("Already on this page");
         setOpen(false);
         return;
       }
