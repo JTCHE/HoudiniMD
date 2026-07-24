@@ -136,8 +136,12 @@ export default function DocLink({
           if (!isInternal || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
           const resolvedSlug = LATEST_NEWS_INDEX_SLUGS.includes(slug!) ? "houdini" : slug;
           if (window.location.pathname === `/docs/${resolvedSlug}`) {
-            if (anchor) document.getElementById(anchor)?.scrollIntoView({ behavior: "smooth" });
-            showToast("Already on this page");
+            const target = anchor ? document.getElementById(anchor) : null;
+            if (target) {
+              target.scrollIntoView({ behavior: "smooth" });
+            } else {
+              showToast("Already on this page");
+            }
             preventNextClick.current = true;
             return;
           }
