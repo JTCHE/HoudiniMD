@@ -551,11 +551,13 @@ img.doc-icon {
   margin: 0 0.5em 0 0;
 }
 
-/* ── Shelf tool cards (shelf/index one-off component) ─────────────────────
-   `.shelftab` groups of `.shelftool` cards, converted to this markup by the
-   `shelfCards` turndown rule: a plain markdown list wrapped in one raw div,
-   so a missing icon or summary just leaves out that line — no empty box, no
-   dangling separator. */
+/* ── Card-grid list items ───────────────────────────────────────────────
+   Two SideFX source components render through this same markup: `.shelftab`
+   groups of `.shelftool` cards (shelf/index) and `.item_group` icon lists
+   (most node-category index pages, e.g. nodes/sop) — converted by the
+   `shelfCards` / `itemGroupCards` turndown rules into a plain markdown list
+   wrapped in one raw div, so a missing icon or summary just leaves out that
+   line — no empty box, no dangling separator. */
 .shelf-grid ul {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -565,6 +567,7 @@ img.doc-icon {
   list-style: none;
 }
 .shelf-grid li {
+  position: relative; /* anchor for the whole-card click overlay below */
   display: flex;
   flex-direction: column;
   gap: 0.375rem;
@@ -591,5 +594,26 @@ img.doc-icon {
   width: 1.75rem !important;
   height: 1.75rem !important;
   margin: 0 !important;
+}
+/* Stretch the title link over the whole card (a "stretched link"), so the
+   icon and summary text are clickable too, not just the title. DocLink wraps
+   every <a> in <span class="relative inline-block">; turn that positioning
+   off so the card <li> above (position: relative) becomes the ::after
+   overlay's containing block instead of that small inline span. */
+.shelf-grid li > p:first-child > span {
+  position: static;
+}
+.shelf-grid li > p:first-child a::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+.shelf-grid li:has(a):hover {
+  border-color: var(--muted-foreground);
+}
+.shelf-grid li:has(a):focus-within {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
 }
 
