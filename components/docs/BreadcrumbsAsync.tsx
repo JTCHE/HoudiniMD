@@ -13,16 +13,63 @@ function parseFrontmatterData(md: string): Record<string, string> {
   return data;
 }
 
-function extractTitle(md: string): string {
+// Legacy fallback for markdown generated before `title:` was a frontmatter
+// field — pull the name out of the H1 line instead. No `nodeType` is
+// recoverable this way (it was never captured), so tier 1 just equals tier 2
+// for old cached pages until they are regenerated.
+function extractTitleFromH1(md: string): string {
   const match = md.match(/^#\s+(.+)$/m);
   return match ? match[1] : "";
+}
+
+interface Crumb {
+  label: string;
+  href: string | null;
+}
+
+// Keep the first `keepStart` items, elide the middle, keep the last item.
+// No-op when there is nothing to elide.
+function truncateChain(chain: Crumb[], keepStart: number): (Crumb | "ellipsis")[] {
+  if (chain.length <= keepStart + 1) return chain;
+  return [...chain.slice(0, keepStart), "ellipsis" as const, chain[chain.length - 1]];
+}
+
+function renderChain(items: (Crumb | "ellipsis")[]) {
+  return items.map((item, i) => {
+    const isLast = i === items.length - 1;
+    const sep = !isLast && " > ";
+    if (item === "ellipsis") {
+      return (
+        <span key={`ellipsis-${i}`}>
+          {"…"}
+          {sep}
+        </span>
+      );
+    }
+    return (
+      <span key={`${item.href ?? item.label}-${i}`}>
+        {item.href ? (
+          <Link
+            href={item.href}
+            className="hover:text-foreground transition-colors cursor-pointer"
+          >
+            {item.label}
+          </Link>
+        ) : (
+          item.label
+        )}
+        {sep}
+      </span>
+    );
+  });
 }
 
 export default async function BreadcrumbsAsync({ slug }: { slug: string }) {
   const raw = await fetchFromR2(`content/${slug}.md`);
   if (!raw) return null;
   const data = parseFrontmatterData(raw);
-  const title = extractTitle(raw);
+  const title = data.title || extractTitleFromH1(raw);
+  const nodeType = data.nodeType || "";
 
   const rawSegments = data.breadcrumbs ? data.breadcrumbs.split(" > ").filter(Boolean) : [];
   // Collapse consecutive duplicate labels (SideFX index pages emit e.g.
@@ -40,25 +87,34 @@ export default async function BreadcrumbsAsync({ slug }: { slug: string }) {
   if (!parentSegments.length && !showTitle) return null;
 
   const slugParts = slug.split("/");
+  const linkChain: Crumb[] = parentSegments.map((label, i) => ({
+    label,
+    href: `/docs/${slugParts.slice(0, i + 1).join("/")}`,
+  }));
+  // The current page's own label is never a link. When the title differs from
+  // the last ancestor crumb it is appended as a plain-text final item;
+  // otherwise the last ancestor link already stands in for it.
+  const chain: Crumb[] = showTitle ? [...linkChain, { label: title, href: null }] : linkChain;
+
+  if (chain.length === 0) return null;
+
+  const lastIsTitle = showTitle;
+  const withNodeType: Crumb[] =
+    lastIsTitle && nodeType
+      ? chain.map((c, i) => (i === chain.length - 1 ? { ...c, label: `${c.label} ${nodeType}` } : c))
+      : chain;
+
+  const tier1 = renderChain(withNodeType); // full path + node type
+  const tier2 = renderChain(chain); // full path, node type dropped
+  const tier3 = renderChain(truncateChain(chain, 2)); // first 2 + last
+  const tier4 = renderChain(truncateChain(chain, 1)); // first + last
 
   return (
     <span className="cursor-default">
-      {parentSegments.map((label, i) => {
-        const targetSlug = slugParts.slice(0, i + 1).join("/");
-        const isLastShown = !showTitle && i === parentSegments.length - 1;
-        return (
-          <span key={targetSlug}>
-            <Link
-              href={`/docs/${targetSlug}`}
-              className="hover:text-foreground transition-colors cursor-pointer"
-            >
-              {label}
-            </Link>
-            {!isLastShown && " > "}
-          </span>
-        );
-      })}
-      {showTitle && <span>{title}</span>}
+      <span className="hidden @md:inline">{tier1}</span>
+      <span className="hidden @sm:inline @md:hidden">{tier2}</span>
+      <span className="hidden @xs:inline @sm:hidden">{tier3}</span>
+      <span className="inline @xs:hidden">{tier4}</span>
     </span>
   );
 }

@@ -105,6 +105,8 @@ export async function convertToMarkdown(
   // YAML front matter
   parts.push('---');
   parts.push(`breadcrumbs: ${scraped.breadcrumbs.join(' > ')}`);
+  parts.push(`title: ${scraped.title}`);
+  if (scraped.nodeType) parts.push(`nodeType: ${scraped.nodeType}`);
   parts.push(`source: ${scraped.sourceUrl}`);
   if (scraped.since) parts.push(`since: ${scraped.since}`);
   if (scraped.icon) parts.push(`icon: ${scraped.icon}`);
@@ -113,8 +115,11 @@ export async function convertToMarkdown(
   parts.push('---');
   parts.push('');
 
-  // Title
-  parts.push(`# ${scraped.title}`);
+  // Title — keep the full name + type text visible in the rendered body,
+  // matching what the source page's H1 shows (frontmatter still carries
+  // title/nodeType split for the breadcrumb and title-metadata use cases).
+  const h1Text = scraped.nodeType ? `${scraped.title} ${scraped.nodeType}` : scraped.title;
+  parts.push(`# ${h1Text}`);
   parts.push('');
 
   // Summary as blockquote

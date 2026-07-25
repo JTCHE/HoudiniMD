@@ -17,6 +17,8 @@ export interface ScrapedContent {
   icon?: string;
   /** Present when the page is marked as a deprecated node. */
   deprecation?: DeprecationInfo;
+  /** Node/function/class kind, e.g. "Geometry Node", "VEX function". Empty when the page has no type (e.g. plain articles). */
+  nodeType?: string;
 }
 
 export class PageNotFoundError extends Error {
@@ -127,8 +129,16 @@ export async function scrapeSideFXPage(url: string): Promise<ScrapedContent> {
     .map((el) => el.textContent.replace(/\s+/g, " ").trim())
     .filter(Boolean);
 
-  // Get title text and normalize all internal whitespace to single spaces
-  const rawTitle = doc.querySelector("#title h1.title")?.textContent || "";
+  // Get title text and normalize all internal whitespace to single spaces.
+  // SideFX splits the name and type into separate elements inside h1.title:
+  //   <h1 class="title">Box <span class="subtitle">geometry node</span></h1>
+  // The subtitle span is present (but empty) on pages with no type, e.g.
+  // plain articles — pull it out first so `title` is name-only.
+  const titleH1 = doc.querySelector("#title h1.title");
+  const subtitleEl = titleH1?.querySelector(".subtitle");
+  const nodeType = subtitleEl?.textContent.replace(/\s+/g, " ").trim() || undefined;
+  subtitleEl?.remove();
+  const rawTitle = titleH1?.textContent || "";
   const title = rawTitle.replace(/\s+/g, " ").trim();
 
   const rawSummary = doc.querySelector("#title p.summary")?.textContent || "";
@@ -210,5 +220,6 @@ export async function scrapeSideFXPage(url: string): Promise<ScrapedContent> {
     since,
     icon,
     deprecation,
+    nodeType,
   };
 }
