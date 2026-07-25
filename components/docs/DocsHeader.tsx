@@ -29,7 +29,7 @@ export function DocsHeader({ breadcrumbs, sourceUrl, markdownUrl, searchRef }: D
         title="View as raw Markdown"
         className="hover:text-foreground transition-colors"
       >
-        {".md ↗︎"}
+        .md ↗︎
       </a>
       <a
         href={sourceUrl}
@@ -37,7 +37,7 @@ export function DocsHeader({ breadcrumbs, sourceUrl, markdownUrl, searchRef }: D
         rel="noopener noreferrer"
         className="hover:text-foreground transition-colors"
       >
-        {"SideFX ↗︎"}
+        SideFX ↗︎
       </a>
     </span>
   );
@@ -52,12 +52,12 @@ export function DocsHeader({ breadcrumbs, sourceUrl, markdownUrl, searchRef }: D
           HoudiniMD
         </Link>
 
-        <span className="@container min-w-0 truncate text-left before:content-['·'] before:mr-2 before:text-muted-foreground/30 max-sm:before:content-none">
+        <span className="@container min-w-0 truncate text-left before:content-['·'] before:mr-2 before:text-muted-foreground/30 max-sm:before:content-none ">
           {breadcrumbs}
         </span>
 
-        <div className="flex items-center justify-end gap-3 shrink-0 print:hidden">
-          <div className="hidden sm:block">{externalLinks}</div>
+        <div className="flex items-center justify-end gap-2 sm:gap-3 shrink-0 print:hidden">
+          {externalLinks}
           <SearchButton onOpenSearch={handleSearchClick} />
         </div>
       </div>
