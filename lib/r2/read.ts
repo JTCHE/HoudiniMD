@@ -26,6 +26,12 @@ export async function fetchIndexEntries(): Promise<SearchIndexEntry[] | null> {
   return entries;
 }
 
+// This is a global cutoff — every one of the ~10.7k cached pages older than
+// it is treated as stale and regenerated live on next visit, which is slow
+// for the whole site. Only bump it for a change that affects rendering of
+// EVERY page (e.g. a markdown converter/layout change). For a change scoped
+// to specific pages (e.g. one template or node category), leave this alone
+// and instead re-scrape just those pages: `bun regen --url <glob>`.
 /** Cached files generated before this date will be re-generated */
 export const CACHE_INVALIDATE_BEFORE = new Date("2026-07-24T18:00:00Z");
 
