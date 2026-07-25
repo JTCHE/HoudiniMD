@@ -17,6 +17,7 @@ export default function GeneratingPage({ slug }: { slug: string }) {
 
   useEffect(() => {
     const sse = new EventSource(`/api/generate?slug=${encodeURIComponent(slug)}`);
+    let reloadTimer: ReturnType<typeof setTimeout> | undefined;
 
     sse.onmessage = (e) => {
       const event = JSON.parse(e.data) as ProgressEvent;
@@ -24,8 +25,9 @@ export default function GeneratingPage({ slug }: { slug: string }) {
       if (event.stage === "complete") {
         sse.close();
         router.refresh();
-        // Fallback: if router.refresh() doesn't navigate away within 3s, force a full reload
-        setTimeout(() => window.location.reload(), 3000);
+        // Fallback: if router.refresh() doesn't navigate away within 3s, force a full reload.
+        // Cleared on unmount so a remount (refresh already worked) can't stack a second one.
+        reloadTimer = setTimeout(() => window.location.reload(), 3000);
       } else if (event.stage === "error") {
         sse.close();
         setError(event.detail ?? event.message);
@@ -37,7 +39,10 @@ export default function GeneratingPage({ slug }: { slug: string }) {
       router.refresh();
     };
 
-    return () => sse.close();
+    return () => {
+      sse.close();
+      clearTimeout(reloadTimer);
+    };
   }, [slug, router]);
 
   if (error) {
