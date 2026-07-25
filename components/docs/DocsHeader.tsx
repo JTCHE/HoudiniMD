@@ -52,7 +52,7 @@ export function DocsHeader({ breadcrumbs, sourceUrl, markdownUrl, searchRef }: D
           HoudiniMD
         </Link>
 
-        <span className="@container min-w-0 truncate text-left before:content-['·'] before:mr-2 before:text-muted-foreground/30 max-sm:before:content-none ">
+        <span className="@container block min-w-0 truncate text-left before:content-['·'] before:mr-2 before:text-muted-foreground/30 max-sm:before:content-none ">
           {breadcrumbs}
         </span>
 
