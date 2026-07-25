@@ -3,6 +3,7 @@
 Available at @README.md
 
 # Work Hygiene
+
 - If you need a paragraph-long comment to justify why the workaround is OK, the code is wrong - fix the code.
 - Always use ASD-STE100 Simplified Technical English in your writing — either to me, or in commits, PRs, and more.
 
@@ -14,6 +15,4 @@ When committing/pushing features to Git, and when an issue/feature has explicite
 
 Name : HoudiniMD — Issue Tracker.base
 
-Obsidian vault : side projects/Houdini/HoudiniMD/
-
-MacOS Location Prefix : /Users/john/Library/Mobile Documents/iCloud~md~obsidian/Documents/
+Obsidian vault : <value of OBSIDIAN_VAULT_PATH in @.env.obsidian>/side projects/Houdini/HoudiniMD/
