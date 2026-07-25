@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import { scrapeSideFXPage, checkPageExists, PageNotFoundError } from "@/lib/scraping";
 import { convertToMarkdown, detectLanguage } from "@/lib/markdown";
 import { fetchFromR2, saveToR2, updateSearchIndex } from "@/lib/r2";
@@ -52,6 +53,10 @@ export async function generateMarkdownForSlug(
 
     const cachedContent = await fetchFromR2(contentPath);
     if (cachedContent) {
+      // The static route may still be pinned to a stale ISR snapshot (e.g. one
+      // rendered while this content was momentarily missing) — refresh it so the
+      // next visitor gets real content instead of a frozen "generating" page.
+      revalidatePath(`/docs/${slug}`);
       progress("complete", "Found in cache", `/docs/${slug}`);
       return { markdown: cachedContent, fromCache: true, slug };
     }
@@ -123,6 +128,7 @@ export async function generateMarkdownForSlug(
     return { content: generatedMarkdown, fromCache: false };
   });
 
+  revalidatePath(`/docs/${slug}`);
   progress("complete", "Generation complete", `/docs/${slug}`);
 
   return {
