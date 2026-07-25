@@ -104,17 +104,50 @@ export default async function BreadcrumbsAsync({ slug }: { slug: string }) {
       ? chain.map((c, i) => (i === chain.length - 1 ? { ...c, label: `${c.label} ${nodeType}` } : c))
       : chain;
 
-  const tier1 = renderChain(withNodeType); // full path + node type
-  const tier2 = renderChain(chain); // full path, node type dropped
-  const tier3 = renderChain(truncateChain(chain, 2)); // first 2 + last
-  const tier4 = renderChain(truncateChain(chain, 1)); // first + last
+  const tier1Items = withNodeType; // full path + node type
+  const tier2Items = chain; // full path, node type dropped
+  const tier3Items = truncateChain(chain, 2); // first 2 + last
+  const tier4Items = truncateChain(chain, 1); // first + last
+
+  const tier1 = renderChain(tier1Items);
+  const tier2 = renderChain(tier2Items);
+  const tier3 = renderChain(tier3Items);
+  const tier4 = renderChain(tier4Items);
+
+  // Each doc page has a different breadcrumb length, so a fixed container-query
+  // breakpoint (e.g. Tailwind's default @xs/@sm/@md) either shows a tier that
+  // overflows or hides one that would have fit — the breakpoint must scale with
+  // the tier's own text. Container queries can't measure rendered pixel width,
+  // so approximate it from character count instead: at the fixed 12px text-xs
+  // size these breadcrumbs render in, glyphs measured ~7.6-7.9px wide on
+  // average (ui-sans-serif) — round up to 8px/char for a small safety margin
+  // against the tier clipping before its threshold is reached.
+  const PX_PER_CHAR = 8;
+  const chainWidth = (items: (Crumb | "ellipsis")[]) =>
+    PX_PER_CHAR *
+    items.reduce((total, item, i) => {
+      const label = item === "ellipsis" ? "…" : item.label;
+      const sep = i < items.length - 1 ? " > " : "";
+      return total + label.length + sep.length;
+    }, 0);
+
+  const tier1Width = chainWidth(tier1Items);
+  const tier2Width = chainWidth(tier2Items);
+  const tier3Width = chainWidth(tier3Items);
 
   return (
     <span className="cursor-default">
-      <span className="hidden @md:inline">{tier1}</span>
-      <span className="hidden @sm:inline @md:hidden">{tier2}</span>
-      <span className="hidden @xs:inline @sm:hidden">{tier3}</span>
-      <span className="inline @xs:hidden">{tier4}</span>
+      <style>{`
+        .bc-t1, .bc-t2, .bc-t3 { display: none; }
+        .bc-t4 { display: inline; }
+        @container (min-width: ${tier3Width}px) { .bc-t4 { display: none; } .bc-t3 { display: inline; } }
+        @container (min-width: ${tier2Width}px) { .bc-t3 { display: none; } .bc-t2 { display: inline; } }
+        @container (min-width: ${tier1Width}px) { .bc-t2 { display: none; } .bc-t1 { display: inline; } }
+      `}</style>
+      <span className="bc-t1">{tier1}</span>
+      <span className="bc-t2">{tier2}</span>
+      <span className="bc-t3">{tier3}</span>
+      <span className="bc-t4">{tier4}</span>
     </span>
   );
 }
