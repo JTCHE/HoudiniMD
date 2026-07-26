@@ -3,6 +3,9 @@
  * Purge stray R2 objects and index entries whose paths are not routable:
  *   - Paths containing '#'  (anchor fragment baked into slug, e.g. page#section)
  *   - Paths ending in '.html' (bare HTML-extension slugs)
+ *   - Paths with a leading/trailing slash or an internal '//' (produces an
+ *     empty segment when split on '/', which breaks Next.js static params —
+ *     "Requested and resolved page mismatch")
  *
  * Runs as a dry-run by default so you can review before committing writes.
  *
@@ -18,7 +21,21 @@ import { listR2Slugs, fetchSearchIndex, putSearchIndex } from "./lib/regen";
 import { parseArgs, c } from "./lib/cli";
 
 function isBadSlug(slug: string): boolean {
-  return slug.includes("#") || slug.endsWith(".html");
+  return (
+    slug.includes("#") ||
+    slug.endsWith(".html") ||
+    slug === "" ||
+    slug.startsWith("/") ||
+    slug.endsWith("/") ||
+    slug.includes("//")
+  );
+}
+
+function badSlugReason(slug: string): string {
+  if (slug.includes("#")) return c.yellow("#fragment");
+  if (slug.endsWith(".html")) return c.yellow(".html");
+  if (slug === "" || slug.startsWith("/") || slug.endsWith("/") || slug.includes("//")) return c.yellow("empty segment");
+  return c.yellow("unknown");
 }
 
 async function deleteR2Object(key: string): Promise<void> {
@@ -56,8 +73,7 @@ async function main() {
   if (verbose || badObjects.length > 0) {
     console.log(c.bold("Bad R2 objects") + (apply ? "" : c.dim(" (would delete)")));
     for (const slug of badObjects) {
-      const reason = slug.includes("#") ? c.yellow("#fragment") : c.yellow(".html");
-      console.log(`  ${c.red("✗")} [${reason}] ${slug}`);
+      console.log(`  ${c.red("✗")} [${badSlugReason(slug)}] ${slug}`);
     }
     if (badObjects.length === 0) console.log(c.dim("  (none)"));
     console.log("");
@@ -66,8 +82,7 @@ async function main() {
   if (verbose || badIndexEntries.length > 0) {
     console.log(c.bold("Bad index entries") + (apply ? "" : c.dim(" (would remove)")));
     for (const e of badIndexEntries) {
-      const reason = e.path.includes("#") ? c.yellow("#fragment") : c.yellow(".html");
-      console.log(`  ${c.red("✗")} [${reason}] ${e.path}`);
+      console.log(`  ${c.red("✗")} [${badSlugReason(e.path)}] ${e.path}`);
     }
     if (badIndexEntries.length === 0) console.log(c.dim("  (none)"));
     console.log("");
