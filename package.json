@@ -9,6 +9,7 @@
     "lint": "eslint",
     "regen": "bun scripts/regenerate.ts",
     "audit:perf": "bun scripts/audit-perf.ts",
+    "bench:sidefx": "bun scripts/benchmark-vs-sidefx.ts",
     "sidefx:index": "bun scripts/build-sidefx-index.ts",
     "indexnow:submit": "bun scripts/submit-indexnow.ts",
     "cleanup:slugs": "bun scripts/cleanup-slugs.ts",
