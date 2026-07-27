@@ -14,6 +14,8 @@
 
 HoudiniMD mirrors SideFX's official Houdini documentation into clean markdown, served through a minimal, near-instant interface. Same content, displayed inside a clean and responsive interface.
 
+![A horizontal bar chart comparing full page load time between the official SideFX docs and HoudiniMD, with the latter showing a median of 10.7x faster loading times than the former](public/load-time-benchmark.png)
+
 It follows the [llms.txt](https://llmstxt.org) standard. AI agents are automatically redirected to raw markdown instead of scraping cluttered HTML. They get accurate, low-noise context about Houdini's nodes and functions; exactly the kind of niche knowledge even frontier models still lack.
 
 ## Features
