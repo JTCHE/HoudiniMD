@@ -1,3 +1,4 @@
+import { SITE_HOST } from "@/lib/site";
 const BG = "#09090b";
 const TEXT = "#fafafa";
 const MUTED = "#71717a";
@@ -20,7 +21,7 @@ export function buildOgImageJsx({
   breadcrumb,
   summary,
   tags,
-  siteUrl = "houdinimd.jchd.me",
+  siteUrl = SITE_HOST,
 }: OgImageProps) {
   const displayTitle = title.length > 42 ? title.slice(0, 39) + "…" : title;
   const displaySummary = summary && summary.length > 140 ? summary.slice(0, 137) + "…" : summary;

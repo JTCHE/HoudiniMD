@@ -13,8 +13,7 @@ import { remarkVex } from "@/lib/markdown/remark-vex";
 import { fetchFromR2 } from "@/lib/r2/read";
 import GeneratingPage from "@/components/docs/GeneratingPage";
 import type { SearchIndexEntry } from "@/lib/r2/search-index";
-
-const URL = process.env.URL ?? "https://houdinimd.jchd.me";
+import { SITE_URL } from "@/lib/site";
 
 export const revalidate = 2592000;
 export const maxDuration = 60;
@@ -67,17 +66,17 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   }
 
   const pageTitle = `${title} — HoudiniMD`;
-  const canonical = `${URL}/docs/${slugPath}`;
+  const canonical = `${SITE_URL}/docs/${slugPath}`;
   const ogParams = new URLSearchParams({ path: slugPath, title });
   if (description) ogParams.set("summary", description);
-  const ogImage = `${URL}/api/og?${ogParams.toString()}`;
+  const ogImage = `${SITE_URL}/api/og?${ogParams.toString()}`;
 
   return {
     title: pageTitle,
     description,
     alternates: {
       canonical,
-      types: { "text/markdown": `${URL}/docs/${slugPath}.md` },
+      types: { "text/markdown": `${SITE_URL}/docs/${slugPath}.md` },
     },
     openGraph: {
       title: pageTitle,
@@ -177,7 +176,7 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
     bodyContent = bodyContent.slice(summaryMatch[0].length);
   }
   const mdSummary = summary ?? bodyContent.match(/^(?!#|>)[^\n]{20,}/m)?.[0]?.trim();
-  const canonical = `${URL}/docs/${slugPath}`;
+  const canonical = `${SITE_URL}/docs/${slugPath}`;
 
   const articleJsonLd = {
     "@context": "https://schema.org",
@@ -188,7 +187,7 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
     author: { "@type": "Organization", name: "SideFX" },
     publisher: { "@type": "Organization", name: "HoudiniMD" },
     about: { "@type": "SoftwareApplication", name: "Houdini" },
-    image: `${URL}/api/og?${new URLSearchParams({ path: slugPath, title: mdTitle, ...(mdSummary ? { summary: mdSummary } : {}) }).toString()}`,
+    image: `${SITE_URL}/api/og?${new URLSearchParams({ path: slugPath, title: mdTitle, ...(mdSummary ? { summary: mdSummary } : {}) }).toString()}`,
     mainEntityOfPage: canonical,
   };
 

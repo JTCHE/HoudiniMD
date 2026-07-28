@@ -1,3 +1,4 @@
+import { SITE_URL } from "../lib/site";
 /**
  * Measures real page-load speed of HoudiniMD against the official SideFX docs
  * over a throttled connection, so marketing claims rest on measured numbers.
@@ -24,7 +25,7 @@ const PAGES = [
 ];
 
 const SIDEFX = "https://www.sidefx.com/docs/houdini/";
-const HOUDINIMD = "https://houdinimd.jchd.me/docs/houdini/";
+const HOUDINIMD = `${SITE_URL}/docs/houdini/`;
 
 type Sample = { ttfb: number; dcl: number; load: number; lcp: number; bytes: number; requests: number };
 

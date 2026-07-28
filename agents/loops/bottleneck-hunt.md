@@ -1,6 +1,6 @@
 # Bottleneck-hunting loop
 
-Loop: browse the live site (houdinimd.jchd.me) with the Claude Browser pane like a real
+Loop: browse the live site (houdinimd.com) with the Claude Browser pane like a real
 visitor — click through breadcrumbs, navigate swiftly between pages, and hard-reload
 (Cmd+Shift+R, bypasses cache) to force fresh renders, since that's what reproduces CPU-limit
 (1102) errors. Check network requests and console for non-200s or errors as you go.

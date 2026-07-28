@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { SITE_URL as BASE_URL } from "../lib/site";
 /**
  * Regenerate markdown pages into the R2 cache.
  *
@@ -46,7 +47,6 @@ import { CACHE_INVALIDATE_BEFORE } from "../lib/r2/read";
 import { extractSlugFromUrl } from "../lib/url";
 import { submitToIndexNow } from "../lib/indexnow";
 
-const BASE_URL = process.env.URL ?? "https://houdinimd.jchd.me";
 const WARM_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 
 // Renders each page once so the ISR cache is populated before a real visitor

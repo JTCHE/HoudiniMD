@@ -1,3 +1,4 @@
+import { SITE_URL as ROOT } from "@/lib/site";
 import { NextRequest } from "next/server";
 import Fuse from "fuse.js";
 import { fetchIndexJson } from "@/lib/r2/read";
@@ -18,8 +19,6 @@ import {
 // user-facing overlay now searches client-side, so this endpoint is primarily
 // for external API callers.
 let cache: { indexed: IndexedEntry[]; fuse: Fuse<IndexedEntry> | null; expiry: number } | null = null;
-
-const ROOT = process.env.URL ?? "https://houdinimd.jchd.me";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",

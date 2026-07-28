@@ -6,7 +6,7 @@
 
 <br>
 <div align="center">
-  <a target="_blank" href="https://houdinimd.jchd.me"><img src="public/badges/website.svg" height="42" alt="Open HoudiniMD"></a>
+  <a target="_blank" href="https://houdinimd.com"><img src="public/badges/website.svg" height="42" alt="Open HoudiniMD"></a>
   <a target="_blank" href="https://github.com/JTCHE/houdini-mcp"><img src="public/badges/mcp.svg" height="42" alt="Houdini MCP"></a>
   <a target="_blank" href="https://ko-fi.com/A0R223KA7G"><img src="public/badges/kofi.svg" height="42" alt="Buy me a coffee on Ko-fi"></a>
 </div>

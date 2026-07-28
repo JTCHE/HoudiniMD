@@ -1,8 +1,7 @@
+import { SITE_URL as ROOT } from "@/lib/site";
 import { NextRequest } from "next/server";
 import { fetchIndexJson } from "@/lib/r2/read";
 import type { SearchIndexEntry } from "@/lib/r2/search-index";
-
-const ROOT = process.env.URL ?? "https://houdinimd.jchd.me";
 
 // Cache the parsed index per warm isolate so only the first request pays the
 // ~2.9MB JSON.parse (the cold-start cost that can brush the 10ms CPU limit).

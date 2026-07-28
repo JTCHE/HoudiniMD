@@ -5,6 +5,9 @@
 // incomplete — the deploy "succeeded" with a broken sitemap).
 
 const REQUIRED = [
+  // Public origin. lib/site.ts also throws on it, but failing here keeps the
+  // error ahead of a multi-minute build instead of part-way through one.
+  "URL",
   "R2_ACCOUNT_ID",
   "R2_ACCESS_KEY_ID",
   "R2_SECRET_ACCESS_KEY",

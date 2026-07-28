@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { SITE_URL } from "../lib/site";
 /**
  * Production performance audit.
  *
@@ -197,7 +198,7 @@ async function main() {
     console.log(`Usage: bun scripts/audit-perf.ts [options]
 
 Options:
-  --base-url <url>     Default https://houdinimd.jchd.me
+  --base-url <url>     Default ${SITE_URL}
   --samples <N>        Number of random pages to probe (default 50)
   --concurrency <N>    Parallel requests (default 5)
   --md                 Test /docs/*.md endpoint instead of HTML
@@ -209,7 +210,7 @@ Options:
     return;
   }
 
-  const baseUrl = getString(args, "base-url", "https://houdinimd.jchd.me").replace(/\/$/, "");
+  const baseUrl = getString(args, "base-url", SITE_URL).replace(/\/$/, "");
   const samples = getNumber(args, "samples", 50);
   const concurrency = getNumber(args, "concurrency", 5);
   const asMd = args.flags.has("md");

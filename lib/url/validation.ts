@@ -10,22 +10,24 @@ import { normalizeInput } from './normalizer';
  *   "sidefx.com/docs/houdini/nodes/sop/carve"
  *   "/nodes/sop/carve"
  */
+// Hosts we recognise as our own. houdinimd.com is canonical; the jchd.me
+// subdomain and the Netlify host stay listed so pasted links from before the
+// move still resolve.
+const HOUDINIMD_HOSTS = /houdinimd\.(?:com|jchd\.me|netlify\.app)/.source;
+
 export function isValidDocUrl(input: string): boolean {
   const normalized = normalizeInput(input);
   if (!normalized) return false;
 
   return (
     /^https?:\/\/(www\.)?sidefx\.com\/docs\//i.test(normalized) ||
-    /^https?:\/\/(www\.)?houdinimd\.jchd\.me\/docs\//i.test(normalized) ||
-    /^https?:\/\/(www\.)?houdinimd\.netlify\.app\/docs\//i.test(normalized) ||
-    /^https?:\/\/(www\.)?houdinimd\.jchd\.me\/docs\//i.test(normalized) ||
-    /^https?:\/\/(www\.)?houdinimd\.netlify\.app\/docs\//i.test(normalized)
+    new RegExp(`^https?://(www\\.)?${HOUDINIMD_HOSTS}/docs/`, "i").test(normalized)
   );
 }
 
 /**
  * Extract the slug path from a HoudiniMD or SideFX URL
- * @example "https://houdinimd.netlify.app/docs/houdini/vex/functions/foreach" -> "houdini/vex/functions/foreach"
+ * @example "https://houdinimd.com/docs/houdini/vex/functions/foreach" -> "houdini/vex/functions/foreach"
  * @example "https://sidefx.com/docs/houdini/vex/functions/foreach.html" -> "houdini/vex/functions/foreach"
  * @example "https://sidefx.com/docs/houdini/network/shortcuts.html#notes" -> "houdini/network/shortcuts"
  */
@@ -36,8 +38,10 @@ export function extractSlugFromUrl(input: string): string | null {
   // Strip URL fragment (hash) before processing - fragments are page anchors, not part of the path
   const urlWithoutFragment = normalized.split("#")[0];
 
-  // Handle HoudiniMD URLs (new domain, keep old houdinimd for redirect compat)
-  const houdinimdMatch = urlWithoutFragment.match(/(?:houdinimd|houdinimd)\.(?:jchd\.me|netlify\.app)\/docs\/(.+?)(?:\.html)?(?:\.md)?$/i);
+  // Handle HoudiniMD URLs, canonical host and the pre-move ones alike
+  const houdinimdMatch = urlWithoutFragment.match(
+    new RegExp(`${HOUDINIMD_HOSTS}/docs/(.+?)(?:\\.html)?(?:\\.md)?$`, "i"),
+  );
   if (houdinimdMatch) {
     return houdinimdMatch[1].replace(/\.html$/, "").replace(/\.md$/, "");
   }

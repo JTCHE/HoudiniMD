@@ -1,10 +1,9 @@
+import { SITE_URL } from "@/lib/site";
 import type { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
 import "./globals.css";
 import ServiceWorkerRegistration from "@/components/ServiceWorker";
 import { ToastListener } from "@/components/ui/toast-notification";
-
-const SITE_URL = process.env.URL || "https://houdinimd.jchd.me";
 
 export const viewport: Viewport = {
   maximumScale: 1,
