@@ -1,3 +1,4 @@
+import { SITE_URL } from "@/lib/site";
 import type { MetadataRoute } from "next";
 
 // Strategy:
@@ -56,7 +57,7 @@ export default function robots(): MetadataRoute.Robots {
       // AI bots — markdown only.
       ...AI_BOTS.map((userAgent) => ({ userAgent, ...aiBotDocRules })),
     ],
-    sitemap: `${process.env.URL}/sitemap.xml`,
-    host: process.env.URL,
+    sitemap: `${SITE_URL}/sitemap.xml`,
+    host: SITE_URL,
   };
 }

@@ -1,9 +1,8 @@
+import { SITE_URL as BASE_URL } from "@/lib/site";
 import type { MetadataRoute } from "next";
 import { fetchIndexEntries } from "@/lib/r2/read";
 
 export const revalidate = 3600;
-
-const BASE_URL = process.env.URL ?? "https://houdinimd.jchd.me";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base: MetadataRoute.Sitemap = [

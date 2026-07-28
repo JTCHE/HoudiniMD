@@ -1,3 +1,4 @@
+import { SITE_URL } from "@/lib/site";
 export interface DeprecationInfo {
   reason?: string;
   version?: string;
@@ -28,7 +29,7 @@ export class PageNotFoundError extends Error {
   }
 }
 
-const USER_AGENT = "HoudiniMD/1.0 (Documentation Converter; https://houdinimd.jchd.me)";
+const USER_AGENT = `HoudiniMD/1.0 (Documentation Converter; ${SITE_URL})`;
 
 /**
  * Check if a SideFX documentation page exists by making a HEAD request.

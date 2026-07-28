@@ -1,6 +1,5 @@
+import { SITE_URL as ROOT } from "@/lib/site";
 import { NextRequest, NextResponse } from "next/server";
-
-const ROOT = process.env.URL ?? "https://houdinimd.jchd.me";
 
 // Matches static-asset-shaped paths (stale /_next/static/chunks/*.js references
 // after a deploy, favicon requests, etc). These aren't doc-slug lookups — running

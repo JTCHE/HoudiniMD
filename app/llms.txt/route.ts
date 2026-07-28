@@ -1,5 +1,5 @@
+import { SITE_URL as root } from "@/lib/site";
 export async function GET() {
-  const root = process.env.URL ?? "https://houdinimd.jchd.me";
 
   const body = `# HoudiniMD — Houdini Docs for LLMs
 

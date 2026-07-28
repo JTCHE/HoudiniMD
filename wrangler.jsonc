@@ -48,10 +48,16 @@
       "new_sqlite_classes": ["DOQueueHandler"],
     },
   ],
+  // Public origin for the Worker runtime. lib/site.ts throws without it, so
+  // keeping it here (rather than in the dashboard) means it deploys atomically
+  // with the code and cannot silently drift.
+  "vars": {
+    "URL": "https://houdinimd.com",
+  },
   "routes": [
     {
-      "pattern": "houdinimd.jchd.me/*",
-      "zone_name": "jchd.me",
+      "pattern": "houdinimd.com/*",
+      "zone_name": "houdinimd.com",
     },
   ],
   "services": [

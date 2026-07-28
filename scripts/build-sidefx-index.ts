@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { SITE_URL } from "../lib/site";
 /**
  * Crawl the SideFX docs site and build a JSON index of every reachable page.
  *
@@ -22,7 +23,7 @@ import { dirname } from "node:path";
 import { parse } from "node-html-parser";
 import { parseArgs, getNumber, getString, c, fmtMs } from "./lib/cli";
 
-const UA = "HoudiniMD/1.0 (Documentation Index Builder; https://houdinimd.jchd.me)";
+const UA = `HoudiniMD/1.0 (Documentation Index Builder; ${SITE_URL})`;
 const SIDEFX_ORIGIN = "https://www.sidefx.com";
 
 /** Skip these subpaths — large media or non-doc resources. */

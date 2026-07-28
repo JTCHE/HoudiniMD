@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { SITE_URL } from "../lib/site";
 /**
  * Submit the live sitemap to IndexNow — which fans out to Bing, Yandex,
  * Seznam.cz, Naver, etc. — and directly to Bing's own IndexNow endpoint.
@@ -17,7 +18,7 @@
 import { submitToIndexNow, INDEXNOW_KEY } from "../lib/indexnow";
 import { parseArgs, getNumber, c } from "./lib/cli";
 
-const DEFAULT_SITEMAP_URL = `${process.env.URL ?? "https://houdinimd.jchd.me"}/sitemap.xml`;
+const DEFAULT_SITEMAP_URL = `${SITE_URL}/sitemap.xml`;
 
 async function fetchSitemapUrls(sitemapUrl: string): Promise<string[]> {
   const res = await fetch(sitemapUrl);
