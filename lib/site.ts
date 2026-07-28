@@ -1,10 +1,5 @@
 // Single source of truth for the public origin.
 //
-// Deliberately no fallback. A hardcoded default is what let the site keep
-// serving `houdinimd.jchd.me` from twelve separate literals, and what let
-// app/robots.ts ship `Sitemap: undefined/sitemap.xml` unnoticed for months.
-// Failing loudly at import time is the whole point.
-//
 // Set it in two places, both of which are checked in or local:
 //   * .env.local        — build, dev and the bun scripts
 //   * wrangler.jsonc    — `vars.URL`, the Workers runtime
