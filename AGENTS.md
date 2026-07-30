@@ -5,7 +5,13 @@ Available at @README.md
 # Work Hygiene
 
 - If you need a paragraph-long comment to justify why the workaround is OK, the code is wrong - fix the code.
-- Always use ASD-STE100 Simplified Technical English in your writing — either to me, or in commits, PRs, and more.
+- Always use ASD-STE100 Simplified Technical English in your writing — either to me, or in commits, PRs, and more
+
+# Deploys
+Deploys can be achieved in two ways:
+1. By comitting and pushing to GitHub. Since the Cloudflare app is installed in the repo, this will trigger an auto deploy.
+2. By running `bun run deploy`
+
 
 # Obsidian Base
 
