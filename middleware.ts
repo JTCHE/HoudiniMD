@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { LATEST_NEWS_INDEX_SLUGS } from './lib/houdini';
+import { wantsMarkdown } from './lib/wants-markdown';
 
 const HOUDINI_PATH_PREFIXES = [
   'nodes/', 'vex/', 'hom/', 'expressions/', 'model/', 'copy/',
@@ -14,23 +15,6 @@ function stripExtensionsAndSlash(p: string): string {
   return p;
 }
 
-// Real browsers always send Mozilla/5.0 alongside a known engine token.
-const BROWSER_RE = /Mozilla\/5\.0.+\b(Chrome|Firefox|Safari|Edg|OPR|Vivaldi)\b/;
-
-// Search-engine and social-preview crawlers we WANT to receive the rendered
-// HTML (and index it / build link previews). These are NOT redirected to .md.
-// AI training/answer bots (GPTBot, ClaudeBot, …) are deliberately absent —
-// they're disallowed from /docs/ HTML in robots.ts and steered to .md below.
-const HTML_CRAWLER_RE =
-  /\b(Googlebot|Storebot-Google|Google-InspectionTool|Bingbot|Slurp|DuckDuckBot|Baiduspider|YandexBot|Applebot|facebookexternalhit|Twitterbot|LinkedInBot|Discordbot|Slackbot)\b/i;
-
-// Programmatic / AI fetchers: not a browser and not a known HTML crawler
-// (curl, python-requests, GPTBot, ClaudeBot, …). These get steered to raw .md.
-function wantsMarkdown(ua: string | null): boolean {
-  if (!ua) return true;
-  return !BROWSER_RE.test(ua) && !HTML_CRAWLER_RE.test(ua);
-}
-
 export function middleware(request: NextRequest) {
   const url = request.nextUrl.clone();
   const pathname = url.pathname;
@@ -39,10 +23,10 @@ export function middleware(request: NextRequest) {
   const sidefxMatch = pathname.match(/^\/https?:\/?\/?(?:www\.)?sidefx\.com\/docs\/(.+)$/);
   if (sidefxMatch) {
     let p = sidefxMatch[1];
-    const wantsMarkdown = p.endsWith('.html.md') || (p.endsWith('.md') && !p.endsWith('.html'));
+    const askedForMarkdown = p.endsWith('.html.md') || (p.endsWith('.md') && !p.endsWith('.html'));
     p = stripExtensionsAndSlash(p);
     if (p.endsWith('.md')) p = p.slice(0, -3); // strip bare .md too
-    url.pathname = wantsMarkdown ? `/docs/${p}.md` : `/docs/${p}`;
+    url.pathname = askedForMarkdown ? `/docs/${p}.md` : `/docs/${p}`;
     return NextResponse.redirect(url, 301);
   }
 
@@ -77,8 +61,10 @@ export function middleware(request: NextRequest) {
     // AI agents / programmatic fetchers → redirect to the .md equivalent so they
     // receive raw markdown instead of the Next.js-rendered HTML. Search and
     // social crawlers fall through to the HTML below.
-    const ua = request.headers.get('user-agent');
-    if (wantsMarkdown(ua)) {
+    if (wantsMarkdown(
+      request.headers.get('user-agent'),
+      request.headers.get('sec-fetch-dest'),
+    )) {
       url.pathname = `${pathname}.md`;
       return NextResponse.redirect(url, 302);
     }
