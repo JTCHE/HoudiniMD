@@ -44,19 +44,19 @@ export function DocsHeader({ breadcrumbs, sourceUrl, markdownUrl, searchRef }: D
 
   return (
     <header className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur print:static print:bg-background">
-      <div className="mx-auto grid max-w-4xl grid-cols-[auto_1fr_auto] items-center gap-2 px-page-x py-3 text-xs text-muted-foreground">
+      <div className="mx-auto grid max-w-4xl grid-cols-[1fr_auto] sm:grid-cols-[auto_1fr_auto] items-center gap-2 px-page-x py-3 text-xs text-muted-foreground">
         <Link
           href="/"
-          className="shrink-0 font-semibold text-foreground hover:opacity-70 transition-opacity"
+          className="row-start-1 shrink-0 font-semibold text-foreground hover:opacity-70 transition-opacity"
         >
           HoudiniMD
         </Link>
 
-        <span className="@container block w-full min-w-0 truncate text-left before:content-['·'] before:mr-2 before:text-muted-foreground/30 max-sm:before:content-none ">
+        <span className="@container col-span-2 row-start-2 block w-full min-w-0 truncate text-left sm:col-span-1 sm:row-start-1 sm:before:content-['·'] sm:before:mr-2 sm:before:text-muted-foreground/30">
           {breadcrumbs}
         </span>
 
-        <div className="flex items-center justify-end gap-2 sm:gap-3 shrink-0 print:hidden">
+        <div className="row-start-1 flex items-center justify-end gap-2 sm:gap-3 shrink-0 print:hidden">
           {externalLinks}
           <SearchButton onOpenSearch={handleSearchClick} />
         </div>
