@@ -449,7 +449,10 @@ pre code.hljs {
   --callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 16v-4'/%3E%3Cpath d='M12 8h.01'/%3E%3C/svg%3E");
   --callout-surface: color-mix(in oklab, var(--callout-color) 4%, var(--card));
   display: block;
-  margin: 1.25rem 0;
+  /* Negative inline margin against the equal inline padding, so callout text
+     sits on the page's text axis and only the surface overhangs — matching
+     the code block and the VEX signature panel. */
+  margin: 1.25rem -1rem;
   padding: 0.85rem 1rem;
   border: none;
   border-radius: var(--radius-lg);
@@ -529,6 +532,217 @@ pre code.hljs {
 }
 .not-prose table .callout:first-child {
   margin-top: 0;
+}
+
+/* ── VEX function signatures ─────────────────────────────────────────────
+   Built by lib/markdown/remark-vex.ts, which only runs on pages under
+   vex/functions/. Two palettes, deliberately kept apart: STRUCTURE lives on
+   the dark panel and reuses the hljs colours above (type, function, params);
+   VALUES live in prose and keep the ordinary pink inline-code chip. A token
+   never changes meaning by moving between them. */
+
+/* Signature panel. The negative inline margin (plus 1px for its own border)
+   against the equal inline padding puts the code glyphs on the same vertical
+   axis as the body text, with the frame sitting proud of it. The callout
+   component gets the same treatment below so both line up. */
+.vex-sig {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0 calc(-1rem - 1px) 1.5rem;
+}
+
+.vex-sig-card {
+  background: oklch(0.13 0 0);
+  border: 1px solid oklch(1 0 0 / 10%);
+  border-radius: var(--radius-lg);
+  overflow-x: auto;
+}
+
+.vex-sig-row {
+  padding: 0.4rem 1rem;
+  font-family: ui-monospace, "Geist Mono", "Fira Code", Menlo, Consolas, monospace;
+  font-size: 0.82rem;
+  line-height: 1.7;
+  white-space: pre;
+  color: oklch(0.88 0 0);
+}
+.vex-sig-row:first-child {
+  padding-top: 0.7rem;
+}
+.vex-sig-row:last-child {
+  padding-bottom: 0.7rem;
+}
+
+/* A caption binds to the overloads directly above it. Without this grouping,
+   a page like xyzdist shows six signatures and three descriptions in one
+   undifferentiated stack. */
+.vex-sig-caption {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  font-size: 0.86rem;
+  line-height: 1.55;
+  color: oklch(0.72 0 0);
+  background: oklch(1 0 0 / 3%);
+  border-top: 1px solid oklch(1 0 0 / 7%);
+}
+.vex-sig-caption strong {
+  color: oklch(0.92 0 0);
+  font-weight: 600;
+}
+.vex-sig-caption a {
+  color: inherit;
+}
+
+/* The panel is dark in both themes (like every other code surface here), so
+   these are set outright rather than through the light/dark tokens. */
+.vex-tk-type {
+  color: oklch(0.72 0.12 195);
+}
+.vex-tk-fn {
+  color: oklch(0.84 0.11 80);
+}
+.vex-tk-arg {
+  color: oklch(0.88 0 0);
+}
+.vex-tk-punct {
+  color: oklch(0.75 0 0);
+}
+.vex-tk-out {
+  color: oklch(0.72 0.14 245);
+  font-weight: 700;
+}
+
+/* Section labels. One rule, so the gap above Arguments and above Returns is
+   identical by construction. */
+.prose p.vex-section-label {
+  margin: 2rem 0 0.75rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--muted-foreground);
+}
+/* Returns is a single line rather than a ruled table: more air above it to
+   separate it from the arguments, less below because there is no table edge. */
+.prose p.vex-section-label-returns {
+  margin-top: 2.5rem;
+  margin-bottom: 0.25rem;
+}
+
+/* Arguments. Two nested grids: a fixed type column and a fixed name column,
+   so every type is left-aligned on one axis and every name on another —
+   the same rhythm the signature has. 6.5rem fits every VEX type up to 14
+   characters; the rare three-way union wraps inside its own cell instead of
+   pushing the name column out of alignment. */
+.vex-args {
+  display: grid;
+  grid-template-columns: 16.5rem 1fr;
+  border-top: 1px solid var(--border);
+}
+.vex-arg-sig,
+.vex-arg-desc {
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.vex-arg-sig {
+  display: grid;
+  grid-template-columns: 6.5rem 1fr;
+  align-items: start;
+  gap: 0 0.5rem;
+  padding-right: 1.25rem;
+  font-family: ui-monospace, "Geist Mono", "Fira Code", Menlo, Consolas, monospace;
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+.vex-arg-type {
+  color: oklch(0.72 0.12 195);
+  overflow-wrap: anywhere;
+}
+.vex-arg-name {
+  color: var(--foreground);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.vex-arg-amp {
+  color: oklch(0.72 0.14 245);
+}
+.vex-arg-desc {
+  font-size: 0.9rem;
+  color: var(--muted-foreground);
+}
+.vex-arg-desc > :first-child {
+  margin-top: 0;
+}
+.vex-arg-desc > :last-child {
+  margin-bottom: 0;
+}
+.prose .vex-arg-desc p {
+  margin: 0 0 0.5rem;
+}
+.prose .vex-arg-desc p:last-child {
+  margin-bottom: 0;
+}
+
+/* Deprecated stubs publish no signature, so there are no types to show.
+   Drop the column rather than pad it with placeholders. */
+.vex-args-untyped {
+  grid-template-columns: 10rem 1fr;
+}
+.vex-args-untyped .vex-arg-sig {
+  grid-template-columns: 1fr;
+}
+
+/* Returns. One statement, not a row in a table — losing the rules and the
+   columns is what tells it apart from Arguments at a glance. The arrow marks
+   it as the result; the type token matches the signature panel's return type
+   so the eye connects the two. */
+.vex-returns {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.vex-ret-sig {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex: none;
+  font-family: ui-monospace, "Geist Mono", "Fira Code", Menlo, Consolas, monospace;
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+.vex-ret-arrow {
+  color: oklch(0.72 0.12 195);
+  opacity: 0.7;
+}
+.vex-ret-type {
+  color: oklch(0.72 0.12 195);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.vex-ret-desc {
+  flex: 1 1 18rem;
+  font-size: 0.9rem;
+  color: var(--foreground);
+}
+.prose .vex-ret-desc p {
+  margin: 0;
+}
+
+@media (max-width: 640px) {
+  .vex-args,
+  .vex-args-untyped {
+    grid-template-columns: 1fr;
+  }
+  .vex-arg-sig {
+    padding-right: 0;
+    padding-bottom: 0.25rem;
+    border-bottom: 0;
+  }
+  .vex-arg-desc {
+    padding-top: 0;
+  }
 }
 
 /* ── Code blocks inside table cells (raw <pre> from the scraper) ─────────── */
