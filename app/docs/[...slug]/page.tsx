@@ -9,6 +9,7 @@ import { MarkdownActions } from "@/components/docs/MarkdownActions";
 import { PrintPagination } from "@/components/docs/PrintPagination";
 import { CodeBlock } from "@/components/docs/CodeBlock";
 import { remarkCallouts } from "@/lib/markdown/remark-callouts";
+import { remarkVex } from "@/lib/markdown/remark-vex";
 import { fetchFromR2 } from "@/lib/r2/read";
 import GeneratingPage from "@/components/docs/GeneratingPage";
 import type { SearchIndexEntry } from "@/lib/r2/search-index";
@@ -112,6 +113,10 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
   const { content: rawContent, data: frontmatter } = parseFrontmatter(rawMarkdown);
   const pageIcon = frontmatter.icon;
   const since = frontmatter.since;
+  // The VEX signature transform is scoped by slug rather than by sniffing the
+  // markdown, so the other ~9,600 pages take the untouched path no matter what
+  // their content looks like.
+  const isVexFunction = /(^|\/)vex\/functions\//.test(`/${slugPath}`);
   // Escape pseudo-tags before rehypeRaw processes the markdown.
   // Real HTML tag names only contain [a-zA-Z0-9-]. We escape two invalid patterns:
   //   1. Uppercase-starting: <A>, <A-B>, <Key>
@@ -223,7 +228,7 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
           {summary && <p className="w-full basis-full m-0 text-sm italic text-muted-foreground">{summary}</p>}
         </header>
         <ReactMarkdown
-          remarkPlugins={[remarkGfm, remarkCallouts]}
+          remarkPlugins={[remarkGfm, remarkCallouts, [remarkVex, { enabled: isVexFunction }]]}
           rehypePlugins={[rehypeRaw, rehypeSlug]}
           components={{
             h1: ({ children }) => (
