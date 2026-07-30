@@ -60,6 +60,13 @@ const isText = (n: MdNode | undefined, s: string) =>
   isParagraph(n) && textOf(n).trim().toLowerCase() === s;
 
 /**
+ * A paragraph holding nothing but a link is how a suite page (vex/attrib_suite)
+ * titles each function it documents. It ends the previous function's section.
+ */
+const isFunctionTitle = (n: MdNode | undefined) =>
+  n?.type === 'paragraph' && n.children?.length === 1 && n.children[0].type === 'link';
+
+/**
  * A caption belongs to the overload group above it: ordinary prose, not another
  * code span, and not one of the section markers.
  */
@@ -89,20 +96,15 @@ export function remarkVex({ enabled }: { enabled: boolean }) {
     if (!enabled || !tree.children) return;
 
     const blocks = tree.children;
-
-    // Collect every signature first — argument rows need the whole page's
-    // types, including ones only declared on a later overload.
-    const signatures: VexSignature[] = [];
-    for (const b of blocks) {
-      const code = loneCode(b);
-      if (!code) continue;
-      const sig = parseSignature(code);
-      if (sig) signatures.push(sig);
-    }
-    const argIndex = indexArguments(signatures);
-
     const out: MdNode[] = [];
     let i = 0;
+
+    // Signatures of the block most recently emitted. Scoped per block, not per
+    // page: a suite page such as vex/attrib_suite documents nine functions in
+    // sequence, so a page-wide index would give one function's arguments
+    // another's types, and merge all nine return types into one union.
+    let current: VexSignature[] = [];
+    let argIndex = indexArguments(current);
 
     while (i < blocks.length) {
       const code = loneCode(blocks[i]);
@@ -111,12 +113,14 @@ export function remarkVex({ enabled }: { enabled: boolean }) {
       // ── signature: consecutive overloads, each run optionally captioned ──
       if (sig) {
         const groups: MdNode[] = [];
+        current = [];
         while (i < blocks.length) {
           const rows: MdNode[] = [];
           for (;;) {
             const c = loneCode(blocks[i]);
             const s = c ? parseSignature(c) : null;
             if (!s) break;
+            current.push(s);
             rows.push(
               box('vexRow', 'vex-sig-row', tokenize(s).map((t) => span(`vex-tk-${t.kind}`, t.text)))
             );
@@ -136,6 +140,7 @@ export function remarkVex({ enabled }: { enabled: boolean }) {
             groups.push(box('vexGroup', 'vex-sig-card', rows));
           }
         }
+        argIndex = indexArguments(current);
         out.push(box('vexSig', 'vex-sig', groups));
         continue;
       }
@@ -161,7 +166,16 @@ export function remarkVex({ enabled }: { enabled: boolean }) {
           while (i < blocks.length) {
             const next = blocks[i];
             const nc = loneCode(next);
-            if ((nc && isArgumentLabel(nc)) || isText(next, 'returns') || isHeading(next)) break;
+            // Stop at the next argument, at Returns, at a heading — and on a
+            // suite page, at the next function's signature or title. Without
+            // those last two the description swallows the following function
+            // whole, and its Returns then reports the wrong type.
+            if (
+              (nc && (isArgumentLabel(nc) || parseSignature(nc))) ||
+              isText(next, 'returns') ||
+              isHeading(next) ||
+              isFunctionTitle(next)
+            ) break;
             desc.push(next);
             i++;
           }
@@ -194,7 +208,7 @@ export function remarkVex({ enabled }: { enabled: boolean }) {
       }
 
       // ── returns: the marker plus the single paragraph that follows ──
-      if (isText(blocks[i], 'returns') && signatures.length) {
+      if (isText(blocks[i], 'returns') && current.length) {
         i++;
         const desc: MdNode[] = [];
         if (isParagraph(blocks[i]) && !loneCode(blocks[i])) {
@@ -206,7 +220,7 @@ export function remarkVex({ enabled }: { enabled: boolean }) {
           box('vexReturns', 'vex-returns', [
             box('vexRetSig', 'vex-ret-sig', [
               span('vex-ret-arrow', '→'),
-              span('vex-ret-type', returnTypes(signatures).join('|')),
+              span('vex-ret-type', returnTypes(current).join('|')),
             ]),
             box('vexRetDesc', 'vex-ret-desc', desc),
           ])

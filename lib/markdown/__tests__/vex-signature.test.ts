@@ -127,6 +127,18 @@ describe("indexArguments", () => {
   it("picks up a type only declared on a later overload", () => {
     expect(indexArguments(sigs).get("primgroup")!.type).toBe("string");
   });
+
+  // A suite page (vex/attrib_suite) documents nine functions in sequence. The
+  // plugin rebuilds this index per signature block, so an argument never picks
+  // up a type that belongs to a different function on the same page.
+  it("keeps two functions' arguments apart when they are indexed separately", () => {
+    const attrib = [parseSignature("<type> attrib(<geometry>geometry, string attribclass, int elemnum)")!];
+    const detail = [parseSignature("<type> detail(<geometry>geometry, string attribute_name, int ignored=0)")!];
+
+    expect(indexArguments(attrib).get("attribclass")!.type).toBe("string");
+    expect(indexArguments(detail).has("attribclass")).toBe(false);
+    expect(indexArguments(detail).get("ignored")!.defaultValue).toBe("0");
+  });
 });
 
 // ---------------------------------------------------------------------------
