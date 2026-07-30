@@ -27,25 +27,16 @@ interface Crumb {
   href: string | null;
 }
 
-// Keep the first `keepStart` items, elide the middle, keep the last item.
-// No-op when there is nothing to elide.
-function truncateChain(chain: Crumb[], keepStart: number): (Crumb | "ellipsis")[] {
-  if (chain.length <= keepStart + 1) return chain;
-  return [...chain.slice(0, keepStart), "ellipsis" as const, chain[chain.length - 1]];
+// Keep the last `keep` items. The current page and its nearest ancestors carry
+// the useful context, so the root segments are the first to go.
+function truncateChain(chain: Crumb[], keep: number): Crumb[] {
+  return chain.slice(-keep);
 }
 
-function renderChain(items: (Crumb | "ellipsis")[]) {
+function renderChain(items: Crumb[]) {
   return items.map((item, i) => {
     const isLast = i === items.length - 1;
     const sep = !isLast && " > ";
-    if (item === "ellipsis") {
-      return (
-        <span key={`ellipsis-${i}`}>
-          {"…"}
-          {sep}
-        </span>
-      );
-    }
     return (
       <span key={`${item.href ?? item.label}-${i}`}>
         {item.href ? (
@@ -106,8 +97,8 @@ export default async function BreadcrumbsAsync({ slug }: { slug: string }) {
 
   const tier1Items = withNodeType; // full path + node type
   const tier2Items = chain; // full path, node type dropped
-  const tier3Items = truncateChain(chain, 2); // first 2 + last
-  const tier4Items = truncateChain(chain, 1); // first + last
+  const tier3Items = truncateChain(chain, 3); // last 3
+  const tier4Items = truncateChain(chain, 2); // parent + current page
 
   const tier1 = renderChain(tier1Items);
   const tier2 = renderChain(tier2Items);
@@ -118,17 +109,16 @@ export default async function BreadcrumbsAsync({ slug }: { slug: string }) {
   // breakpoint (e.g. Tailwind's default @xs/@sm/@md) either shows a tier that
   // overflows or hides one that would have fit — the breakpoint must scale with
   // the tier's own text. Container queries can't measure rendered pixel width,
-  // so approximate it from character count instead: at the fixed 12px text-xs
-  // size these breadcrumbs render in, glyphs measured ~7.6-7.9px wide on
-  // average (ui-sans-serif) — round up to 8px/char for a small safety margin
+  // so approximate it from character count instead: canvas measureText on real
+  // breadcrumb strings at the fixed 12px text-xs size these render in gives
+  // 5.4px/char average (ui-sans-serif) — round up to 6 for a safety margin
   // against the tier clipping before its threshold is reached.
-  const PX_PER_CHAR = 8;
-  const chainWidth = (items: (Crumb | "ellipsis")[]) =>
+  const PX_PER_CHAR = 6;
+  const chainWidth = (items: Crumb[]) =>
     PX_PER_CHAR *
     items.reduce((total, item, i) => {
-      const label = item === "ellipsis" ? "…" : item.label;
       const sep = i < items.length - 1 ? " > " : "";
-      return total + label.length + sep.length;
+      return total + item.label.length + sep.length;
     }, 0);
 
   const tier1Width = chainWidth(tier1Items);
