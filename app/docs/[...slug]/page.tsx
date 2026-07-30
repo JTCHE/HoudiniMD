@@ -115,8 +115,11 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
   const since = frontmatter.since;
   // The VEX signature transform is scoped by slug rather than by sniffing the
   // markdown, so the other ~9,600 pages take the untouched path no matter what
-  // their content looks like.
-  const isVexFunction = /(^|\/)vex\/functions\//.test(`/${slugPath}`);
+  // their content looks like. The whole vex/ tree is in scope, not just
+  // vex/functions/: the `_suite` pages (e.g. vex/attrib_suite) document
+  // functions in exactly the same shape. Of the 37 non-function vex pages only
+  // those 2 contain a signature at all; the other 35 pass through unchanged.
+  const isVexPage = /(^|\/)vex\//.test(`/${slugPath}`);
   // Escape pseudo-tags before rehypeRaw processes the markdown.
   // Real HTML tag names only contain [a-zA-Z0-9-]. We escape two invalid patterns:
   //   1. Uppercase-starting: <A>, <A-B>, <Key>
@@ -228,7 +231,7 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
           {summary && <p className="w-full basis-full m-0 text-sm italic text-muted-foreground">{summary}</p>}
         </header>
         <ReactMarkdown
-          remarkPlugins={[remarkGfm, remarkCallouts, [remarkVex, { enabled: isVexFunction }]]}
+          remarkPlugins={[remarkGfm, remarkCallouts, [remarkVex, { enabled: isVexPage }]]}
           rehypePlugins={[rehypeRaw, rehypeSlug]}
           components={{
             h1: ({ children }) => (
