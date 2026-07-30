@@ -66,3 +66,6 @@ playwright.config.ts
 .codex
 
 .open-next*
+
+# log files
+*.log
