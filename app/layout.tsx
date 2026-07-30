@@ -22,9 +22,8 @@ export const metadata: Metadata = {
   description: websiteInfo.description,
   keywords: ["Houdini", "VEX", "SideFX", "documentation", "LLM", "AI", "llms.txt", "Python API", "HOM"],
   authors: [{ name: "HoudiniMD" }],
-  icons: {
-    icon: "/favicon.ico",
-  },
+  // Icons come from the app/ file conventions (favicon.ico, icon.svg, apple-icon.png).
+  // Next.js emits the <link> tags itself — declaring them here too would duplicate them.
   openGraph: {
     title: websiteInfo.title,
     description: websiteInfo.description,
