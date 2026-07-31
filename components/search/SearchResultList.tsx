@@ -9,7 +9,7 @@
  * plainer list of the same results. Everything that decides WHAT a result looks
  * like now lives here, and both callers pass the same ranked results in.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { SearchResultRow } from "@/components/search/SearchResultRow";
 import { getExcerpt } from "@/lib/search/excerpt";
 
@@ -100,7 +100,6 @@ export function SearchResultList({
   withSubHits = true,
   header,
   footer,
-  listRef,
   className,
 }: {
   results: ListResult[];
@@ -113,17 +112,30 @@ export function SearchResultList({
   withSubHits?: boolean;
   header?: React.ReactNode;
   footer?: React.ReactNode;
-  listRef?: React.Ref<HTMLUListElement>;
   className?: string;
 }) {
   const rows = useMemo(() => toRows(results, withSubHits), [results, withSubHits]);
   const excerpts = useExcerpts(rows, withSubHits ? query : "");
+  const listRef = useRef<HTMLUListElement>(null);
+
+  // Keeping the selected row in view belongs here, not in each caller: the
+  // homepage had no such effect and its arrow keys walked off screen. Rows are
+  // found by index rather than by child position, so an optional header or
+  // footer `li` cannot shift the lookup.
+  useEffect(() => {
+    const list = listRef.current;
+    const row =
+      list?.querySelector(`[data-row="${selected}"]`) ??
+      // Past the last row is the footer, when a caller supplies one.
+      (selected >= rows.length ? list?.lastElementChild : null);
+    row?.scrollIntoView({ block: "nearest" });
+  }, [selected, rows.length]);
 
   return (
     <ul ref={listRef} className={className}>
       {header}
       {rows.map((row, i) => (
-        <li key={`${rowKey(row)}${row.heading || row.text ? ":sub" : ""}`}>
+        <li key={`${rowKey(row)}${row.heading || row.text ? ":sub" : ""}`} data-row={i}>
           <SearchResultRow
             title={
               row.heading
@@ -137,6 +149,7 @@ export function SearchResultList({
             sub={Boolean(row.heading || row.text)}
             subKind={row.heading ? "heading" : "text"}
             excerpt={excerpts.get(rowKey(row))}
+            query={query}
             active={i === selected}
             onClick={() => onActivate(row.result, row.heading?.slug)}
             onMouseMove={() => onSelect(i)}

@@ -55,7 +55,6 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
   const [recentSearches, setRecentSearches] = useState<SearchResult[]>([]);
   const [selected, setSelected] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
-  const listRef = useRef<HTMLUListElement>(null);
   // Always-current query value — avoids stale closure in navigate()
   const queryRef = useRef("");
   queryRef.current = query;
@@ -96,12 +95,6 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
       inputRef.current?.focus();
     }
   }, [open]);
-
-  // Scroll selected item into view when navigating by keyboard
-  useEffect(() => {
-    const item = listRef.current?.children[selected] as HTMLElement | undefined;
-    item?.scrollIntoView({ block: "nearest" });
-  }, [selected]);
 
   // Detect SideFX URL paste — direct navigation result, bypasses the search index
   const trimmedQuery = query.trim();
@@ -300,7 +293,6 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
                 selected={selected}
                 onSelect={setSelected}
                 onActivate={(result, anchor) => navigate(result, anchor)}
-                listRef={listRef}
                 className="max-h-80 overflow-y-auto"
                 header={
                   isQueryEmpty && recentSearches.length > 0 ? (
