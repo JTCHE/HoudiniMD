@@ -85,6 +85,15 @@ function stripFrontmatter(md: string): string {
   return md.startsWith("---") ? md.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "") : md;
 }
 
+/**
+ * ...with one exception. `nodeType` names what the page IS — "VEX function",
+ * "Geometry node", "Shelf tool" — which is exactly the context readers type
+ * and is stated nowhere else in a form worth indexing.
+ */
+function nodeTypeOf(md: string): string {
+  return md.match(/^nodeType:\s*(.+)$/m)?.[1]?.trim() ?? "";
+}
+
 // Pages mix generated `<h2 id="...">` (explicit anchor) with plain markdown
 // headings. rehype-slug derives the id for the latter, so mirror it here or the
 // sub-hit anchors point at nothing.
@@ -259,6 +268,9 @@ async function main() {
       for (const token of tokenize(segment)) {
         fieldBoost.set(token, (fieldBoost.get(token) ?? 0) + PATH_TF_BOOST);
       }
+    }
+    for (const token of tokenize(nodeTypeOf(markdown))) {
+      fieldBoost.set(token, (fieldBoost.get(token) ?? 0) + PATH_TF_BOOST);
     }
     for (const token of tokenize(entry.summary)) {
       fieldBoost.set(token, (fieldBoost.get(token) ?? 0) + SUMMARY_TF_BOOST);

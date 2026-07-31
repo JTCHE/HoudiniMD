@@ -6,31 +6,14 @@ import { useRouter } from "next/navigation";
 import { showToast } from "@/components/ui/toast-notification";
 import { useDebouncedSearch } from "@/lib/search/useDebouncedSearch";
 import { recordClick } from "@/lib/search/clicks";
-import { SearchResultRow } from "@/components/search/SearchResultRow";
+import { SearchResultList, toRows, type ListResult } from "@/components/search/SearchResultList";
 
-interface SearchResult {
-  path: string;
-  title: string;
-  summary: string;
-  category: string;
-  docs_url: string;
-  icon?: string;
-  /** Sections of the page that matched — rendered as sub-hits beneath it. */
-  headings?: { text: string; slug: string }[];
-}
-
-/** One selectable line: a page, or one of its matching headings. */
-interface Row {
-  result: SearchResult;
-  heading?: { text: string; slug: string };
-}
-
-/** Flatten pages and their heading sub-hits into the arrow-key navigation order. */
-function toRows(results: SearchResult[]): Row[] {
-  return results.flatMap((result) => [
-    { result },
-    ...(result.headings ?? []).map((heading) => ({ result, heading })),
-  ]);
+/**
+ * The overlay's own result, which is a `ListResult` plus what recents need.
+ * `docs_url` is kept because recents persisted before this refactor carry it.
+ */
+interface SearchResult extends ListResult {
+  docs_url?: string;
 }
 
 export interface SearchOverlayRef {
@@ -167,9 +150,9 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
   const isDirect = !isQueryEmpty && results.length === 1 && results[0].category === "Direct link";
   const displayResults = isQueryEmpty ? recentSearches : results;
   const showSearchForItem = !isDirect && !isQueryEmpty;
-  // Recents are pages the user already picked; their old heading hits are noise.
-  const rows = useMemo<Row[]>(
-    () => (isQueryEmpty ? displayResults.map((result) => ({ result })) : toRows(displayResults)),
+  // Same flattening the list renders, so arrow-key indices line up with it.
+  const rows = useMemo(
+    () => toRows(displayResults, !isQueryEmpty),
     [isQueryEmpty, displayResults],
   );
 
@@ -199,7 +182,7 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
   const navigate = useCallback(
     async (result?: SearchResult, anchor?: string) => {
       if (result) {
-        const slug = result.docs_url.replace(/^\/docs\//, "").split("#")[0];
+        const slug = result.path.split("#")[0];
         if (window.location.pathname !== `/docs/${slug}`) {
           // Recents store the page, never the section the user happened to enter by.
           saveRecentSearch({ ...result, headings: undefined });
@@ -308,40 +291,41 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
             </div>
 
             {showList && (
-              <ul ref={listRef} className="max-h-80 overflow-y-auto">
-                {isQueryEmpty && recentSearches.length > 0 && (
-                  <li className="px-4 pt-2 pb-1 text-xs text-muted-foreground/60 select-none">
-                    Recent
-                  </li>
-                )}
-                {rows.map((row, i) => (
-                  <li key={row.heading ? `${row.result.path}#${row.heading.slug}` : row.result.path}>
-                    <SearchResultRow
-                      title={row.heading ? row.heading.text : row.result.title}
-                      category={row.result.category}
-                      icon={row.result.icon}
-                      sub={Boolean(row.heading)}
-                      active={i === selected}
-                      onClick={() => navigate(row.result, row.heading?.slug)}
-                      onMouseMove={() => setSelected(i)}
-                    />
-                  </li>
-                ))}
-                {showSearchForItem && query.trim() && (
-                  <li>
-                    <button
-                      className={`w-full text-left px-4 py-2.5 flex items-center gap-2 transition-colors text-muted-foreground ${
-                        selected === rows.length ? "bg-muted" : "hover:bg-muted/50"
-                      }`}
-                      onClick={() => navigate()}
-                      onMouseMove={() => setSelected(rows.length)}
-                    >
-                      <span className="text-xs shrink-0">Search for</span>
-                      <span className="text-sm font-mono truncate">&ldquo;{query.trim()}&rdquo;</span>
-                    </button>
-                  </li>
-                )}
-              </ul>
+              <SearchResultList
+                results={displayResults}
+                query={isQueryEmpty ? "" : query}
+                // Recents are pages the reader already picked; their old
+                // heading hits and excerpts are noise.
+                withSubHits={!isQueryEmpty}
+                selected={selected}
+                onSelect={setSelected}
+                onActivate={(result, anchor) => navigate(result, anchor)}
+                listRef={listRef}
+                className="max-h-80 overflow-y-auto"
+                header={
+                  isQueryEmpty && recentSearches.length > 0 ? (
+                    <li className="px-4 pt-2 pb-1 text-xs text-muted-foreground/60 select-none">
+                      Recent
+                    </li>
+                  ) : null
+                }
+                footer={
+                  showSearchForItem && query.trim() ? (
+                    <li>
+                      <button
+                        className={`w-full text-left px-4 py-2.5 flex items-center gap-2 transition-colors text-muted-foreground ${
+                          selected === rows.length ? "bg-muted" : "hover:bg-muted/50"
+                        }`}
+                        onClick={() => navigate()}
+                        onMouseMove={() => setSelected(rows.length)}
+                      >
+                        <span className="text-xs shrink-0">Search for</span>
+                        <span className="text-sm font-mono truncate">&ldquo;{query.trim()}&rdquo;</span>
+                      </button>
+                    </li>
+                  ) : null
+                }
+              />
             )}
 
             <div className="px-4 py-2 border-t text-xs text-muted-foreground flex gap-3 [&_span]:space-x-1 space-x-2">

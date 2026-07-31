@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect, useRef, type FormEvent } from "react";
+import { useState, useEffect, useMemo, useRef, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { isValidDocUrl, extractSlugFromUrl } from "@/lib/url";
 import { cn } from "@/lib/utils";
 import { useDebouncedSearch } from "@/lib/search/useDebouncedSearch";
-import { SearchResultRow } from "@/components/search/SearchResultRow";
+import { SearchResultList, toRows } from "@/components/search/SearchResultList";
 import ProgressLogEntry from "@/components/root/progress-log-entry/ProgressLogEntry";
 
 // Must match ProgressStage from lib/generator.ts
@@ -66,6 +66,9 @@ export function HomeSearchField() {
   const trimmedUrl = url.trim();
   const isUrlLike = isValidDocUrl(trimmedUrl);
   const results = useDebouncedSearch(isProcessing || isUrlLike ? "" : url);
+  // The list expands each page into its matching sections, so keyboard
+  // navigation counts rows, not results.
+  const rows = useMemo(() => toRows(results), [results]);
 
   useEffect(() => {
     setSelected(0);
@@ -79,8 +82,9 @@ export function HomeSearchField() {
 
   function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (dropdownOpen && results[selected]) {
-      selectResult(results[selected].path);
+    const row = dropdownOpen ? rows[selected] : undefined;
+    if (row) {
+      selectResult(row.heading ? `${row.result.path}#${row.heading.slug}` : row.result.path);
       return;
     }
     processUrl(url);
@@ -244,13 +248,13 @@ export function HomeSearchField() {
   }, []);
 
   function onKeyDown(e: React.KeyboardEvent) {
-    if (!dropdownOpen || results.length === 0) return;
+    if (!dropdownOpen || rows.length === 0) return;
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setSelected((s) => (s + 1) % results.length);
+      setSelected((s) => (s + 1) % rows.length);
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setSelected((s) => (s - 1 + results.length) % results.length);
+      setSelected((s) => (s - 1 + rows.length) % rows.length);
     } else if (e.key === "Escape") {
       setDropdownOpen(false);
     }
@@ -292,20 +296,16 @@ export function HomeSearchField() {
           )}
 
           {dropdownOpen && (
-            <ul className="absolute z-10 top-full left-0 right-0 mt-1 bg-background border rounded-md shadow-2xl overflow-y-auto max-h-80 pb-2">
-              {results.map((r, i) => (
-                <li key={r.path}>
-                  <SearchResultRow
-                    title={r.title}
-                    category={r.category}
-                    icon={r.icon}
-                    active={i === selected}
-                    onClick={() => selectResult(r.path)}
-                    onMouseMove={() => setSelected(i)}
-                  />
-                </li>
-              ))}
-            </ul>
+            <SearchResultList
+              results={results}
+              query={url}
+              selected={selected}
+              onSelect={setSelected}
+              onActivate={(result, anchor) =>
+                selectResult(anchor ? `${result.path}#${anchor}` : result.path)
+              }
+              className="absolute z-10 top-full left-0 right-0 mt-1 bg-background border rounded-md shadow-2xl overflow-y-auto max-h-80 pb-2"
+            />
           )}
         </div>
         <Button
