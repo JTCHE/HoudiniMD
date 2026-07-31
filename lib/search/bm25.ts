@@ -104,13 +104,41 @@ const STOPWORDS = new Set([
 ]);
 
 /**
+ * Fold a plural or third-person verb onto its singular.
+ *
+ * `read a point attribute` could not find the `point` VEX function whose
+ * summary opens "Reads a point attribute value", because `read` and `reads`
+ * were unrelated tokens. Same for `point`/`points` and `function`/`functions`.
+ *
+ * Deliberately only the -s family. Stripping -ing and -ed as well would turn
+ * `wrangling` into `wrangl` and merge words that mean different things in this
+ * corpus; plurals are where the misses actually are. Runs on both the index and
+ * the query, from this one function, so the two cannot disagree.
+ */
+function singular(t: string): string {
+  // Three letters are left alone: `abs`, `pos` and `eps` are VEX function
+  // names, not plurals, and folding them loses the page they name.
+  if (t.length <= 3 || !t.endsWith("s")) return t;
+  // Words that merely end in s: class, axis, status, bias, gas.
+  if (/(ss|is|us)$/.test(t)) return t;
+  // properties -> property, but leave 3-letter -ies alone.
+  if (t.length > 4 && t.endsWith("ies")) return `${t.slice(0, -3)}y`;
+  // boxes -> box, meshes -> mesh. Only after a sibilant, or "es" is not a suffix.
+  if (t.length > 4 && t.endsWith("es") && /[sxzh]$/.test(t.slice(0, -2))) return t.slice(0, -2);
+  // nodes -> node, points -> point. A vowel before the s usually means it
+  // belongs to the word (bias), except e, which is the stem's own final letter.
+  if (/[aiu]s$/.test(t)) return t;
+  return t.slice(0, -1);
+}
+
+/**
  * The single tokenizer. Two-character tokens are kept on purpose — `uv` and
  * `id` are real Houdini query terms.
  */
 export function tokenize(text: string): string[] {
   const out: string[] = [];
   for (const t of text.toLowerCase().split(/[^a-z0-9]+/)) {
-    if (t.length > 1 && t.length <= 40 && !STOPWORDS.has(t)) out.push(t);
+    if (t.length > 1 && t.length <= 40 && !STOPWORDS.has(t)) out.push(singular(t));
   }
   return out;
 }
@@ -342,7 +370,12 @@ export function scoreTokens(
         const f = fieldsOf(docId, doc);
         if (f.name.includes(token) || f.slug.includes(token)) {
           cur.nameIdf += idf;
-          cur.nameChars += token.length;
+          // Credit the plural if that is what the name actually spells:
+          // `copytopoints` gives up six characters to "points", not the five
+          // of its stem, and coverage is a measure of the name, not the token.
+          const plural = `${token}s`;
+          cur.nameChars +=
+            f.name.includes(plural) || f.slug.includes(plural) ? plural.length : token.length;
           if (token === f.slug || token === f.name) cur.exactIdf += idf;
         } else if (f.summary.includes(token)) {
           cur.summaryIdf += idf;
