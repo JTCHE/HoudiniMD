@@ -250,6 +250,24 @@ const EXACT_NAME_WEIGHT = 0.5;
  * to 2 and then 3. 0.35 takes the win before that begins.
  */
 const SUMMARY_WEIGHT = 0.35;
+/**
+ * Weight of a run of query words found BACK TO BACK in the summary.
+ *
+ * Scoring words one at a time throws away their order, so "reads a point
+ * attribute" — which is the `point` VEX function's summary, word for word —
+ * counted as three separate common words and lost to `Karma Point Cloud Read`,
+ * a page whose title merely contains two of them.
+ *
+ * A phrase is a much stronger claim than the same words scattered, so this
+ * outweighs the plain summary signal. It fires only on the WHOLE query, and
+ * scales with the idf of what matched, so a run of common words earns little.
+ *
+ * Swept 0.5 / 0.7 / 0.9 / 1.1 over a 29-query probe set. 0.5 is too weak to
+ * move the page it was built for; from 0.9 up the phrase starts outvoting the
+ * title and `reduce polygons` slips behind `greduce`, whose summary happens to
+ * open with those two words. Rank-1 hits: 15 / 17 / 16 / 15 of 29.
+ */
+const PHRASE_WEIGHT = 0.7;
 /** How many heading sub-hits to keep per page. */
 const MAX_SUBHITS = 3;
 
@@ -259,6 +277,8 @@ const MAX_SUBHITS = 3;
 interface DocFields {
   /** Lowercased summary, for the weak summary signal. */
   summary: string;
+  /** The same summary tokenized, for the phrase signal — order matters here. */
+  sumTokens: string[];
   /** Letters and digits of the title, no separators — `Copy to Points 2.0` -> `copytopoints20`. */
   name: string;
   /** Same treatment for the slug. Usually the shorter, more canonical of the two. */
@@ -271,7 +291,12 @@ const squash = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 function fieldsOf(docId: number, doc: SearchDoc): DocFields {
   let f = fieldCache.get(docId);
   if (!f) {
-    f = { summary: doc.summary.toLowerCase(), name: squash(doc.title), slug: squash(doc.s) };
+    f = {
+      summary: doc.summary.toLowerCase(),
+      sumTokens: tokenize(doc.summary),
+      name: squash(doc.title),
+      slug: squash(doc.s),
+    };
     fieldCache.set(docId, f);
   }
   return f;
@@ -291,11 +316,38 @@ export interface Bm25Hit {
  * better — some pages carry the readable name in the title (`Copy to Points`,
  * slug `copytopoints`), others only in the slug (`kinefx--rigattribwrangle`).
  */
+/**
+ * The longest run of `q` that appears, in order and unbroken, inside `s`.
+ *
+ * Both sides come from the one tokenizer, so stopwords are already gone from
+ * both — which is what makes "reads a point attribute" an unbroken run against
+ * the summary "Reads a point attribute value from a geometry".
+ *
+ * Quadratic, over a query of a few words and a one-line summary.
+ */
+function longestRun(q: string[], s: string[]): { at: number; len: number } {
+  let at = 0;
+  let len = 0;
+  for (let i = 0; i < q.length; i++) {
+    for (let j = 0; j < s.length; j++) {
+      let n = 0;
+      while (i + n < q.length && j + n < s.length && q[i + n] === s[j + n]) n++;
+      if (n > len) {
+        len = n;
+        at = i;
+      }
+    }
+  }
+  return { at, len };
+}
+
 function fieldScore(
   docId: number,
   doc: SearchDoc | undefined,
   v: { nameIdf: number; nameChars: number; summaryIdf: number; exactIdf: number },
   queryChars: number,
+  qSeq: string[],
+  idfs: Map<string, number>,
 ): number {
   if (!doc) return 0;
   // Share of the query the name accounts for. `pyrosolver` explains all of
@@ -307,6 +359,19 @@ function fieldScore(
     const len = Math.min(f.name.length || Infinity, f.slug.length || Infinity);
     const coverage = Math.min(1, v.nameChars / (len || 1));
     total += v.nameIdf * TITLE_WEIGHT * (1 - COVERAGE_SHARE + COVERAGE_SHARE * coverage);
+  }
+
+  // Words said back to back, in the order asked for.
+  if (qSeq.length > 1) {
+    const { at, len } = longestRun(qSeq, fieldsOf(docId, doc).sumTokens);
+    // The WHOLE query, or nothing. A partial run fires on any summary that
+    // happens to repeat two common words in order, which promoted noise across
+    // the probe set — "write a file to disk" put a Labs biome cache first.
+    if (len === qSeq.length) {
+      let runIdf = 0;
+      for (let i = at; i < at + len; i++) runIdf += idfs.get(qSeq[i]) ?? 0;
+      total += PHRASE_WEIGHT * runIdf;
+    }
   }
   return total;
 }
@@ -333,7 +398,11 @@ export function scoreTokens(
     exactIdf: number;
   }
   const acc = new Map<number, Acc>();
+  // A Set keeps insertion order, so this is still the query as it was typed —
+  // which the phrase signal needs.
   const unique = new Set(tokens);
+  const qSeq = [...unique];
+  const idfs = new Map<string, number>();
   let queryChars = 0;
   for (const token of unique) queryChars += token.length;
 
@@ -346,6 +415,7 @@ export function scoreTokens(
 
     const df = postings.length;
     const idf = Math.log(1 + (N - df + 0.5) / (df + 0.5));
+    idfs.set(token, idf);
 
     for (const [docId, tf, headingIdx] of postings) {
       const doc = table.docs[docId];
@@ -390,7 +460,7 @@ export function scoreTokens(
   return [...acc]
     .map(([docId, v]) => ({
       docId,
-      score: v.score + fieldScore(docId, table.docs[docId], v, queryChars),
+      score: v.score + fieldScore(docId, table.docs[docId], v, queryChars, qSeq, idfs),
       headingIdxs: [...v.sections]
         .filter(([idx]) => idx > 0)
         .sort((a, b) => b[1] - a[1])
