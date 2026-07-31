@@ -11,6 +11,7 @@ export function SearchResultRow({
   category,
   icon,
   active,
+  sub,
   onClick,
   onMouseMove,
 }: {
@@ -18,11 +19,33 @@ export function SearchResultRow({
   category: string;
   icon?: string;
   active: boolean;
+  /** Render as a heading hit nested under the page row above it. */
+  sub?: boolean;
   onClick: () => void;
   onMouseMove: () => void;
 }) {
   const [loaded, setLoaded] = useState(false);
   const [errored, setErrored] = useState(false);
+
+  if (sub) {
+    return (
+      <button
+        type="button"
+        className={`w-full text-left pl-9 pr-4 py-1.5 flex items-center gap-2 transition-colors ${
+          active ? "bg-muted" : "hover:bg-muted/50"
+        }`}
+        onClick={onClick}
+        onMouseMove={onMouseMove}
+      >
+        {/* Elbow connector, so a heading reads as belonging to the page above. */}
+        <span aria-hidden="true" className="shrink-0 text-muted-foreground/40 font-mono text-xs leading-none">
+          ↳
+        </span>
+        <span className="text-xs text-muted-foreground truncate">{title}</span>
+      </button>
+    );
+  }
+
   // Treat a broken icon URL as "no icon" so the row falls back to left-aligned
   // text instead of pulsing a skeleton forever.
   const showIconSlot = Boolean(icon) && !errored;

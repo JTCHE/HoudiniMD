@@ -1,37 +1,23 @@
 /**
- * Client-side search. Loads the index once (lazily, when the overlay first
- * opens or the first query runs), builds the Fuse index on the user's device,
- * and ranks entirely in the browser — the Worker is never involved, so search
- * can never hit the 10ms CPU limit again.
+ * Client-side search. Loads the doc table once (lazily, when the overlay first
+ * opens or the first query runs) and ranks in the browser.
  *
- * The Fuse index itself is built lazily (only on the first query that needs the
- * fuzzy fallback) so opening the overlay and typing an exact node name stays
- * instant even on slower devices.
+ * The table comes same-origin from `/api/search-index`; BM25 postings shards
+ * come straight from the R2 public origin named in `table.origin`, which is why
+ * that bucket needs CORS. Only the 3-5 shards a query touches are downloaded.
  */
-import Fuse from "fuse.js";
-import {
-  toIndexed,
-  rankResults,
-  FUSE_OPTIONS,
-  type IndexedEntry,
-  type RankedResult,
-} from "./ranking";
-import type { SearchIndexEntry } from "@/lib/r2/search-index";
+import { rankResults, type RankedResult } from "./ranking";
+import { applyClickBoost } from "./clicks";
+import type { DocsTable } from "./bm25";
 
-interface Loaded {
-  indexed: IndexedEntry[];
-  fuse: Fuse<IndexedEntry> | null;
-}
+let loadPromise: Promise<DocsTable> | null = null;
 
-let loadPromise: Promise<Loaded> | null = null;
-
-function load(): Promise<Loaded> {
+function load(): Promise<DocsTable> {
   if (!loadPromise) {
     loadPromise = (async () => {
       const res = await fetch("/api/search-index");
       if (!res.ok) throw new Error(`search index fetch failed: ${res.status}`);
-      const entries: SearchIndexEntry[] = await res.json();
-      return { indexed: toIndexed(entries), fuse: null };
+      return (await res.json()) as DocsTable;
     })();
     // Let a failed load be retried on the next call rather than caching the rejection.
     loadPromise.catch(() => {
@@ -41,7 +27,7 @@ function load(): Promise<Loaded> {
   return loadPromise;
 }
 
-/** Kick off the index download ahead of the first keystroke (e.g. on open). */
+/** Kick off the table download ahead of the first keystroke (e.g. on open). */
 export function prewarmSearchIndex(): void {
   void load();
 }
@@ -49,10 +35,9 @@ export function prewarmSearchIndex(): void {
 export async function searchClient(q: string, limit = 6): Promise<RankedResult[]> {
   const query = q.trim();
   if (!query) return [];
-  const loaded = await load();
-  const makeFuse = () => {
-    if (!loaded.fuse) loaded.fuse = new Fuse(loaded.indexed, FUSE_OPTIONS);
-    return loaded.fuse;
-  };
-  return rankResults(loaded.indexed, query, limit, makeFuse);
+  // Rank deeper than we show: a page this browser has learned is only worth
+  // promoting if it was still ranked, and the ones worth rescuing sit just
+  // below the cut. `/api/search` deliberately does not do this — see ./clicks.
+  const ranked = await rankResults(await load(), query, limit * 3);
+  return applyClickBoost(query, ranked).slice(0, limit);
 }

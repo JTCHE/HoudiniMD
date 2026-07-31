@@ -69,3 +69,10 @@ playwright.config.ts
 
 # log files
 *.log
+
+# python cache
+__pycache__/
+*.py[cod]
+
+# benchmark
+.run/*

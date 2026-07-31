@@ -5,6 +5,7 @@ import { flushSync } from "react-dom";
 import { useRouter } from "next/navigation";
 import { showToast } from "@/components/ui/toast-notification";
 import { useDebouncedSearch } from "@/lib/search/useDebouncedSearch";
+import { recordClick } from "@/lib/search/clicks";
 import { SearchResultRow } from "@/components/search/SearchResultRow";
 
 interface SearchResult {
@@ -14,6 +15,22 @@ interface SearchResult {
   category: string;
   docs_url: string;
   icon?: string;
+  /** Sections of the page that matched — rendered as sub-hits beneath it. */
+  headings?: { text: string; slug: string }[];
+}
+
+/** One selectable line: a page, or one of its matching headings. */
+interface Row {
+  result: SearchResult;
+  heading?: { text: string; slug: string };
+}
+
+/** Flatten pages and their heading sub-hits into the arrow-key navigation order. */
+function toRows(results: SearchResult[]): Row[] {
+  return results.flatMap((result) => [
+    { result },
+    ...(result.headings ?? []).map((heading) => ({ result, heading })),
+  ]);
 }
 
 export interface SearchOverlayRef {
@@ -139,6 +156,7 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
       category: r.category,
       docs_url: `/docs/${r.path}`,
       icon: r.icon,
+      headings: r.headings,
     }));
     setResults(res);
     setSelected(0);
@@ -149,6 +167,11 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
   const isDirect = !isQueryEmpty && results.length === 1 && results[0].category === "Direct link";
   const displayResults = isQueryEmpty ? recentSearches : results;
   const showSearchForItem = !isDirect && !isQueryEmpty;
+  // Recents are pages the user already picked; their old heading hits are noise.
+  const rows = useMemo<Row[]>(
+    () => (isQueryEmpty ? displayResults.map((result) => ({ result })) : toRows(displayResults)),
+    [isQueryEmpty, displayResults],
+  );
 
   const streamAndNavigate = useCallback(
     (slug: string) => {
@@ -174,13 +197,17 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
   );
 
   const navigate = useCallback(
-    async (result?: SearchResult) => {
+    async (result?: SearchResult, anchor?: string) => {
       if (result) {
         const slug = result.docs_url.replace(/^\/docs\//, "").split("#")[0];
         if (window.location.pathname !== `/docs/${slug}`) {
-          saveRecentSearch(result);
+          // Recents store the page, never the section the user happened to enter by.
+          saveRecentSearch({ ...result, headings: undefined });
         }
-        streamAndNavigate(result.docs_url.replace(/^\/docs\//, ""));
+        // Opening a result answers the query better than any score could. Only
+        // when there IS a query — a click from the recents list teaches nothing.
+        recordClick(queryRef.current, result.path);
+        streamAndNavigate(anchor ? `${slug}#${anchor}` : slug);
         return;
       }
       // Use ref to avoid stale closure on query
@@ -212,9 +239,8 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
   );
 
   function onKeyDown(e: React.KeyboardEvent) {
-    const total = isQueryEmpty
-      ? recentSearches.length
-      : displayResults.length + (showSearchForItem ? 1 : 0);
+    const total = rows.length + (!isQueryEmpty && showSearchForItem ? 1 : 0);
+    if (total === 0) return;
 
     if (e.key === "ArrowDown") {
       e.preventDefault();
@@ -225,15 +251,16 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
       setSelected((s) => (s - 1 + total) % total);
     }
     if (e.key === "Enter") {
-      if (selected < displayResults.length) {
-        navigate(displayResults[selected]);
+      const row = rows[selected];
+      if (row) {
+        navigate(row.result, row.heading?.slug);
       } else if (!isQueryEmpty) {
         navigate();
       }
     }
   }
 
-  const showList = displayResults.length > 0 || showSearchForItem;
+  const showList = rows.length > 0 || showSearchForItem;
 
   return (
     <>
@@ -287,14 +314,15 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
                     Recent
                   </li>
                 )}
-                {displayResults.map((r, i) => (
-                  <li key={r.path}>
+                {rows.map((row, i) => (
+                  <li key={row.heading ? `${row.result.path}#${row.heading.slug}` : row.result.path}>
                     <SearchResultRow
-                      title={r.title}
-                      category={r.category}
-                      icon={r.icon}
+                      title={row.heading ? row.heading.text : row.result.title}
+                      category={row.result.category}
+                      icon={row.result.icon}
+                      sub={Boolean(row.heading)}
                       active={i === selected}
-                      onClick={() => navigate(r)}
+                      onClick={() => navigate(row.result, row.heading?.slug)}
                       onMouseMove={() => setSelected(i)}
                     />
                   </li>
@@ -303,10 +331,10 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
                   <li>
                     <button
                       className={`w-full text-left px-4 py-2.5 flex items-center gap-2 transition-colors text-muted-foreground ${
-                        selected === displayResults.length ? "bg-muted" : "hover:bg-muted/50"
+                        selected === rows.length ? "bg-muted" : "hover:bg-muted/50"
                       }`}
                       onClick={() => navigate()}
-                      onMouseMove={() => setSelected(displayResults.length)}
+                      onMouseMove={() => setSelected(rows.length)}
                     >
                       <span className="text-xs shrink-0">Search for</span>
                       <span className="text-sm font-mono truncate">&ldquo;{query.trim()}&rdquo;</span>
