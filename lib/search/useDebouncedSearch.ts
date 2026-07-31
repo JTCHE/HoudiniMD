@@ -6,7 +6,7 @@ import type { RankedResult } from "./ranking";
 
 /**
  * Debounced client-side search — single source of truth for querying the
- * in-browser Fuse index, shared by the docs search overlay and the homepage
+ * in-browser BM25 index, shared by the docs search overlay and the homepage
  * search field so both stay in sync with the same ranking/debounce behavior.
  */
 export function useDebouncedSearch(query: string, limit = 6): RankedResult[] {

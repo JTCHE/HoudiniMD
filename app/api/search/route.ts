@@ -1,24 +1,16 @@
 import { SITE_URL as ROOT } from "@/lib/site";
 import { NextRequest } from "next/server";
-import Fuse from "fuse.js";
-import { fetchIndexJson } from "@/lib/r2/read";
-import type { SearchIndexEntry } from "@/lib/r2/search-index";
+import { getConfig } from "@/lib/r2/config";
 import { stageLogger } from "@/lib/perf-log";
-import {
-  toIndexed,
-  rankResults,
-  FUSE_OPTIONS,
-  type IndexedEntry,
-} from "@/lib/search/ranking";
+import { rankResults } from "@/lib/search/ranking";
+import { DOCS_KEY, type DocsTable } from "@/lib/search/bm25";
 
-// Module-level caches survive across requests on a WARM isolate. The Fuse index
-// is the expensive thing to construct (tokenizing ~10.5k entries), so we build
-// it at most once per isolate AND only when a query actually needs the fuzzy
-// fallback — exact/prefix queries (the common case) never build it. This is
-// what keeps the route under the 10ms CPU limit on most requests. The
-// user-facing overlay now searches client-side, so this endpoint is primarily
-// for external API callers.
-let cache: { indexed: IndexedEntry[]; fuse: Fuse<IndexedEntry> | null; expiry: number } | null = null;
+// The doc table is the only thing this route parses per isolate; postings are
+// fetched per query and cached inside lib/search/bm25. Previously the route
+// built a full Fuse index over ~10.5k entries on the first fuzzy query, which
+// is where 350-600ms of every cold search went.
+let cache: { table: DocsTable; expiry: number } | null = null;
+const TABLE_TTL = 5 * 60 * 1000;
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -43,42 +35,39 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const mark = stageLogger("search", q);
-  mark("start");
-
-  mark("fetch-index:start");
-  const raw = await fetchIndexJson();
-  mark("fetch-index:done");
-  if (!raw) {
+  const config = getConfig();
+  if (!config) {
     return Response.json(
       { error: "Search index unavailable" },
       { status: 503, headers: CORS_HEADERS }
     );
   }
 
+  const mark = stageLogger("search", q);
+  mark("start");
+
   if (!cache || Date.now() >= cache.expiry) {
-    mark("parse-index:start");
-    const entries: SearchIndexEntry[] = JSON.parse(raw);
-    mark("parse-index:done");
-    mark("to-indexed:start");
-    cache = { indexed: toIndexed(entries), fuse: null, expiry: Date.now() + 5 * 60 * 1000 };
-    mark("to-indexed:done");
+    mark("fetch-docs:start");
+    const res = await fetch(`${config.publicUrl}/${DOCS_KEY}`);
+    mark("fetch-docs:done");
+    if (!res.ok) {
+      return Response.json(
+        { error: "Search index unavailable" },
+        { status: 503, headers: CORS_HEADERS }
+      );
+    }
+    mark("parse-docs:start");
+    const table: DocsTable = await res.json();
+    mark("parse-docs:done");
+    cache = { table, expiry: Date.now() + TABLE_TTL };
   } else {
     mark("cache-hit");
   }
-  const { indexed } = cache;
-  const makeFuse = () => {
-    if (!cache!.fuse) {
-      mark("fuse-build:start");
-      cache!.fuse = new Fuse(indexed, FUSE_OPTIONS);
-      mark("fuse-build:done");
-    }
-    return cache!.fuse;
-  };
 
   mark("rank:start");
-  const ranked = rankResults(indexed, q, limit, makeFuse, category);
+  const ranked = await rankResults(cache.table, q, limit, category);
   mark("rank:done");
+
   const results = ranked.map((r) => ({
     ...r,
     docs_url: `/docs/${r.path}`,

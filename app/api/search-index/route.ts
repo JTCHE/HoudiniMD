@@ -1,8 +1,10 @@
 import { getConfig } from "@/lib/r2/config";
+import { DOCS_KEY } from "@/lib/search/bm25";
 
 /**
- * Serves the raw search index for the CLIENT-side search overlay, same-origin
- * (avoids cross-origin CORS to the R2 public domain).
+ * Serves the BM25 doc table for the CLIENT-side search overlay, same-origin.
+ * Postings shards are fetched by the browser directly from R2 (see
+ * lib/search/client.ts); only this one large file is proxied.
  *
  * It streams the R2 object body straight through — no `.text()` decode and no
  * string re-encode. Decoding+re-encoding the ~2.9MB index in JS was enough to
@@ -32,7 +34,7 @@ export async function GET() {
   }
 
   // Proxy the R2 public object, piping its body stream through unchanged.
-  const upstream = await fetch(`${config.publicUrl}/content/index.json`);
+  const upstream = await fetch(`${config.publicUrl}/${DOCS_KEY}`);
   if (!upstream.ok || !upstream.body) {
     return Response.json(
       { error: "Search index unavailable" },

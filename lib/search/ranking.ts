@@ -1,19 +1,17 @@
 /**
  * Shared search ranking — used by BOTH the client-side search overlay and the
  * server `/api/search` route so results are identical regardless of where the
- * query runs. Pure/isomorphic: no Node or browser APIs, no I/O.
+ * query runs.
  *
- * Search moved client-side because building a Fuse index over ~10.5k entries on
- * a cold Worker isolate blew the 10ms CPU limit (Error 1102). The exact/prefix
- * pass here is cheap and handles the common case (typing a node name); the Fuse
- * fuzzy pass is the expensive fallback and is invoked lazily — only when
- * exact+prefix don't fill the requested limit.
+ * Three passes, cheapest first:
+ *   1. exact  — the whole query is a title or slug. `pyrosolver` resolves here.
+ *   2. prefix — the query starts a title or slug.
+ *   3. BM25   — full page content, sharded in R2 (see `./bm25`).
+ *
+ * Passes 1 and 2 are a linear scan over the precomputed `t`/`s` fields and
+ * touch no network. Pass 3 runs only when they cannot fill the limit.
  */
-import Fuse from "fuse.js";
-import type { IFuseOptions } from "fuse.js";
-import type { SearchIndexEntry } from "@/lib/r2/search-index";
-
-export type IndexedEntry = SearchIndexEntry & { slug: string };
+import { searchBm25, tokenize, type DocsTable, type SearchDoc, type DocHeading } from "./bm25";
 
 export interface RankedResult {
   path: string;
@@ -23,102 +21,211 @@ export interface RankedResult {
   version: string;
   icon?: string;
   score: number | null;
-}
-
-/** Fuse config — kept here so the precomputed index and the runtime agree. */
-export const FUSE_OPTIONS: IFuseOptions<IndexedEntry> = {
-  keys: [
-    { name: "slug", weight: 0.45 },
-    { name: "title", weight: 0.35 },
-    { name: "summary", weight: 0.1 },
-    { name: "path", weight: 0.1 },
-  ],
-  threshold: 0.5,
-  includeScore: true,
-  ignoreLocation: true,
-};
-
-/** Add the `slug` field (last path segment) Fuse and ranking key off of. */
-export function toIndexed(entries: SearchIndexEntry[]): IndexedEntry[] {
-  return entries.map((e) => ({ ...e, slug: e.path.split("/").pop() ?? e.path }));
+  /** Matching sections, strongest first — rendered as sub-hits under the page. */
+  headings?: DocHeading[];
 }
 
 /**
- * Rank entries for a query: exact and prefix matches first (cheap, no Fuse),
- * then a fuzzy fallback. `makeFuse` is called lazily so callers can avoid
- * constructing the Fuse index unless the fuzzy pass is actually needed.
+ * Multiplier on a page's score, by what kind of page it is.
+ *
+ * Someone searching "copy points" wants the NODE. The shelf tool and the node
+ * share a title, so text scoring alone cannot separate them — the shelf page is
+ * shorter, which BM25 actively rewards. Reference pages are what the docs are
+ * for; a shelf entry is a button that runs the node, and an example is a file
+ * that uses it. Both are worth showing, below the thing itself.
+ *
+ * First match wins, so order matters.
  */
-export function rankResults(
-  indexed: IndexedEntry[],
+const CATEGORY_WEIGHT: Array<[RegExp, number]> = [
+  [/^Examples\b/, 0.55],
+  [/^Shelf tools\b/, 0.7],
+  [/^Galleries\b/, 0.7],
+  [/^Reference > Stand-alone utilities\b/, 0.7],
+  [/^What’s new\b/, 0.75],
+  // Every node context is a reference page, but a name shared between contexts
+  // ("Attribute Wrangle" is a SOP, a LOP and a COP) has to break the tie
+  // somehow, and SOPs are what most readers are in.
+  [/^Nodes > Geometry nodes\b/, 1],
+  [/^(Nodes|VEX|Expression functions|Python scripting|HScript)\b/, 0.97],
+];
+
+/**
+ * SideFX keeps the superseded version of a node at a trailing-dash slug —
+ * `copytopoints-` is v1, `copytopoints` is "Copy to Points 2.0". 15 pages. The
+ * old one is still worth finding, never worth ranking first.
+ */
+const SUPERSEDED_PAGE = /-$/;
+
+/**
+ * Does one query token name this page, with the rest saying where it lives?
+ *
+ * `point vex function` is the name `point` plus the location `vex/functions`.
+ * BM25 cannot rank that: `point` is on thousands of pages so its idf is tiny,
+ * and `vex`/`function` are said constantly by every sibling — so the actual
+ * `point` VEX function came 10th behind `sensor_save` and `distance_pointray`.
+ * The same shape covers `light lop`, `boolean sop` and `hou.Node python`.
+ *
+ * Requires an EXACT token match on the name, so it cannot fire loosely; the
+ * locating tokens may match the path or the category, since a reader saying
+ * "python" means `Python scripting > hou`, which the path spells `hom`.
+ */
+function locates(doc: SearchDoc, qTokens: string[]): boolean {
+  if (qTokens.length < 2) return false;
+  const named = qTokens.filter((tok) => tok === doc.s || tok === doc.t);
+  if (!named.length) return false;
+  const where = `${doc.path} ${doc.category}`.toLowerCase();
+  return qTokens.every((tok) => named.includes(tok) || where.includes(tok));
+}
+
+function weightOf(doc: SearchDoc | undefined): number {
+  if (!doc) return 0;
+  // `/examples/` catches example pages whose category string does not say so.
+  if (doc.path.includes("/examples/")) return 0.55;
+  // `nav` is stamped by the build on any page that has pages beneath it.
+  if (doc.nav) return 0.6;
+  if (SUPERSEDED_PAGE.test(doc.path)) return 0.8;
+  for (const [pattern, w] of CATEGORY_WEIGHT) if (pattern.test(doc.category)) return w;
+  return 0.9;
+}
+
+function toResult(doc: SearchDoc, score: number | null, headings?: DocHeading[]): RankedResult {
+  return {
+    path: doc.path,
+    title: doc.title,
+    summary: doc.summary,
+    category: doc.category,
+    version: doc.version,
+    icon: doc.icon,
+    score,
+    ...(headings?.length ? { headings } : {}),
+  };
+}
+
+/**
+ * Rank pages for a query. Async because the BM25 pass fetches postings shards;
+ * a query answered by exact/prefix alone never awaits a network call.
+ *
+ * Shard fetches use `table.origin`, stamped in by the build script.
+ */
+export async function rankResults(
+  table: DocsTable,
   q: string,
   limit: number,
-  makeFuse: () => Fuse<IndexedEntry>,
   category?: string,
-): RankedResult[] {
-  let pool = indexed;
-  if (category) {
-    const cat = category.toLowerCase();
-    pool = indexed.filter((e) => e.category.toLowerCase() === cat);
-  }
+): Promise<RankedResult[]> {
+  const cat = category?.toLowerCase();
+  const inCategory = (d: SearchDoc) => !cat || d.category.toLowerCase() === cat;
 
   const qLower = q.toLowerCase().replace(/\s+/g, "");
+  const qTokens = tokenize(q);
+  const exact: SearchDoc[] = [];
+  const located: SearchDoc[] = [];
+  const prefix: SearchDoc[] = [];
 
-  // 1. Exact & prefix matches — prioritized before fuzzy
-  const exactHits = new Map<string, { item: IndexedEntry; score: number }>();
-  const prefixHits = new Map<string, { item: IndexedEntry; score: number }>();
-
-  for (const e of pool) {
-    const titleNorm = e.title.toLowerCase().replace(/\s+/g, "");
-    const slugLower = e.slug.toLowerCase();
-
-    if (titleNorm === qLower || slugLower === qLower) {
-      exactHits.set(e.path, { item: e, score: 0 });
-    } else if (titleNorm.startsWith(qLower) || slugLower.startsWith(qLower)) {
-      prefixHits.set(e.path, { item: e, score: 0.05 });
-    }
-
-    if (exactHits.size + prefixHits.size >= limit * 2) break;
+  for (const doc of table.docs) {
+    if (!inCategory(doc)) continue;
+    if (doc.t === qLower || doc.s === qLower) exact.push(doc);
+    else if (locates(doc, qTokens)) located.push(doc);
+    else if (doc.t.startsWith(qLower) || doc.s.startsWith(qLower)) prefix.push(doc);
+    if (exact.length + located.length + prefix.length >= limit * 2) break;
   }
 
-  // Sort prefix hits: title-prefix matches before slug-only matches
-  const sortedPrefix = [...prefixHits.values()].sort((a, b) => {
-    const aTitle = +!a.item.title.toLowerCase().replace(/\s+/g, "").startsWith(qLower);
-    const bTitle = +!b.item.title.toLowerCase().replace(/\s+/g, "").startsWith(qLower);
-    return aTitle - bTitle;
-  });
+  // Within a pass, order by what kind of page it is; a title-prefix match still
+  // beats a slug-only one at equal weight.
+  const byWeight = (a: SearchDoc, b: SearchDoc) =>
+    weightOf(b) - weightOf(a) || +!b.t.startsWith(qLower) - +!a.t.startsWith(qLower);
+  exact.sort(byWeight);
+  located.sort(byWeight);
+  prefix.sort(byWeight);
 
-  // 2. Fuse fuzzy fallback — only built/run when exact+prefix can't fill the
-  // limit. This is the expensive step (index construction), so skipping it for
-  // the common case is what keeps the work cheap.
-  const seen = new Set([...exactHits.keys(), ...prefixHits.keys()]);
-  const needFuzzy = exactHits.size + prefixHits.size < limit;
-  const fuseHits = needFuzzy ? makeFuse().search(q, { limit: limit * 2 }) : [];
+  const seen = new Set([...exact, ...located, ...prefix].map((d) => d.path));
+  const merged: RankedResult[] = [
+    ...exact.map((d) => toResult(d, 1)),
+    ...located.map((d) => toResult(d, 0.97)),
+    ...prefix.map((d) => toResult(d, 0.95)),
+  ];
 
-  const deprioritizeExamples = <T extends { item: IndexedEntry }>(arr: T[]) =>
-    arr.sort((a) => +a.item.path.includes("/examples/"));
+  if (merged.length < limit) {
+    // Ask for extra: category filtering and dedup below both drop rows.
+    const hits = await searchBm25(q, table, limit * 3);
+    // Weighting after BM25 keeps `bm25.ts` pure text scoring. It reorders only
+    // within the window fetched, which is 3x what the caller asked for.
+    const weighted = new Map(hits.map((h) => [h.docId, h.score * weightOf(table.docs[h.docId])]));
+    hits.sort((a, b) => weighted.get(b.docId)! - weighted.get(a.docId)!);
+    const top = weighted.get(hits[0]?.docId) || 1;
+    for (const hit of hits) {
+      const doc = table.docs[hit.docId];
+      if (!doc || seen.has(doc.path) || !inCategory(doc)) continue;
+      seen.add(doc.path);
+      merged.push(
+        toResult(
+          doc,
+          Math.round((weighted.get(hit.docId)! / top) * 90) / 100,
+          // Widen the stored [text, slug] tuples only for what is returned.
+          hit.headingIdxs
+            .map((i) => doc.headings[i])
+            .filter(Boolean)
+            .map(([text, slug]) => ({ text, slug })),
+        ),
+      );
+    }
+  }
 
-  const merged = [
-    ...deprioritizeExamples([...exactHits.values()]),
-    ...deprioritizeExamples(sortedPrefix),
-    ...deprioritizeExamples(fuseHits.filter((r) => !seen.has(r.item.path)) as { item: IndexedEntry; score?: number }[]),
-  ].slice(0, limit);
+  // An empty result is worse than a bad one: the benchmark agent read "no
+  // results" as proof the node did not exist and hand-wrote VEX instead. A
+  // typo ("pyrosolvr") tokenizes to nothing the index has, so BM25 cannot
+  // save it — scan for a near-miss before giving up.
+  if (merged.length === 0 && qLower.length > 1) {
+    for (const doc of lastResort(table, qLower, limit, inCategory)) {
+      merged.push(toResult(doc, 0.1));
+    }
+  }
 
-  // Deduplicate anchor fragments: keep "foo" over "foo#bar"
+  // Collapse anchor fragments ("foo" over "foo#bar") and the `/index` twin the
+  // scrape produces — `houdini/nodes/lop` and `houdini/nodes/lop/index` are one
+  // page, and listing both wastes a slot on a literal duplicate.
   const seenBase = new Set<string>();
-  const deduped = merged.filter(({ item }) => {
-    const base = item.path.split("#")[0];
-    if (seenBase.has(base)) return false;
-    seenBase.add(base);
-    return true;
-  });
+  return merged
+    .filter((r) => {
+      const base = r.path.split("#")[0].replace(/\/index$/, "");
+      if (seenBase.has(base)) return false;
+      seenBase.add(base);
+      return true;
+    })
+    .slice(0, limit);
+}
 
-  return deduped.map(({ item, score }) => ({
-    path: item.path,
-    title: item.title,
-    summary: item.summary,
-    category: item.category,
-    version: item.version,
-    icon: item.icon,
-    score: score !== undefined ? Math.round((1 - score) * 100) / 100 : null,
-  }));
+/**
+ * Last resort when every other pass came back empty: substring, then a
+ * shrinking prefix of the query. Trimming "pyrosolvr" to "pyrosolv" finds
+ * `pyrosolver`, which covers the common trailing typo without a fuzzy matcher.
+ *
+ * Only ever runs on the already-empty path, so its worst case (a few passes
+ * over the table) costs nothing on real queries.
+ */
+function lastResort(
+  table: DocsTable,
+  qLower: string,
+  limit: number,
+  inCategory: (d: SearchDoc) => boolean,
+): SearchDoc[] {
+  const MIN_STEM = 4;
+  const found: SearchDoc[] = [];
+
+  const scan = (matches: (d: SearchDoc) => boolean) => {
+    for (const doc of table.docs) {
+      if (!inCategory(doc) || !matches(doc)) continue;
+      found.push(doc);
+      if (found.length >= limit) return;
+    }
+  };
+
+  scan((d) => d.s.includes(qLower) || d.t.includes(qLower));
+
+  for (let len = qLower.length - 1; len >= MIN_STEM && found.length === 0; len--) {
+    const stem = qLower.slice(0, len);
+    scan((d) => d.s.startsWith(stem) || d.t.startsWith(stem));
+  }
+
+  return found;
 }
