@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { tokenize } from "@/lib/search/bm25";
 
 /**
  * A single result row (icon + title + category) shared by the docs search
@@ -42,19 +43,24 @@ function SolarIcon({ className, children }: { className?: string; children: Reac
 function DocumentIcon() {
   return (
     <SolarIcon className="size-5 text-muted-foreground/55">
-      <path d="M14 3.5H9c-2.357 0-3.536 0-4.268.732C4 4.964 4 6.143 4 8.5v7c0 2.357 0 3.536.732 4.268.732.732 1.911.732 4.268.732h6c2.357 0 3.536 0 4.268-.732.732-.732.732-1.911.732-4.268V9L14 3.5Z" />
-      <path d="M14 3.5V7c0 .943 0 1.414.293 1.707C14.586 9 15.057 9 16 9h4" />
-      <path d="M8.5 14h7M8.5 17.5h4" />
+      {/* Portrait, like a sheet of paper: 14 wide by 19 tall on the 24 grid. */}
+      <path d="M14 2.5H10c-2.357 0-3.536 0-4.268.732C5 3.964 5 5.143 5 7.5v9c0 2.357 0 3.536.732 4.268.732.732 1.911.732 4.268.732h4c2.357 0 3.536 0 4.268-.732.732-.732.732-1.911.732-4.268V8L14 2.5Z" />
+      <path d="M14 2.5V6c0 .943 0 1.414.293 1.707C14.586 8 15.057 8 16 8h3" />
+      <path d="M9 13.5h6M9 17h4" />
     </SolarIcon>
   );
 }
 
-/** Marks a named section. Solar "Hashtag". */
+/**
+ * Marks a named section. A `#` from the page font rather than a drawn glyph:
+ * the icon sets all carry a wide, sheared hashtag, and at 17px it reads as a
+ * smear next to the upright strokes of the icons beside it.
+ */
 function HashIcon() {
   return (
-    <SolarIcon className="size-[1.05rem]">
-      <path d="M10 3L5 21M19 3L14 21M22 9H4M20 16H2" />
-    </SolarIcon>
+    <span className="flex size-[1.05rem] items-center justify-center text-[0.95rem] font-medium leading-none">
+      #
+    </span>
   );
 }
 
@@ -67,6 +73,39 @@ function ParagraphIcon() {
   );
 }
 
+/**
+ * The query, in bold, wherever it appears in the excerpt — so the reader can
+ * see WHY a page matched without reading the whole line.
+ *
+ * Both the stem and the word the reader typed are matched: `properties` stems
+ * to `property`, which would otherwise miss the very word on the page. The
+ * trailing `\w*` catches the other direction, `point` inside `pointattrib`.
+ */
+function Highlight({ text, query }: { text: string; query: string }) {
+  const parts = useMemo(() => {
+    const words = new Set([...tokenize(query), ...query.toLowerCase().split(/[^a-z0-9]+/)]);
+    const terms = [...words].filter((w) => w.length > 1).sort((a, b) => b.length - a.length);
+    if (!terms.length) return [text];
+    const escaped = terms.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+    return text.split(new RegExp(`(\\b(?:${escaped.join("|")})\\w*)`, "gi"));
+  }, [text, query]);
+
+  // split() with one capture group alternates: text, match, text, match…
+  return (
+    <>
+      {parts.map((part, i) =>
+        i % 2 ? (
+          <strong key={i} className="font-semibold text-foreground/75">
+            {part}
+          </strong>
+        ) : (
+          part
+        ),
+      )}
+    </>
+  );
+}
+
 export function SearchResultRow({
   title,
   category,
@@ -75,6 +114,7 @@ export function SearchResultRow({
   sub,
   subKind,
   excerpt,
+  query,
   onClick,
   onMouseMove,
 }: {
@@ -88,6 +128,8 @@ export function SearchResultRow({
   subKind?: "heading" | "text";
   /** Matching prose, shown under the sub-row title. */
   excerpt?: string;
+  /** What the reader typed, bolded inside the excerpt. */
+  query?: string;
   onClick: () => void;
   onMouseMove: () => void;
 }) {
@@ -119,7 +161,7 @@ export function SearchResultRow({
             <span className="truncate text-xs text-muted-foreground">{title}</span>
             {excerpt && (
               <span className="line-clamp-2 text-[0.7rem] leading-snug text-muted-foreground/60">
-                {excerpt}
+                {query ? <Highlight text={excerpt} query={query} /> : excerpt}
               </span>
             )}
           </span>
