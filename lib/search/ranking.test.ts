@@ -148,6 +148,21 @@ test("finds a node from a word only its summary carries", async () => {
   );
 });
 
+// The `point` VEX function's summary IS this query, word for word, but scoring
+// words one at a time threw their order away: three common words counted
+// separately lost to Karma Point Cloud Read, whose title merely contains two.
+test("the whole query said back to back in a summary wins", async () => {
+  expect((await rank("reads a point attribute"))[0]).toBe("houdini/vex/functions/point");
+  // The stemmer has to carry the verb, or the run breaks at its first word.
+  expect((await rank("read a point attribute"))[0]).toBe("houdini/vex/functions/point");
+});
+
+test("a phrase bonus does not outvote the page's own name", async () => {
+  // `greduce` opens its summary "Reduces polygon count", so it earns the full
+  // run — but PolyReduce IS the thing being asked for.
+  expect((await rank("reduce polygons"))[0]).toBe("houdini/nodes/sop/polyreduce");
+});
+
 test("IDF outranks the common word", async () => {
   // `distance` is on hundreds of pages, `geodesic` on a handful. Without IDF
   // this returned planepointdistance first.
