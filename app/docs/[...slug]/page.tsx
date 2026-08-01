@@ -262,7 +262,9 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
             },
             table: ({ children }) => (
               <div className="not-prose overflow-x-auto my-6 rounded-lg border border-border">
-                <table className="w-full border-collapse text-sm [&_tr:last-child_td]:border-b-0 [&_td_code]:whitespace-nowrap">{children}</table>
+                <table className="w-full border-collapse text-sm [&_tr:last-child_td]:border-b-0 [&_td_code]:whitespace-nowrap">
+                  {children}
+                </table>
               </div>
             ),
             thead: ({ children }) => <thead>{children}</thead>,
