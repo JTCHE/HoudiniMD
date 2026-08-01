@@ -76,6 +76,21 @@ export default function RootLayout({
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }}
         />
+        {/* A deploy renames every chunk, so the last navigation served by the
+            outgoing service worker gets HTML that names files which no longer
+            exist. Reload that page one time, on the evidence that a chunk
+            actually failed, so a healthy load pays nothing. This has to be
+            inline and ahead of the chunks: when they 404 React never boots, so
+            a listener attached from a component would never run. The flag stops
+            a repeat if the asset is missing for some other reason. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "addEventListener('error',function(e){var t=e.target,u=t&&(t.src||t.href);" +
+              "if(typeof u=='string'&&u.indexOf('/_next/static/')>-1&&!sessionStorage.getItem('hmd-heal')){" +
+              "sessionStorage.setItem('hmd-heal','1');location.reload()}},true)",
+          }}
+        />
       </head>
       <body>
         <ServiceWorkerRegistration />
