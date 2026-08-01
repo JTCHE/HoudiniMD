@@ -7,7 +7,9 @@ import rehypeSlug from "rehype-slug";
 import DocLink from "@/components/docs/DocLink";
 import { MarkdownActions } from "@/components/docs/MarkdownActions";
 import { PrintPagination } from "@/components/docs/PrintPagination";
+import { TableOfContents } from "@/components/docs/TableOfContents";
 import { CodeBlock } from "@/components/docs/CodeBlock";
+import { extractHeadings } from "@/lib/markdown/headings";
 import { remarkCallouts } from "@/lib/markdown/remark-callouts";
 import { remarkVex } from "@/lib/markdown/remark-vex";
 import { fetchFromR2 } from "@/lib/r2/read";
@@ -229,6 +231,7 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
           </div>
           {summary && <p className="w-full basis-full m-0 text-sm italic text-muted-foreground">{summary}</p>}
         </header>
+        <TableOfContents headings={extractHeadings(bodyContent)} />
         <ReactMarkdown
           remarkPlugins={[remarkGfm, remarkCallouts, [remarkVex, { enabled: isVexPage }]]}
           rehypePlugins={[rehypeRaw, rehypeSlug]}

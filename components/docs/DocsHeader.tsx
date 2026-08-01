@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { SearchButton } from "./SearchButton";
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type { SearchOverlayRef } from "./SearchOverlay";
 
 interface DocsHeaderProps {
@@ -13,9 +13,24 @@ interface DocsHeaderProps {
 }
 
 export function DocsHeader({ breadcrumbs, sourceUrl, markdownUrl, searchRef }: DocsHeaderProps) {
+  const header = useRef<HTMLElement>(null);
+
   const handleSearchClick = useCallback(() => {
     searchRef.current?.openSearch();
   }, [searchRef]);
+
+  // Publish the real header height. Anchor targets clear it via --header-h
+  // (globals.css) — it changes with the breadcrumb wrap, the font, and the
+  // device, so no rem constant can stand in for measuring it.
+  useEffect(() => {
+    const el = header.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => {
+      document.documentElement.style.setProperty("--header-h", `${entry.contentRect.height}px`);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // Two "alternate view" links — same pattern, sibling treatment.
   // .md goes first as the canonical/internal representation; SideFX is the
@@ -43,7 +58,10 @@ export function DocsHeader({ breadcrumbs, sourceUrl, markdownUrl, searchRef }: D
   );
 
   return (
-    <header className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur print:static print:bg-background">
+    <header
+      ref={header}
+      className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur print:static print:bg-background"
+    >
       <div className="mx-auto grid max-w-4xl grid-cols-[1fr_auto] sm:grid-cols-[auto_1fr_auto] items-center gap-2 px-page-x py-3 text-xs text-muted-foreground">
         <Link
           href="/"
