@@ -4,12 +4,13 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import rehypeSlug from "rehype-slug";
-import DocLink from "@/components/docs/DocLink";
 import { MarkdownActions } from "@/components/docs/MarkdownActions";
 import { PrintPagination } from "@/components/docs/PrintPagination";
 import { TableOfContents } from "@/components/docs/TableOfContents";
-import { CodeBlock } from "@/components/docs/CodeBlock";
+import { markdownComponents } from "@/components/docs/markdown";
 import { extractHeadings } from "@/lib/markdown/headings";
+import { decodeEntities } from "@/lib/markdown/entities";
+import { parseFrontmatter } from "@/lib/markdown/frontmatter";
 import { remarkCallouts } from "@/lib/markdown/remark-callouts";
 import { remarkVex } from "@/lib/markdown/remark-vex";
 import { fetchFromR2 } from "@/lib/r2/read";
@@ -31,18 +32,6 @@ export async function generateStaticParams() {
   } catch {
     return [];
   }
-}
-
-function parseFrontmatter(md: string): { content: string; data: Record<string, string> } {
-  if (!md.startsWith("---")) return { content: md, data: {} };
-  const end = md.indexOf("\n---\n", 3);
-  if (end === -1) return { content: md, data: {} };
-  const data: Record<string, string> = {};
-  for (const line of md.slice(3, end).trim().split("\n")) {
-    const i = line.indexOf(":");
-    if (i > -1) data[line.slice(0, i).trim()] = line.slice(i + 1).trim();
-  }
-  return { content: md.slice(end + 5), data };
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string[] }> }): Promise<Metadata> {
@@ -145,12 +134,7 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
   // Title is pulled from the RAW (pre-escape) markdown and entity-decoded, so a
   // generic node like "Add<T>" renders as text instead of literal "Add&lt;T&gt;".
   const rawH1Match = rawContent.match(/^#[ \t]+(\S[^\n]*)$/m);
-  const mdTitle = (rawH1Match?.[1]?.trim() ?? slug[slug.length - 1].replace(/-/g, " "))
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&amp;/g, "&")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'");
+  const mdTitle = decodeEntities(rawH1Match?.[1]?.trim() ?? slug[slug.length - 1].replace(/-/g, " "));
   const h1Match = content.match(/^#[ \t]+(\S[^\n]*)$/m);
 
   // The H1 is rendered in the page header row (alongside the Copy button) so
@@ -168,13 +152,7 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
     // The summary renders as a plain-text node (not through ReactMarkdown), so
     // decode the entities the escape step introduced — otherwise a token like
     // <UDIM> would surface as literal "&lt;UDIM&gt;".
-    summary = summaryMatch[1]
-      .trim()
-      .replace(/&lt;/g, "<")
-      .replace(/&gt;/g, ">")
-      .replace(/&amp;/g, "&")
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'");
+    summary = decodeEntities(summaryMatch[1].trim());
     bodyContent = bodyContent.slice(summaryMatch[0].length);
   }
   const mdSummary = summary ?? bodyContent.match(/^(?!#|>)[^\n]{20,}/m)?.[0]?.trim();
@@ -235,102 +213,7 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
         <ReactMarkdown
           remarkPlugins={[remarkGfm, remarkCallouts, [remarkVex, { enabled: isVexPage }]]}
           rehypePlugins={[rehypeRaw, rehypeSlug]}
-          components={{
-            h1: ({ children }) => (
-              <h1 className="not-prose text-2xl font-bold tracking-tight border-b border-border pb-3 mb-6 mt-0">{children}</h1>
-            ),
-            blockquote: ({ children, className, ...props }) => {
-              // Callouts are tagged by the remark-callouts plugin.
-              const calloutType = (props as Record<string, string>)["data-callout"];
-              if (calloutType) {
-                const label = calloutType.charAt(0).toUpperCase() + calloutType.slice(1);
-                return (
-                  <blockquote
-                    className={`not-prose ${className ?? ""}`}
-                    data-callout={calloutType}
-                  >
-                    <p className="callout-title">{label}</p>
-                    {children}
-                  </blockquote>
-                );
-              }
-              return (
-                <blockquote className="not-prose border-l-2 border-foreground/30 pl-4 my-4 text-muted-foreground text-sm italic">
-                  {children}
-                </blockquote>
-              );
-            },
-            table: ({ children }) => (
-              <div className="not-prose overflow-x-auto my-6 rounded-lg border border-border">
-                <table className="w-full border-collapse text-sm [&_tr:last-child_td]:border-b-0 [&_td_code]:whitespace-nowrap">
-                  {children}
-                </table>
-              </div>
-            ),
-            thead: ({ children }) => <thead>{children}</thead>,
-            th: ({ children }) => (
-              <th className="border-b border-r border-border last:border-r-0 px-3 py-2 text-left font-semibold bg-muted text-foreground">
-                {children}
-              </th>
-            ),
-            td: ({ children }) => (
-              <td className="border-b border-r border-border last:border-r-0 px-3 py-2 align-top text-foreground">{children}</td>
-            ),
-            pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            code: ({ className, children, node: _node, ...props }) => {
-              const isBlock = !!className?.startsWith("language-") || (typeof children === "string" && children.includes("\n"));
-              if (isBlock) {
-                // CSS in globals.css handles all block code styling
-                return (
-                  <code
-                    className={className ?? ""}
-                    {...props}
-                  >
-                    {children}
-                  </code>
-                );
-              }
-              return (
-                <code
-                  className="bg-muted px-1.5 py-0.5 text-sm font-mono border border-border/50 rounded-sm text-pink-600 dark:text-pink-400 [overflow-wrap:anywhere] whitespace-normal"
-                  {...props}
-                >
-                  {children}
-                </code>
-              );
-            },
-            img: ({ src, alt }) => {
-              if (!src || typeof src !== "string") return null;
-              if (/icons\//.test(src)) {
-                return (
-                  <img
-                    src={src}
-                    alt={alt ?? ""}
-                    className="doc-icon"
-                  />
-                );
-              }
-              return (
-                <img
-                  src={src}
-                  alt={alt ?? ""}
-                  className="max-w-full h-auto my-4 block"
-                />
-              );
-            },
-            a: ({ href, children, ...props }) =>
-              href ? (
-                <DocLink
-                  href={href}
-                  {...props}
-                >
-                  {children}
-                </DocLink>
-              ) : (
-                <span {...(props as React.HTMLAttributes<HTMLSpanElement>)}>{children}</span>
-              ),
-          }}
+          components={markdownComponents}
         >
           {bodyContent}
         </ReactMarkdown>
