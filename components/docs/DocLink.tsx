@@ -95,6 +95,12 @@ export default function DocLink({
   useEffect(() => {
     if (!slug || !linkRef.current) return;
     const el = linkRef.current;
+    // Card grids put dozens-to-hundreds of links in the viewport at once (e.g.
+    // /docs/houdini/nodes/sop has ~1000). Registering the viewport observer for
+    // all of them floods the prefetch queue right after load, so the fetch for
+    // a card the user actually clicks queues behind a pile of ones they don't.
+    // Hover/focus prefetch (show(), below) still covers the one being clicked.
+    if (el.closest(".shelf-grid")) return;
     const observer = getLinkObserver();
     observedSlugs.set(el, { slug, href: href! });
     observer.observe(el);
