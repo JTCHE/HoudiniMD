@@ -31,8 +31,22 @@ export function wantsMarkdown(
   ua: string | null,
   secFetchDest?: string | null
 ): boolean {
-  if (secFetchDest === 'document') return false;
-  if (!ua) return true;
-  if (HTML_CRAWLER_RE.test(ua)) return false;
-  return !BROWSER_RE.test(ua) && !IOS_WEBVIEW_RE.test(ua);
+  return visitorKind(ua, secFetchDest) === 'agent';
+}
+
+export type VisitorKind = 'human' | 'crawler' | 'agent';
+
+/**
+ * Who is asking, using the same signals as `wantsMarkdown` above. Analytics
+ * needs the three-way split (a Googlebot hit is not a reader), the redirect
+ * only needs to know whether it is an agent.
+ */
+export function visitorKind(
+  ua: string | null,
+  secFetchDest?: string | null
+): VisitorKind {
+  if (ua && HTML_CRAWLER_RE.test(ua)) return 'crawler';
+  if (secFetchDest === 'document') return 'human';
+  if (!ua) return 'agent';
+  return BROWSER_RE.test(ua) || IOS_WEBVIEW_RE.test(ua) ? 'human' : 'agent';
 }

@@ -31,6 +31,14 @@
       "bucket_name": "houdinimd-cache",
     },
   ],
+  // Page views written by recordPageView() in worker.ts, read by
+  // scripts/analytics.ts. Free plan: 100k data points/day, 3-month retention.
+  "analytics_engine_datasets": [
+    {
+      "binding": "ANALYTICS",
+      "dataset": "houdinimd_views",
+    },
+  ],
   // Durable Object that runs ISR revalidation in the background (off the request
   // path). Configured via `queue: doQueue` in open-next.config.ts. SQLite-backed
   // (see the migration below), which is available on the Workers free plan.
