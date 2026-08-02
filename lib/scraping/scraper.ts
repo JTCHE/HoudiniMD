@@ -76,22 +76,40 @@ export async function scrapeSideFXPage(url: string): Promise<ScrapedContent> {
   //   leaf pages: trailing slash causes 404 — must omit it
   // Always fetch with a trailing slash first (correct for section pages). When that 404s,
   // retry without — handles leaf pages. Keeps toSideFXUrl clean (no slash, canonical display).
-  const slashUrl = url.endsWith('/') ? url : `${url}/`;
-  let response = await fetch(slashUrl, {
-    headers: { "User-Agent": USER_AGENT },
-  });
+  let response: Response;
+  let rawHtml = "";
 
-  if (!response.ok) {
-    const noSlashUrl = slashUrl.slice(0, -1);
-    const retry = await fetch(noSlashUrl, { headers: { "User-Agent": USER_AGENT } });
-    if (retry.ok) {
-      response = retry;
-      url = noSlashUrl;
+  // Some SideFX pages (node aliases pointing at a canonical tool page, e.g.
+  // /nodes/generic_state/renderregion.html -> /render/renderregion.html) are a
+  // near-empty stub with a <meta http-equiv="refresh"> pointing at the real
+  // content. fetch() only follows HTTP redirects, not meta-refresh, so without
+  // this loop the stub's empty <main> gets scraped instead of the real page.
+  for (let hop = 0; ; hop++) {
+    const slashUrl = url.endsWith('/') ? url : `${url}/`;
+    response = await fetch(slashUrl, {
+      headers: { "User-Agent": USER_AGENT },
+    });
+
+    if (!response.ok) {
+      const noSlashUrl = slashUrl.slice(0, -1);
+      const retry = await fetch(noSlashUrl, { headers: { "User-Agent": USER_AGENT } });
+      if (retry.ok) {
+        response = retry;
+        url = noSlashUrl;
+      } else {
+        throw new PageNotFoundError(url, response.status);
+      }
     } else {
-      throw new PageNotFoundError(url, response.status);
+      url = slashUrl;
     }
-  } else {
-    url = slashUrl;
+
+    rawHtml = await response.text();
+    const metaRefresh = rawHtml.match(
+      /<meta\s+http-equiv=["']refresh["']\s+content=["']\d+;\s*url=([^"']+)["']/i,
+    );
+    if (!metaRefresh) break;
+    if (hop >= 3) throw new Error(`Too many meta-refresh redirects starting from ${url}`);
+    url = new URL(metaRefresh[1], response.url || url).href;
   }
 
   // Use response.url (final URL after any server redirects) as the base for
@@ -108,7 +126,6 @@ export async function scrapeSideFXPage(url: string): Promise<ScrapedContent> {
   // redirects to a more specific URL (e.g. /foo/bar → /foo/bar.html).
   const effectiveUrl = url.endsWith('/') ? url : (response.url || url);
 
-  const rawHtml = await response.text();
   // Escape bare << sequences that aren't valid HTML but appear in some SideFX pages
   // (e.g. <<clip = false>> in href attributes), which break node-html-parser
   // Also escape unescaped generic-type markers in APEX node names (e.g. Abs<T>,
