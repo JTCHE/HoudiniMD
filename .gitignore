@@ -79,3 +79,5 @@ __pycache__/
 
 # screenshot output
 shots/
+# local analytics archive
+.analytics.db*

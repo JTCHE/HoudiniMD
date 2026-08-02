@@ -17,7 +17,7 @@
 //    that falls through to the worker (Workers Assets already handles
 //    current-deploy files without invoking the worker at all).
 import handler, { DOQueueHandler, DOShardedTagCache, BucketCachePurge } from "./.open-next/worker.js";
-import { visitorKind } from "./lib/wants-markdown";
+import { visitorKind, botFamily } from "./lib/wants-markdown";
 import { visitorHash } from "./lib/visitor-hash";
 
 export { DOQueueHandler, DOShardedTagCache, BucketCachePurge };
@@ -66,8 +66,52 @@ function recordPageView(request: Request, url: URL, response: Response, env: Env
       visitorKind(ua, request.headers.get("sec-fetch-dest")),
       visitorHash(ip), // blob3: lets the CLI drop the operator's own visits
       request.headers.get("cf-ipcountry") ?? "",
+      botFamily(ua) ?? "", // blob5: named crawler/agent for the live feed, e.g. "Googlebot"
+      (request.cf?.city as string) ?? "", // blob6: city, for the live feed's location tag
     ],
   });
+}
+
+// One data point per /api/search hit, in the same dataset as page views
+// (blob2 "search" marks the row so the CLI's kind-based panels skip it).
+// Answers "what did people search for and find nothing" — see Analytics.md
+// "search quality". Runs in ctx.waitUntil so parsing the response body never
+// delays the actual search response.
+function recordSearchQuery(
+  request: Request,
+  url: URL,
+  response: Response,
+  env: Env,
+  ctx: { waitUntil(p: Promise<unknown>): void }
+) {
+  if (!env.ANALYTICS || request.method !== "GET" || response.status !== 200) return;
+  if (url.pathname !== "/api/search") return;
+  const q = url.searchParams.get("q")?.trim();
+  if (!q) return;
+  const category = url.searchParams.get("category")?.trim() ?? "";
+  const ip = request.headers.get("cf-connecting-ip") ?? "";
+
+  ctx.waitUntil(
+    response
+      .clone()
+      .json()
+      .then((body: unknown) => {
+        const total = typeof (body as { total?: unknown })?.total === "number" ? (body as { total: number }).total : 0;
+        env.ANALYTICS!.writeDataPoint({
+          indexes: [visitorHash(`${ip}|${request.headers.get("user-agent") ?? ""}`)],
+          blobs: [
+            q.slice(0, 200),
+            "search",
+            visitorHash(ip),
+            request.headers.get("cf-ipcountry") ?? "",
+            "", // blob5: bot family — not applicable to search rows
+            category,
+          ],
+          doubles: [total],
+        });
+      })
+      .catch(() => {})
+  );
 }
 
 export default {
@@ -91,6 +135,7 @@ export default {
 
     const response = await handler.fetch(request, env, ctx);
     recordPageView(request, url, response, env);
+    recordSearchQuery(request, url, response, env, ctx);
 
     const contentType = response.headers.get("content-type") ?? "";
     const cacheControl = response.headers.get("cache-control") ?? "";

@@ -6,7 +6,7 @@
  *   bun test lib/wants-markdown.test.ts
  */
 import { expect, test } from "bun:test";
-import { visitorKind, wantsMarkdown } from "./wants-markdown";
+import { botFamily, visitorKind, wantsMarkdown } from "./wants-markdown";
 
 const CHROME = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
 const IOS_WEBVIEW = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 [FBAN/FBIOS] Mobile/22F76";
@@ -28,4 +28,12 @@ test("wantsMarkdown redirects agents only", () => {
   expect(wantsMarkdown(CHROME)).toBe(false);
   expect(wantsMarkdown(GOOGLEBOT)).toBe(false);
   expect(wantsMarkdown("curl/8.5.0", "document")).toBe(false);
+});
+
+test("botFamily names known crawlers/agents, else null", () => {
+  expect(botFamily(GOOGLEBOT)).toBe("Googlebot");
+  expect(botFamily("ClaudeBot/1.0")).toBe("ClaudeBot");
+  expect(botFamily("Mozilla/5.0 (compatible; GPTBot/1.1; +https://openai.com/gptbot)")).toBe("GPTBot");
+  expect(botFamily(CHROME)).toBeNull();
+  expect(botFamily(null)).toBeNull();
 });
