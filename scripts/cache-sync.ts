@@ -53,6 +53,7 @@ interface CacheAsset {
   fullPath: string;
   /** R2 object key, identical to what the runtime computes. */
   key: string;
+  kind: "cache" | "fetch";
 }
 
 /** Mirror of OpenNext's computeCacheKey. */
@@ -88,6 +89,7 @@ function collectAssets(): CacheAsset[] {
       assets.push({
         fullPath,
         key: computeCacheKey(`/${keyParts.join("/")}`, "fetch", buildId),
+        kind: "fetch",
       });
     } else if (relPath.endsWith(".cache")) {
       const [buildId, ...keyParts] = relPath.slice(0, -".cache".length).split("/");
@@ -95,6 +97,7 @@ function collectAssets(): CacheAsset[] {
       assets.push({
         fullPath,
         key: computeCacheKey(`/${keyParts.join("/")}`, "cache", buildId),
+        kind: "cache",
       });
     }
     // everything else (directories) is skipped
@@ -104,6 +107,44 @@ function collectAssets(): CacheAsset[] {
 
 function md5(buf: Buffer): string {
   return createHash("md5").update(buf).digest("hex");
+}
+
+// A .fetch entry is a whole HTTP response from the docs origin, response
+// headers included. Some of those headers change on every request (`date`,
+// `cf-ray`, ...), so byte-identical markdown produced a different object each
+// build and re-uploaded all ~11k .fetch entries — half the PUTs of a deploy,
+// for no content change. Drop the volatile ones and sort the rest, so the
+// stored bytes depend only on the response body. Next only reads the headers
+// it cares about (content-type, etag, cache-control), all of which stay.
+const VOLATILE_FETCH_HEADERS = new Set([
+  "age",
+  "alt-svc",
+  "cf-cache-status",
+  "cf-ray",
+  "date",
+  "nel",
+  "report-to",
+  "server-timing",
+  "x-request-id",
+]);
+
+/** Bytes to store for an asset: .fetch entries normalised, everything else raw. */
+function bodyFor(a: CacheAsset): Buffer {
+  const raw = readFileSync(a.fullPath);
+  if (a.kind !== "fetch") return raw;
+  try {
+    const entry = JSON.parse(raw.toString("utf8"));
+    const headers = entry?.data?.headers;
+    if (!headers || typeof headers !== "object") return raw;
+    entry.data.headers = Object.fromEntries(
+      Object.entries(headers)
+        .filter(([k]) => !VOLATILE_FETCH_HEADERS.has(k.toLowerCase()))
+        .sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0)),
+    );
+    return Buffer.from(JSON.stringify(entry));
+  } catch {
+    return raw; // not the shape we expect — store it untouched
+  }
 }
 
 function makeClient(): S3Client {
@@ -234,7 +275,7 @@ async function main() {
   for (const a of assets) {
     valid.add(a.key);
     const remoteEtag = remote.get(a.key);
-    const localEtag = md5(readFileSync(a.fullPath));
+    const localEtag = md5(bodyFor(a));
     if (remoteEtag !== localEtag) toUpload.push(a);
   }
   const toDelete = prune
@@ -255,12 +296,18 @@ async function main() {
     return;
   }
 
+  // Archive the new build's chunks FIRST. The cache upload below overwrites the
+  // live cache in place (pinned BUILD_ID), so the still-live previous deploy
+  // starts serving the new pages ~10 minutes before `wrangler deploy` publishes
+  // the chunks they reference. Until then only this archive can serve them.
+  await syncStaticArchive(client);
+
   // Uploads
   const UPLOAD_RETRIES = 3;
   let uploaded = 0;
   let failed = 0;
   await pool(toUpload, CONCURRENCY, async (a) => {
-    const body = readFileSync(a.fullPath);
+    const body = bodyFor(a); // must match the diff above, or every deploy re-uploads
     for (let attempt = 1; attempt <= UPLOAD_RETRIES; attempt++) {
       try {
         await client.send(new PutObjectCommand({ Bucket: BUCKET, Key: a.key, Body: body }));
@@ -293,8 +340,6 @@ async function main() {
     deleted += batch.length;
     console.log(c.dim(`    deleted ${deleted}/${toDelete.length}`));
   }
-
-  await syncStaticArchive(client);
 
   console.log("");
   console.log(c.bold(`Done. ${uploaded} uploaded, ${deleted} deleted.`));
