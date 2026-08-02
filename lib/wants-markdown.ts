@@ -34,6 +34,16 @@ export function wantsMarkdown(
   return visitorKind(ua, secFetchDest) === 'agent';
 }
 
+// Name a crawler/agent for the live feed — "Googlebot" reads better than
+// "crawler". Not exhaustive, and unlike HTML_CRAWLER_RE this is analytics
+// labelling only: it never changes what visitorKind()/wantsMarkdown() decide.
+const BOT_FAMILY_RE =
+  /\b(Googlebot|Storebot-Google|Google-InspectionTool|Google-Extended|Bingbot|Slurp|DuckDuckBot|Baiduspider|YandexBot|Applebot|facebookexternalhit|Twitterbot|LinkedInBot|Discordbot|Slackbot|GPTBot|OAI-SearchBot|ChatGPT-User|ClaudeBot|Claude-Web|anthropic-ai|CCBot|PerplexityBot|Perplexity-User|Amazonbot|Bytespider|cohere-ai|Meta-ExternalAgent|Diffbot|SemrushBot|AhrefsBot|MJ12bot)\b/i;
+
+export function botFamily(ua: string | null): string | null {
+  return ua?.match(BOT_FAMILY_RE)?.[1] ?? null;
+}
+
 export type VisitorKind = 'human' | 'crawler' | 'agent';
 
 /**

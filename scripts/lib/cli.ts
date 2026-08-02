@@ -109,14 +109,22 @@ export function shuffleSeeded<T>(arr: T[], seed: number): T[] {
   return out;
 }
 
-/** ANSI colours, no-op when not a TTY (avoids junk in piped output). */
-const isTTY = typeof process !== "undefined" && !!process.stdout?.isTTY;
+/**
+ * ANSI colours, no-op when not a TTY (avoids junk in piped output).
+ * FORCE_COLOR=1 overrides the TTY check — used by scripts/tui-shot.ts, which
+ * captures coloured output through a pipe to turn it into a screenshot.
+ */
+const isTTY = (typeof process !== "undefined" && !!process.stdout?.isTTY) || process.env?.FORCE_COLOR === "1";
 const wrap = (code: string) => (s: string) => (isTTY ? `\x1b[${code}m${s}\x1b[0m` : s);
+/** 24-bit foreground colour, for scripts that carry their own palette. */
+export const rgb = (r: number, g: number, b: number) => wrap(`38;2;${r};${g};${b}`);
 export const c = {
   dim: wrap("2"),
   red: wrap("31"),
   green: wrap("32"),
   yellow: wrap("33"),
+  blue: wrap("34"),
+  magenta: wrap("35"),
   cyan: wrap("36"),
   bold: wrap("1"),
 };

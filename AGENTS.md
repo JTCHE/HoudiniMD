@@ -27,10 +27,20 @@ node scripts/webkit-shot.ts houdini/nodes/dop/pyrosolver
 
 # Deploys
 
-Deploys can be achieved in two ways:
+Deploys are done by comitting and pushing to GitHub. Since the Cloudflare app is installed in the repo, this will trigger an auto deploy.
 
-1. By comitting and pushing to GitHub. Since the Cloudflare app is installed in the repo, this will trigger an auto deploy.
-2. By running `bun run deploy`
+**Do not run `bun run deploy` from Windows.** Tailwind's native CSS
+scanner (`@tailwindcss/oxide`) and `lightningcss` ship a separate
+compiled binary per OS. On Windows this produces a different
+`@property` fallback block than the Linux binary Cloudflare CI uses,
+even with an identical, lockfile-pinned `tailwindcss` version. The
+result is a different CSS content hash, which changes the hashed URL
+in every prerendered page and forces a full ~11k-page `.cache`
+re-upload for zero real content change.
+
+Deploy from Windows by pushing to GitHub instead, so Cloudflare CI
+always produces the CSS hash. If you need a local deploy, build from
+WSL or a Linux container, not native Windows.
 
 # Obsidian Base
 
