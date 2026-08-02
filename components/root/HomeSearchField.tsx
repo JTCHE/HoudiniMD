@@ -265,11 +265,17 @@ export function HomeSearchField() {
   return (
     <div ref={containerRef}>
       {error && (
-        <p id="url-error" className="text-xs text-destructive mb-2">
+        <p
+          id="url-error"
+          className="text-xs text-destructive mb-2"
+        >
           {error}
         </p>
       )}
-      <form onSubmit={handleSubmit} className="flex gap-2">
+      <form
+        onSubmit={handleSubmit}
+        className="flex gap-2"
+      >
         <div className="relative flex-1">
           <Input
             ref={inputRef}
@@ -301,9 +307,7 @@ export function HomeSearchField() {
               query={url}
               selected={selected}
               onSelect={setSelected}
-              onActivate={(result, anchor) =>
-                selectResult(anchor ? `${result.path}#${anchor}` : result.path)
-              }
+              onActivate={(result, anchor) => selectResult(anchor ? `${result.path}#${anchor}` : result.path)}
               className="absolute z-10 top-full left-0 right-0 mt-1 bg-background border rounded-md shadow-2xl overflow-y-auto max-h-80 pb-2"
             />
           )}
@@ -320,7 +324,11 @@ export function HomeSearchField() {
         <div className="mt-4 p-3 bg-muted/50 rounded-md border text-sm font-mono overflow-hidden">
           <div className="space-y-1">
             {progressLog.map((event, i) => (
-              <ProgressLogEntry key={i} event={event} isLatest={i === progressLog.length - 1} />
+              <ProgressLogEntry
+                key={i}
+                event={event}
+                isLatest={i === progressLog.length - 1}
+              />
             ))}
           </div>
         </div>
