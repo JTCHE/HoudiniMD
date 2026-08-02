@@ -52,6 +52,12 @@ type Kind = (typeof KINDS)[number];
  */
 const NAME_HUMANS = true;
 const KIND_ROWS_FILTER = `blob2 IN ('human','agent','crawler')`; // excludes blob2='search' rows
+/**
+ * How much of the feed is kept in memory to scroll back through. The whole
+ * archive, in practice: the point of keeping it is that the history does not
+ * stop where this session started.
+ */
+const FEED_CAP = 20_000;
 const GAP = " ";
 const CHART_H = 6; // rows of braille in the activity chart
 const DB_PATH = ".analytics.db";
@@ -117,6 +123,15 @@ async function ownIpHash(): Promise<string | null> {
 
 // ---------- local archive ----------
 
+/**
+ * One row of the live feed. Page views and searches share it: the worker
+ * writes both into one dataset, and the feed is the whole story of a visit —
+ * what someone asked for as well as what they opened.
+ *
+ * `kind` is "search" for the second sort, which is why the reused blob columns
+ * are named for what a page view puts in them. A search row reads `q`, `dest`
+ * and `results` instead of `path`, `evidence` and `status`.
+ */
 interface FeedRow {
   timestamp: string;
   path: string;
@@ -128,19 +143,23 @@ interface FeedRow {
   evidence?: string;
   status?: string;
   referrer?: string;
-}
-interface SearchRow {
-  timestamp: string;
-  q: string;
-  country: string;
-  category: string;
-  results: string;
-  visitor: string;
-  /** Which submit path it came from — api · resolve · generate · overlay · home. */
-  source?: string;
-  /** The page the reader landed on. Empty means the search found nothing. */
+  /** 1 when the raw .md twin was read rather than the page. */
+  markdown?: string;
+  /** Search rows only — the query, where it landed, and how it was submitted. */
+  q?: string;
   dest?: string;
+  source?: string;
+  results?: string;
 }
+/** A feed row is a search when the worker marked it one. */
+const isSearch = (r: FeedRow) => r.kind === "search";
+
+/**
+ * The kind a search row counts as. Nothing measures headers on a search, so it
+ * is judged by where it was submitted from: the public API is machinery, every
+ * other path is a person at a keyboard.
+ */
+const searchKind = (r: FeedRow): Kind => (r.source === "api" ? "agent" : "human");
 
 /**
  * Analytics Engine keeps 90 days; this keeps everything. The primary key
@@ -165,7 +184,8 @@ function addColumn(table: string, name: string, decl: string) {
 addColumn("views", "evidence", "TEXT NOT NULL DEFAULT ''");
 addColumn("views", "status", "TEXT NOT NULL DEFAULT ''");
 addColumn("views", "referrer", "TEXT NOT NULL DEFAULT ''");
-const insertRow = db.prepare("INSERT OR IGNORE INTO views VALUES (?,?,?,?,?,?,?,?,?,?)");
+addColumn("views", "markdown", "TEXT NOT NULL DEFAULT ''");
+const insertRow = db.prepare("INSERT OR IGNORE INTO views VALUES (?,?,?,?,?,?,?,?,?,?,?)");
 const insertRows = db.transaction((rows: FeedRow[]) => {
   for (const r of rows)
     insertRow.run(
@@ -179,6 +199,7 @@ const insertRows = db.transaction((rows: FeedRow[]) => {
       r.evidence ?? "",
       r.status ?? "",
       r.referrer ?? "",
+      r.markdown ?? "",
     );
 });
 const countRows = db.prepare("SELECT COUNT(*) AS n FROM views");
@@ -225,19 +246,24 @@ db.run(`CREATE TABLE IF NOT EXISTS searches (
 addColumn("searches", "source", "TEXT NOT NULL DEFAULT ''");
 addColumn("searches", "dest", "TEXT NOT NULL DEFAULT ''");
 const insertSearch = db.prepare("INSERT OR IGNORE INTO searches VALUES (?,?,?,?,?,?,?,?)");
-const insertSearches = db.transaction((rows: SearchRow[]) => {
+const insertSearches = db.transaction((rows: FeedRow[]) => {
   for (const r of rows)
     insertSearch.run(
       r.timestamp,
       r.visitor ?? "",
-      r.q,
+      r.q ?? "",
       r.country ?? "",
-      r.category ?? "",
+      r.city ?? "", // a search row puts the category where a view puts the city
       num(r.results),
       r.source ?? "",
       r.dest ?? "",
     );
 });
+/** The queries asked most often, whether they worked or not. */
+const topSearchRows = db.prepare(
+  `SELECT q, COUNT(*) AS n, SUM(CASE WHEN dest = '' AND results = 0 THEN 1 ELSE 0 END) AS misses
+   FROM searches WHERE ts > ? GROUP BY q ORDER BY n DESC, MAX(ts) DESC LIMIT 30`,
+);
 /**
  * Every query that ever found nothing, heaviest first — the content gaps.
  * A row with a landing page is not a gap even when the ranker returned no
@@ -247,6 +273,48 @@ const deadRows = db.prepare(
   "SELECT q, COUNT(*) AS n FROM searches WHERE results = 0 AND dest = '' GROUP BY q ORDER BY n DESC, MAX(ts) DESC LIMIT 30",
 );
 const chainRows = db.prepare("SELECT visitor, ts, q FROM searches WHERE ts > ? ORDER BY visitor, ts");
+
+/**
+ * The feed before this run started. Analytics Engine only answers for the
+ * window asked of it, so without this the history stops where the session
+ * began — everything older is in the archive and was simply never read back.
+ */
+const archivedViews = db.prepare(
+  `SELECT ts AS timestamp, visitor, path, kind, country, city, bot, evidence, status, referrer, markdown
+   FROM views ORDER BY ts DESC LIMIT ?`,
+);
+const archivedSearches = db.prepare(
+  `SELECT ts AS timestamp, visitor, q, country, category AS city, results, source, dest
+   FROM searches ORDER BY ts DESC LIMIT ?`,
+);
+/**
+ * Everything this machine ever archived, per kind. The stored kinds are
+ * corrected in place at startup (see backfillKinds), so this can group by the
+ * column and does not need the fold the API rollups do.
+ */
+const lifetimeRows = db.prepare(
+  "SELECT kind, COUNT(*) AS views, COUNT(DISTINCT visitor) AS visitors FROM views GROUP BY kind",
+);
+/** Re-read after every write, so the row keeps up with the feed. */
+const readLifetime = (): KindRow[] => (lifetimeRows.all() as KindRow[]).map((r) => ({ ...r, kind: asKind(r.kind) }));
+/** The last place a visitor was seen — a search row carries no city of its own. */
+const placeRow = db.prepare("SELECT city, country FROM views WHERE visitor = ? AND city != '' ORDER BY ts DESC LIMIT 1");
+const placeCache = new Map<string, string>();
+function placeOf(visitor: string, country: string): string {
+  if (!visitor) return country;
+  const hit = placeCache.get(visitor);
+  if (hit !== undefined) return hit;
+  const row = placeRow.get(visitor) as { city: string; country: string } | null;
+  const place = [row?.city, row?.country || country].filter(Boolean).join(", ");
+  placeCache.set(visitor, place);
+  return place;
+}
+
+function readArchive(limit: number): FeedRow[] {
+  const views = archivedViews.all(limit) as FeedRow[];
+  const searches = (archivedSearches.all(limit) as FeedRow[]).map((r) => ({ ...r, kind: "search", path: "" }));
+  return [...views, ...searches];
+}
 /** Referring hosts, busiest first. Same-site and direct hits are stored empty. */
 const referrerRows = db.prepare(
   "SELECT referrer AS host, COUNT(*) AS n FROM views WHERE referrer != '' AND ts > ? GROUP BY referrer ORDER BY n DESC, MAX(ts) DESC LIMIT 10",
@@ -356,6 +424,12 @@ interface KindRow {
   views: string;
   visitors: string;
 }
+/** A rollup as the API returns it: one row per visitor, before folding. */
+interface VisitorRow {
+  visitor: string;
+  kind: string;
+  views: string;
+}
 interface PathRow {
   path: string;
   kind: string;
@@ -460,7 +534,14 @@ function topPathsPanel(rows: PathRow[], inner: number, maxRows: number): string[
   });
 }
 
-/** `17:04:36  Human    │ Cleo, Paris     /docs/…` — kind, then who, then where. */
+/** The kind a feed row counts as, page view or search alike. */
+const rowKind = (r: FeedRow): Kind => (isSearch(r) ? searchKind(r) : fixKind(r.kind, r.bot, r.evidence));
+
+/**
+ * `17:04:36  Human   │ Cleo | Paris, FR   nodes/sop/box` — when, what sort of
+ * visitor, who, and what they did. Every event is a row: a page read, a raw
+ * .md read, a 404, and a search with the page it opened.
+ */
 function feedPanel(rows: FeedRow[], inner: number, maxRows: number, offset = 0): string[] {
   if (rows.length === 0) return [p.label("waiting for traffic…")];
   const kindW = 7;
@@ -469,35 +550,67 @@ function feedPanel(rows: FeedRow[], inner: number, maxRows: number, offset = 0):
   // clean 200, so a long path cannot push it past the border.
   const pathW = Math.max(8, inner - 9 - kindW - whoW - 3 - 4);
   return rows.slice(offset, offset + maxRows).map((r) => {
-    const k = fixKind(r.kind, r.bot, r.evidence);
+    const k = rowKind(r);
     // Humans get a name and a place, bots get their own name. "Sapporo, JP" —
     // the city alone repeats across countries, and the country alone is all
-    // there is when Cloudflare gave us no city.
-    const where = [r.city, r.country].filter(Boolean).join(", ");
+    // there is when Cloudflare gave us no city. A search row carries no city,
+    // so the place comes from the last page view by the same visitor.
+    const where = isSearch(r) ? placeOf(r.visitor, r.country) : [r.city, r.country].filter(Boolean).join(", ");
     // A reader who did not arrive on a top-level navigation is worth a second
     // look: every real click sends Sec-Fetch-Dest: document. Rows archived
     // before the worker measured headers carry no evidence and get no mark.
-    const thin = k === "human" && !!r.evidence && !r.evidence.includes("d");
+    const thin = k === "human" && !isSearch(r) && !!r.evidence && !r.evidence.includes("d");
     const who =
       k === "human"
         ? (thin ? "? " : "") +
           [NAME_HUMANS && r.visitor ? visitorName(r.visitor) : "", where || "unknown"].filter(Boolean).join(" | ")
-        : r.bot || r.country || "unnamed";
-    // A 404 read as an ordinary view until the worker recorded the status:
-    // a dead inbound link and a real read looked identical. Rows archived
-    // before that carry no status and get no mark.
-    const status = num(r.status);
-    return (
+        : r.bot || where || "unnamed";
+    const stamp =
       p.label(new Date(r.timestamp + (r.timestamp.endsWith("Z") ? "" : "Z")).toLocaleTimeString("en-GB")) +
       " " +
-      KIND_COLOUR[k](Title(k).padEnd(kindW)) +
+      (isSearch(r) ? p.accent("Search".padEnd(kindW)) : KIND_COLOUR[k](Title(k).padEnd(kindW))) +
       p.line("│ ") +
       KIND_COLOUR[k](padVis(truncEnd(who, whoW), whoW)) +
-      " " +
-      p.ink(link(SITE + r.path, truncate(shortPath(r.path), pathW))) +
-      (status >= 400 ? p.err(` ${status}`) : "")
+      " ";
+
+    if (isSearch(r)) return stamp + searchEvent(r, pathW + 4);
+
+    // A 404 read as an ordinary view until the worker recorded the status:
+    // a dead inbound link and a real read looked identical. Rows archived
+    // before that carry no status and get no mark. The .md suffix is likewise
+    // stripped from blob1 and restored here, so a raw-markdown read is visible
+    // without splitting the page's rollups in two.
+    const status = num(r.status);
+    const path = shortPath(r.path) + (num(r.markdown) === 1 ? ".md" : "");
+    return (
+      stamp + p.ink(link(SITE + r.path, truncate(path, pathW))) + (status >= 400 ? p.err(` ${status}`) : "")
     );
   });
+}
+
+/**
+ * `"pyro solver" → nodes/dop/pyrosolver`, or the whole row red when it failed.
+ * A query is truncated at its end, like a name: what someone typed first is
+ * what says most about what they wanted.
+ */
+function searchEvent(r: FeedRow, width: number): string {
+  const dest = r.dest ?? "";
+  const quoted = (w: number) => `"${truncEnd(r.q ?? "", Math.max(3, w - 2))}"`;
+  if (dest) {
+    const q = quoted(Math.floor(width * 0.5));
+    return (
+      p.ink(q) +
+      p.line(" → ") +
+      p.ink2(link(`${SITE}/docs/${dest}`, truncate(shortPath(`/docs/${dest}`), Math.max(6, width - vlen(q) - 3))))
+    );
+  }
+  // An API caller reads the JSON and goes wherever it likes, so it has no
+  // landing page and its result count is the only outcome there is.
+  if (!r.source || r.source === "api") {
+    const n = num(r.results);
+    return (n === 0 ? p.err : p.ink)(quoted(width - 5)) + (n === 0 ? p.err(" →0") : p.ink2(` →${n}`));
+  }
+  return p.err(quoted(width - 16) + " ✗ nothing found");
 }
 
 const hhmmss = (ts: string) => new Date(ts + (ts.endsWith("Z") ? "" : "Z")).toLocaleTimeString("en-GB");
@@ -507,31 +620,40 @@ const hhmmss = (ts: string) => new Date(ts + (ts.endsWith("Z") ? "" : "Z")).toLo
 // costs rows and answers no question.
 
 /**
- * `17:32:47  pyro solver  → nodes/dop/pyrosolver` — the query and the page it
- * opened, which is the only pair that says whether the search worked. A query
- * that landed nowhere is the error colour.
- *
- * API rows have no landing page by design (the caller reads the JSON and goes
- * wherever it likes), so they keep the older `→n` result count — as do rows
- * archived before the worker recorded a destination.
+ * `12 pyro solver   3✗` — the queries asked most often, with how many of them
+ * found nothing. Recent searches are not a panel any more: they are events in
+ * the feed, next to the pages they led to.
  */
-function recentSearchPanel(rows: SearchRow[], inner: number, maxRows: number): string[] {
+function topSearchPanel(inner: number, maxRows: number): string[] {
+  const rows = topSearchRows.all(utc(Date.now() - 24 * 3600_000)) as { q: string; n: number; misses: number }[];
   if (rows.length === 0) return [];
-  const width = inner - 9; // after the timestamp
-  const qW = Math.max(6, Math.floor(width * 0.45));
-  const destW = Math.max(6, width - qW - 3);
   return rows.slice(0, maxRows).map((r) => {
-    const dest = r.dest ?? "";
-    const headless = !r.source || r.source === "api";
-    const q = p.label(hhmmss(r.timestamp)) + " " + p.ink(padVis(truncate(r.q, qW), qW));
-    // `dest` is a slug, not a path — shortPath wants the URL it will link to.
-    if (dest) return q + p.line(" → ") + p.ink2(link(`${SITE}/docs/${dest}`, truncate(shortPath(`/docs/${dest}`), destW)));
-    if (headless) {
-      const n = num(r.results);
-      return q + (n === 0 ? p.err(" →0") : p.ink2(` →${n}`));
-    }
-    return q + p.err(" ✗ nothing found");
+    const miss = r.misses > 0 ? p.err(`${r.misses}✗`.padStart(4)) : "";
+    return (
+      p.ink2(String(r.n).padStart(4)) +
+      " " +
+      p.ink(padVis(truncate(r.q, inner - 5 - vlen(miss)), inner - 5 - vlen(miss))) +
+      miss
+    );
   });
+}
+
+/**
+ * Feed rows counted per kind, for the "Current view" row: what is on screen
+ * right now, however it was filtered and scrolled. Searches are events, not
+ * page views, so they are not counted here.
+ */
+function countRowsByKind(rows: FeedRow[]): KindRow[] {
+  const acc = new Map<Kind, { views: number; visitors: Set<string> }>();
+  for (const r of rows) {
+    if (isSearch(r)) continue;
+    const k = rowKind(r);
+    const cur = acc.get(k) ?? { views: 0, visitors: new Set<string>() };
+    cur.views++;
+    if (r.visitor) cur.visitors.add(r.visitor);
+    acc.set(k, cur);
+  }
+  return [...acc].map(([kind, v]) => ({ kind, views: String(v.views), visitors: String(v.visitors.size) }));
 }
 
 /** Where readers came from, host only — direct and same-site hits are not rows. */
@@ -687,8 +809,8 @@ interface State {
   paths: PathRow[];
   feed: FeedRow[];
   lastFeedTs: string | null;
-  searches: SearchRow[];
-  lastSearchTs: string | null;
+  /** Everything ever archived on this machine — read from SQLite, not the API. */
+  lifetime: KindRow[];
   stored: number;
   lastError: string | null;
   /** h/a/c: show only this kind in the feed, pages and chart. null = all. */
@@ -710,7 +832,7 @@ function stack(state: State, width: number, height: number): string[] {
     if (lines(1).length > 0) panels.push({ title, lines });
   };
   add(p.accent("Top Pages"), (n) => topPathsPanel(filterPaths(state), inner, n));
-  add(p.accent("Recent Searches"), (n) => recentSearchPanel(state.searches, inner, n));
+  add(p.accent("Top Searches") + p.line(" ") + p.label("24h"), (n) => topSearchPanel(inner, n));
   add(p.accent("Dead Queries"), (n) => deadQueryPanel(inner, n));
   add(p.accent("Referrers") + p.line(" ") + p.label("24h"), (n) => referrerPanel(inner, n));
   add(p.accent("Refined Searches") + p.line(" ") + p.label("24h"), (n) => refinementPanel(chains, inner, n));
@@ -725,7 +847,7 @@ function stack(state: State, width: number, height: number): string[] {
 
 // Filters apply to what the row IS, not what was recorded — see fixKind.
 const filterFeed = (state: State) =>
-  state.filter ? state.feed.filter((r) => fixKind(r.kind, r.bot, r.evidence) === state.filter) : state.feed;
+  state.filter ? state.feed.filter((r) => rowKind(r) === state.filter) : state.feed;
 const filterPaths = (state: State) => (state.filter ? state.paths.filter((r) => asKind(r.kind) === state.filter) : state.paths);
 
 function frame(state: State, exclude: string | null): string[] {
@@ -752,15 +874,19 @@ function frame(state: State, exclude: string | null): string[] {
     (state.lastError ? p.err(`  · ${state.lastError.replace(/\s+/g, " ")}`) : "");
 
   const chartH = CHART_H + 3; // braille rows + caption + borders
-  const trafficH = 7; // column header + three windows + unit caption + borders
+  const trafficH = 8; // column header + four windows + unit caption + borders
   const mainH = Math.max(8, H - 1 - chartH);
   const wide = W >= 96;
+  const feed = filterFeed(state);
+  // The feed panel's own height, so "Current view" counts exactly the rows on
+  // screen — filtered and scrolled the same way the chart is filtered.
+  const feedRows = (wide ? mainH : Math.max(5, mainH - trafficH - 8)) - 2;
   const windows = [
-    { label: `Now ${LIVE_MINUTES}m`, rows: state.live },
+    { label: "Current view", rows: countRowsByKind(feed.slice(state.feedOffset, state.feedOffset + feedRows)) },
     { label: `Last ${windowMin}m`, rows: state.recent },
     { label: "Last 24h", rows: state.day },
+    { label: "Lifetime", rows: state.lifetime },
   ];
-  const feed = filterFeed(state);
   const feedTitle =
     p.accent("Live Feed") + (state.feedOffset > 0 ? p.line("  ") + p.label(`+${state.feedOffset} back · g live`) : "");
 
@@ -809,19 +935,35 @@ function draw(state: State, exclude: string | null) {
 
 // ---------- queries ----------
 
+/** crawler beats agent beats human: what a visitor looked like at its least human. */
+const KIND_RANK: Record<Kind, number> = { human: 0, agent: 1, crawler: 2 };
+
 /**
- * Every rollup groups by bot family as well as kind, then folds the groups in
- * JS through fixKind — the stored kind of a 90-day-old row cannot be trusted
- * (see fixKind), and the bot name that corrects it is right there in blob5.
- * A visitor who is somehow both a bot and not is counted in both groups; at
- * this traffic that is a rounding error against getting SemrushBot right.
+ * Every rollup groups by visitor as well as kind, then folds the groups in JS
+ * through fixKind — the stored kind of a 90-day-old row cannot be trusted (see
+ * fixKind), and the bot name that corrects it is right there in blob5.
+ *
+ * Grouping by the visitor is what makes the visitor counts true. Counting
+ * distinct visitors per (kind, bot, evidence) group and adding the groups up
+ * counted one reader once per set of headers they happened to send: a day of
+ * ordinary browsing turned ~40 people into "200 visitors". A visitor is one
+ * visitor here, filed under the least human kind it ever looked like.
  */
-function foldKinds(rows: (KindRow & { bot?: string; evidence?: string })[]): KindRow[] {
-  const acc = new Map<Kind, { views: number; visitors: number }>();
+function foldKinds(rows: (VisitorRow & { bot?: string; evidence?: string })[]): KindRow[] {
+  const seen = new Map<string, { kind: Kind; views: number }>();
   for (const r of rows) {
     const k = fixKind(r.kind, r.bot, r.evidence);
-    const cur = acc.get(k) ?? { views: 0, visitors: 0 };
-    acc.set(k, { views: cur.views + num(r.views), visitors: cur.visitors + num(r.visitors) });
+    const cur = seen.get(r.visitor);
+    if (!cur) seen.set(r.visitor, { kind: k, views: num(r.views) });
+    else {
+      cur.views += num(r.views);
+      if (KIND_RANK[k] > KIND_RANK[cur.kind]) cur.kind = k;
+    }
+  }
+  const acc = new Map<Kind, { views: number; visitors: number }>();
+  for (const v of seen.values()) {
+    const cur = acc.get(v.kind) ?? { views: 0, visitors: 0 };
+    acc.set(v.kind, { views: cur.views + v.views, visitors: cur.visitors + 1 });
   }
   return [...acc].map(([kind, v]) => ({ kind, views: String(v.views), visitors: String(v.visitors) }));
 }
@@ -831,11 +973,11 @@ const DAY_MINUTES = 24 * 60;
 async function fetchRollups(exclude: string | null, withDay: boolean) {
   const notMine = exclude ? ` AND blob3 != '${exclude}'` : "";
   const since = (mins: number) => `timestamp > NOW() - INTERVAL '${mins}' MINUTE`;
-  type RollupRow = KindRow & { bot: string; evidence: string };
+  type RollupRow = VisitorRow & { bot: string; evidence: string };
   const rollup = (mins: number) => `
-    SELECT blob2 AS kind, blob5 AS bot, blob7 AS evidence,
-           SUM(_sample_interval) AS views, COUNT(DISTINCT index1) AS visitors
-    FROM ${DATASET} WHERE ${since(mins)} AND ${KIND_ROWS_FILTER}${notMine} GROUP BY kind, bot, evidence`;
+    SELECT index1 AS visitor, blob2 AS kind, blob5 AS bot, blob7 AS evidence,
+           SUM(_sample_interval) AS views
+    FROM ${DATASET} WHERE ${since(mins)} AND ${KIND_ROWS_FILTER}${notMine} GROUP BY visitor, kind, bot, evidence`;
 
   const [live, recent, day, paths] = await Promise.all([
     query<RollupRow>(rollup(LIVE_MINUTES)),
@@ -866,14 +1008,26 @@ function tsLiteral(ts: string): string {
   return `toDateTime('${ts.replace("T", " ").replace(/\.\d+/, "").replace("Z", "").slice(0, 19)}')`;
 }
 
+/**
+ * Page views and searches in one stream. Both sorts live in the same dataset
+ * and the same columns: blob1 is a path or a query, blob7 is header evidence
+ * or a landing page, double1 is a status or a result count. blob2 says which,
+ * and the rows below are read accordingly — one query, one timeline.
+ */
 function feedQuery(exclude: string | null, since: string, limit: number): Promise<FeedRow[]> {
   const notMine = exclude ? ` AND blob3 != '${exclude}'` : "";
   return query<FeedRow>(`
     SELECT timestamp AS timestamp, blob1 AS path, blob2 AS kind, blob4 AS country,
            blob5 AS bot, blob6 AS city, blob7 AS evidence, blob8 AS referrer,
-           double1 AS status, index1 AS visitor
-    FROM ${DATASET} WHERE ${since} AND ${KIND_ROWS_FILTER}${notMine}
-    ORDER BY timestamp DESC LIMIT ${limit}`);
+           double1 AS status, double2 AS markdown, index1 AS visitor
+    FROM ${DATASET} WHERE ${since}${notMine}
+    ORDER BY timestamp DESC LIMIT ${limit}`).then((rows) =>
+    rows.map((r) =>
+      r.kind === "search"
+        ? { ...r, q: r.path, path: "", dest: r.evidence, source: r.bot, results: r.status, evidence: "", bot: "" }
+        : r,
+    ),
+  );
 }
 
 const fetchFeedIncrement = (exclude: string | null, lastTs: string | null) =>
@@ -882,15 +1036,20 @@ const fetchFeedIncrement = (exclude: string | null, lastTs: string | null) =>
 /** One query at startup so the chart has a full window, not just this session. */
 const fetchWindow = (exclude: string | null) => feedQuery(exclude, `timestamp > NOW() - INTERVAL '${windowMin}' MINUTE`, 2000);
 
-/** Search rows ride the slow tick — they are rare, and the cap is per day. */
-function fetchSearches(exclude: string | null, lastTs: string | null): Promise<SearchRow[]> {
-  const notMine = exclude ? ` AND blob3 != '${exclude}'` : "";
-  const since = lastTs ? `timestamp > ${tsLiteral(lastTs)}` : `timestamp > NOW() - INTERVAL '${windowMin}' MINUTE`;
-  return query<SearchRow>(`
-    SELECT timestamp AS timestamp, blob1 AS q, blob4 AS country, blob5 AS source,
-           blob6 AS category, blob7 AS dest, double1 AS results, index1 AS visitor
-    FROM ${DATASET} WHERE ${since} AND blob2 = 'search'${notMine}
-    ORDER BY timestamp DESC LIMIT 200`);
+/**
+ * Newest first, one row per event, duplicates dropped. The archive and the API
+ * overlap by design — the same row can arrive from both — and the primary keys
+ * of the two tables are what makes an event the same event.
+ */
+function mergeFeed(...sources: FeedRow[][]): FeedRow[] {
+  const byKey = new Map<string, FeedRow>();
+  for (const rows of sources) {
+    for (const r of rows) {
+      const key = `${r.timestamp}|${r.visitor}|${isSearch(r) ? r.q : r.path}`;
+      if (!byKey.has(key)) byKey.set(key, r);
+    }
+  }
+  return [...byKey.values()].sort((a, b) => b.timestamp.localeCompare(a.timestamp)).slice(0, FEED_CAP);
 }
 
 // ---------- self-test ----------
@@ -915,14 +1074,27 @@ function selfTest() {
   console.assert(fixKind("human", "", NO_EVIDENCE) === "agent", "fixKind: a human with no browser headers is a copied UA");
   console.assert(fixKind("human", "", "") === "human", "fixKind: a row from before we measured keeps its kind");
   const folded = foldKinds([
-    { kind: "agent", bot: "SemrushBot", views: "10", visitors: "1" },
-    { kind: "agent", bot: "ClaudeBot", views: "5", visitors: "2" },
-    { kind: "human", bot: "", evidence: "dmlc", views: "3", visitors: "3" },
-    { kind: "human", bot: "", evidence: NO_EVIDENCE, views: "7", visitors: "7" },
+    { visitor: "s1", kind: "agent", bot: "SemrushBot", views: "10" },
+    { visitor: "a1", kind: "agent", bot: "ClaudeBot", views: "5" },
+    { visitor: "h1", kind: "human", bot: "", evidence: "dmlc", views: "3" },
+    { visitor: "b1", kind: "human", bot: "", evidence: NO_EVIDENCE, views: "7" },
   ]);
   console.assert(num(by(folded, "crawler")?.views) === 10, "foldKinds: Semrush counted as a crawler");
   console.assert(num(by(folded, "agent")?.views) === 12, "foldKinds: bare-header humans join the agents");
   console.assert(num(by(folded, "human")?.views) === 3, "foldKinds: only corroborated humans are counted human");
+  // The bug this replaced: one reader whose headers varied across a day was
+  // counted once per variation, so 40 people read as 200 visitors.
+  const oneReader = foldKinds([
+    { visitor: "h1", kind: "human", bot: "", evidence: "dmlc", views: "4" },
+    { visitor: "h1", kind: "human", bot: "", evidence: "dml", views: "2" },
+  ]);
+  console.assert(num(by(oneReader, "human")?.visitors) === 1, "foldKinds: one visitor is one visitor");
+  console.assert(num(by(oneReader, "human")?.views) === 6, "foldKinds: their views still add up");
+  const alsoCrawled = foldKinds([
+    { visitor: "x", kind: "human", bot: "", evidence: "dmlc", views: "1" },
+    { visitor: "x", kind: "agent", bot: "SemrushBot", views: "1" },
+  ]);
+  console.assert(by(alsoCrawled, "human") === undefined, "foldKinds: a visitor is filed at its least human");
   console.assert(visitorName("abc") === visitorName("abc"), "visitorName: stable per visitor");
   console.assert(cell(3, 3) === "3" && cell(2, 9) === "2·9" && cell(0, 0) === "–", "cell: one number when they agree");
 
@@ -960,6 +1132,7 @@ function selfTest() {
     "chart: a filter drops the other kinds",
   );
 
+  const RED = "\x1b[38;2;217;100;122m"; // p.err, as the terminal receives it
   const feedRow = (over: Partial<FeedRow> = {}): FeedRow => ({
     timestamp: "2026-08-02T16:45:03Z",
     path: "/docs/a",
@@ -998,30 +1171,29 @@ function selfTest() {
     stripAnsi(refinementPanel(chains, 40, 3)[0]).includes("vellum → vellum grain"),
     "refine: chain rendered oldest to newest",
   );
-  const searchRow = (over: Partial<SearchRow> = {}): SearchRow => ({
-    timestamp: "2026-08-02T16:45:03Z",
-    q: "pyro",
-    country: "FR",
-    category: "",
-    results: "0",
-    visitor: "v",
-    ...over,
-  });
-  console.assert(stripAnsi(recentSearchPanel([searchRow()], 40, 3)[0]).includes("→0"), "search: an API row keeps its count");
+  const searchRow = (over: Partial<FeedRow> = {}): FeedRow =>
+    feedRow({ kind: "search", path: "", q: "pyro", results: "0", ...over });
+  const apiSearch = stripAnsi(feedPanel([searchRow()], 70, 3)[0]);
+  console.assert(apiSearch.includes("Search") && apiSearch.includes('"pyro"'), "feed: a search is an event like any other");
+  console.assert(apiSearch.includes("→0"), "feed: an API search keeps its result count");
   console.assert(
-    stripAnsi(
-      recentSearchPanel([searchRow({ source: "overlay", dest: "houdini/nodes/dop/pyrosolver", results: "6" })], 60, 3)[0],
-    ).includes("→ nodes/dop/pyrosolver"),
-    "search: a submitted search shows the page it opened",
+    stripAnsi(feedPanel([searchRow({ source: "overlay", dest: "houdini/nodes/dop/pyrosolver", results: "6" })], 78, 3)[0])
+      .includes("→ nodes/dop/pyrosolver"),
+    "feed: a submitted search shows the page it opened",
   );
+  const missed = feedPanel([searchRow({ source: "resolve", dest: "" })], 70, 3)[0];
+  console.assert(stripAnsi(missed).includes("✗"), "feed: a search that landed nowhere is a failure");
+  console.assert(missed.includes(RED), "feed: a failed search is drawn in the error colour");
+  console.assert(rowKind(searchRow({ source: "api" })) === "agent", "feed: an API search counts as an agent");
+  console.assert(rowKind(searchRow({ source: "overlay" })) === "human", "feed: a submitted search counts as a human");
   console.assert(
-    stripAnsi(recentSearchPanel([searchRow({ source: "resolve", dest: "" })], 40, 3)[0]).includes("✗"),
-    "search: a submitted search that landed nowhere is a failure",
+    stripAnsi(feedPanel([feedRow({ markdown: "1" })], 60, 5)[0]).includes("/docs/a.md"),
+    "feed: a raw markdown read is marked .md",
   );
-  console.assert(
-    recentSearchPanel([], 40, 3).length === 0 && refinementPanel([], 40, 3).length === 0,
-    "panels: empty means no box",
-  );
+  const counted = countRowsByKind([feedRow(), feedRow({ path: "/docs/b" }), searchRow(), feedRow({ visitor: "w" })]);
+  console.assert(num(by(counted, "human")?.views) === 3, "current view: every page view on screen is counted");
+  console.assert(num(by(counted, "human")?.visitors) === 2, "current view: a visitor is counted once");
+  console.assert(refinementPanel([], 40, 3).length === 0, "panels: empty means no box");
 
   const base: State = {
     live: rows,
@@ -1030,8 +1202,7 @@ function selfTest() {
     paths,
     feed: [],
     lastFeedTs: null,
-    searches: [],
-    lastSearchTs: null,
+    lifetime: rows,
     stored: 7,
     lastError: "boom",
     filter: null,
@@ -1064,10 +1235,11 @@ const state: State = {
   recent: [],
   day: [],
   paths: [],
-  feed: [],
+  // The feed starts as the whole archive, so scrolling back reaches every
+  // event ever recorded and not just the window this session has seen.
+  feed: mergeFeed(readArchive(FEED_CAP)),
   lastFeedTs: null,
-  searches: [],
-  lastSearchTs: null,
+  lifetime: readLifetime(),
   stored: num(countRows.get()?.n),
   lastError: null,
   filter: startFilter,
@@ -1081,13 +1253,7 @@ let rollupTicks = 0;
 async function tickRollups() {
   try {
     const withDay = rollupTicks++ % DAY_EVERY === 0;
-    const [rollups, searches] = await Promise.all([fetchRollups(exclude, withDay), fetchSearches(exclude, state.lastSearchTs)]);
-    Object.assign(state, rollups);
-    if (searches.length > 0) {
-      insertSearches(searches);
-      state.searches = [...searches, ...state.searches].slice(0, 200);
-      state.lastSearchTs = searches[0].timestamp;
-    }
+    Object.assign(state, await fetchRollups(exclude, withDay));
     state.lastError = null;
   } catch (err) {
     state.lastError = (err as Error).message;
@@ -1098,13 +1264,17 @@ async function tickFeed(full = false) {
   try {
     const fresh = full ? await fetchWindow(exclude) : await fetchFeedIncrement(exclude, state.lastFeedTs);
     if (fresh.length > 0) {
-      insertRows(fresh);
+      insertRows(fresh.filter((r) => !isSearch(r)));
+      insertSearches(fresh.filter(isSearch));
       state.stored = num(countRows.get()?.n);
-      state.feed = [...fresh, ...state.feed].slice(0, 200);
+      state.lifetime = readLifetime();
+      const before = state.feed.length;
+      state.feed = mergeFeed(fresh, state.feed);
       state.lastFeedTs = fresh[0].timestamp;
       // Rows arrive at the head, so a reader scrolled back must be pushed down
-      // by as many rows, or the feed slides under them while they read.
-      if (state.feedOffset > 0) state.feedOffset += fresh.length;
+      // by as many rows as were genuinely new, or the feed slides under them
+      // while they read.
+      if (state.feedOffset > 0) state.feedOffset += Math.max(0, state.feed.length - before);
     }
     state.lastError = null;
   } catch (err) {
