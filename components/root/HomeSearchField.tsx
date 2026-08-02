@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { isValidDocUrl, extractSlugFromUrl } from "@/lib/url";
 import { cn } from "@/lib/utils";
 import { useDebouncedSearch } from "@/lib/search/useDebouncedSearch";
+import { logSearch } from "@/lib/search/log";
 import { SearchResultList, toRows } from "@/components/search/SearchResultList";
 import ProgressLogEntry from "@/components/root/progress-log-entry/ProgressLogEntry";
 
@@ -202,8 +203,11 @@ export function HomeSearchField() {
 
   // A dropdown pick is an already-indexed page — navigate straight there
   // instead of round-tripping through /api/resolve, same as the search overlay.
+  // No server sees this search, so it is beaconed; the /api/resolve and
+  // /api/generate paths above are recorded by the worker instead.
   function selectResult(slug: string) {
     setDropdownOpen(false);
+    logSearch(url, slug.split("#")[0], "home");
     router.push(`/docs/${slug}`);
   }
 

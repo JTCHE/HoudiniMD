@@ -61,10 +61,7 @@ export function middleware(request: NextRequest) {
     // AI agents / programmatic fetchers → redirect to the .md equivalent so they
     // receive raw markdown instead of the Next.js-rendered HTML. Search and
     // social crawlers fall through to the HTML below.
-    if (wantsMarkdown(
-      request.headers.get('user-agent'),
-      request.headers.get('sec-fetch-dest'),
-    )) {
+    if (wantsMarkdown(request.headers.get('user-agent'), request.headers)) {
       url.pathname = `${pathname}.md`;
       return NextResponse.redirect(url, 302);
     }

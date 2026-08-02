@@ -49,9 +49,13 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-/** Parses `\x1b[<codes>m` SGR sequences into nested <span>s; `0` closes all. */
+/**
+ * Parses `\x1b[<codes>m` SGR sequences into nested <span>s; `0` closes all.
+ * OSC 8 hyperlinks are dropped first: a real terminal makes the label
+ * clickable, a screenshot has nothing to click.
+ */
 function ansiToHtml(raw: string): string {
-  const parts = raw.split(/\x1b\[([0-9;]*)m/);
+  const parts = raw.replace(/\x1b\]8;;[^\x1b\x07]*(?:\x1b\\|\x07)/g, "").split(/\x1b\[([0-9;]*)m/);
   let open = 0;
   let html = "";
   for (let i = 0; i < parts.length; i++) {

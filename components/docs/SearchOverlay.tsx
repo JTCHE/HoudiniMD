@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { showToast } from "@/components/ui/toast-notification";
 import { useDebouncedSearch } from "@/lib/search/useDebouncedSearch";
 import { recordClick } from "@/lib/search/clicks";
+import { logSearch } from "@/lib/search/log";
 import { SearchResultList, toRows, type ListResult } from "@/components/search/SearchResultList";
 
 /**
@@ -183,6 +184,7 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
         // Opening a result answers the query better than any score could. Only
         // when there IS a query — a click from the recents list teaches nothing.
         recordClick(queryRef.current, result.path);
+        logSearch(queryRef.current, result.path, "overlay");
         streamAndNavigate(anchor ? `${slug}#${anchor}` : slug);
         return;
       }

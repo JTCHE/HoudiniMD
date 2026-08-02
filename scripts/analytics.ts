@@ -29,16 +29,28 @@
  *   bun scripts/analytics.ts --once             # print one frame and exit (no alt screen)
  *   bun scripts/analytics.ts --width 132 --height 40  # force a size (for tui-shot.ts)
  *   bun scripts/analytics.ts --keep-mine        # do not filter out this machine
+ *   bun scripts/analytics.ts --filter human     # start filtered (see the h/a/c keys)
+ *
+ * Keys: q quit · h/a/c filter to humans/agents/crawlers (again to clear) ·
+ *       j/k or ↑/↓ scroll the live feed · g back to live.
  */
 
 import { Database } from "bun:sqlite";
 import { parseArgs, getNumber, rgb } from "./lib/cli";
 import { visitorHash } from "../lib/visitor-hash";
+import { NO_EVIDENCE, visitorKind } from "../lib/wants-markdown";
 
 const DATASET = "houdinimd_views";
 const LIVE_MINUTES = 5; // "on the site now" — a page read plus a little slack
 const KINDS = ["human", "agent", "crawler"] as const;
 type Kind = (typeof KINDS)[number];
+
+/**
+ * Humans are anonymous, which makes a returning visitor invisible in the feed.
+ * Give each visitor hash a stable name so the same person reads as the same
+ * person. Set false to go back to plain city names.
+ */
+const NAME_HUMANS = true;
 const KIND_ROWS_FILTER = `blob2 IN ('human','agent','crawler')`; // excludes blob2='search' rows
 const GAP = " ";
 const CHART_H = 6; // rows of braille in the activity chart
@@ -51,6 +63,9 @@ const windowMin = getNumber(args, "window", 30);
 const forcedWidth = args.values.has("width") ? getNumber(args, "width", 120) : null;
 const forcedHeight = args.values.has("height") ? getNumber(args, "height", 34) : null;
 const once = args.flags.has("once");
+// The h/a/c keys can't be pressed in --once mode, and tui-shot.ts draws one
+// frame — this is the same filter, for a screenshot or a piped frame.
+const startFilter = KINDS.find((k) => k === args.values.get("filter")) ?? null;
 
 /**
  * Dim-blue palette. Nothing is ever black or white: the darkest ink is a
@@ -102,8 +117,30 @@ async function ownIpHash(): Promise<string | null> {
 
 // ---------- local archive ----------
 
-interface FeedRow { timestamp: string; path: string; kind: string; country: string; bot: string; city: string; visitor: string }
-interface SearchRow { timestamp: string; q: string; country: string; category: string; results: string; visitor: string }
+interface FeedRow {
+  timestamp: string;
+  path: string;
+  kind: string;
+  country: string;
+  bot: string;
+  city: string;
+  visitor: string;
+  evidence?: string;
+  status?: string;
+  referrer?: string;
+}
+interface SearchRow {
+  timestamp: string;
+  q: string;
+  country: string;
+  category: string;
+  results: string;
+  visitor: string;
+  /** Which submit path it came from — api · resolve · generate · overlay · home. */
+  source?: string;
+  /** The page the reader landed on. Empty means the search found nothing. */
+  dest?: string;
+}
 
 /**
  * Analytics Engine keeps 90 days; this keeps everything. The primary key
@@ -115,25 +152,105 @@ db.run(`CREATE TABLE IF NOT EXISTS views (
   ts TEXT NOT NULL, visitor TEXT NOT NULL, path TEXT NOT NULL,
   kind TEXT NOT NULL, country TEXT, city TEXT, bot TEXT,
   PRIMARY KEY (ts, visitor, path)) WITHOUT ROWID`);
-const insertRow = db.prepare("INSERT OR IGNORE INTO views VALUES (?,?,?,?,?,?,?)");
+/**
+ * Columns added after the table existed. Every one defaults to the empty
+ * string, which each read path treats as "never measured" rather than
+ * "measured and empty" — an archive predating a column must not read as a
+ * fleet of header-less visitors, or of 404s.
+ */
+function addColumn(table: string, name: string, decl: string) {
+  const columns = db.query(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  if (!columns.some((c) => c.name === name)) db.run(`ALTER TABLE ${table} ADD COLUMN ${name} ${decl}`);
+}
+addColumn("views", "evidence", "TEXT NOT NULL DEFAULT ''");
+addColumn("views", "status", "TEXT NOT NULL DEFAULT ''");
+addColumn("views", "referrer", "TEXT NOT NULL DEFAULT ''");
+const insertRow = db.prepare("INSERT OR IGNORE INTO views VALUES (?,?,?,?,?,?,?,?,?,?)");
 const insertRows = db.transaction((rows: FeedRow[]) => {
-  for (const r of rows) insertRow.run(r.timestamp, r.visitor ?? "", r.path, r.kind, r.country ?? "", r.city ?? "", r.bot ?? "");
+  for (const r of rows)
+    insertRow.run(
+      r.timestamp,
+      r.visitor ?? "",
+      r.path,
+      r.kind,
+      r.country ?? "",
+      r.city ?? "",
+      r.bot ?? "",
+      r.evidence ?? "",
+      r.status ?? "",
+      r.referrer ?? "",
+    );
 });
 const countRows = db.prepare("SELECT COUNT(*) AS n FROM views");
+
+/**
+ * The kind a row would get today. Analytics Engine rows are immutable and keep
+ * 90 days of whatever visitorKind() believed at write time — SemrushBot spent
+ * that window filed as an "agent" — so every read path re-derives the kind
+ * instead of trusting the stored one:
+ *
+ *   - a named bot is re-classified from its name (blob5);
+ *   - a "human" that carried none of the browser-only headers (blob7 = "-") is
+ *     a copied user-agent, and is counted as an agent.
+ *
+ * An empty `evidence` is a row archived before the worker measured headers at
+ * all; it keeps its stored kind, because there is nothing to judge it on.
+ */
+const fixKind = (kind: string, bot: string | null | undefined, evidence?: string | null): Kind => {
+  if (bot) return visitorKind(bot);
+  if (kind === "human" && evidence === NO_EVIDENCE) return "agent";
+  return asKind(kind);
+};
+
+/** Same correction, applied once to the rows already archived locally. */
+function backfillKinds() {
+  const rows = db.query("SELECT DISTINCT bot, kind, evidence FROM views").all() as {
+    bot: string;
+    kind: string;
+    evidence: string;
+  }[];
+  const update = db.prepare("UPDATE views SET kind = ? WHERE bot = ? AND evidence = ? AND kind != ?");
+  let fixed = 0;
+  for (const r of rows) {
+    const want = fixKind(r.kind, r.bot, r.evidence);
+    if (want !== r.kind) fixed += update.run(want, r.bot, r.evidence, want).changes;
+  }
+  return fixed;
+}
 
 db.run(`CREATE TABLE IF NOT EXISTS searches (
   ts TEXT NOT NULL, visitor TEXT NOT NULL, q TEXT NOT NULL,
   country TEXT, category TEXT, results INTEGER,
   PRIMARY KEY (ts, visitor, q)) WITHOUT ROWID`);
-const insertSearch = db.prepare("INSERT OR IGNORE INTO searches VALUES (?,?,?,?,?,?)");
+addColumn("searches", "source", "TEXT NOT NULL DEFAULT ''");
+addColumn("searches", "dest", "TEXT NOT NULL DEFAULT ''");
+const insertSearch = db.prepare("INSERT OR IGNORE INTO searches VALUES (?,?,?,?,?,?,?,?)");
 const insertSearches = db.transaction((rows: SearchRow[]) => {
-  for (const r of rows) insertSearch.run(r.timestamp, r.visitor ?? "", r.q, r.country ?? "", r.category ?? "", num(r.results));
+  for (const r of rows)
+    insertSearch.run(
+      r.timestamp,
+      r.visitor ?? "",
+      r.q,
+      r.country ?? "",
+      r.category ?? "",
+      num(r.results),
+      r.source ?? "",
+      r.dest ?? "",
+    );
 });
-/** Every query that ever found nothing, heaviest first — the content gaps. */
+/**
+ * Every query that ever found nothing, heaviest first — the content gaps.
+ * A row with a landing page is not a gap even when the ranker returned no
+ * count for it, so `dest` decides here, not `results`.
+ */
 const deadRows = db.prepare(
-  "SELECT q, COUNT(*) AS n FROM searches WHERE results = 0 GROUP BY q ORDER BY n DESC, MAX(ts) DESC LIMIT 30",
+  "SELECT q, COUNT(*) AS n FROM searches WHERE results = 0 AND dest = '' GROUP BY q ORDER BY n DESC, MAX(ts) DESC LIMIT 30",
 );
 const chainRows = db.prepare("SELECT visitor, ts, q FROM searches WHERE ts > ? ORDER BY visitor, ts");
+/** Referring hosts, busiest first. Same-site and direct hits are stored empty. */
+const referrerRows = db.prepare(
+  "SELECT referrer AS host, COUNT(*) AS n FROM views WHERE referrer != '' AND ts > ? GROUP BY referrer ORDER BY n DESC, MAX(ts) DESC LIMIT 10",
+);
 
 const CHAIN_GAP_MS = 60_000;
 
@@ -159,17 +276,17 @@ function refinementChains(hours: number): { ts: string; queries: string[] }[] {
 }
 // `ts` is stored as UTC "YYYY-MM-DD HH:MM:SS", so a plain string compare is a
 // chronological one — no strftime, no TEXT-vs-INTEGER affinity surprises.
-const sinceRows = db.prepare("SELECT ts FROM views WHERE ts > ?");
+const sinceRows = db.prepare("SELECT ts, kind FROM views WHERE ts > ?");
 const utc = (ms: number) => new Date(ms).toISOString().replace("T", " ").slice(0, 19);
 
-/** `buckets` samples covering the last `windowMin`, oldest first. */
-function chartSeries(buckets: number): number[] {
+/** `buckets` samples per kind covering the last `windowMin`, oldest first. */
+function chartSeries(buckets: number): Record<Kind, number[]> {
   const now = Date.now();
   const span = windowMin * 60_000;
-  const out = new Array(buckets).fill(0);
-  for (const r of sinceRows.all(utc(now - span)) as { ts: string }[]) {
+  const out = Object.fromEntries(KINDS.map((k) => [k, new Array(buckets).fill(0)])) as Record<Kind, number[]>;
+  for (const r of sinceRows.all(utc(now - span)) as { ts: string; kind: string }[]) {
     const i = buckets - 1 - Math.floor(((now - Date.parse(r.ts + "Z")) / span) * buckets);
-    if (i >= 0 && i < buckets) out[i]++;
+    if (i >= 0 && i < buckets) out[asKind(r.kind)][i]++;
   }
   return out;
 }
@@ -178,10 +295,20 @@ function chartSeries(buckets: number): number[] {
 
 const num = (v: unknown) => Number(v ?? 0);
 
+// Colour (CSI SGR) and hyperlink (OSC 8) sequences both occupy zero columns.
 function stripAnsi(s: string): string {
-  return s.replace(/\x1b\[[0-9;]*m/g, "");
+  return s.replace(/\x1b\]8;;[^\x1b\x07]*(?:\x1b\\|\x07)|\x1b\[[0-9;]*m/g, "");
 }
 const vlen = (s: string) => stripAnsi(s).length;
+
+/**
+ * OSC 8 hyperlink: ⌘-click (ctrl-click on Linux) opens `url` in the default
+ * browser. Terminals that don't support it ignore the escape and print `label`,
+ * so there is nothing to feature-detect.
+ */
+const link = (url: string, label: string) => `\x1b]8;;${url}\x1b\\${label}\x1b]8;;\x1b\\`;
+
+const SITE = "https://houdinimd.com";
 
 /** Pad a coloured string to `width` visible chars (clips plain if too long). */
 function padVis(s: string, width: number): string {
@@ -195,16 +322,47 @@ function truncate(label: string, width: number): string {
   return label.length > width ? "…" + label.slice(-(width - 1)) : label;
 }
 
+/** The other way round: names and places carry their meaning at the front. */
+const truncEnd = (label: string, width: number) => (label.length > width ? label.slice(0, width - 1) + "…" : label);
+
 /** Every doc path opens with the same 14 chars; they are not information. */
 const shortPath = (path: string) => (path.startsWith("/docs/houdini/") ? path.slice(14) : path);
 
+// Short, unambiguous when truncated, and none of them is a Houdini node name.
+const NAMES =
+  "Ada Bo Cleo Dex Echo Fern Gus Hana Ivo Juno Kit Lex Mira Nix Otto Pia Quin Rho Sage Tao Uma Vera Wren Xan Yuki Zev Alba Brin Coda Dove Elm Flint Gale Hollis Iris Jet Koa Lark Moss Nell Onyx Pike Reed Sky Thorn Vale Wisp Yarrow".split(
+    " ",
+  );
+
+/**
+ * A stable name per visitor hash (which the worker derives from IP + UA), so a
+ * returning reader is recognisable in the feed without storing anything about
+ * them. Collisions are fine and expected — this labels a session, it does not
+ * identify a person.
+ */
+function visitorName(visitor: string): string {
+  let h = 0;
+  for (let i = 0; i < visitor.length; i++) h = (h * 31 + visitor.charCodeAt(i)) >>> 0;
+  return NAMES[h % NAMES.length];
+}
+
 const KIND_COLOUR: Record<Kind, (s: string) => string> = { human: p.human, agent: p.agent, crawler: p.crawler };
 /** Each kind also gets its own fill density, so the stacked bars read in mono. */
-const KIND_FILL: Record<Kind, string> = { human: "█", agent: "█", crawler: "█" };
+const KIND_FILL: Record<Kind, string> = { human: "█", agent: "▓", crawler: "▒" };
 const Title = (k: Kind) => k[0].toUpperCase() + k.slice(1);
 
-interface KindRow { kind: string; views: string; visitors: string }
-interface PathRow { path: string; kind: string; views: string }
+interface KindRow {
+  kind: string;
+  views: string;
+  visitors: string;
+}
+interface PathRow {
+  path: string;
+  kind: string;
+  views: string;
+  bot?: string;
+  evidence?: string;
+}
 
 const by = (rows: KindRow[], kind: Kind) => rows.find((r) => r.kind === kind);
 const asKind = (k: string): Kind => (KINDS.includes(k as Kind) ? (k as Kind) : "agent");
@@ -212,32 +370,72 @@ const asKind = (k: string): Kind => (KINDS.includes(k as Kind) ? (k as Kind) : "
 // ---------- panels: each returns lines sized to `inner` visible chars ----------
 
 /**
- * One window per row: visitors, views, and a stacked bar split by kind.
- * Three rollup panels collapsed into three columns of one dense table.
+ * `visitors·views` — who came, then how much they read. One number when the
+ * two are equal, because "3·3" says nothing "3" doesn't.
+ */
+const cell = (visitors: number, views: number) =>
+  views === 0 ? "–" : visitors === views ? String(views) : `${visitors}·${views}`;
+
+/**
+ * One window per row, one column per kind — the split is read, never inferred.
+ * The trailing bar is the same split as a shape, for the glance that doesn't
+ * stop to read digits.
  */
 function trafficPanel(windows: { label: string; rows: KindRow[] }[], inner: number): string[] {
-  const total = (rows: KindRow[]) => KINDS.reduce((n, k) => n + num(by(rows, k)?.views), 0);
-  const labelW = Math.max(...windows.map((w) => w.label.length));
-  // Units live in the header row, not on every number — that width goes to the
-  // bars instead. Overrun the `inner` budget and padVis clips the row, which
-  // strips its colour along with the overflow.
-  const barW = Math.max(4, inner - labelW - 14);
-  const rows = [p.label(" ".repeat(labelW) + "visits".padStart(6) + "views".padStart(6))];
-  rows.push(...windows.map((w) => {
-    const visitors = KINDS.reduce((n, k) => n + num(by(w.rows, k)?.visitors), 0);
-    const views = total(w.rows);
-    // Each row is normalised to its own total: the bar is a share of traffic,
-    // not a volume — 5m always losing to 30m tells you nothing.
-    const cells = KINDS.map((k) => (views > 0 ? Math.round((num(by(w.rows, k)?.views) / views) * barW) : 0));
-    if (views > 0) {
+  const labelW = Math.max(...windows.map((w) => w.label.length), 8);
+  const sum = (ns: number[]) => ns.reduce((a, b) => a + b, 0);
+  // Columns are sized to their content, never to a guess: a clipped row loses
+  // its colour along with its overflow, and these numbers grow all day. When
+  // even that will not fit, visitors are dropped before the table is mangled.
+  const build = (compact: boolean) => {
+    const rows = windows.map((w) => {
+      const views = KINDS.map((k) => num(by(w.rows, k)?.views));
+      const visitors = KINDS.map((k) => num(by(w.rows, k)?.visitors));
+      const one = (v: number, n: number) => (compact ? (n === 0 ? "–" : String(n)) : cell(v, n));
+      return {
+        label: w.label,
+        views,
+        cells: KINDS.map((_, i) => one(visitors[i], views[i])),
+        total: one(sum(visitors), sum(views)),
+      };
+    });
+    const colW = Math.max(...KINDS.map((k) => Title(k).length + 1), ...rows.flatMap((d) => d.cells.map((c) => c.length + 1)));
+    const totalW = Math.max(4, ...rows.map((d) => d.total.length + 2));
+    return { rows, colW, totalW, width: labelW + KINDS.length * colW + totalW };
+  };
+  let { rows: data, colW, totalW, width } = build(false);
+  const compact = width > inner;
+  if (compact) ({ rows: data, colW, totalW, width } = build(true));
+  // Whatever is left goes to the bar; below ~8 columns a three-part bar is a
+  // smudge rather than a shape, so it gets nothing.
+  const spare = inner - width - 1;
+  const barW = spare >= 8 ? spare : 0;
+
+  const head =
+    p.label("".padEnd(labelW)) +
+    KINDS.map((k) => KIND_COLOUR[k](Title(k).padStart(colW))).join("") +
+    p.label("all".padStart(totalW));
+  const rows = data.map((d) => {
+    const total = d.views.reduce((a, b) => a + b, 0);
+    // The bar is normalised to its own row: a share of traffic, not a volume —
+    // 5m always losing to 30m tells you nothing.
+    const widths = d.views.map((v) => (total > 0 ? Math.round((v / total) * barW) : 0));
+    if (total > 0) {
       // Rounding drift lands on the dominant kind, so the bar always fills.
-      const top = cells.indexOf(Math.max(...cells));
-      cells[top] += barW - cells.reduce((a, b) => a + b, 0);
+      const top = widths.indexOf(Math.max(...widths));
+      widths[top] += barW - widths.reduce((a, b) => a + b, 0);
     }
-    const bar = KINDS.map((k, i) => KIND_COLOUR[k](KIND_FILL[k].repeat(Math.max(0, cells[i])))).join("");
-    return p.label(w.label.padEnd(labelW)) + p.ink(String(visitors).padStart(6) + String(views).padStart(6)) + "  " + bar;
-  }));
-  return rows;
+    const bar = KINDS.map((k, i) => KIND_COLOUR[k](KIND_FILL[k].repeat(Math.max(0, widths[i])))).join("");
+    return (
+      p.label(d.label.padEnd(labelW)) +
+      KINDS.map((k, i) => KIND_COLOUR[k](d.cells[i].padStart(colW))).join("") +
+      p.ink(d.total.padStart(totalW)) +
+      " " +
+      bar
+    );
+  });
+  const units = compact ? "views" : "visitors·views";
+  return [head, ...rows, p.label(units.padStart(labelW + KINDS.length * colW))];
 }
 
 function topPathsPanel(rows: PathRow[], inner: number, maxRows: number): string[] {
@@ -255,65 +453,106 @@ function topPathsPanel(rows: PathRow[], inner: number, maxRows: number): string[
     return (
       KIND_COLOUR[k](String(num(r.views)).padStart(4)) +
       " " +
-      p.ink(padVis(truncate(shortPath(r.path), labelW), labelW)) +
+      p.ink(link(SITE + r.path, padVis(truncate(shortPath(r.path), labelW), labelW))) +
       " " +
       p.line("▄".repeat(fill) + "▁".repeat(barW - fill))
     );
   });
 }
 
-/** `17:04:36  Human    │ Paris, FR       /docs/…` — kind, then who, then where. */
-function feedPanel(rows: FeedRow[], inner: number, maxRows: number): string[] {
+/** `17:04:36  Human    │ Cleo, Paris     /docs/…` — kind, then who, then where. */
+function feedPanel(rows: FeedRow[], inner: number, maxRows: number, offset = 0): string[] {
   if (rows.length === 0) return [p.label("waiting for traffic…")];
   const kindW = 7;
-  const whoW = 11; // country code, or a bot name — paths need the rest
-  const pathW = Math.max(8, inner - 9 - kindW - whoW - 3);
-  return rows.slice(0, maxRows).map((r) => {
-    const k = asKind(r.kind);
-    // Humans get a place, bots get their name; both fall back to the country.
+  const whoW = 20; // a name and a place, or a bot name — paths need the rest
+  // Four trailing columns are kept for the status of anything that was not a
+  // clean 200, so a long path cannot push it past the border.
+  const pathW = Math.max(8, inner - 9 - kindW - whoW - 3 - 4);
+  return rows.slice(offset, offset + maxRows).map((r) => {
+    const k = fixKind(r.kind, r.bot, r.evidence);
+    // Humans get a name and a place, bots get their own name. "Sapporo, JP" —
+    // the city alone repeats across countries, and the country alone is all
+    // there is when Cloudflare gave us no city.
+    const where = [r.city, r.country].filter(Boolean).join(", ");
+    // A reader who did not arrive on a top-level navigation is worth a second
+    // look: every real click sends Sec-Fetch-Dest: document. Rows archived
+    // before the worker measured headers carry no evidence and get no mark.
+    const thin = k === "human" && !!r.evidence && !r.evidence.includes("d");
     const who =
       k === "human"
-        ? [r.city, r.country].filter(Boolean).join(", ") || "unknown"
+        ? (thin ? "? " : "") +
+          [NAME_HUMANS && r.visitor ? visitorName(r.visitor) : "", where || "unknown"].filter(Boolean).join(" | ")
         : r.bot || r.country || "unnamed";
+    // A 404 read as an ordinary view until the worker recorded the status:
+    // a dead inbound link and a real read looked identical. Rows archived
+    // before that carry no status and get no mark.
+    const status = num(r.status);
     return (
       p.label(new Date(r.timestamp + (r.timestamp.endsWith("Z") ? "" : "Z")).toLocaleTimeString("en-GB")) +
       " " +
       KIND_COLOUR[k](Title(k).padEnd(kindW)) +
       p.line("│ ") +
-      KIND_COLOUR[k](padVis(truncate(who, whoW), whoW)) +
+      KIND_COLOUR[k](padVis(truncEnd(who, whoW), whoW)) +
       " " +
-      p.ink(truncate(shortPath(r.path), pathW))
+      p.ink(link(SITE + r.path, truncate(shortPath(r.path), pathW))) +
+      (status >= 400 ? p.err(` ${status}`) : "")
     );
   });
 }
 
 const hhmmss = (ts: string) => new Date(ts + (ts.endsWith("Z") ? "" : "Z")).toLocaleTimeString("en-GB");
 
-/** `17:32:47  vellum grain              →0` — misses in the error colour. */
+// The three search panels return nothing at all when they have nothing to
+// show, and stack() drops the whole box: an empty widget is a widget that
+// costs rows and answers no question.
+
+/**
+ * `17:32:47  pyro solver  → nodes/dop/pyrosolver` — the query and the page it
+ * opened, which is the only pair that says whether the search worked. A query
+ * that landed nowhere is the error colour.
+ *
+ * API rows have no landing page by design (the caller reads the JSON and goes
+ * wherever it likes), so they keep the older `→n` result count — as do rows
+ * archived before the worker recorded a destination.
+ */
 function recentSearchPanel(rows: SearchRow[], inner: number, maxRows: number): string[] {
-  if (rows.length === 0) return [p.label("no searches yet")];
-  const qW = Math.max(6, inner - 9 - 5);
+  if (rows.length === 0) return [];
+  const width = inner - 9; // after the timestamp
+  const qW = Math.max(6, Math.floor(width * 0.45));
+  const destW = Math.max(6, width - qW - 3);
   return rows.slice(0, maxRows).map((r) => {
-    const n = num(r.results);
-    return (
-      p.label(hhmmss(r.timestamp)) +
-      " " +
-      p.ink(padVis(truncate(r.q, qW), qW)) +
-      (n === 0 ? p.err("   →0") : p.ink2(`→${n}`.padStart(5)))
-    );
+    const dest = r.dest ?? "";
+    const headless = !r.source || r.source === "api";
+    const q = p.label(hhmmss(r.timestamp)) + " " + p.ink(padVis(truncate(r.q, qW), qW));
+    // `dest` is a slug, not a path — shortPath wants the URL it will link to.
+    if (dest) return q + p.line(" → ") + p.ink2(link(`${SITE}/docs/${dest}`, truncate(shortPath(`/docs/${dest}`), destW)));
+    if (headless) {
+      const n = num(r.results);
+      return q + (n === 0 ? p.err(" →0") : p.ink2(` →${n}`));
+    }
+    return q + p.err(" ✗ nothing found");
   });
+}
+
+/** Where readers came from, host only — direct and same-site hits are not rows. */
+function referrerPanel(inner: number, maxRows: number): string[] {
+  const rows = referrerRows.all(utc(Date.now() - 24 * 3600_000)) as { host: string; n: number }[];
+  if (rows.length === 0) return [];
+  return rows
+    .slice(0, maxRows)
+    .map((r) => p.ink2(String(r.n).padStart(4)) + " " + p.ink(truncate(r.host, inner - 5)));
 }
 
 /** Queries that found nothing, by volume — each row is a content gap. */
 function deadQueryPanel(inner: number, maxRows: number): string[] {
   const rows = deadRows.all() as { q: string; n: number }[];
-  if (rows.length === 0) return [p.label("every query found something")];
+  if (rows.length === 0) return [];
   return rows.slice(0, maxRows).map((r) => p.err(String(r.n).padStart(4)) + " " + p.ink(truncate(r.q, inner - 5)));
 }
 
 /** `vellum → vellum grain → grain constraint` — the tail is what they meant. */
 function refinementPanel(chains: { ts: string; queries: string[] }[], inner: number, maxRows: number): string[] {
-  if (chains.length === 0) return [p.label("no refined searches")];
+  if (chains.length === 0) return [];
   return chains.slice(0, maxRows).map((ch) => {
     const tail = ch.queries[ch.queries.length - 1];
     const head = ch.queries.slice(0, -1).join(" → ");
@@ -332,58 +571,82 @@ const DOT = [
   [0x40, 0x80],
 ];
 
+/** Resample a coarse series up to `pw` pixel columns, right-aligned. */
+function resample(src: number[], pw: number): number[] {
+  if (src.length >= pw || src.length < 2) return src;
+  return Array.from({ length: pw }, (_, i) => {
+    const t = (i / (pw - 1)) * (src.length - 1);
+    const lo = Math.floor(t);
+    const hi = Math.min(src.length - 1, lo + 1);
+    return src[lo] + (src[hi] - src[lo]) * (t - lo);
+  });
+}
+
 /**
- * Rolling views-per-feed-tick line, newest at the right edge. The line itself
- * is solid; the area beneath it is dithered on a checkerboard, which reads as
- * a tone at terminal resolution without competing with the line.
+ * One rolling line per kind, newest at the right edge, each in its kind's
+ * colour — the same split the Traffic table counts, as a shape over time.
+ * Lines are solid; the area beneath each is dithered on a checkerboard, which
+ * reads as a tone at terminal resolution without competing with the line.
+ *
+ * A braille cell carries eight dots but only one colour, so where two kinds
+ * share a cell the dots merge and the busier kind (human, then agent) picks
+ * the colour. Overlap is rare enough at this resolution to be worth the trade.
  */
-function chartPanel(pulse: number[], inner: number, rows: number): string[] {
+function chartPanel(series: Record<Kind, number[]>, inner: number, rows: number, only: Kind | null): string[] {
   const pw = inner * 2;
   const ph = rows * 4;
+  const drawn = only ? [only] : [...KINDS];
   // One bucket per pixel column is 0/1 noise at this traffic; sample coarsely
   // and interpolate back up so the silhouette reads as a line.
-  const src = pulse.slice(-pw);
-  const points =
-    src.length >= pw || src.length < 2
-      ? src
-      : Array.from({ length: pw }, (_, i) => {
-          const t = (i / (pw - 1)) * (src.length - 1);
-          const lo = Math.floor(t);
-          const hi = Math.min(src.length - 1, lo + 1);
-          return src[lo] + (src[hi] - src[lo]) * (t - lo);
-        });
-  const max = Math.max(1, ...points);
-  const cells: number[] = new Array(inner * rows).fill(0);
-  const set = (x: number, y: number) => {
-    if (x < 0 || y < 0 || x >= pw || y >= ph) return;
-    cells[(y >> 2) * inner + (x >> 1)] |= DOT[y & 3][x & 1];
-  };
+  const points = Object.fromEntries(drawn.map((k) => [k, resample(series[k].slice(-pw), pw)])) as Record<Kind, number[]>;
+  const max = Math.max(1, ...drawn.flatMap((k) => points[k]));
 
-  const offset = pw - points.length; // right-align: history grows leftward
-  const yOf = (n: number) => Math.round((1 - n / max) * (ph - 1));
-  let prevY: number | null = null;
-  points.forEach((n, i) => {
-    const x = offset + i;
-    const y = yOf(n);
-    // Connect to the previous sample so steps read as a line, not a scatter.
-    if (prevY !== null) for (let yy = Math.min(prevY, y); yy <= Math.max(prevY, y); yy++) set(x, yy);
-    else set(x, y);
-    for (let yy = y + 2; yy < ph; yy++) if ((x + yy) % 2 === 0) set(x, yy); // dithered area
-    prevY = y;
-  });
+  const layers = Object.fromEntries(drawn.map((k) => [k, new Array(inner * rows).fill(0)])) as Record<Kind, number[]>;
+  for (const k of drawn) {
+    const cells = layers[k];
+    const set = (x: number, y: number) => {
+      if (x < 0 || y < 0 || x >= pw || y >= ph) return;
+      cells[(y >> 2) * inner + (x >> 1)] |= DOT[y & 3][x & 1];
+    };
+    const pts = points[k];
+    const offset = pw - pts.length; // right-align: history grows leftward
+    let prevY: number | null = null;
+    pts.forEach((n, i) => {
+      const x = offset + i;
+      const y = Math.round((1 - n / max) * (ph - 1));
+      // Connect to the previous sample so steps read as a line, not a scatter.
+      if (prevY !== null) for (let yy = Math.min(prevY, y); yy <= Math.max(prevY, y); yy++) set(x, yy);
+      else set(x, y);
+      // Fill under the line only when it is the only line: three overlapping
+      // dithered areas are a smudge, and the fill is what hides the others.
+      if (drawn.length === 1) for (let yy = y + 2; yy < ph; yy++) if ((x + yy) % 2 === 0) set(x, yy);
+      prevY = y;
+    });
+  }
 
   const out: string[] = [];
   for (let r = 0; r < rows; r++) {
     let line = "";
+    let run = "";
+    let runKind: Kind | null = null;
+    const flush = () => {
+      if (run) line += runKind ? KIND_COLOUR[runKind](run) : run;
+      run = "";
+    };
     for (let x = 0; x < inner; x++) {
-      const bits = cells[r * inner + x];
-      line += bits === 0 ? " " : String.fromCharCode(0x2800 + bits);
+      const i = r * inner + x;
+      const owner = drawn.find((k) => layers[k][i] !== 0) ?? null;
+      const bits = drawn.reduce((b, k) => b | layers[k][i], 0);
+      if (owner !== runKind) {
+        flush();
+        runKind = owner;
+      }
+      run += bits === 0 ? " " : String.fromCharCode(0x2800 + bits);
     }
-    // The top third of the chart is the peak; fade the ink downward so the
-    // silhouette is what the eye lands on.
-    out.push((r < rows / 2 ? p.accent : p.human)(line));
+    flush();
+    out.push(line);
   }
-  const empty = points.every((n) => n === 0);
+  const empty = drawn.every((k) => points[k].every((n) => n === 0));
   const caption = `last ${windowMin}m · peak ${empty ? 0 : Math.round(max)}/bucket · ${Math.max(1, Math.round((windowMin * 120) / pw))}s buckets`;
   out.push(p.label(caption) + p.line(" " + "·".repeat(Math.max(0, inner - caption.length - 1))));
   return out;
@@ -420,6 +683,7 @@ const termHeight = () => forcedHeight ?? process.stdout.rows ?? 34;
 interface State {
   live: KindRow[];
   recent: KindRow[];
+  day: KindRow[];
   paths: PathRow[];
   feed: FeedRow[];
   lastFeedTs: string | null;
@@ -427,25 +691,30 @@ interface State {
   lastSearchTs: string | null;
   stored: number;
   lastError: string | null;
+  /** h/a/c: show only this kind in the feed, pages and chart. null = all. */
+  filter: Kind | null;
+  /** Rows of the feed scrolled past. 0 keeps it pinned to live. */
+  feedOffset: number;
 }
 
-const legend = KINDS.map((k) => KIND_COLOUR[k](Title(k))).join(p.line(" ∙ "));
-
 /**
- * The right column below Traffic. Top Pages only earns its place once a page
- * has repeat traffic; until then the search widgets take the whole column.
- * Whatever panels are showing split the height evenly.
+ * The right column below Traffic. A panel with nothing to say does not take
+ * up a box: whatever is left splits the height evenly, so an empty dataset
+ * gives its rows to the widgets that do have data.
  */
 function stack(state: State, width: number, height: number): string[] {
   const inner = width - 4;
   const chains = refinementChains(24);
   const panels: { title: string; lines: (rows: number) => string[] }[] = []; // titles are pre-coloured
-  if (topPathsPanel(state.paths, inner, 1).length > 0) {
-    panels.push({ title: p.accent("Top Pages"), lines: (n) => topPathsPanel(state.paths, inner, n) });
-  }
-  panels.push({ title: p.accent("Recent Searches"), lines: (n) => recentSearchPanel(state.searches, inner, n) });
-  panels.push({ title: p.accent("Dead Queries"), lines: (n) => deadQueryPanel(inner, n) });
-  panels.push({ title: p.accent("Refined Searches") + p.line(" ") + p.label("24h"), lines: (n) => refinementPanel(chains, inner, n) });
+  const add = (title: string, lines: (rows: number) => string[]) => {
+    if (lines(1).length > 0) panels.push({ title, lines });
+  };
+  add(p.accent("Top Pages"), (n) => topPathsPanel(filterPaths(state), inner, n));
+  add(p.accent("Recent Searches"), (n) => recentSearchPanel(state.searches, inner, n));
+  add(p.accent("Dead Queries"), (n) => deadQueryPanel(inner, n));
+  add(p.accent("Referrers") + p.line(" ") + p.label("24h"), (n) => referrerPanel(inner, n));
+  add(p.accent("Refined Searches") + p.line(" ") + p.label("24h"), (n) => refinementPanel(chains, inner, n));
+  if (panels.length === 0) return [];
 
   const each = Math.floor(height / panels.length);
   return panels.flatMap((panel, i) => {
@@ -453,6 +722,11 @@ function stack(state: State, width: number, height: number): string[] {
     return box(panel.title, panel.lines(h - 2), width, h);
   });
 }
+
+// Filters apply to what the row IS, not what was recorded — see fixKind.
+const filterFeed = (state: State) =>
+  state.filter ? state.feed.filter((r) => fixKind(r.kind, r.bot, r.evidence) === state.filter) : state.feed;
+const filterPaths = (state: State) => (state.filter ? state.paths.filter((r) => asKind(r.kind) === state.filter) : state.paths);
 
 function frame(state: State, exclude: string | null): string[] {
   const W = termWidth();
@@ -464,42 +738,59 @@ function frame(state: State, exclude: string | null): string[] {
     p.accent("houdinimd.com") +
     p.line("  ·  ") +
     p.ink(new Date().toLocaleTimeString("en-GB")) +
-    p.label(`  window ${windowMin}m · rollups ${intervalSec}s · feed ${feedIntervalSec}s · ${state.stored.toLocaleString("en-GB")} archived`) +
-    (exclude ? "" : p.label(" · own visits included")) +
+    // The window is already named in the chart caption; this line is tight.
+    p.label(`  rollups ${intervalSec}s · feed ${feedIntervalSec}s · ${state.stored.toLocaleString("en-GB")} archived`) +
+    (exclude ? "" : p.label(" · own visits kept")) +
     p.label("  ·  ") +
+    p.ink2("hac") +
+    p.label(" filter ") +
+    p.ink2("jk") +
+    p.label(" scroll ") +
     p.ink2("q") +
     p.label(" quit") +
+    (state.filter ? p.line(" · ") + KIND_COLOUR[state.filter](`${state.filter}s only`) : "") +
     (state.lastError ? p.err(`  · ${state.lastError.replace(/\s+/g, " ")}`) : "");
 
   const chartH = CHART_H + 3; // braille rows + caption + borders
-  const trafficH = 5; // header + two windows + borders
+  const trafficH = 7; // column header + three windows + unit caption + borders
   const mainH = Math.max(8, H - 1 - chartH);
   const wide = W >= 96;
   const windows = [
     { label: `Now ${LIVE_MINUTES}m`, rows: state.live },
     { label: `Last ${windowMin}m`, rows: state.recent },
+    { label: "Last 24h", rows: state.day },
   ];
+  const feed = filterFeed(state);
+  const feedTitle =
+    p.accent("Live Feed") + (state.feedOffset > 0 ? p.line("  ") + p.label(`+${state.feedOffset} back · g live`) : "");
 
   const lines: string[] = [header];
-  lines.push(...box(p.accent("Activity"), chartPanel(chartSeries(Math.max(8, Math.floor((W - 4) / 2))), W - 4, CHART_H), W, chartH));
+  lines.push(
+    ...box(
+      p.accent("Activity"),
+      chartPanel(chartSeries(Math.max(8, Math.floor((W - 4) / 2))), W - 4, CHART_H, state.filter),
+      W,
+      chartH,
+    ),
+  );
 
   if (wide) {
     const rightW = Math.min(52, Math.max(38, Math.floor(W * 0.36)));
     const leftW = W - rightW - GAP.length;
     lines.push(
       ...hstack(
-        box(p.accent("Live Feed"), feedPanel(state.feed, leftW - 4, mainH - 2), leftW, mainH),
+        box(feedTitle, feedPanel(feed, leftW - 4, mainH - 2, state.feedOffset), leftW, mainH),
         [
-          ...box(p.accent("Traffic") + p.line("  ") + legend, trafficPanel(windows, rightW - 4), rightW, trafficH),
+          ...box(p.accent("Traffic"), trafficPanel(windows, rightW - 4), rightW, trafficH),
           ...stack(state, rightW, mainH - trafficH),
         ],
         leftW,
       ),
     );
   } else {
-    lines.push(...box(p.accent("Traffic") + p.line("  ") + legend, trafficPanel(windows, W - 4), W, trafficH));
+    lines.push(...box(p.accent("Traffic"), trafficPanel(windows, W - 4), W, trafficH));
     const feedH = Math.max(5, mainH - trafficH - 8);
-    lines.push(...box(p.accent("Live Feed"), feedPanel(state.feed, W - 4, feedH - 2), W, feedH));
+    lines.push(...box(feedTitle, feedPanel(feed, W - 4, feedH - 2, state.feedOffset), W, feedH));
     lines.push(...stack(state, W, Math.max(8, H - lines.length - 1)));
   }
 
@@ -518,22 +809,51 @@ function draw(state: State, exclude: string | null) {
 
 // ---------- queries ----------
 
-async function fetchRollups(exclude: string | null) {
+/**
+ * Every rollup groups by bot family as well as kind, then folds the groups in
+ * JS through fixKind — the stored kind of a 90-day-old row cannot be trusted
+ * (see fixKind), and the bot name that corrects it is right there in blob5.
+ * A visitor who is somehow both a bot and not is counted in both groups; at
+ * this traffic that is a rounding error against getting SemrushBot right.
+ */
+function foldKinds(rows: (KindRow & { bot?: string; evidence?: string })[]): KindRow[] {
+  const acc = new Map<Kind, { views: number; visitors: number }>();
+  for (const r of rows) {
+    const k = fixKind(r.kind, r.bot, r.evidence);
+    const cur = acc.get(k) ?? { views: 0, visitors: 0 };
+    acc.set(k, { views: cur.views + num(r.views), visitors: cur.visitors + num(r.visitors) });
+  }
+  return [...acc].map(([kind, v]) => ({ kind, views: String(v.views), visitors: String(v.visitors) }));
+}
+
+const DAY_MINUTES = 24 * 60;
+
+async function fetchRollups(exclude: string | null, withDay: boolean) {
   const notMine = exclude ? ` AND blob3 != '${exclude}'` : "";
   const since = (mins: number) => `timestamp > NOW() - INTERVAL '${mins}' MINUTE`;
+  type RollupRow = KindRow & { bot: string; evidence: string };
   const rollup = (mins: number) => `
-    SELECT blob2 AS kind, SUM(_sample_interval) AS views, COUNT(DISTINCT index1) AS visitors
-    FROM ${DATASET} WHERE ${since(mins)} AND ${KIND_ROWS_FILTER}${notMine} GROUP BY kind`;
+    SELECT blob2 AS kind, blob5 AS bot, blob7 AS evidence,
+           SUM(_sample_interval) AS views, COUNT(DISTINCT index1) AS visitors
+    FROM ${DATASET} WHERE ${since(mins)} AND ${KIND_ROWS_FILTER}${notMine} GROUP BY kind, bot, evidence`;
 
-  const [live, recent, paths] = await Promise.all([
-    query<KindRow>(rollup(LIVE_MINUTES)),
-    query<KindRow>(rollup(windowMin)),
+  const [live, recent, day, paths] = await Promise.all([
+    query<RollupRow>(rollup(LIVE_MINUTES)),
+    query<RollupRow>(rollup(windowMin)),
+    // The 24h row moves slowly and every query counts against the daily read
+    // cap, so the caller refreshes it on a multiple of the slow tick.
+    withDay ? query<RollupRow>(rollup(DAY_MINUTES)) : Promise.resolve(null),
     query<PathRow>(`
-      SELECT blob1 AS path, blob2 AS kind, SUM(_sample_interval) AS views
+      SELECT blob1 AS path, blob2 AS kind, blob5 AS bot, blob7 AS evidence, SUM(_sample_interval) AS views
       FROM ${DATASET} WHERE ${since(windowMin)} AND ${KIND_ROWS_FILTER}${notMine}
-      GROUP BY path, kind ORDER BY views DESC LIMIT 20`),
+      GROUP BY path, kind, bot, evidence ORDER BY views DESC LIMIT 20`),
   ]);
-  return { live, recent, paths };
+  return {
+    live: foldKinds(live),
+    recent: foldKinds(recent),
+    ...(day ? { day: foldKinds(day) } : {}),
+    paths: paths.map((r) => ({ ...r, kind: fixKind(r.kind, r.bot, r.evidence) })),
+  };
 }
 
 /**
@@ -550,7 +870,8 @@ function feedQuery(exclude: string | null, since: string, limit: number): Promis
   const notMine = exclude ? ` AND blob3 != '${exclude}'` : "";
   return query<FeedRow>(`
     SELECT timestamp AS timestamp, blob1 AS path, blob2 AS kind, blob4 AS country,
-           blob5 AS bot, blob6 AS city, index1 AS visitor
+           blob5 AS bot, blob6 AS city, blob7 AS evidence, blob8 AS referrer,
+           double1 AS status, index1 AS visitor
     FROM ${DATASET} WHERE ${since} AND ${KIND_ROWS_FILTER}${notMine}
     ORDER BY timestamp DESC LIMIT ${limit}`);
 }
@@ -559,16 +880,15 @@ const fetchFeedIncrement = (exclude: string | null, lastTs: string | null) =>
   feedQuery(exclude, lastTs ? `timestamp > ${tsLiteral(lastTs)}` : `timestamp > NOW() - INTERVAL '${LIVE_MINUTES}' MINUTE`, 30);
 
 /** One query at startup so the chart has a full window, not just this session. */
-const fetchWindow = (exclude: string | null) =>
-  feedQuery(exclude, `timestamp > NOW() - INTERVAL '${windowMin}' MINUTE`, 2000);
+const fetchWindow = (exclude: string | null) => feedQuery(exclude, `timestamp > NOW() - INTERVAL '${windowMin}' MINUTE`, 2000);
 
 /** Search rows ride the slow tick — they are rare, and the cap is per day. */
 function fetchSearches(exclude: string | null, lastTs: string | null): Promise<SearchRow[]> {
   const notMine = exclude ? ` AND blob3 != '${exclude}'` : "";
   const since = lastTs ? `timestamp > ${tsLiteral(lastTs)}` : `timestamp > NOW() - INTERVAL '${windowMin}' MINUTE`;
   return query<SearchRow>(`
-    SELECT timestamp AS timestamp, blob1 AS q, blob4 AS country, blob6 AS category,
-           double1 AS results, index1 AS visitor
+    SELECT timestamp AS timestamp, blob1 AS q, blob4 AS country, blob5 AS source,
+           blob6 AS category, blob7 AS dest, double1 AS results, index1 AS visitor
     FROM ${DATASET} WHERE ${since} AND blob2 = 'search'${notMine}
     ORDER BY timestamp DESC LIMIT 200`);
 }
@@ -583,7 +903,28 @@ function selfTest() {
   console.assert(stripAnsi("\x1b[38;2;1;2;3mx\x1b[0m") === "x", "stripAnsi: strips truecolour SGR");
   console.assert(vlen(p.human("abc")) === 3, "vlen: ignores colour");
   console.assert(padVis(p.human("ab"), 4).endsWith("  "), "padVis: pads to visible width");
-  console.assert(tsLiteral("2026-08-02T16:45:03.123Z") === "toDateTime('2026-08-02 16:45:03')", "tsLiteral: DateTime-safe literal");
+  console.assert(vlen(link("https://x.test/a", "abc")) === 3, "link: hyperlink costs no columns");
+  console.assert(
+    tsLiteral("2026-08-02T16:45:03.123Z") === "toDateTime('2026-08-02 16:45:03')",
+    "tsLiteral: DateTime-safe literal",
+  );
+
+  console.assert(fixKind("agent", "SemrushBot") === "crawler", "fixKind: a stored kind loses to the bot name");
+  console.assert(fixKind("human", "meta-externalagent") === "agent", "fixKind: a browser-shaped bot is not a reader");
+  console.assert(fixKind("human", "", "dmlc") === "human", "fixKind: a corroborated human stays human");
+  console.assert(fixKind("human", "", NO_EVIDENCE) === "agent", "fixKind: a human with no browser headers is a copied UA");
+  console.assert(fixKind("human", "", "") === "human", "fixKind: a row from before we measured keeps its kind");
+  const folded = foldKinds([
+    { kind: "agent", bot: "SemrushBot", views: "10", visitors: "1" },
+    { kind: "agent", bot: "ClaudeBot", views: "5", visitors: "2" },
+    { kind: "human", bot: "", evidence: "dmlc", views: "3", visitors: "3" },
+    { kind: "human", bot: "", evidence: NO_EVIDENCE, views: "7", visitors: "7" },
+  ]);
+  console.assert(num(by(folded, "crawler")?.views) === 10, "foldKinds: Semrush counted as a crawler");
+  console.assert(num(by(folded, "agent")?.views) === 12, "foldKinds: bare-header humans join the agents");
+  console.assert(num(by(folded, "human")?.views) === 3, "foldKinds: only corroborated humans are counted human");
+  console.assert(visitorName("abc") === visitorName("abc"), "visitorName: stable per visitor");
+  console.assert(cell(3, 3) === "3" && cell(2, 9) === "2·9" && cell(0, 0) === "–", "cell: one number when they agree");
 
   const boxed = box(p.accent("T"), ["x"], 20, 4);
   console.assert(boxed.length === 4 && boxed.every((l) => vlen(l) === 20), "box: fixed height, even width");
@@ -595,27 +936,115 @@ function selfTest() {
   ];
   console.assert(!stripAnsi(topPathsPanel(paths, 40, 5).join("")).includes(" / "), "topPaths: home page excluded");
 
-  const chart = chartPanel([0, 3, 1, 4], 20, 3);
+  const traffic = stripAnsi(trafficPanel([{ label: "Now 5m", rows }], 44).join("\n"));
+  console.assert(/Human.+Agent.+Crawler/.test(traffic), "traffic: one column per kind");
+  console.assert(
+    traffic.includes("2·3") && traffic.includes("1·9") && traffic.includes("3·12"),
+    "traffic: visitors first, then views",
+  );
+  console.assert(traffic.trimEnd().endsWith("visitors·views"), "traffic: units named once, in the caption");
+  console.assert(
+    trafficPanel([{ label: "Last 24h", rows: [{ kind: "human", views: "999999", visitors: "888888" }] }], 44).every(
+      (l) => vlen(l) <= 44,
+    ),
+    "traffic: columns grow with the numbers instead of clipping",
+  );
+
+  const series = { human: [0, 3, 1, 4], agent: [1, 0, 2, 0], crawler: [0, 0, 0, 0] };
+  const chart = chartPanel(series, 20, 3, null);
   console.assert(chart.length === 4 && chart.slice(0, 3).every((l) => vlen(l) === 20), "chart: braille rows plus caption");
   console.assert(/[⠀-⣿]/.test(stripAnsi(chart.join(""))), "chart: draws braille");
+  console.assert(chart.join("").includes("\x1b[38;2;9;121;105m"), "chart: humans drawn in the human colour");
+  console.assert(
+    !chartPanel(series, 20, 3, "agent").join("").includes("\x1b[38;2;9;121;105m"),
+    "chart: a filter drops the other kinds",
+  );
 
-  const feed = stripAnsi(
-    feedPanel([{ timestamp: "2026-08-02T16:45:03Z", path: "/docs/a", kind: "human", country: "FR", bot: "", city: "Paris", visitor: "v" }], 60, 5)[0],
+  const feedRow = (over: Partial<FeedRow> = {}): FeedRow => ({
+    timestamp: "2026-08-02T16:45:03Z",
+    path: "/docs/a",
+    kind: "human",
+    country: "FR",
+    bot: "",
+    city: "Paris",
+    visitor: "v",
+    ...over,
+  });
+  const feed = stripAnsi(feedPanel([feedRow()], 60, 5)[0]);
+  console.assert(feed.includes("Human") && feed.includes("Paris, FR"), "feed: human shows the city and its country");
+  console.assert(
+    stripAnsi(feedPanel([feedRow({ city: "" })], 60, 5)[0]).includes("FR"),
+    "feed: falls back to the country when Cloudflare gave us no city",
   );
-  console.assert(feed.includes("Human") && feed.includes("Paris, FR"), "feed: human shows Title-cased kind and city");
-  const bot = stripAnsi(
-    feedPanel([{ timestamp: "2026-08-02T16:45:03Z", path: "/docs/a", kind: "agent", country: "US", bot: "ClaudeBot", city: "", visitor: "v" }], 60, 5)[0],
+  console.assert(
+    stripAnsi(feedPanel([feedRow({ status: "404" })], 60, 5)[0]).includes("404") &&
+      !stripAnsi(feedPanel([feedRow({ status: "200" })], 60, 5)[0]).includes("200"),
+    "feed: only a failed request is marked with its status",
   );
+  console.assert(feed.includes(visitorName("v")), "feed: human named from the visitor hash");
+  const bot = stripAnsi(feedPanel([feedRow({ kind: "agent", bot: "ClaudeBot", city: "", country: "US" })], 60, 5)[0]);
   console.assert(bot.includes("Agent") && bot.includes("ClaudeBot"), "feed: agent shows its bot name");
+  const semrush = stripAnsi(feedPanel([feedRow({ kind: "agent", bot: "SemrushBot" })], 60, 5)[0]);
+  console.assert(semrush.includes("Crawler"), "feed: a stored kind is corrected on read");
+  const scrolled = feedPanel([feedRow(), feedRow({ path: "/docs/b" })], 60, 5, 1);
+  console.assert(scrolled.length === 1 && stripAnsi(scrolled[0]).includes("/docs/b"), "feed: offset scrolls past the head");
+  console.assert(
+    feedPanel([feedRow()], 60, 5)[0].includes("\x1b]8;;https://houdinimd.com/docs/a"),
+    "feed: path links to the live page",
+  );
 
   const chains = [{ ts: "2026-08-02 16:45:03", queries: ["vellum", "vellum grain"] }];
-  console.assert(stripAnsi(refinementPanel(chains, 40, 3)[0]).includes("vellum → vellum grain"), "refine: chain rendered oldest to newest");
-  const search: SearchRow[] = [{ timestamp: "2026-08-02T16:45:03Z", q: "pyro", country: "FR", category: "", results: "0", visitor: "v" }];
-  console.assert(stripAnsi(recentSearchPanel(search, 40, 3)[0]).includes("→0"), "search: miss marked");
+  console.assert(
+    stripAnsi(refinementPanel(chains, 40, 3)[0]).includes("vellum → vellum grain"),
+    "refine: chain rendered oldest to newest",
+  );
+  const searchRow = (over: Partial<SearchRow> = {}): SearchRow => ({
+    timestamp: "2026-08-02T16:45:03Z",
+    q: "pyro",
+    country: "FR",
+    category: "",
+    results: "0",
+    visitor: "v",
+    ...over,
+  });
+  console.assert(stripAnsi(recentSearchPanel([searchRow()], 40, 3)[0]).includes("→0"), "search: an API row keeps its count");
+  console.assert(
+    stripAnsi(
+      recentSearchPanel([searchRow({ source: "overlay", dest: "houdini/nodes/dop/pyrosolver", results: "6" })], 60, 3)[0],
+    ).includes("→ nodes/dop/pyrosolver"),
+    "search: a submitted search shows the page it opened",
+  );
+  console.assert(
+    stripAnsi(recentSearchPanel([searchRow({ source: "resolve", dest: "" })], 40, 3)[0]).includes("✗"),
+    "search: a submitted search that landed nowhere is a failure",
+  );
+  console.assert(
+    recentSearchPanel([], 40, 3).length === 0 && refinementPanel([], 40, 3).length === 0,
+    "panels: empty means no box",
+  );
 
-  const f = frame({ live: rows, recent: rows, paths, feed: [], lastFeedTs: null, searches: [], lastSearchTs: null, stored: 7, lastError: "boom" }, "x");
-  console.assert(f.every((l) => vlen(l) === termWidth()), "frame: every line exactly terminal width");
-  console.assert(f.length <= termHeight(), "frame: fits terminal height");
+  const base: State = {
+    live: rows,
+    recent: rows,
+    day: rows,
+    paths,
+    feed: [],
+    lastFeedTs: null,
+    searches: [],
+    lastSearchTs: null,
+    stored: 7,
+    lastError: "boom",
+    filter: null,
+    feedOffset: 0,
+  };
+  for (const filter of [null, "human"] as const) {
+    const f = frame({ ...base, filter }, "x");
+    console.assert(
+      f.every((l) => vlen(l) === termWidth()),
+      `frame(${filter}): every line exactly terminal width`,
+    );
+    console.assert(f.length <= termHeight(), `frame(${filter}): fits terminal height`);
+  }
   console.log("self-test ok");
 }
 
@@ -628,9 +1057,12 @@ if (args.flags.has("test")) {
 
 const exclude = args.flags.has("keep-mine") ? null : await ownIpHash();
 
+const fixedRows = backfillKinds();
+
 const state: State = {
   live: [],
   recent: [],
+  day: [],
   paths: [],
   feed: [],
   lastFeedTs: null,
@@ -638,11 +1070,18 @@ const state: State = {
   lastSearchTs: null,
   stored: num(countRows.get()?.n),
   lastError: null,
+  filter: startFilter,
+  feedOffset: 0,
 };
+
+// One 24h rollup per this many slow ticks — 2 minutes at the default interval.
+const DAY_EVERY = Math.max(1, Math.round(120 / intervalSec));
+let rollupTicks = 0;
 
 async function tickRollups() {
   try {
-    const [rollups, searches] = await Promise.all([fetchRollups(exclude), fetchSearches(exclude, state.lastSearchTs)]);
+    const withDay = rollupTicks++ % DAY_EVERY === 0;
+    const [rollups, searches] = await Promise.all([fetchRollups(exclude, withDay), fetchSearches(exclude, state.lastSearchTs)]);
     Object.assign(state, rollups);
     if (searches.length > 0) {
       insertSearches(searches);
@@ -661,8 +1100,11 @@ async function tickFeed(full = false) {
     if (fresh.length > 0) {
       insertRows(fresh);
       state.stored = num(countRows.get()?.n);
-      state.feed = [...fresh, ...state.feed].slice(0, 100);
+      state.feed = [...fresh, ...state.feed].slice(0, 200);
       state.lastFeedTs = fresh[0].timestamp;
+      // Rows arrive at the head, so a reader scrolled back must be pushed down
+      // by as many rows, or the feed slides under them while they read.
+      if (state.feedOffset > 0) state.feedOffset += fresh.length;
     }
     state.lastError = null;
   } catch (err) {
@@ -685,12 +1127,29 @@ process.on("exit", cleanup);
 process.on("SIGINT", () => process.exit(0));
 process.on("SIGTERM", () => process.exit(0));
 
+const FILTER_KEY: Record<string, Kind> = { h: "human", a: "agent", c: "crawler" };
+
 if (process.stdin.isTTY) {
   process.stdin.setRawMode(true);
   process.stdin.resume();
   process.stdin.on("data", (key: Buffer) => {
     const k = key.toString();
     if (k === "q" || k === "\x03") process.exit(0); // q or Ctrl+C
+    const wanted = FILTER_KEY[k];
+    if (wanted) {
+      state.filter = state.filter === wanted ? null : wanted; // same key again clears
+      state.feedOffset = 0;
+    } else if (k === "j" || k === "\x1b[B") {
+      // Never scroll past the last row it is possible to show.
+      state.feedOffset = Math.min(state.feedOffset + 1, Math.max(0, filterFeed(state).length - 1));
+    } else if (k === "k" || k === "\x1b[A") {
+      state.feedOffset = Math.max(0, state.feedOffset - 1);
+    } else if (k === "g") {
+      state.feedOffset = 0;
+    } else {
+      return;
+    }
+    draw(state, exclude);
   });
 }
 
