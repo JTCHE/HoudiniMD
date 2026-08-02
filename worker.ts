@@ -17,12 +17,18 @@
 //    that falls through to the worker (Workers Assets already handles
 //    current-deploy files without invoking the worker at all).
 import handler, { DOQueueHandler, DOShardedTagCache, BucketCachePurge } from "./.open-next/worker.js";
+import { visitorKind } from "./lib/wants-markdown";
+import { visitorHash } from "./lib/visitor-hash";
 
 export { DOQueueHandler, DOShardedTagCache, BucketCachePurge };
 
 interface Env {
   NEXT_INC_CACHE_R2_BUCKET: {
     get(key: string): Promise<{ body: ReadableStream } | null>;
+  };
+  // Absent in `next dev` and in any deploy predating the binding.
+  ANALYTICS?: {
+    writeDataPoint(event: { indexes?: string[]; blobs?: string[]; doubles?: number[] }): void;
   };
   [key: string]: unknown;
 }
@@ -35,6 +41,34 @@ const STATIC_ARCHIVE_MIME: Record<string, string> = {
   ico: "image/x-icon",
   svg: "image/svg+xml",
 };
+
+// One data point per doc page actually served, so `bun run analytics` can split
+// humans from agents. Everything skipped here is noise the Cloudflare dashboard
+// drowns in: assets, /api/*, the .md redirect (the agent's follow-up request to
+// the .md URL is the real read), and Next's link prefetches.
+//
+// index1 is the visitor id, which is what Analytics Engine samples on — a bot
+// hammering one path gets sampled down on its own while ordinary visitors are
+// recorded in full. Every count must therefore be SUM(_sample_interval).
+function recordPageView(request: Request, url: URL, response: Response, env: Env) {
+  if (!env.ANALYTICS || request.method !== "GET") return;
+  if (response.status >= 300 && response.status < 400) return;
+  if (request.headers.get("next-router-prefetch")) return;
+  const path = url.pathname;
+  if (path !== "/" && !path.startsWith("/docs/")) return;
+
+  const ua = request.headers.get("user-agent");
+  const ip = request.headers.get("cf-connecting-ip") ?? "";
+  env.ANALYTICS.writeDataPoint({
+    indexes: [visitorHash(`${ip}|${ua ?? ""}`)],
+    blobs: [
+      path.endsWith(".md") ? path.slice(0, -3) : path,
+      visitorKind(ua, request.headers.get("sec-fetch-dest")),
+      visitorHash(ip), // blob3: lets the CLI drop the operator's own visits
+      request.headers.get("cf-ipcountry") ?? "",
+    ],
+  });
+}
 
 export default {
   async fetch(request: Request, env: Env, ctx: { waitUntil(p: Promise<unknown>): void; passThroughOnException(): void }) {
@@ -56,6 +90,7 @@ export default {
     }
 
     const response = await handler.fetch(request, env, ctx);
+    recordPageView(request, url, response, env);
 
     const contentType = response.headers.get("content-type") ?? "";
     const cacheControl = response.headers.get("cache-control") ?? "";
