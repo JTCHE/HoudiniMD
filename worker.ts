@@ -74,8 +74,10 @@ function recordPageView(request: Request, url: URL, response: Response, env: Env
       referrerHost(request, url), // blob8: where the visit came from, host only
     ],
     // A 404 is a page view like any other until you can see the status: a dead
-    // inbound link and a real read were previously the same row.
-    doubles: [response.status],
+    // inbound link and a real read were previously the same row. The second
+    // number marks a raw-markdown read: blob1 keeps the .md stripped so both
+    // forms of a page roll up as one, and this is what tells them apart.
+    doubles: [response.status, path.endsWith(".md") ? 1 : 0],
   });
 }
 
