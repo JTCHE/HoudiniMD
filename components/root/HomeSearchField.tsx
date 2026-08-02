@@ -20,14 +20,14 @@ export interface ProgressEvent {
 }
 
 const PLACEHOLDER_EXAMPLES = [
-  "fuse",
-  "noise",
-  "rbdconstraintsfromrules",
-  "https://www.sidefx.com/docs/houdini/vex/functions/fit.html",
+  "Copy to points",
+  "Box",
+  "Pyro solver",
+  "Read point attribute",
+  "MPM vs other solvers",
   "vex/functions/abs",
-  "copytopoints",
   "https://www.sidefx.com/docs/houdini/nodes/sop/scatter.html",
-  "attribwrangle",
+  "Karma Texture Maps",
 ];
 
 function useCyclingPlaceholder(examples: string[], intervalMs = 2800) {
