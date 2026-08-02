@@ -8,6 +8,8 @@ import { MarkdownActions } from "@/components/docs/MarkdownActions";
 import { PrintPagination } from "@/components/docs/PrintPagination";
 import { TableOfContents } from "@/components/docs/TableOfContents";
 import { markdownComponents } from "@/components/docs/markdown";
+import { createImageComponent } from "@/components/docs/markdown/MarkdownImage";
+import { probeImages } from "@/lib/images/probe";
 import { extractHeadings } from "@/lib/markdown/headings";
 import { decodeEntities } from "@/lib/markdown/entities";
 import { parseFrontmatter } from "@/lib/markdown/frontmatter";
@@ -171,6 +173,15 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
     mainEntityOfPage: canonical,
   };
 
+  // Block-figure images (not inline icons) get their dimensions probed from
+  // the source's first bytes, so the reserved space in the markdown img
+  // component below matches the real image and nothing shifts once it loads.
+  const blockImageUrls = Array.from(bodyContent.matchAll(/!\[[^\]]*\]\((https?:\/\/[^\s)]+)\)/g))
+    .map((m) => m[1])
+    .filter((src) => !/icons\//.test(src));
+  const imageMeta = await probeImages(blockImageUrls);
+  const imageComponent = createImageComponent(imageMeta);
+
   return (
     <main className="mx-auto max-w-4xl px-page-x py-10">
       <PrintPagination />
@@ -213,7 +224,7 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
         <ReactMarkdown
           remarkPlugins={[remarkGfm, remarkCallouts, [remarkVex, { enabled: isVexPage }]]}
           rehypePlugins={[rehypeRaw, rehypeSlug]}
-          components={markdownComponents}
+          components={{ ...markdownComponents, img: imageComponent }}
         >
           {bodyContent}
         </ReactMarkdown>
