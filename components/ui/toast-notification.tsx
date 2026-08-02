@@ -14,10 +14,8 @@ export function ToastNotification({ message, type }: ToastProps) {
   return (
     <div className="fixed top-4 inset-x-0 z-100 flex justify-center pointer-events-none">
       <div
-        className={`text-sm px-4 py-2 shadow-lg pointer-events-auto ${
-          type === "info"
-            ? "bg-muted text-foreground border border-border"
-            : "bg-foreground text-background"
+        className={`text-sm px-4 py-2 shadow-lg pointer-events-auto rounded ${
+          type === "info" ? "bg-muted text-foreground border border-border" : "bg-foreground text-background"
         }`}
       >
         {message}
@@ -28,9 +26,7 @@ export function ToastNotification({ message, type }: ToastProps) {
 
 // Fire from anywhere — no React tree constraints
 export function showToast(message: string, type: ToastType = "info") {
-  window.dispatchEvent(
-    new CustomEvent("houdinimd:toast", { detail: { message, type } }),
-  );
+  window.dispatchEvent(new CustomEvent("houdinimd:toast", { detail: { message, type } }));
 }
 
 // Mount once at root — listens for showToast() calls and renders the toast
@@ -53,5 +49,10 @@ export function ToastListener() {
   }, []);
 
   if (!toast) return null;
-  return <ToastNotification message={toast.message} type={toast.type} />;
+  return (
+    <ToastNotification
+      message={toast.message}
+      type={toast.type}
+    />
+  );
 }

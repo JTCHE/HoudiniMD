@@ -76,3 +76,6 @@ __pycache__/
 
 # benchmark
 .run
+
+# screenshot output
+shots/
