@@ -18,7 +18,10 @@ const width = process.argv[3] ?? "130";
 const height = process.argv[4] ?? "38";
 await mkdir(outDir, { recursive: true });
 
-const res = spawnSync("bun", ["scripts/analytics.ts", "--once", `--width=${width}`, `--height=${height}`, "--keep-mine"], {
+// No --keep-mine: the shot draws what the dashboard normally draws. Keeping
+// this machine's own visits also re-archived them, so every screenshot put the
+// operator's test traffic back into the local database.
+const res = spawnSync("bun", ["scripts/analytics.ts", "--once", `--width=${width}`, `--height=${height}`], {
   env: { ...process.env, FORCE_COLOR: "1" },
   encoding: "utf8",
 });
