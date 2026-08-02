@@ -48,7 +48,7 @@
 
 :root {
   --page-x: 1.5rem;
-  --radius: 12px;
+  --radius: 8px;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -485,7 +485,7 @@ pre code.hljs {
   margin: 1.25rem -1rem;
   padding: 0.85rem 1rem;
   border: none;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xl);
   background: var(--callout-surface);
   font-size: 0.9rem;
   color: var(--card-foreground);

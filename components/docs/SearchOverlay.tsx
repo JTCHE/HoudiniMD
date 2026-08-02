@@ -246,7 +246,7 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
           onClick={() => setOpen(false)}
         >
           <div
-            className="w-full max-w-lg mx-4 bg-background border rounded-lg shadow-2xl overflow-hidden"
+            className="w-full max-w-lg mx-4 bg-background border rounded-xl shadow-2xl overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="relative border-b">
