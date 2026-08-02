@@ -287,16 +287,6 @@ const archivedSearches = db.prepare(
   `SELECT ts AS timestamp, visitor, q, country, category AS city, results, source, dest
    FROM searches ORDER BY ts DESC LIMIT ?`,
 );
-/**
- * Everything this machine ever archived, per kind. The stored kinds are
- * corrected in place at startup (see backfillKinds), so this can group by the
- * column and does not need the fold the API rollups do.
- */
-const lifetimeRows = db.prepare(
-  "SELECT kind, COUNT(*) AS views, COUNT(DISTINCT visitor) AS visitors FROM views GROUP BY kind",
-);
-/** Re-read after every write, so the row keeps up with the feed. */
-const readLifetime = (): KindRow[] => (lifetimeRows.all() as KindRow[]).map((r) => ({ ...r, kind: asKind(r.kind) }));
 /** The last place a visitor was seen — a search row carries no city of its own. */
 const placeRow = db.prepare("SELECT city, country FROM views WHERE visitor = ? AND city != '' ORDER BY ts DESC LIMIT 1");
 const placeCache = new Map<string, string>();
@@ -448,7 +438,7 @@ const asKind = (k: string): Kind => (KINDS.includes(k as Kind) ? (k as Kind) : "
  * two are equal, because "3·3" says nothing "3" doesn't.
  */
 const cell = (visitors: number, views: number) =>
-  views === 0 ? "–" : visitors === views ? String(views) : `${visitors}·${views}`;
+  views === 0 && visitors === 0 ? "–" : visitors === views ? String(views) : `${visitors}·${views}`;
 
 /**
  * One window per row, one column per kind — the split is read, never inferred.
@@ -459,9 +449,12 @@ function trafficPanel(windows: { label: string; rows: KindRow[] }[], inner: numb
   const labelW = Math.max(...windows.map((w) => w.label.length), 8);
   const sum = (ns: number[]) => ns.reduce((a, b) => a + b, 0);
   // Columns are sized to their content, never to a guess: a clipped row loses
-  // its colour along with its overflow, and these numbers grow all day. When
-  // even that will not fit, visitors are dropped before the table is mangled.
-  const build = (compact: boolean) => {
+  // its colour along with its overflow, and these numbers grow all day. What is
+  // given up when it will not fit is given up in order of what it costs the
+  // reader: first the "all" column, which is the three others added up, and
+  // only then the visitor counts — "19" where "9·19" was meant is not a
+  // narrower answer, it is a different one.
+  const build = (compact: boolean, withTotal: boolean) => {
     const rows = windows.map((w) => {
       const views = KINDS.map((k) => num(by(w.rows, k)?.views));
       const visitors = KINDS.map((k) => num(by(w.rows, k)?.visitors));
@@ -470,16 +463,18 @@ function trafficPanel(windows: { label: string; rows: KindRow[] }[], inner: numb
         label: w.label,
         views,
         cells: KINDS.map((_, i) => one(visitors[i], views[i])),
-        total: one(sum(visitors), sum(views)),
+        total: withTotal ? one(sum(visitors), sum(views)) : "",
       };
     });
     const colW = Math.max(...KINDS.map((k) => Title(k).length + 1), ...rows.flatMap((d) => d.cells.map((c) => c.length + 1)));
-    const totalW = Math.max(4, ...rows.map((d) => d.total.length + 2));
+    const totalW = withTotal ? Math.max(4, ...rows.map((d) => d.total.length + 2)) : 0;
     return { rows, colW, totalW, width: labelW + KINDS.length * colW + totalW };
   };
-  let { rows: data, colW, totalW, width } = build(false);
-  const compact = width > inner;
-  if (compact) ({ rows: data, colW, totalW, width } = build(true));
+  const fits = (b: { width: number }) => b.width <= inner;
+  const built = [build(false, true), build(false, false), build(true, true)];
+  const chosen = built.find(fits) ?? built[built.length - 1];
+  const compact = chosen === built[2];
+  const { rows: data, colW, totalW, width } = chosen;
   // Whatever is left goes to the bar; below ~8 columns a three-part bar is a
   // smudge rather than a shape, so it gets nothing.
   const spare = inner - width - 1;
@@ -488,7 +483,7 @@ function trafficPanel(windows: { label: string; rows: KindRow[] }[], inner: numb
   const head =
     p.label("".padEnd(labelW)) +
     KINDS.map((k) => KIND_COLOUR[k](Title(k).padStart(colW))).join("") +
-    p.label("all".padStart(totalW));
+    (totalW ? p.label("all".padStart(totalW)) : "");
   const rows = data.map((d) => {
     const total = d.views.reduce((a, b) => a + b, 0);
     // The bar is normalised to its own row: a share of traffic, not a volume —
@@ -503,7 +498,7 @@ function trafficPanel(windows: { label: string; rows: KindRow[] }[], inner: numb
     return (
       p.label(d.label.padEnd(labelW)) +
       KINDS.map((k, i) => KIND_COLOUR[k](d.cells[i].padStart(colW))).join("") +
-      p.ink(d.total.padStart(totalW)) +
+      (totalW ? p.ink(d.total.padStart(totalW)) : "") +
       " " +
       bar
     );
@@ -640,16 +635,17 @@ function topSearchPanel(inner: number, maxRows: number): string[] {
 
 /**
  * Feed rows counted per kind, for the "Current view" row: what is on screen
- * right now, however it was filtered and scrolled. Searches are events, not
- * page views, so they are not counted here.
+ * right now, however it was filtered and scrolled. A search is an event, not a
+ * page view, so it adds no view — but whoever searched is on screen, so it
+ * still counts as a visitor. A row of "no humans" beside a visible human
+ * search was the older, narrower reading.
  */
 function countRowsByKind(rows: FeedRow[]): KindRow[] {
   const acc = new Map<Kind, { views: number; visitors: Set<string> }>();
   for (const r of rows) {
-    if (isSearch(r)) continue;
     const k = rowKind(r);
     const cur = acc.get(k) ?? { views: 0, visitors: new Set<string>() };
-    cur.views++;
+    if (!isSearch(r)) cur.views++;
     if (r.visitor) cur.visitors.add(r.visitor);
     acc.set(k, cur);
   }
@@ -809,7 +805,7 @@ interface State {
   paths: PathRow[];
   feed: FeedRow[];
   lastFeedTs: string | null;
-  /** Everything ever archived on this machine — read from SQLite, not the API. */
+  /** Every row Analytics Engine still holds — its whole 90-day retention. */
   lifetime: KindRow[];
   stored: number;
   lastError: string | null;
@@ -969,6 +965,11 @@ function foldKinds(rows: (VisitorRow & { bot?: string; evidence?: string })[]): 
 }
 
 const DAY_MINUTES = 24 * 60;
+// Analytics Engine keeps 90 days and nothing older exists anywhere, so this is
+// the lifetime of the dataset. It was read from the local archive before, which
+// counted stored rows instead of SUM(_sample_interval) and only knew the
+// windows this machine had polled — a "lifetime" smaller than its own 24h row.
+const LIFETIME_MINUTES = 90 * DAY_MINUTES;
 
 async function fetchRollups(exclude: string | null, withDay: boolean) {
   const notMine = exclude ? ` AND blob3 != '${exclude}'` : "";
@@ -979,12 +980,13 @@ async function fetchRollups(exclude: string | null, withDay: boolean) {
            SUM(_sample_interval) AS views
     FROM ${DATASET} WHERE ${since(mins)} AND ${KIND_ROWS_FILTER}${notMine} GROUP BY visitor, kind, bot, evidence`;
 
-  const [live, recent, day, paths] = await Promise.all([
+  const [live, recent, day, lifetime, paths] = await Promise.all([
     query<RollupRow>(rollup(LIVE_MINUTES)),
     query<RollupRow>(rollup(windowMin)),
-    // The 24h row moves slowly and every query counts against the daily read
-    // cap, so the caller refreshes it on a multiple of the slow tick.
+    // The 24h and lifetime rows move slowly and every query counts against the
+    // daily read cap, so the caller refreshes them on a multiple of the slow tick.
     withDay ? query<RollupRow>(rollup(DAY_MINUTES)) : Promise.resolve(null),
+    withDay ? query<RollupRow>(rollup(LIFETIME_MINUTES)) : Promise.resolve(null),
     query<PathRow>(`
       SELECT blob1 AS path, blob2 AS kind, blob5 AS bot, blob7 AS evidence, SUM(_sample_interval) AS views
       FROM ${DATASET} WHERE ${since(windowMin)} AND ${KIND_ROWS_FILTER}${notMine}
@@ -994,6 +996,7 @@ async function fetchRollups(exclude: string | null, withDay: boolean) {
     live: foldKinds(live),
     recent: foldKinds(recent),
     ...(day ? { day: foldKinds(day) } : {}),
+    ...(lifetime ? { lifetime: foldKinds(lifetime) } : {}),
     paths: paths.map((r) => ({ ...r, kind: fixKind(r.kind, r.bot, r.evidence) })),
   };
 }
@@ -1121,6 +1124,8 @@ function selfTest() {
     ),
     "traffic: columns grow with the numbers instead of clipping",
   );
+  const tight = stripAnsi(trafficPanel([{ label: "Now 5m", rows }], 37).join("\n"));
+  console.assert(tight.includes("2·3") && !tight.includes("all"), "traffic: the sum column goes before the visitors do");
 
   const series = { human: [0, 3, 1, 4], agent: [1, 0, 2, 0], crawler: [0, 0, 0, 0] };
   const chart = chartPanel(series, 20, 3, null);
@@ -1193,6 +1198,9 @@ function selfTest() {
   const counted = countRowsByKind([feedRow(), feedRow({ path: "/docs/b" }), searchRow(), feedRow({ visitor: "w" })]);
   console.assert(num(by(counted, "human")?.views) === 3, "current view: every page view on screen is counted");
   console.assert(num(by(counted, "human")?.visitors) === 2, "current view: a visitor is counted once");
+  const searchOnly = countRowsByKind([searchRow({ source: "overlay" })]);
+  console.assert(num(by(searchOnly, "human")?.visitors) === 1, "current view: a visible searcher is a visible human");
+  console.assert(num(by(searchOnly, "human")?.views) === 0, "current view: a search is not a page view");
   console.assert(refinementPanel([], 40, 3).length === 0, "panels: empty means no box");
 
   const base: State = {
@@ -1239,7 +1247,7 @@ const state: State = {
   // event ever recorded and not just the window this session has seen.
   feed: mergeFeed(readArchive(FEED_CAP)),
   lastFeedTs: null,
-  lifetime: readLifetime(),
+  lifetime: [], // filled by the first rollup tick
   stored: num(countRows.get()?.n),
   lastError: null,
   filter: startFilter,
@@ -1267,7 +1275,6 @@ async function tickFeed(full = false) {
       insertRows(fresh.filter((r) => !isSearch(r)));
       insertSearches(fresh.filter(isSearch));
       state.stored = num(countRows.get()?.n);
-      state.lifetime = readLifetime();
       const before = state.feed.length;
       state.feed = mergeFeed(fresh, state.feed);
       state.lastFeedTs = fresh[0].timestamp;
