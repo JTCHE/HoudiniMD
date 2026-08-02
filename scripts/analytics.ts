@@ -540,26 +540,30 @@ const rowKind = (r: FeedRow): Kind => (isSearch(r) ? searchKind(r) : fixKind(r.k
 function feedPanel(rows: FeedRow[], inner: number, maxRows: number, offset = 0): string[] {
   if (rows.length === 0) return [p.label("waiting for traffic…")];
   const kindW = 7;
-  const whoW = 20; // a name and a place, or a bot name — paths need the rest
+  const visible = rows.slice(offset, offset + maxRows);
+  // Bots get their own name, humans get a name and a place. "Sapporo, JP" —
+  // the city alone repeats across countries, and the country alone is all
+  // there is when Cloudflare gave us no city. A search row carries no city,
+  // so the place comes from the last page view by the same visitor.
+  const whoOf = (r: FeedRow) => {
+    const k = rowKind(r);
+    const where = isSearch(r) ? placeOf(r.visitor, r.country) : [r.city, r.country].filter(Boolean).join(", ");
+    const thin = k === "human" && !isSearch(r) && !!r.evidence && !r.evidence.includes("d");
+    return k === "human"
+      ? (thin ? "? " : "") +
+          [NAME_HUMANS && r.visitor ? visitorName(r.visitor) : "", where || "unknown"].filter(Boolean).join(" | ")
+      : r.bot || where || "unnamed";
+  };
+  // Sized to this page's actual content, capped so the path column always
+  // keeps a usable width even when one row carries an unusually long name.
+  const whoW = Math.min(20, Math.max(4, ...visible.map((r) => whoOf(r).length)));
+
   // Four trailing columns are kept for the status of anything that was not a
   // clean 200, so a long path cannot push it past the border.
   const pathW = Math.max(8, inner - 9 - kindW - whoW - 3 - 4);
-  return rows.slice(offset, offset + maxRows).map((r) => {
+  return visible.map((r) => {
     const k = rowKind(r);
-    // Humans get a name and a place, bots get their own name. "Sapporo, JP" —
-    // the city alone repeats across countries, and the country alone is all
-    // there is when Cloudflare gave us no city. A search row carries no city,
-    // so the place comes from the last page view by the same visitor.
-    const where = isSearch(r) ? placeOf(r.visitor, r.country) : [r.city, r.country].filter(Boolean).join(", ");
-    // A reader who did not arrive on a top-level navigation is worth a second
-    // look: every real click sends Sec-Fetch-Dest: document. Rows archived
-    // before the worker measured headers carry no evidence and get no mark.
-    const thin = k === "human" && !isSearch(r) && !!r.evidence && !r.evidence.includes("d");
-    const who =
-      k === "human"
-        ? (thin ? "? " : "") +
-          [NAME_HUMANS && r.visitor ? visitorName(r.visitor) : "", where || "unknown"].filter(Boolean).join(" | ")
-        : r.bot || where || "unnamed";
+    const who = whoOf(r);
     const stamp =
       p.label(new Date(r.timestamp + (r.timestamp.endsWith("Z") ? "" : "Z")).toLocaleTimeString("en-GB")) +
       " " +
