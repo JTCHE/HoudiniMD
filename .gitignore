@@ -67,6 +67,8 @@ playwright.config.ts
 
 .open-next*
 
+.claude
+
 # log files
 *.log
 
@@ -79,5 +81,6 @@ __pycache__/
 
 # screenshot output
 shots/
+
 # local analytics archive
 .analytics.db*
