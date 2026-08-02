@@ -1,6 +1,7 @@
 import type { Components } from "react-markdown";
 import type { ImageProbe } from "@/lib/images/probe";
 import DocImageClient from "./DocImageClient";
+import DocIconClient from "./DocIconClient";
 
 export type ImageMetaMap = Map<string, ImageProbe>;
 
@@ -13,7 +14,7 @@ export function createImageComponent(metaMap: ImageMetaMap): Components["img"] {
   return function MarkdownImage({ src, alt }) {
     if (!src || typeof src !== "string") return null;
     if (/icons\//.test(src)) {
-      return <img src={src} alt={alt ?? ""} className="doc-icon" />;
+      return <DocIconClient src={src} alt={alt ?? ""} />;
     }
 
     const meta = metaMap.get(src);
