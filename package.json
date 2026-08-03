@@ -16,6 +16,7 @@
     "cleanup:slugs": "bun scripts/cleanup-slugs.ts",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "cache:sync": "bun scripts/cache-sync.ts",
+    "check:404-redirects": "bun scripts/check-404-redirects.ts",
     "og:shot": "node scripts/shot-og.ts",
     "deploy": "bun scripts/check-env.ts && bun scripts/build-search-index.ts && opennextjs-cloudflare build && bun scripts/cache-sync.ts --apply && OPEN_NEXT_DEPLOY=true wrangler deploy",
     "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"

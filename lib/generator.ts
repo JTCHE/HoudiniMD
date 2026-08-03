@@ -32,6 +32,39 @@ export interface GenerateResult {
 export { PageNotFoundError };
 
 /**
+ * Resolve a slug to the SideFX URL that actually serves it, trying the two
+ * index-page fallback patterns generation already relied on. Throws
+ * PageNotFoundError if none of them exist.
+ */
+export async function resolveSideFXUrl(slug: string): Promise<string> {
+  const sideFXUrl = toSideFXUrl(slug);
+  try {
+    await checkPageExists(sideFXUrl);
+    return sideFXUrl;
+  } catch (err) {
+    if (!(err instanceof PageNotFoundError)) throw err;
+    const slugBase = slug.split("#")[0];
+    // ponytail: slug ending /index means the file IS index.html, not a subdirectory
+    const fallbackUrl = slugBase.endsWith("/index")
+      ? `https://www.sidefx.com/docs/${slugBase}.html`
+      : `https://www.sidefx.com/docs/${slugBase}/index.html`;
+    await checkPageExists(fallbackUrl); // re-throws PageNotFoundError if also missing
+    return fallbackUrl;
+  }
+}
+
+/** Cheap existence check for the HTML route — true if SideFX has this page, false if not. */
+export async function slugExistsOnSideFX(slug: string): Promise<boolean> {
+  try {
+    await resolveSideFXUrl(slug);
+    return true;
+  } catch (err) {
+    if (err instanceof PageNotFoundError) return false;
+    throw err;
+  }
+}
+
+/**
  * Generate markdown for a documentation page.
  * Core logic shared between /api/generate (SSE) and /docs/[...slug] (direct).
  */
@@ -41,7 +74,6 @@ export async function generateMarkdownForSlug(
   onProgress?: ProgressCallback,
 ): Promise<GenerateResult> {
   const contentPath = `content/${slug}.md`;
-  const sideFXUrl = toSideFXUrl(slug);
 
   const progress = (stage: ProgressStage, message: string, detail?: string) => {
     onProgress?.({ stage, message, detail });
@@ -67,20 +99,8 @@ export async function generateMarkdownForSlug(
   // Stage 2: Verify page exists — try primary URL, then fallbacks for two patterns:
   //   - slug ends with /index (e.g. houdini/chop/index):  try .html extension → index.html
   //   - directory slug (e.g. houdini/nodes/sop):           try /index.html
-  progress("verifying", "Verifying page exists", sideFXUrl);
-  let resolvedUrl = sideFXUrl;
-  try {
-    await checkPageExists(sideFXUrl);
-  } catch (err) {
-    if (!(err instanceof PageNotFoundError)) throw err;
-    const slugBase = slug.split("#")[0];
-    // ponytail: slug ending /index means the file IS index.html, not a subdirectory
-    const fallbackUrl = slugBase.endsWith("/index")
-      ? `https://www.sidefx.com/docs/${slugBase}.html`
-      : `https://www.sidefx.com/docs/${slugBase}/index.html`;
-    await checkPageExists(fallbackUrl); // re-throws PageNotFoundError if also missing
-    resolvedUrl = fallbackUrl;
-  }
+  progress("verifying", "Verifying page exists", toSideFXUrl(slug));
+  const resolvedUrl = await resolveSideFXUrl(slug);
 
   // Stage 3-6: Generate with lock to prevent concurrent generation
   const markdown = await withLock(slug, async () => {
