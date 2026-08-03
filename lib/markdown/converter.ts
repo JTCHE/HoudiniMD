@@ -35,6 +35,7 @@ export async function convertToMarkdown(
     const text = el.textContent?.trim();
     if (text === 'Load' || text === 'Launch' || text === 'Show/hide arguments') el.remove();
   });
+  root.querySelectorAll('.collapsible.method .collapsed-content').forEach((el) => el.remove());
 
   // For subtopic list items (.with-icon), merge the .g icon into the label link and
   // remove the .g div. Two HTML patterns on SideFX:
