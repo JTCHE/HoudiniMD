@@ -61,11 +61,15 @@ const FEED_CAP = 20_000;
 const GAP = " ";
 const CHART_H = 6; // rows of braille in the activity chart
 const DB_PATH = ".analytics.db";
+// Matches Analytics Engine's own retention, and the promise on /privacy.
+const RETENTION_DAYS = 90;
 
 const args = parseArgs(process.argv.slice(2));
 const intervalSec = getNumber(args, "interval", 15);
 const feedIntervalSec = getNumber(args, "feed-interval", 5);
-const windowMin = getNumber(args, "window", 30);
+// The chart, the "Last …" traffic row and the Top Pages query all read this.
+// ← and → walk it along WINDOW_LADDER; --window sets where it starts.
+let windowMin = getNumber(args, "window", 30);
 const forcedWidth = args.values.has("width") ? getNumber(args, "width", 120) : null;
 const forcedHeight = args.values.has("height") ? getNumber(args, "height", 34) : null;
 const once = args.flags.has("once");
@@ -98,6 +102,14 @@ if (!accountId || !token) {
   console.error("with permission: Account | Account Analytics | Read.");
   process.exit(1);
 }
+// Must be byte-identical to the Worker secret, or "my own visits" resolves to a
+// hash the dataset has never seen and the operator filter silently does nothing.
+const visitorSalt = process.env.VISITOR_SALT;
+if (!visitorSalt) {
+  console.error("Missing VISITOR_SALT in .env.local.");
+  console.error("It must match the Worker secret: wrangler secret put VISITOR_SALT");
+  process.exit(1);
+}
 
 async function query<T>(sql: string): Promise<T[]> {
   const res = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/analytics_engine/sql`, {
@@ -115,7 +127,7 @@ async function ownIpHash(): Promise<string | null> {
   try {
     const trace = await fetch("https://cloudflare.com/cdn-cgi/trace").then((r) => r.text());
     const ip = trace.match(/^ip=(.+)$/m)?.[1];
-    return ip ? visitorHash(ip) : null;
+    return ip ? visitorHash(ip, visitorSalt) : null;
   } catch {
     return null;
   }
@@ -155,6 +167,14 @@ interface FeedRow {
 const isSearch = (r: FeedRow) => r.kind === "search";
 
 /**
+ * What referrerHost() in worker.ts writes when the visitor followed a link
+ * inside the site. It is not a referring site, so the Referrers panel skips it;
+ * the feed uses it to tell reading on from arriving.
+ */
+const SELF_REFERRER = "self";
+const isInSite = (r: FeedRow) => !isSearch(r) && r.referrer === SELF_REFERRER;
+
+/**
  * The kind a search row counts as. Nothing measures headers on a search, so it
  * is judged by where it was submitted from: the public API is machinery, every
  * other path is a person at a keyboard.
@@ -162,8 +182,38 @@ const isSearch = (r: FeedRow) => r.kind === "search";
 const searchKind = (r: FeedRow): Kind => (r.source === "api" ? "agent" : "human");
 
 /**
- * Analytics Engine keeps 90 days; this keeps everything. The primary key
- * makes re-inserting an overlapping page of feed rows a no-op.
+ * A page address reduced to its slug, so two spellings of the same page compare
+ * equal: a pasted `https://www.sidefx.com/docs/houdini/nodes/sop/box.html`, a
+ * `/docs/houdini/nodes/sop/box`, and a bare `houdini/nodes/sop/box` are one page.
+ */
+function slugOf(s: string): string {
+  let v = s.trim().toLowerCase();
+  v = v.replace(/^https?:\/\/[^/]+/, "");
+  v = v.replace(/^\/?docs\//, "");
+  v = v.replace(/\.html(\.md)?$|\.md$/, "");
+  return v.replace(/^\/+|\/+$/g, "");
+}
+
+/**
+ * A "search" whose query IS the page it opened. Both search fields accept a
+ * pasted SideFX URL or a bare slug as well as a question, and record whatever
+ * was typed — so someone going straight to a page they already knew came out of
+ * the dataset labelled "Search", reading `"houdini/nodes/sop/box" → box`. That
+ * is a navigation. The query says nothing the destination does not.
+ */
+const isDirect = (r: FeedRow): boolean => {
+  const dest = r.dest ?? "";
+  return dest !== "" && slugOf(r.q ?? "") === slugOf(dest);
+};
+
+/**
+ * A local mirror of the dataset, so the feed and the panels can look further
+ * back than the window Analytics Engine was asked for. The primary key makes
+ * re-inserting an overlapping page of feed rows a no-op.
+ *
+ * It holds the same 90 days Analytics Engine holds, and no more. An archive
+ * that "keeps everything" is a second, longer-lived copy of the visit history —
+ * exactly the thing the privacy page promises does not exist.
  */
 const db = new Database(DB_PATH, { create: true });
 db.run("PRAGMA journal_mode = WAL");
@@ -245,7 +295,27 @@ db.run(`CREATE TABLE IF NOT EXISTS searches (
   PRIMARY KEY (ts, visitor, q)) WITHOUT ROWID`);
 addColumn("searches", "source", "TEXT NOT NULL DEFAULT ''");
 addColumn("searches", "dest", "TEXT NOT NULL DEFAULT ''");
-const insertSearch = db.prepare("INSERT OR IGNORE INTO searches VALUES (?,?,?,?,?,?,?,?)");
+// Stored, not re-derived in SQL: isDirect() is the one definition, and writing
+// it down here keeps the panels from carrying a second copy of it in ClickHouse
+// string functions that would drift the first time a URL form changes.
+addColumn("searches", "direct", "INTEGER NOT NULL DEFAULT 0");
+
+/**
+ * Drop anything past retention, at every start. `ts` is stored as Analytics
+ * Engine returns it ("YYYY-MM-DD HH:MM:SS", UTC), which sorts the same way
+ * SQLite's own datetime() string does, so a plain string compare is the cut.
+ */
+function prune(target: Database = db): number {
+  const cutoff = `datetime('now', '-${RETENTION_DAYS} days')`;
+  return (
+    target.run(`DELETE FROM views WHERE ts < ${cutoff}`).changes +
+    target.run(`DELETE FROM searches WHERE ts < ${cutoff}`).changes
+  );
+}
+// VACUUM only when something went, so the usual start pays nothing. Without it
+// the deleted rows stay legible in the file's free pages, which is not deletion.
+if (prune() > 0) db.run("VACUUM");
+const insertSearch = db.prepare("INSERT OR IGNORE INTO searches VALUES (?,?,?,?,?,?,?,?,?)");
 const insertSearches = db.transaction((rows: FeedRow[]) => {
   for (const r of rows)
     insertSearch.run(
@@ -257,12 +327,25 @@ const insertSearches = db.transaction((rows: FeedRow[]) => {
       num(r.results),
       r.source ?? "",
       r.dest ?? "",
+      isDirect(r) ? 1 : 0,
     );
 });
+
+/** The same mark, applied once to the rows archived before the column existed. */
+function backfillDirect(): number {
+  const rows = db.query("SELECT DISTINCT q, dest FROM searches WHERE dest != '' AND direct = 0").all() as {
+    q: string;
+    dest: string;
+  }[];
+  const update = db.prepare("UPDATE searches SET direct = 1 WHERE q = ? AND dest = ?");
+  let marked = 0;
+  for (const r of rows) if (isDirect(r as FeedRow)) marked += update.run(r.q, r.dest).changes;
+  return marked;
+}
 /** The queries asked most often, whether they worked or not. */
 const topSearchRows = db.prepare(
   `SELECT q, COUNT(*) AS n, SUM(CASE WHEN dest = '' AND results = 0 THEN 1 ELSE 0 END) AS misses
-   FROM searches WHERE ts > ? GROUP BY q ORDER BY n DESC, MAX(ts) DESC LIMIT 30`,
+   FROM searches WHERE ts > ? AND direct = 0 GROUP BY q ORDER BY n DESC, MAX(ts) DESC LIMIT 30`,
 );
 /**
  * Every query that ever found nothing, heaviest first — the content gaps.
@@ -272,7 +355,8 @@ const topSearchRows = db.prepare(
 const deadRows = db.prepare(
   "SELECT q, COUNT(*) AS n FROM searches WHERE results = 0 AND dest = '' GROUP BY q ORDER BY n DESC, MAX(ts) DESC LIMIT 30",
 );
-const chainRows = db.prepare("SELECT visitor, ts, q FROM searches WHERE ts > ? ORDER BY visitor, ts");
+// A pasted address between two searches is not a refinement of either.
+const chainRows = db.prepare("SELECT visitor, ts, q FROM searches WHERE ts > ? AND direct = 0 ORDER BY visitor, ts");
 
 /**
  * The feed before this run started. Analytics Engine only answers for the
@@ -307,7 +391,8 @@ function readArchive(limit: number): FeedRow[] {
 }
 /** Referring hosts, busiest first. Same-site and direct hits are stored empty. */
 const referrerRows = db.prepare(
-  "SELECT referrer AS host, COUNT(*) AS n FROM views WHERE referrer != '' AND ts > ? GROUP BY referrer ORDER BY n DESC, MAX(ts) DESC LIMIT 10",
+  `SELECT referrer AS host, COUNT(*) AS n FROM views WHERE referrer NOT IN ('', '${SELF_REFERRER}') AND ts > ?
+   GROUP BY referrer ORDER BY n DESC, MAX(ts) DESC LIMIT 10`,
 );
 
 const CHAIN_GAP_MS = 60_000;
@@ -511,7 +596,12 @@ function topPathsPanel(rows: PathRow[], inner: number, maxRows: number): string[
   // The home page is always the top page — it says nothing. Drop it.
   // Empty, not a placeholder: the caller drops the whole panel and gives the
   // rows to the search widgets instead.
-  const shown = rows.filter((r) => r.path !== "/" && num(r.views) > 1).slice(0, maxRows);
+  // A single view is noise while anything busier exists. When nothing is busier
+  // it is the whole story, and hiding it is how a kind filter used to leave the
+  // panel blank on a site that plainly had traffic.
+  const ranked = rows.filter((r) => r.path !== "/");
+  const busy = ranked.filter((r) => num(r.views) > 1);
+  const shown = (busy.length > 0 ? busy : ranked).slice(0, maxRows);
   if (shown.length === 0) return [];
   const max = Math.max(1, ...shown.map((r) => num(r.views)));
   const barW = Math.max(3, Math.floor(inner * 0.16));
@@ -554,20 +644,27 @@ function feedPanel(rows: FeedRow[], inner: number, maxRows: number, offset = 0):
           [NAME_HUMANS && r.visitor ? visitorName(r.visitor) : "", where || "unknown"].filter(Boolean).join(" | ")
       : r.bot || where || "unnamed";
   };
-  // Sized to this page's actual content, capped so the path column always
-  // keeps a usable width even when one row carries an unusually long name.
-  const whoW = Math.min(20, Math.max(4, ...visible.map((r) => whoOf(r).length)));
-
+  // Sized to this page's actual content, and allowed to grow past the old flat
+  // 20 whenever the path column can still keep PATH_MIN — "Fitzgerald | San
+  // Francisco, US" was cut on a terminal with columns to spare, which is the one
+  // thing this column exists to show. 20 stays the floor, so a narrow terminal
+  // is no worse off than before.
+  const PATH_MIN = 24;
   // Four trailing columns are kept for the status of anything that was not a
   // clean 200, so a long path cannot push it past the border.
-  const pathW = Math.max(8, inner - 9 - kindW - whoW - 3 - 4);
+  const fixed = 9 + kindW + 3 + 4;
+  const want = Math.max(...visible.map((r) => whoOf(r).length));
+  const whoW = Math.max(4, Math.min(want, Math.max(20, inner - fixed - PATH_MIN)));
+  const pathW = Math.max(8, inner - fixed - whoW);
   return visible.map((r) => {
     const k = rowKind(r);
     const who = whoOf(r);
     const stamp =
       p.label(new Date(r.timestamp + (r.timestamp.endsWith("Z") ? "" : "Z")).toLocaleTimeString("en-GB")) +
       " " +
-      (isSearch(r) ? p.accent("Search".padEnd(kindW)) : KIND_COLOUR[k](Title(k).padEnd(kindW))) +
+      (isSearch(r)
+        ? (isDirect(r) ? p.ink2 : p.accent)((isDirect(r) ? "Direct" : "Search").padEnd(kindW))
+        : KIND_COLOUR[k](Title(k).padEnd(kindW))) +
       p.line("│ ") +
       KIND_COLOUR[k](padVis(truncEnd(who, whoW), whoW)) +
       " ";
@@ -581,8 +678,13 @@ function feedPanel(rows: FeedRow[], inner: number, maxRows: number, offset = 0):
     // without splitting the page's rollups in two.
     const status = num(r.status);
     const path = shortPath(r.path) + (num(r.markdown) === 1 ? ".md" : "");
+    // "↳" is a link followed from another page on the site: reading on, rather
+    // than arriving. Without it a click through the docs and a typed address are
+    // the same row, which is the whole of "I cannot tell navigating from
+    // searching". Rows archived before the worker recorded it carry no mark.
+    const arrow = isInSite(r) ? p.line("↳") : " ";
     return (
-      stamp + p.ink(link(SITE + r.path, truncate(path, pathW))) + (status >= 400 ? p.err(` ${status}`) : "")
+      stamp + arrow + p.ink(link(SITE + r.path, truncate(path, pathW - 1))) + (status >= 400 ? p.err(` ${status}`) : "")
     );
   });
 }
@@ -595,6 +697,10 @@ function feedPanel(rows: FeedRow[], inner: number, maxRows: number, offset = 0):
 function searchEvent(r: FeedRow, width: number): string {
   const dest = r.dest ?? "";
   const quoted = (w: number) => `"${truncEnd(r.q ?? "", Math.max(3, w - 2))}"`;
+  // Someone who typed the address gets the address, once. The "Direct" tag in
+  // the kind column already says how they arrived, so repeating the slug either
+  // side of an arrow only cost the row the width to show it.
+  if (isDirect(r)) return p.ink2(link(`${SITE}/docs/${dest}`, truncate(shortPath(`/docs/${dest}`), width)));
   if (dest) {
     const q = quoted(Math.floor(width * 0.5));
     return (
@@ -672,15 +778,21 @@ function deadQueryPanel(inner: number, maxRows: number): string[] {
   return rows.slice(0, maxRows).map((r) => p.err(String(r.n).padStart(4)) + " " + p.ink(truncate(r.q, inner - 5)));
 }
 
-/** `vellum → vellum grain → grain constraint` — the tail is what they meant. */
+/**
+ * `vellum → vellum grain → grain constraint` — the tail is what they meant.
+ *
+ * Two lines per chain, the tail on its own. On one line the panel is only ever
+ * as wide as the right column (~48 columns, and stretching the terminal does
+ * not widen it), so the whole chain competed for that width and the query the
+ * reader ended on — the answer the panel exists to give — was the part that
+ * fell off the edge.
+ */
 function refinementPanel(chains: { ts: string; queries: string[] }[], inner: number, maxRows: number): string[] {
-  if (chains.length === 0) return [];
-  return chains.slice(0, maxRows).map((ch) => {
-    const tail = ch.queries[ch.queries.length - 1];
-    const head = ch.queries.slice(0, -1).join(" → ");
-    const room = inner - vlen(tail) - 3;
-    return (room > 4 ? p.ink2(truncate(head, room)) + p.line(" → ") : "") + p.ink(truncate(tail, inner));
-  });
+  if (chains.length === 0 || maxRows < 2) return [];
+  return chains.slice(0, Math.floor(maxRows / 2)).flatMap((ch) => [
+    p.ink(truncEnd(ch.queries[ch.queries.length - 1], inner)),
+    p.label("  ↑ ") + p.ink2(truncEnd(ch.queries.slice(0, -1).join(" → "), inner - 4)),
+  ]);
 }
 
 // ---------- braille line chart ----------
@@ -769,7 +881,9 @@ function chartPanel(series: Record<Kind, number[]>, inner: number, rows: number,
     out.push(line);
   }
   const empty = drawn.every((k) => points[k].every((n) => n === 0));
-  const caption = `last ${windowMin}m · peak ${empty ? 0 : Math.round(max)}/bucket · ${Math.max(1, Math.round((windowMin * 120) / pw))}s buckets`;
+  const bucketSec = Math.max(1, Math.round((windowMin * 120) / pw));
+  const bucket = bucketSec >= 3600 ? `${Math.round(bucketSec / 3600)}h` : bucketSec >= 60 ? `${Math.round(bucketSec / 60)}m` : `${bucketSec}s`;
+  const caption = `last ${windowLabel(windowMin)} · peak ${empty ? 0 : Math.round(max)}/bucket · ${bucket} buckets`;
   out.push(p.label(caption) + p.line(" " + "·".repeat(Math.max(0, inner - caption.length - 1))));
   return out;
 }
@@ -868,6 +982,8 @@ function frame(state: State, exclude: string | null): string[] {
     p.label(" filter ") +
     p.ink2("jk") +
     p.label(" scroll ") +
+    p.ink2("←→") +
+    p.label(" window ") +
     p.ink2("q") +
     p.label(" quit") +
     (state.filter ? p.line(" · ") + KIND_COLOUR[state.filter](`${state.filter}s only`) : "") +
@@ -883,7 +999,7 @@ function frame(state: State, exclude: string | null): string[] {
   const feedRows = (wide ? mainH : Math.max(5, mainH - trafficH - 8)) - 2;
   const windows = [
     { label: "Current view", rows: countRowsByKind(feed.slice(state.feedOffset, state.feedOffset + feedRows)) },
-    { label: `Last ${windowMin}m`, rows: state.recent },
+    { label: `Last ${windowLabel(windowMin)}`, rows: state.recent },
     { label: "Last 24h", rows: state.day },
     { label: "Lifetime", rows: state.lifetime },
   ];
@@ -975,6 +1091,23 @@ const DAY_MINUTES = 24 * 60;
 // windows this machine had polled — a "lifetime" smaller than its own 24h row.
 const LIFETIME_MINUTES = 90 * DAY_MINUTES;
 
+/**
+ * The rungs ← and → step through. Each step is the next rung strictly past the
+ * current window, so a custom --window is not snapped away — it simply broadens
+ * or narrows to the nearest rung on either side of wherever it sits.
+ */
+const WINDOW_LADDER = [30, 45, 60, 120, 240, 480, 1440, 2880, 4320, 10080, 43200, LIFETIME_MINUTES];
+const broaden = (mins: number) => WINDOW_LADDER.find((v) => v > mins) ?? mins;
+const narrow = (mins: number) => WINDOW_LADDER.filter((v) => v < mins).pop() ?? mins;
+
+/** "45m", "8h", "72h", "7d", "lifetime" — hours up to three days, then days. */
+function windowLabel(mins: number): string {
+  if (mins >= LIFETIME_MINUTES) return "lifetime";
+  if (mins >= 7 * DAY_MINUTES) return `${Math.round(mins / DAY_MINUTES)}d`;
+  if (mins % 60 === 0) return `${mins / 60}h`;
+  return `${mins}m`;
+}
+
 async function fetchRollups(exclude: string | null, withDay: boolean) {
   const notMine = exclude ? ` AND blob3 != '${exclude}'` : "";
   const since = (mins: number) => `timestamp > NOW() - INTERVAL '${mins}' MINUTE`;
@@ -1001,8 +1134,28 @@ async function fetchRollups(exclude: string | null, withDay: boolean) {
     recent: foldKinds(recent),
     ...(day ? { day: foldKinds(day) } : {}),
     ...(lifetime ? { lifetime: foldKinds(lifetime) } : {}),
-    paths: paths.map((r) => ({ ...r, kind: fixKind(r.kind, r.bot, r.evidence) })),
+    paths: foldPaths(paths),
   };
+}
+
+/**
+ * One row per (page, kind). The query has to group by bot and evidence as well,
+ * because fixKind needs them — so a page read by four people carrying four
+ * different sets of browser headers came back as four rows of one view each.
+ * Nothing folded them again, so "Top Pages" saw a site where no page was ever
+ * read twice, and filtering to humans emptied the panel outright: a crawler
+ * sends one fixed header set and aggregates on its own, a person does not.
+ */
+function foldPaths(rows: PathRow[]): PathRow[] {
+  const acc = new Map<string, PathRow>();
+  for (const r of rows) {
+    const kind = fixKind(r.kind, r.bot, r.evidence);
+    const key = `${r.path} ${kind}`;
+    const cur = acc.get(key);
+    if (cur) cur.views = String(num(cur.views) + num(r.views));
+    else acc.set(key, { path: r.path, kind, views: String(num(r.views)) });
+  }
+  return [...acc.values()].sort((a, b) => num(b.views) - num(a.views));
 }
 
 /**
@@ -1177,8 +1330,8 @@ function selfTest() {
 
   const chains = [{ ts: "2026-08-02 16:45:03", queries: ["vellum", "vellum grain"] }];
   console.assert(
-    stripAnsi(refinementPanel(chains, 40, 3)[0]).includes("vellum → vellum grain"),
-    "refine: chain rendered oldest to newest",
+    stripAnsi(refinementPanel(chains, 40, 4).join("\n")) === "vellum grain\n  ↑ vellum",
+    "refine: newest query on top, the queries it came from beneath",
   );
   const searchRow = (over: Partial<FeedRow> = {}): FeedRow =>
     feedRow({ kind: "search", path: "", q: "pyro", results: "0", ...over });
@@ -1206,6 +1359,64 @@ function selfTest() {
   console.assert(num(by(searchOnly, "human")?.visitors) === 1, "current view: a visible searcher is a visible human");
   console.assert(num(by(searchOnly, "human")?.views) === 0, "current view: a search is not a page view");
   console.assert(refinementPanel([], 40, 3).length === 0, "panels: empty means no box");
+  const chain = refinementPanel([{ ts: "t", queries: ["vellum", "vellum grain", "grain constraint solver setup"] }], 24, 4);
+  console.assert(stripAnsi(chain[0]) === "grain constraint solver…", "refined: the query they ended on gets its own line");
+  console.assert(chain.length === 2 && stripAnsi(chain[1]).startsWith("  ↑ "), "refined: the earlier queries sit under it");
+
+  // Direct hits. A pasted address recorded as a search must read as an arrival,
+  // not as a question, in every spelling the two search fields accept.
+  const direct = (q: string, dest: string) => isDirect(searchRow({ q, dest }));
+  console.assert(direct("houdini/nodes/sop/box", "houdini/nodes/sop/box"), "direct: a slug typed verbatim");
+  console.assert(direct("https://www.sidefx.com/docs/houdini/nodes/sop/box.html", "houdini/nodes/sop/box"), "direct: a pasted SideFX URL");
+  console.assert(direct("/docs/houdini/nodes/sop/box", "houdini/nodes/sop/box"), "direct: a pasted local path");
+  console.assert(!direct("read a point", "houdini/vex/functions/point"), "direct: a real question is not a direct hit");
+  console.assert(!direct("box", ""), "direct: a search that landed nowhere is not a direct hit");
+  const directRow = stripAnsi(feedPanel([searchRow({ source: "home", q: "houdini/nodes/sop/box", dest: "houdini/nodes/sop/box" })], 78, 3)[0]);
+  console.assert(directRow.includes("Direct") && !directRow.includes("→"), "feed: a direct hit shows the page once, not both sides of an arrow");
+
+  // Reading on vs arriving.
+  const followed = stripAnsi(feedPanel([feedRow({ referrer: SELF_REFERRER })], 60, 3)[0]);
+  const arrived = stripAnsi(feedPanel([feedRow({ referrer: "" })], 60, 3)[0]);
+  console.assert(followed.includes("↳/docs/a"), "feed: a link followed inside the site is marked");
+  console.assert(!arrived.includes("↳"), "feed: an arrival carries no mark");
+  console.assert(vlen(followed) === vlen(arrived), "feed: the mark costs the path column nothing");
+
+  // Top Pages. The rollup groups by header evidence as well as kind, so folding
+  // is what makes a page read by several people one row instead of several.
+  const foldedPaths = foldPaths([
+    { path: "/docs/a", kind: "human", views: "1", bot: "", evidence: "dl" },
+    { path: "/docs/a", kind: "human", views: "1", bot: "", evidence: "d" },
+    { path: "/docs/b", kind: "human", views: "5", bot: "", evidence: "d" },
+  ]);
+  console.assert(foldedPaths.length === 2, "top pages: one row per page and kind");
+  console.assert(num(foldedPaths.find((r) => r.path === "/docs/a")?.views) === 2, "top pages: header sets are summed, not split");
+  console.assert(
+    topPathsPanel([{ path: "/docs/a", kind: "human", views: "1" }], 40, 5).length === 1,
+    "top pages: a lone one-view page still shows when nothing is busier",
+  );
+
+  // The window ladder walks past whatever it is given, in both directions.
+  console.assert(broaden(30) === 45 && broaden(1440) === 2880, "window: ← climbs one rung");
+  console.assert(narrow(60) === 45 && narrow(30) === 30, "window: → falls one rung and stops at the floor");
+  console.assert(broaden(37) === 45 && narrow(37) === 30, "window: a custom --window is not snapped away");
+  console.assert(broaden(LIFETIME_MINUTES) === LIFETIME_MINUTES, "window: lifetime is the ceiling");
+  console.assert(
+    [30, 60, 1440, 4320, 10080, LIFETIME_MINUTES].map(windowLabel).join(" ") === "30m 1h 24h 72h 7d lifetime",
+    "window: every rung has the label the spec asks for",
+  );
+
+  // Retention. The risk is the comparison, not the DELETE: `ts` is a string in
+  // Analytics Engine's format, so this proves it sorts against SQLite's own
+  // datetime() the way the cut assumes.
+  const mem = new Database(":memory:");
+  mem.run("CREATE TABLE views (ts TEXT)");
+  mem.run("CREATE TABLE searches (ts TEXT)");
+  const stamp = (days: number) => utc(Date.now() - days * 86_400_000);
+  mem.run(`INSERT INTO views VALUES ('${stamp(RETENTION_DAYS + 1)}'), ('${stamp(1)}')`);
+  mem.run(`INSERT INTO searches VALUES ('${stamp(RETENTION_DAYS + 1)}'), ('${stamp(1)}')`);
+  console.assert(prune(mem) === 2, "retention: one row per table drops at the cutoff");
+  console.assert(num((mem.query("SELECT COUNT(*) AS n FROM views").get() as { n: number })?.n) === 1, "retention: a row inside the window stays");
+  console.assert(prune(mem) === 0, "retention: a second pass finds nothing left to drop");
 
   const base: State = {
     live: rows,
@@ -1240,7 +1451,8 @@ if (args.flags.has("test")) {
 
 const exclude = args.flags.has("keep-mine") ? null : await ownIpHash();
 
-const fixedRows = backfillKinds();
+backfillKinds();
+backfillDirect();
 
 const state: State = {
   live: [],
@@ -1327,6 +1539,17 @@ if (process.stdin.isTTY) {
       state.feedOffset = Math.max(0, state.feedOffset - 1);
     } else if (k === "g") {
       state.feedOffset = 0;
+    } else if (k === "\x1b[D" || k === "\x1b[C") {
+      // ← broadens, → narrows. The chart redraws at once from the local
+      // archive; the rollups and the feed need Analytics Engine again, so they
+      // are refetched in the background and draw themselves when they land.
+      const next = k === "\x1b[D" ? broaden(windowMin) : narrow(windowMin);
+      if (next === windowMin) return;
+      windowMin = next;
+      state.feedOffset = 0;
+      draw(state, exclude);
+      void Promise.all([tickRollups(), tickFeed(true)]).then(() => draw(state, exclude));
+      return;
     } else {
       return;
     }

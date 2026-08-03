@@ -30,6 +30,9 @@ interface Env {
   ANALYTICS?: {
     writeDataPoint(event: { indexes?: string[]; blobs?: string[]; doubles?: number[] }): void;
   };
+  // Secret. Without it a visitor id would be a reversible IP, so every write
+  // path below refuses to record rather than record something identifying.
+  VISITOR_SALT?: string;
   [key: string]: unknown;
 }
 
@@ -42,6 +45,10 @@ const STATIC_ARCHIVE_MIME: Record<string, string> = {
   svg: "image/svg+xml",
 };
 
+// Both the dataset binding and the salt must be present. A missing salt is not
+// a reason to fall back to an unsalted hash — it is a reason to write nothing.
+const canRecord = (env: Env): boolean => Boolean(env.ANALYTICS && env.VISITOR_SALT);
+
 // One data point per doc page actually served, so `bun run analytics` can split
 // humans from agents. Everything skipped here is noise the Cloudflare dashboard
 // drowns in: assets, /api/*, the .md redirect (the agent's follow-up request to
@@ -51,7 +58,7 @@ const STATIC_ARCHIVE_MIME: Record<string, string> = {
 // hammering one path gets sampled down on its own while ordinary visitors are
 // recorded in full. Every count must therefore be SUM(_sample_interval).
 function recordPageView(request: Request, url: URL, response: Response, env: Env) {
-  if (!env.ANALYTICS || request.method !== "GET") return;
+  if (!canRecord(env) || request.method !== "GET") return;
   if (response.status >= 300 && response.status < 400) return;
   if (request.headers.get("next-router-prefetch")) return;
   const path = url.pathname;
@@ -59,12 +66,13 @@ function recordPageView(request: Request, url: URL, response: Response, env: Env
 
   const ua = request.headers.get("user-agent");
   const ip = request.headers.get("cf-connecting-ip") ?? "";
-  env.ANALYTICS.writeDataPoint({
-    indexes: [visitorHash(`${ip}|${ua ?? ""}`)],
+  const salt = env.VISITOR_SALT!;
+  env.ANALYTICS!.writeDataPoint({
+    indexes: [visitorHash(`${ip}|${ua ?? ""}`, salt)],
     blobs: [
       path.endsWith(".md") ? path.slice(0, -3) : path,
       visitorKind(ua, request.headers),
-      visitorHash(ip), // blob3: lets the CLI drop the operator's own visits
+      visitorHash(ip, salt), // blob3: lets the CLI drop the operator's own visits
       request.headers.get("cf-ipcountry") ?? "",
       botFamily(ua) ?? "", // blob5: named crawler/agent for the live feed, e.g. "Googlebot"
       (request.cf?.city as string) ?? "", // blob6: city, for the live feed's location tag
@@ -82,16 +90,21 @@ function recordPageView(request: Request, url: URL, response: Response, env: Env
 }
 
 /**
- * Host of the referring page, or "" for same-site and direct hits. Only the
- * host: the full URL is the visitor's browsing history, and the question this
- * answers ("where does traffic come from") never needs the path.
+ * Host of the referring page, "self" when the visitor followed a link inside
+ * the site, or "" when they arrived with no referrer at all. Only the host: the
+ * full URL is the visitor's browsing history, and the question this answers
+ * ("where does traffic come from") never needs the path.
+ *
+ * Same-site used to collapse into "" alongside a direct hit, which made reading
+ * on from page to page and typing an address look identical in the dataset.
+ * "self" is our own hostname, so naming it adds nothing about the visitor.
  */
 function referrerHost(request: Request, url: URL): string {
   const ref = request.headers.get("referer");
   if (!ref) return "";
   try {
     const host = new URL(ref).hostname.replace(/^www\./, "");
-    return host === url.hostname.replace(/^www\./, "") ? "" : host;
+    return host === url.hostname.replace(/^www\./, "") ? "self" : host;
   } catch {
     return "";
   }
@@ -115,12 +128,13 @@ function writeSearchRow(
   ev: { q: string; source: SearchSource; dest: string; results: number; category?: string }
 ) {
   const ip = request.headers.get("cf-connecting-ip") ?? "";
+  const salt = env.VISITOR_SALT!;
   env.ANALYTICS!.writeDataPoint({
-    indexes: [visitorHash(`${ip}|${request.headers.get("user-agent") ?? ""}`)],
+    indexes: [visitorHash(`${ip}|${request.headers.get("user-agent") ?? ""}`, salt)],
     blobs: [
       ev.q.slice(0, 200),
       "search",
-      visitorHash(ip),
+      visitorHash(ip, salt),
       request.headers.get("cf-ipcountry") ?? "",
       ev.source,
       ev.category ?? "",
@@ -148,7 +162,7 @@ function recordApiSearch(
   env: Env,
   ctx: { waitUntil(p: Promise<unknown>): void }
 ) {
-  if (!env.ANALYTICS || request.method !== "GET") return;
+  if (!canRecord(env) || request.method !== "GET") return;
 
   if (url.pathname === "/api/search" && response.status === 200) {
     const q = url.searchParams.get("q")?.trim();
@@ -209,7 +223,7 @@ function recordSearchBeacon(request: Request, url: URL, env: Env): Response | nu
   if (url.pathname !== "/api/search-log") return null;
   const q = url.searchParams.get("q")?.trim();
   const source = url.searchParams.get("src") === "home" ? "home" : "overlay";
-  if (env.ANALYTICS && q) {
+  if (canRecord(env) && q) {
     writeSearchRow(request, env, {
       q,
       source,
