@@ -64,7 +64,7 @@ export function buildOgImageJsx({ title, nodeType, subtitle, category, summary, 
         {category && <div style={{ color: MUTED, fontSize: 18, marginBottom: 16 }}>{category}</div>}
 
         {/* Title (+ page icon, if it has one) */}
-        <div style={{ display: "flex", alignItems: "baseline", gap: 24 }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 24 }}>
           {icon && (
             // eslint-disable-next-line @next/next/no-img-element
             <img
