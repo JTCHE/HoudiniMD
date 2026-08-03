@@ -8,7 +8,6 @@
     "start": "next start",
     "lint": "eslint",
     "regen": "bun scripts/regenerate.ts",
-    "analytics": "bun --env-file=.env.local scripts/analytics.ts",
     "audit:perf": "bun scripts/audit-perf.ts",
     "bench:sidefx": "bun scripts/benchmark-vs-sidefx.ts",
     "sidefx:index": "bun scripts/build-sidefx-index.ts",
