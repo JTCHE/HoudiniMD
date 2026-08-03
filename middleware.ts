@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { LATEST_NEWS_INDEX_SLUGS } from './lib/houdini';
 import { wantsMarkdown } from './lib/wants-markdown';
 
+// Verified renamed/duplicated slugs — exact matches only, never a fuzzy guess.
+// Each entry was checked with `curl -L`: the old slug 404s, the new one 200s.
+const VERIFIED_SLUG_REDIRECTS: Record<string, string> = {
+  'houdini/nodes/sop/sop/copytopoints': 'houdini/nodes/sop/copytopoints',
+  'houdini/nodes/top/labs--filecache-2.0': 'houdini/nodes/top/labs--topfilecache-2.0',
+};
+
 const HOUDINI_PATH_PREFIXES = [
   'nodes/', 'vex/', 'hom/', 'expressions/', 'model/', 'copy/',
   'crowds/', 'fluids/', 'grains/', 'cloth/', 'pyro/', 'destruction/',
@@ -41,6 +48,11 @@ export function middleware(request: NextRequest) {
     if (LATEST_NEWS_INDEX_SLUGS.includes(bareSlug)) {
       url.pathname = '/docs/houdini';
       return NextResponse.redirect(url, 302);
+    }
+
+    if (bareSlug in VERIFIED_SLUG_REDIRECTS) {
+      url.pathname = `/docs/${VERIFIED_SLUG_REDIRECTS[bareSlug]}`;
+      return NextResponse.redirect(url, 301);
     }
 
     // .md suffix → rewrite to /api/raw/ (raw markdown for LLMs, per llmstxt.org spec)

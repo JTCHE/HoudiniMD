@@ -1,4 +1,5 @@
 import { unstable_noStore } from "next/cache";
+import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -18,6 +19,7 @@ import { formatPageTitle } from "@/lib/markdown/page-title";
 import { remarkCallouts } from "@/lib/markdown/remark-callouts";
 import { remarkVex } from "@/lib/markdown/remark-vex";
 import { fetchFromR2 } from "@/lib/r2/read";
+import { slugExistsOnSideFX } from "@/lib/generator";
 import GeneratingPage from "@/components/docs/GeneratingPage";
 import type { SearchIndexEntry } from "@/lib/r2/search-index";
 import { SITE_URL } from "@/lib/site";
@@ -117,6 +119,12 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
   // and can show the skeleton + SSE progress log while generation happens client-side.
   const rawMarkdown = await fetchFromR2(`content/${slugPath}.md`);
   if (!rawMarkdown) {
+    // Distinguish "not generated yet" (200, show progress) from "SideFX has no
+    // such page" (real 404) — without this, every dead link served a 200 page
+    // that only failed client-side once the generation SSE stream ran.
+    if (!(await slugExistsOnSideFX(slugPath))) {
+      notFound();
+    }
     // Prevent ISR/CDN from caching the generating state
     unstable_noStore();
     return <GeneratingPage slug={slugPath} />;

@@ -25,7 +25,7 @@ export function DocsPageContent({ breadcrumbs, sourceUrl, markdownUrl, children 
         markdownUrl={markdownUrl}
         searchRef={searchRef}
       />
-      <div className="flex-1">{children}</div>
+      <div className="flex-1 flex flex-col">{children}</div>
       <Footer />
     </div>
   );
