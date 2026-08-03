@@ -20,9 +20,8 @@ export function createImageComponent(metaMap: ImageMetaMap): Components["img"] {
     const meta = metaMap.get(src);
     if (!meta) {
       // Degenerate case: probing failed or was skipped (e.g. page has more
-      // images than the probe cap). Render exactly as before the feature —
       // no reserved space, but never a broken image.
-      return <img src={src} alt={alt ?? ""} className="max-w-full h-auto my-4 block" />;
+      return <img src={src} alt={alt ?? ""} className="markdown-media my-4 block h-auto w-full" />;
     }
 
     return (

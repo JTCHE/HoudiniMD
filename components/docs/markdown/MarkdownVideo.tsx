@@ -47,27 +47,30 @@ export function Video({
   if (typeof src !== "string") return null;
 
   return (
-    <MediaPlayer
-      className="markdown-media markdown-video"
-      src={src}
-      title={title || "Documentation video"}
-      viewType="video"
-      streamType="on-demand"
-      playsInline
-      preload="metadata"
-    >
-      <MediaProvider />
-      <DefaultVideoLayout
-        colorScheme="dark"
-        icons={playerIcons}
-        slots={{
-          chapterTitle: null,
-          googleCastButton: null,
-          pipButton: null,
-          settingsMenu: null,
-          beforeFullscreenButton: <div className="vds-controls-spacer" />,
-        }}
-      />
-    </MediaPlayer>
+    <div className="markdown-media my-4 aspect-video">
+      <MediaPlayer
+        className="markdown-video"
+        style={{ width: "100%", height: "100%" }}
+        src={src}
+        title={title || "Documentation video"}
+        viewType="video"
+        streamType="on-demand"
+        playsInline
+        preload="metadata"
+      >
+        <MediaProvider />
+        <DefaultVideoLayout
+          colorScheme="dark"
+          icons={playerIcons}
+          slots={{
+            chapterTitle: null,
+            googleCastButton: null,
+            pipButton: null,
+            settingsMenu: null,
+            beforeFullscreenButton: <div className="vds-controls-spacer" />,
+          }}
+        />
+      </MediaPlayer>
+    </div>
   );
 }

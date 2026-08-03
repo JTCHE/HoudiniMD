@@ -27,12 +27,13 @@ export default function DocImageClient({ src, alt, width, height, blurDataURL }:
   }, [src]);
 
   return (
-    // maxWidth pins the box to the image's own width, so a figure narrower
-    // than the column is never upscaled — matching how `max-w-full h-auto`
-    // rendered it before the box was reserved.
     <span
-      className="markdown-media relative my-4 block max-w-full"
-      style={{ aspectRatio: `${width} / ${height}`, maxWidth: `${width}px` }}
+      className="markdown-media relative my-4 block"
+      style={{
+        aspectRatio: `${width} / ${height}`,
+        maxWidth: width > height ? undefined : `min(100%, ${width}px)`,
+        marginInline: width > height ? undefined : "auto",
+      }}
     >
       {!loaded &&
         (blurDataURL ? (
@@ -57,7 +58,7 @@ export default function DocImageClient({ src, alt, width, height, blurDataURL }:
         decoding="async"
         onLoad={() => setLoaded(true)}
         onError={() => setLoaded(true)}
-        className="relative block h-full w-full object-contain transition-opacity duration-300"
+        className="relative block h-full w-full object-cover transition-opacity duration-300"
         // `.prose img` carries a 2em margin. Inside the reserved box that
         // offsets the image and pushes its bottom under overflow-hidden, so
         // the spacing lives on the wrapper (my-4) and the image sits flush.
