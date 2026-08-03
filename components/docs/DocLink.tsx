@@ -6,6 +6,9 @@ import Link from "next/link";
 import { DocTooltip, registerSlug } from "./Tooltip";
 import { showToast } from "@/components/ui/toast-notification";
 import { LATEST_NEWS_INDEX_SLUGS } from "@/lib/houdini";
+import { cn } from "@/lib/utils";
+
+export const DOC_LINK_CLASS_NAME = "underline underline-offset-2";
 
 // Shared across all DocLink instances so a link-dense page (1000+ links) uses
 // one observer instead of one per link. Registers a link's slug for tooltip
@@ -78,6 +81,7 @@ function queuePrefetch(run: () => void) {
 export default function DocLink({
   href,
   children,
+  className,
   ...props
 }: React.AnchorHTMLAttributes<HTMLAnchorElement>) {
   const slug = href?.startsWith("/docs/") ? href.slice(6).split("#")[0] : null;
@@ -134,6 +138,7 @@ export default function DocLink({
       <Link
         ref={linkRef}
         href={href!}
+        className={cn(DOC_LINK_CLASS_NAME, className)}
         {...props}
         prefetch={false}
         onMouseDown={(e) => {
