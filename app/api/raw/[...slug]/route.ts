@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { generateMarkdownForSlug, PageNotFoundError } from "@/lib/generator";
+import { insertLegacyWarning } from "@/lib/markdown/legacy-warning";
 import { toSideFXUrl } from "@/lib/url";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +16,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       console.log(`[${slugPath}] ${event.stage}: ${event.message}${event.detail ? ` - ${event.detail}` : ""}`);
     });
 
-    return new Response(result.markdown, {
+    return new Response(insertLegacyWarning(result.markdown, slugPath), {
       headers: {
         ...getHeaders(slugPath),
         ...(result.fromCache ? {} : { "X-Generated-At": new Date().toISOString() }),
