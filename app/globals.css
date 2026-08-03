@@ -135,6 +135,43 @@
   color: var(--background);
 }
 
+.markdown-media {
+  margin-inline: -1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.markdown-video {
+  --video-border: 1px solid var(--border);
+  --video-border-radius: var(--radius);
+  --video-font-family: inherit;
+  --video-focus-ring-color: var(--ring);
+  --media-button-color: var(--muted-foreground);
+  --media-button-icon-size: 50%;
+  --media-button-hover-bg: transparent;
+  --media-button-hover-transform: none;
+  --media-button-touch-hover-bg: transparent;
+  --media-time-color: var(--muted-foreground);
+  --media-time-divider-color: var(--muted-foreground);
+}
+
+.markdown-video .vds-button {
+  transition: color 180ms ease;
+}
+
+.markdown-video .vds-button:hover {
+  color: var(--foreground);
+}
+
+.markdown-video .vds-video-layout:not([data-sm]) .vds-controls-group:last-child {
+  padding-left: 8px;
+}
+
+.markdown-media + figcaption {
+  margin-inline: -1rem;
+}
+
 /* ── Syntax highlighting (hljs / rehype-highlight) ─────────────────────── */
 pre {
   background: oklch(0.13 0 0);

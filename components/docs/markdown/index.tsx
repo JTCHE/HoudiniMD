@@ -5,6 +5,7 @@ import { Table, Th, Td } from "./MarkdownTable";
 import { Blockquote } from "./MarkdownBlockquote";
 import { Code } from "./MarkdownCode";
 import { Image } from "./MarkdownImage";
+import { Video } from "./MarkdownVideo";
 
 /** Single source of truth for how docs markdown renders. */
 export const markdownComponents: Components = {
@@ -18,6 +19,10 @@ export const markdownComponents: Components = {
   pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
   code: Code,
   img: Image,
+  video: Video,
+  figcaption: ({ children }) => (
+    <figcaption className="mt-2 text-left text-sm text-muted-foreground">{children}</figcaption>
+  ),
   a: ({ href, children, ...props }) =>
     href ? (
       <DocLink
