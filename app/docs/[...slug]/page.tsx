@@ -4,7 +4,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import rehypeSlug from "rehype-slug";
-import { MarkdownActions } from "@/components/docs/MarkdownActions";
+import { PageHeader } from "@/components/docs/PageHeader";
 import { PrintPagination } from "@/components/docs/PrintPagination";
 import { TableOfContents } from "@/components/docs/TableOfContents";
 import { markdownComponents } from "@/components/docs/markdown";
@@ -13,6 +13,8 @@ import { probeImages } from "@/lib/images/probe";
 import { extractHeadings } from "@/lib/markdown/headings";
 import { decodeEntities } from "@/lib/markdown/entities";
 import { parseFrontmatter } from "@/lib/markdown/frontmatter";
+import { legacyWarningMarkdown } from "@/lib/markdown/legacy-warning";
+import { formatPageTitle } from "@/lib/markdown/page-title";
 import { remarkCallouts } from "@/lib/markdown/remark-callouts";
 import { remarkVex } from "@/lib/markdown/remark-vex";
 import { fetchFromR2 } from "@/lib/r2/read";
@@ -42,6 +44,8 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const fallbackTitle = slug[slug.length - 1].replace(/-/g, " ");
 
   let title = fallbackTitle;
+  let nodeType: string | undefined;
+  let icon: string | undefined;
   let description: string | undefined;
 
   // Derive metadata from the page's own markdown (already fetched by the page
@@ -50,18 +54,34 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   // brush the Workers 10ms CPU limit on every request, including MISSes.
   const rawMarkdown = await fetchFromR2(`content/${slugPath}.md`);
   if (rawMarkdown) {
-    const { content } = parseFrontmatter(rawMarkdown);
+    const { content, data } = parseFrontmatter(rawMarkdown);
     const h1Match = content.match(/^#[ \t]+(\S[^\n]*)$/m);
-    if (h1Match) title = h1Match[1].trim();
+    // Prefer the frontmatter's own name/type split — the H1 is only their
+    // concatenation (`${title} ${nodeType}`), so reading it back keeps the
+    // metadata title correct without re-parsing text that already came apart
+    // cleanly at generation time. Fall back to the raw H1 for pages with no
+    // frontmatter (should not happen for generated docs, but degrade safely).
+    if (data.title) {
+      title = data.title;
+      nodeType = data.nodeType;
+      icon = data.icon;
+    } else if (h1Match) {
+      title = h1Match[1].trim();
+    }
     const bodyAfterH1 = h1Match ? content.replace(/^#[ \t]+\S[^\n]*\r?\n+/m, "") : content;
     const summaryMatch = bodyAfterH1.match(/^\s*>[ \t]+(?!\[!)([^\n]+)\n+/);
     if (summaryMatch) description = summaryMatch[1].trim();
   }
 
-  const pageTitle = `${title} — HoudiniMD`;
+  const pageTitle = `${formatPageTitle(title, nodeType)} | HoudiniMD`;
   const canonical = `${SITE_URL}/docs/${slugPath}`;
+  // The OG image keeps name and type as separate params — it renders its own
+  // bold-name/thin-type hierarchy (see lib/og/og-image.tsx), not the
+  // Title Cased/dash-joined <title> string.
   const ogParams = new URLSearchParams({ path: slugPath, title });
+  if (nodeType) ogParams.set("type", nodeType);
   if (description) ogParams.set("summary", description);
+  if (icon) ogParams.set("icon", icon);
   const ogImage = `${SITE_URL}/api/og?${ogParams.toString()}`;
 
   return {
@@ -139,6 +159,13 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
   const mdTitle = decodeEntities(rawH1Match?.[1]?.trim() ?? slug[slug.length - 1].replace(/-/g, " "));
   const h1Match = content.match(/^#[ \t]+(\S[^\n]*)$/m);
 
+  // The header displays the page name and its type as two visually distinct
+  // pieces (name as scraped, type Title Cased) — frontmatter already carries
+  // them split. Pages without frontmatter (should not happen for generated
+  // docs) degrade to the full H1 text as the name, with no type.
+  const headerName = frontmatter.title ? decodeEntities(frontmatter.title) : mdTitle;
+  const headerNodeType = frontmatter.title ? frontmatter.nodeType : undefined;
+
   // The H1 is rendered in the page header row (alongside the Copy button) so
   // it can share a row with action controls. Strip it from the markdown body
   // to avoid a duplicate render.
@@ -157,6 +184,7 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
     summary = decodeEntities(summaryMatch[1].trim());
     bodyContent = bodyContent.slice(summaryMatch[0].length);
   }
+  bodyContent = legacyWarningMarkdown(slugPath) + bodyContent;
   const mdSummary = summary ?? bodyContent.match(/^(?!#|>)[^\n]{20,}/m)?.[0]?.trim();
   const canonical = `${SITE_URL}/docs/${slugPath}`;
 
@@ -195,31 +223,14 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
           on this: a title outside the article, with the body as the only
           content inside it, reads as "no content" to them. */}
       <article className="prose prose-neutral dark:prose-invert max-w-none">
-        <header className="not-prose flex flex-wrap items-start justify-between gap-x-8 gap-y-3 border-b border-border pb-3 mb-6">
-          <div className="flex items-start gap-3 min-w-0">
-            {pageIcon && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={pageIcon}
-                alt=""
-                className="size-8 shrink-0 mt-0.5 select-none"
-                aria-hidden="true"
-              />
-            )}
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 min-w-0">
-              <h1 className="text-2xl font-bold tracking-tight leading-tight m-0 wrap-break-word">{mdTitle}</h1>
-              {since && (
-                <span className="inline-flex items-center rounded-md border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                  Since {since}
-                </span>
-              )}
-            </div>
-          </div>
-          <div className="shrink-0 pt-0.5">
-            <MarkdownActions slug={slugPath} />
-          </div>
-          {summary && <p className="w-full basis-full m-0 text-sm italic text-muted-foreground">{summary}</p>}
-        </header>
+        <PageHeader
+          slug={slugPath}
+          name={headerName}
+          nodeType={headerNodeType}
+          icon={pageIcon}
+          since={since}
+          summary={summary}
+        />
         <TableOfContents headings={extractHeadings(bodyContent)} />
         <ReactMarkdown
           remarkPlugins={[remarkGfm, remarkCallouts, [remarkVex, { enabled: isVexPage }]]}
