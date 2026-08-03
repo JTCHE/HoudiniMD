@@ -30,6 +30,10 @@ export async function convertToMarkdown(
     el.remove();
   });
 
+  // Turndown skips custom rules for empty elements. Give video-only figures
+  // fallback text so the video rule can replace the complete figure.
+  root.querySelectorAll('video[src]').forEach((video) => video.set_content('Video'));
+
   // Remove "Load" / "Launch" example buttons and "Show/hide arguments" toggles
   root.querySelectorAll('a, button, span').forEach((el) => {
     const text = el.textContent?.trim();

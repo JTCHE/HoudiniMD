@@ -31,7 +31,7 @@ export default function DocImageClient({ src, alt, width, height, blurDataURL }:
     // than the column is never upscaled — matching how `max-w-full h-auto`
     // rendered it before the box was reserved.
     <span
-      className="relative my-4 block max-w-full overflow-hidden"
+      className="markdown-media relative my-4 block max-w-full"
       style={{ aspectRatio: `${width} / ${height}`, maxWidth: `${width}px` }}
     >
       {!loaded &&
