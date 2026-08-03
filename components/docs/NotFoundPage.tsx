@@ -3,8 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { FileQuestion } from "lucide-react";
-import Link from "next/link";
-import { HomeSearchField } from "@/components/root/HomeSearchField";
+import DocLink from "./DocLink";
 
 interface Suggestion {
   path: string;
@@ -58,12 +57,12 @@ export default function NotFoundPage() {
             <ul className="space-y-1">
               {suggestions.map((s) => (
                 <li key={s.path}>
-                  <Link
+                  <DocLink
                     href={`/docs/${s.path}`}
-                    className="text-sm font-medium hover:underline"
+                    className="text-sm font-medium"
                   >
                     {s.title}
-                  </Link>
+                  </DocLink>
                 </li>
               ))}
             </ul>
@@ -74,12 +73,12 @@ export default function NotFoundPage() {
           <HomeSearchField />
         </div> */}
 
-        <Link
+        <DocLink
           href="/"
-          className="text-xs text-muted-foreground underline underline-offset-2"
+          className="text-xs text-muted-foreground"
         >
           Go home
-        </Link>
+        </DocLink>
       </div>
     </main>
   );
