@@ -19,6 +19,7 @@
 import handler, { DOQueueHandler, DOShardedTagCache, BucketCachePurge } from "./.open-next/worker.js";
 import { visitorKind, botFamily, browserEvidence } from "./lib/wants-markdown";
 import { visitorHash } from "./lib/visitor-hash";
+import { visitorLabel } from "./lib/visitor-label";
 
 export { DOQueueHandler, DOShardedTagCache, BucketCachePurge };
 
@@ -67,8 +68,9 @@ function recordPageView(request: Request, url: URL, response: Response, env: Env
   const ua = request.headers.get("user-agent");
   const ip = request.headers.get("cf-connecting-ip") ?? "";
   const salt = env.VISITOR_SALT!;
+  const visitor = visitorHash(`${ip}|${ua ?? ""}`, salt);
   env.ANALYTICS!.writeDataPoint({
-    indexes: [visitorHash(`${ip}|${ua ?? ""}`, salt)],
+    indexes: [visitor],
     blobs: [
       path.endsWith(".md") ? path.slice(0, -3) : path,
       visitorKind(ua, request.headers),
@@ -80,6 +82,8 @@ function recordPageView(request: Request, url: URL, response: Response, env: Env
       // count can be audited instead of trusted. "-" means none of them.
       browserEvidence(request.headers),
       referrerHost(request, url), // blob8: where the visit came from, host only
+      visitorKind(ua, request.headers), // blob9: actual kind for every event
+      visitorLabel(visitor), // blob10: stable, non-identifying dashboard label
     ],
     // A 404 is a page view like any other until you can see the status: a dead
     // inbound link and a real read were previously the same row. The second
@@ -129,8 +133,10 @@ function writeSearchRow(
 ) {
   const ip = request.headers.get("cf-connecting-ip") ?? "";
   const salt = env.VISITOR_SALT!;
+  const ua = request.headers.get("user-agent");
+  const visitor = visitorHash(`${ip}|${ua ?? ""}`, salt);
   env.ANALYTICS!.writeDataPoint({
-    indexes: [visitorHash(`${ip}|${request.headers.get("user-agent") ?? ""}`, salt)],
+    indexes: [visitor],
     blobs: [
       ev.q.slice(0, 200),
       "search",
@@ -139,6 +145,8 @@ function writeSearchRow(
       ev.source,
       ev.category ?? "",
       ev.dest.slice(0, 200),
+      visitorKind(ua, request.headers), // blob9: avoids treating every UI route as human
+      visitorLabel(visitor), // blob10: survives dashboard naming changes
     ],
     doubles: [ev.results],
   });
@@ -151,9 +159,8 @@ function writeSearchRow(
  * - /api/search   the public JSON API (MCP, agents, curl) — no landing page.
  * - /api/resolve  "I typed a name and pressed Enter", from the ⌘K overlay and
  *                 the homepage field. A non-200 is the "Nothing found" toast.
- * - /api/generate "mirror a page you do not have yet" — the request itself is
- *                 the signal, so it is recorded when the stream starts rather
- *                 than waiting on SSE events the client already handles.
+ * - /api/generate "mirror a page you do not have yet" — the terminal SSE
+ *                 event decides whether SideFX had a matching page.
  */
 function recordApiSearch(
   request: Request,
@@ -204,12 +211,19 @@ function recordApiSearch(
   if (url.pathname === "/api/generate") {
     const slug = url.searchParams.get("slug")?.trim();
     if (!slug) return;
-    writeSearchRow(request, env, {
-      q: slug,
-      source: "generate",
-      dest: response.status === 200 ? slug : "",
-      results: response.status === 200 ? 1 : 0,
-    });
+    // An SSE response starts as 200 even when generation later reports that
+    // SideFX has no matching page. Wait for that terminal event before logging
+    // the search, or a 404 request is indistinguishable from a successful one.
+    ctx.waitUntil(
+      response
+        .clone()
+        .text()
+        .then((body) => {
+          const found = response.status === 200 && !body.includes('"stage":"error"');
+          writeSearchRow(request, env, { q: slug, source: "generate", dest: found ? slug : "", results: found ? 1 : 0 });
+        })
+        .catch(() => writeSearchRow(request, env, { q: slug, source: "generate", dest: "", results: 0 })),
+    );
   }
 }
 
