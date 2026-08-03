@@ -64,7 +64,14 @@ export function buildOgImageJsx({ title, nodeType, subtitle, category, summary, 
         {category && <div style={{ color: MUTED, fontSize: 18, marginBottom: 16 }}>{category}</div>}
 
         {/* Title (+ page icon, if it has one) */}
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 24 }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 24,
+            marginBottom: subtitle || displaySummary ? 24 : 0,
+          }}
+        >
           {icon && (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -82,7 +89,6 @@ export function buildOgImageJsx({ title, nodeType, subtitle, category, summary, 
               fontSize: 84,
               lineHeight: 1.05,
               letterSpacing: -2,
-              marginBottom: subtitle || displaySummary ? 24 : 0,
             }}
           >
             <span style={{ color: TEXT, fontWeight: 500 }}>{displayTitle}</span>
