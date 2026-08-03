@@ -82,8 +82,9 @@ export default function DocLink({
   href,
   children,
   className,
+  underline = true,
   ...props
-}: React.AnchorHTMLAttributes<HTMLAnchorElement>) {
+}: React.AnchorHTMLAttributes<HTMLAnchorElement> & { underline?: boolean }) {
   const slug = href?.startsWith("/docs/") ? href.slice(6).split("#")[0] : null;
   const anchor = href?.includes("#") ? href.slice(href.indexOf("#") + 1) : null;
   const [visible, setVisible] = useState(false);
@@ -138,7 +139,7 @@ export default function DocLink({
       <Link
         ref={linkRef}
         href={href!}
-        className={cn(DOC_LINK_CLASS_NAME, className)}
+        className={cn(underline && DOC_LINK_CLASS_NAME, className)}
         {...props}
         prefetch={false}
         onMouseDown={(e) => {
