@@ -2,6 +2,10 @@
 @import "tw-animate-css";
 @plugin "@tailwindcss/typography";
 
+html {
+  scrollbar-gutter: stable;
+}
+
 @theme inline {
   /* Page gutter — SSoT for horizontal padding on page-width containers.
      Same `px-page-x` class everywhere; only --page-x below shifts per media query. */
