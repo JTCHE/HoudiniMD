@@ -9,7 +9,15 @@ import { useEffect, useRef, useState } from "react";
  * entirely if the icon turns out to be a broken or degenerate (near-0px, e.g.
  * SideFX's 1x1 placeholder) image, rather than showing an empty box for it.
  */
-export default function DocIconClient({ src, alt }: { src: string; alt: string }) {
+export default function DocIconClient({
+  src,
+  alt,
+  className = "doc-icon",
+}: {
+  src: string;
+  alt: string;
+  className?: string;
+}) {
   const [state, setState] = useState<"loading" | "loaded" | "broken">("loading");
   const ref = useRef<HTMLImageElement>(null);
 
@@ -26,7 +34,7 @@ export default function DocIconClient({ src, alt }: { src: string; alt: string }
       ref={ref}
       src={src}
       alt={alt}
-      className="doc-icon"
+      className={className}
       loading="lazy"
       decoding="async"
       style={{ opacity: state === "loaded" ? 1 : 0, transition: "opacity 200ms" }}
