@@ -56,4 +56,4 @@ When committing/pushing features to Git, and when an issue/feature has explicite
 
 Name : HoudiniMD — Issue Tracker.base
 
-Obsidian vault : <value of OBSIDIAN_VAULT_PATH in @.env.obsidian>/side projects/Houdini/HoudiniMD/
+Obsidian vault : <value of OBSIDIAN_VAULT_PATH in @.env.obsidian>/vault/side projects/Houdini/HoudiniMD/
