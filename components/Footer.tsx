@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 
-const KOFI_URL = "https://ko-fi.com/jtche";
+const DONATION_URL = "https://github.com/sponsors/JTCHE?frequency=one-time";
 
 interface FooterProps {
   className?: string;
@@ -9,12 +9,7 @@ interface FooterProps {
 
 export function Footer({ className }: FooterProps) {
   return (
-    <footer
-      className={cn(
-        "border-t bg-background text-muted-foreground text-xs py-4 print:py-1.5",
-        className,
-      )}
-    >
+    <footer className={cn("border-t bg-background text-muted-foreground text-xs py-4 print:py-1.5", className)}>
       <div className="max-w-4xl mx-auto px-page-x">
         <div className="flex flex-wrap gap-x-2 gap-y-1">
           <span className="hidden print:inline font-semibold text-foreground/80">HoudiniMD</span>
@@ -56,7 +51,7 @@ export function Footer({ className }: FooterProps) {
             ·
           </span>
           <a
-            href={KOFI_URL}
+            href={DONATION_URL}
             target="_blank"
             rel="noopener noreferrer"
             className="print:hidden text-foreground/80 hover:text-foreground transition-colors underline-offset-4 hover:underline"
