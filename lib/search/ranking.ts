@@ -100,6 +100,66 @@ function toResult(doc: SearchDoc, score: number | null, headings?: DocHeading[])
     ...(headings?.length ? { headings } : {}),
   };
 }
+type PathIntent = { doc?: SearchDoc; query?: string };
+
+function oneEditAway(a: string, b: string): boolean {
+  if (Math.abs(a.length - b.length) > 1) return false;
+  let i = 0;
+  let j = 0;
+  let edits = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) {
+      i++;
+      j++;
+    } else if (++edits > 1) {
+      return false;
+    } else if (a.length > b.length) {
+      i++;
+    } else if (b.length > a.length) {
+      j++;
+    } else {
+      i++;
+      j++;
+    }
+  }
+  return edits + (a.length - i) + (b.length - j) <= 1;
+}
+
+/** Preserve a missing docs path's node context before general text ranking. */
+export function pathIntent(table: DocsTable, q: string): PathIntent {
+  const path = q
+    .toLowerCase()
+    .replace(/^https?:\/\/[^/]+/, "")
+    .replace(/^\/?docs\//, "")
+    .replace(/\.html$/, "")
+    .replace(/^\/|\/$/g, "");
+  if (!path.includes("/")) return {};
+
+  const slash = path.lastIndexOf("/");
+  const parent = path.slice(0, slash + 1);
+  const leaf = path.slice(slash + 1);
+  if (leaf.length < 3) return {};
+  const siblings = table.docs.filter((doc) => doc.path.startsWith(parent) && !doc.path.slice(parent.length).includes("/"));
+  if (!siblings.length) return {};
+
+  const exact = siblings.find((doc) => doc.s === leaf);
+  if (exact) return { doc: exact };
+  const typo = siblings.find((doc) => oneEditAway(doc.s, leaf));
+  if (typo) return { doc: typo };
+
+  const words = new Set(siblings.flatMap((doc) => doc.title.toLowerCase().match(/[a-z0-9]+/g) ?? []).filter((word) => word.length >= 3));
+  const parts: string[][] = Array.from({ length: leaf.length + 1 }, () => []);
+  for (let i = 0; i < leaf.length; i++) {
+    if (i > 0 && parts[i].length === 0) continue;
+    for (let j = i + 3; j <= leaf.length; j++) {
+      const word = leaf.slice(i, j);
+      if (!words.has(word)) continue;
+      const candidate = [...parts[i], word];
+      if (candidate.length > parts[j].length) parts[j] = candidate;
+    }
+  }
+  return parts[leaf.length].length >= 2 ? { query: parts[leaf.length].join(" ") } : {};
+}
 
 /**
  * Rank pages for a query. Async because the BM25 pass fetches postings shards;
@@ -113,11 +173,14 @@ export async function rankResults(
   limit: number,
   category?: string,
 ): Promise<RankedResult[]> {
+  const intent = pathIntent(table, q);
+  if (intent.doc) return [toResult(intent.doc, 1)];
+  const searchQuery = intent.query ?? q;
   const cat = category?.toLowerCase();
   const inCategory = (d: SearchDoc) => !cat || d.category.toLowerCase() === cat;
 
-  const qLower = q.toLowerCase().replace(/\s+/g, "");
-  const qTokens = tokenize(q);
+  const qLower = searchQuery.toLowerCase().replace(/\s+/g, "");
+  const qTokens = tokenize(searchQuery);
   const exact: SearchDoc[] = [];
   const located: SearchDoc[] = [];
   const prefix: SearchDoc[] = [];
@@ -147,7 +210,7 @@ export async function rankResults(
 
   if (merged.length < limit) {
     // Ask for extra: category filtering and dedup below both drop rows.
-    const hits = await searchBm25(q, table, limit * 3);
+    const hits = await searchBm25(searchQuery, table, limit * 3);
     // Weighting after BM25 keeps `bm25.ts` pure text scoring. It reorders only
     // within the window fetched, which is 3x what the caller asked for.
     const weighted = new Map(hits.map((h) => [h.docId, h.score * weightOf(table.docs[h.docId])]));
