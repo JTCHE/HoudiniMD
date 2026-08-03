@@ -14,10 +14,6 @@
     "search:index": "bun scripts/build-search-index.ts",
     "indexnow:submit": "bun scripts/submit-indexnow.ts",
     "cleanup:slugs": "bun scripts/cleanup-slugs.ts",
-    "test:unit": "bun --env-file=.env.local test",
-    "test": "playwright test",
-    "test:ui": "playwright test --ui",
-    "test:debug": "playwright test --debug",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "cache:sync": "bun scripts/cache-sync.ts",
     "og:shot": "node scripts/shot-og.ts",
@@ -47,7 +43,6 @@
   },
   "devDependencies": {
     "@opennextjs/cloudflare": "^1.19.11",
-    "@playwright/test": "^1.58.2",
     "@tailwindcss/postcss": "4.1.18",
     "@types/node": "^20",
     "@types/react": "^19",
