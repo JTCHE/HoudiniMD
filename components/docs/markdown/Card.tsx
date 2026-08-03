@@ -16,7 +16,12 @@ function text(node: HastNode): string {
 export function Card({ node, children, ...props }: React.ComponentProps<"li"> & { node?: HastNode }) {
   if (!node?.properties?.dataCard) return <li {...props}>{children}</li>;
 
-  const [title, summary] = node.children?.filter((child) => child.tagName === "p") ?? [];
+  // A single-item card grid with no description parses as a "tight" list
+  // (CommonMark only wraps item content in <p> when a blank line separates
+  // blocks), so the link/icon land directly under <li> instead of under a
+  // <p>. Fall back to the li itself as the title source in that case.
+  const paragraphs = node.children?.filter((child) => child.tagName === "p") ?? [];
+  const [title, summary] = paragraphs.length ? paragraphs : [node];
   const link = title?.children?.find((child) => child.tagName === "a");
   const icon = title?.children?.find((child) => child.tagName === "img");
   const href = typeof link?.properties?.href === "string" ? link.properties.href : undefined;
