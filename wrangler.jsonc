@@ -31,8 +31,9 @@
       "bucket_name": "houdinimd-cache",
     },
   ],
-  // Page views written by recordPageView() in worker.ts, read by
-  // scripts/analytics.ts. Free plan: 100k data points/day, 3-month retention.
+  // Page views written by recordPageView() in worker.ts, read by the
+  // houdinimd-analytics dashboard. Free plan: 100k data points/day, 3-month
+  // retention.
   "analytics_engine_datasets": [
     {
       "binding": "ANALYTICS",
