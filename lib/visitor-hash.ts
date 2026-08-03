@@ -1,6 +1,7 @@
-// Shared by worker.ts (writes the analytics data point) and scripts/analytics.ts
-// (recomputes the operator's own hash to filter their visits out). Both sides
-// must agree, so it lives in one place.
+// Used by worker.ts (writes the analytics data point) and mirrored into the
+// houdinimd-analytics dashboard (recomputes the operator's own hash to filter
+// their visits out). Both sides must agree, so a change here must be copied
+// there too.
 //
 // The salt is what makes the word "anonymous" honest. IPv4 is only 4 billion
 // inputs, so an unsalted hash of an IP is the IP: anyone holding the dataset
