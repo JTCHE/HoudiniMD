@@ -34,20 +34,19 @@ node scripts/webkit-shot.ts houdini/nodes/dop/pyrosolver
 
 # Deploys
 
-Deploys are done by comitting and pushing to GitHub. Since the Cloudflare app is installed in the repo, this will trigger an auto deploy.
+Deploy by committing and pushing to GitHub. The Cloudflare app is installed in
+the repo, so a push to `main` runs `bun run deploy` in Cloudflare CI.
 
-**Do not run `bun run deploy` from Windows.** Tailwind's native CSS
-scanner (`@tailwindcss/oxide`) and `lightningcss` ship a separate
-compiled binary per OS. On Windows this produces a different
-`@property` fallback block than the Linux binary Cloudflare CI uses,
-even with an identical, lockfile-pinned `tailwindcss` version. The
-result is a different CSS content hash, which changes the hashed URL
-in every prerendered page and forces a full ~11k-page `.cache`
-re-upload for zero real content change.
+**Cloudflare CI is the only place that deploys.** `bun run deploy` exits
+immediately when `CI` is unset (see `scripts/check-env.ts`). Tailwind's native
+CSS scanner (`@tailwindcss/oxide`) and `lightningcss` ship a separate compiled
+binary per OS, so a local build produces a different CSS content hash than CI
+even with an identical, lockfile-pinned `tailwindcss`. That hash sits in the
+hashed URL of every prerendered page, so a local deploy re-uploads all ~11k
+`.cache` objects (~2.1 GB) and the next CI deploy re-uploads them back.
 
-Deploy from Windows by pushing to GitHub instead, so Cloudflare CI
-always produces the CSS hash. If you need a local deploy, build from
-WSL or a Linux container, not native Windows.
+Local `opennextjs-cloudflare build` for `bun run preview` is fine — it never
+writes to R2.
 
 # Obsidian Base
 
