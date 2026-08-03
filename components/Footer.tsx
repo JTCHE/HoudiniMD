@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import Link from "next/link";
 
 const KOFI_URL = "https://ko-fi.com/jtche";
 
@@ -76,6 +77,18 @@ export function Footer({ className }: FooterProps) {
           >
             Feedback
           </a>
+          <span
+            className="text-muted-foreground/40 print:hidden"
+            aria-hidden
+          >
+            ·
+          </span>
+          <Link
+            href="/privacy"
+            className="print:hidden text-foreground/80 hover:text-foreground transition-colors underline-offset-4 hover:underline"
+          >
+            Privacy Policy
+          </Link>
         </div>
         <p className="mt-1.5 text-[11px] leading-tight text-muted-foreground/60">
           HoudiniMD is an unofficial, independent project, and isn't affiliated with or endorsed by SideFX.
