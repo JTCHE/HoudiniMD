@@ -478,12 +478,6 @@ pre code.hljs {
   margin-top: 1em;
 }
 
-/* Links inside not-prose tables — restore underline that prose would normally add */
-.not-prose table a {
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
 /* Lists inside not-prose table cells — restore bullet/number styling stripped by not-prose */
 .not-prose table td ul,
 .not-prose table th ul {
@@ -566,8 +560,6 @@ pre code.hljs {
 }
 .callout a {
   color: var(--callout-color);
-  text-decoration: underline;
-  text-underline-offset: 2px;
 }
 .callout code {
   background: color-mix(in oklab, var(--callout-color) 12%, var(--background));
