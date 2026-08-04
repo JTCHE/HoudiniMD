@@ -8,7 +8,8 @@ const referrerHost = (request: Request, url: URL) => {
   if (!ref) return "";
   try {
     const host = new URL(ref).hostname.replace(/^www\./, "");
-    return host === url.hostname.replace(/^www\./, "") ? "self" : host;
+    if (host === url.hostname.replace(/^www\./, "")) return `self:${new URL(ref).pathname}`;
+    return host;
   } catch {
     return "";
   }
