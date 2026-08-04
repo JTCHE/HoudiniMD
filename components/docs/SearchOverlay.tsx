@@ -183,7 +183,7 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
         }
         // Opening a result answers the query better than any score could. Only
         // when there IS a query — a click from the recents list teaches nothing.
-        recordClick(queryRef.current, result.path);
+        recordClick(queryRef.current, result.path, results.findIndex((r) => r.path === result.path) + 1);
         logSearch(queryRef.current, result.path, "overlay");
         streamAndNavigate(anchor ? `${slug}#${anchor}` : slug);
         return;
@@ -213,7 +213,7 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
         showToast(`Nothing found for "${q}"`, "error");
       }
     },
-    [streamAndNavigate],
+    [results, streamAndNavigate],
   );
 
   function onKeyDown(e: React.KeyboardEvent) {
