@@ -125,7 +125,14 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
     // Distinguish "not generated yet" (200, show progress) from "SideFX has no
     // such page" (real 404) — without this, every dead link served a 200 page
     // that only failed client-side once the generation SSE stream ran.
-    if (!(await slugExistsOnSideFX(slugPath))) {
+    let existsOnSideFX: boolean;
+    try {
+      existsOnSideFX = await slugExistsOnSideFX(slugPath);
+    } catch {
+      unstable_noStore();
+      return <GeneratingPage slug={slugPath} />;
+    }
+    if (!existsOnSideFX) {
       notFound();
     }
     // Prevent ISR/CDN from caching the generating state
