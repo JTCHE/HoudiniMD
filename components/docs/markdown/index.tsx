@@ -22,9 +22,7 @@ export const markdownComponents: Components = {
   img: Image,
   video: Video,
   li: Card,
-  figcaption: ({ children }) => (
-    <figcaption className="mt-2 text-left text-sm text-muted-foreground">{children}</figcaption>
-  ),
+  figcaption: ({ children }) => <figcaption className="mt-2 px-4 text-left text-sm text-muted-foreground">{children}</figcaption>,
   a: ({ href, children, ...props }) =>
     href ? (
       <DocLink
