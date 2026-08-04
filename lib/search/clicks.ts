@@ -13,7 +13,6 @@
  * from, and results would stop being reproducible.
  */
 
-import { recordSearchClick } from "./telemetry";
 
 const KEY = "houdinimd:clicks";
 /** Cap on remembered (query, page) pairs. Oldest use is dropped first. */
@@ -53,11 +52,10 @@ function save(rows: ClickRow[]): void {
 }
 
 /** Record that `path` was opened from `query`. Call on navigation, not hover. */
-export function recordClick(query: string, path: string, rank?: number): void {
+export function recordClick(query: string, path: string): void {
   const q = normalise(query);
   if (!q || !path) return;
 
-  if (rank) recordSearchClick(q, path, rank);
 
   const rows = load();
   const existing = rows.find((r) => r.q === q && r.path === path);

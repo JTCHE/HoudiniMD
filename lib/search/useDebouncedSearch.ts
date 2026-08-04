@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { searchClient, prewarmSearchIndex } from "./client";
 import type { RankedResult } from "./ranking";
-import { recordSearch } from "./telemetry";
 
 /**
  * Debounced client-side search — single source of truth for querying the
@@ -30,7 +29,6 @@ export function useDebouncedSearch(query: string, limit = 6): RankedResult[] {
         .then((ranked) => {
           if (!cancelled) {
             setResults(ranked);
-            recordSearch(q, ranked.length);
           }
         })
         .catch(() => {});
