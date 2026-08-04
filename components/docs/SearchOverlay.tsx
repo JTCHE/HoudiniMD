@@ -183,8 +183,8 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
         }
         // Opening a result answers the query better than any score could. Only
         // when there IS a query — a click from the recents list teaches nothing.
-        recordClick(queryRef.current, result.path, results.findIndex((r) => r.path === result.path) + 1);
-        logSearch(queryRef.current, result.path, "overlay");
+        recordClick(queryRef.current, result.path);
+        logSearch(queryRef.current, result.path, "overlay", results.findIndex((r) => r.path === result.path) + 1);
         streamAndNavigate(anchor ? `${slug}#${anchor}` : slug);
         return;
       }

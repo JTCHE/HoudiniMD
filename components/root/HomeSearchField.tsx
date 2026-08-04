@@ -207,7 +207,7 @@ export function HomeSearchField() {
   // /api/generate paths above are recorded by the worker instead.
   function selectResult(slug: string) {
     setDropdownOpen(false);
-    logSearch(url, slug.split("#")[0], "home");
+    logSearch(url, slug.split("#")[0], "home", results.findIndex((result) => result.path === slug.split("#")[0]) + 1);
     router.push(`/docs/${slug}`);
   }
 

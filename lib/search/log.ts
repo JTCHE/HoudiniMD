@@ -9,13 +9,13 @@
  *
  * Fire-and-forget: a dropped log must never delay or break a navigation.
  */
-export function logSearch(q: string, dest: string, source: "overlay" | "home"): void {
+export function logSearch(q: string, dest: string, source: "overlay" | "home", rank?: number): void {
   const query = q.trim();
   if (!query) return; // a click from the recents list answers no query
   // No result count: picking a result already says the search worked, and the
   // page picked is the finer answer. The count only matters where there is no
   // landing page — the API rows, which the worker counts server-side.
-  const params = new URLSearchParams({ q: query, dest, src: source });
+  const params = new URLSearchParams({ q: query, dest, src: source, ...(rank ? { rank: String(rank) } : {}) });
   try {
     navigator.sendBeacon?.(`/api/search-log?${params}`);
   } catch {
