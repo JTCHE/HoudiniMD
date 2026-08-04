@@ -77,6 +77,19 @@ function locates(doc: SearchDoc, qTokens: string[]): boolean {
   return qTokens.every((tok) => named.includes(tok) || where.includes(tok));
 }
 
+/** A multi-word title can safely absorb one typo in one of its long words. */
+function typoLocates(doc: SearchDoc, qTokens: string[]): boolean {
+  if (qTokens.length < 2) return false;
+  const words: string[] = doc.title.toLowerCase().match(/[a-z0-9]+/g) ?? [];
+  let typo = false;
+  for (const token of qTokens) {
+    if (words.includes(token)) continue;
+    if (token.length < 4 || !words.some((word) => word.length >= 4 && oneEditAway(token, word))) return false;
+    typo = true;
+  }
+  return typo;
+}
+
 function weightOf(doc: SearchDoc | undefined): number {
   if (!doc) return 0;
   // `/examples/` catches example pages whose category string does not say so.
@@ -183,14 +196,18 @@ export async function rankResults(
   const qTokens = tokenize(searchQuery);
   const exact: SearchDoc[] = [];
   const located: SearchDoc[] = [];
+  const typo: SearchDoc[] = [];
   const prefix: SearchDoc[] = [];
 
   for (const doc of table.docs) {
     if (!inCategory(doc)) continue;
-    if (doc.t === qLower || doc.s === qLower) exact.push(doc);
+    // A bare "vellum" exactly matches stale What's New slugs, but readers
+    // expect Vellum nodes. Let the weighted prefix/BM25 passes rank those.
+    if ((doc.t === qLower || doc.s === qLower) && weightOf(doc) >= 0.9) exact.push(doc);
     else if (locates(doc, qTokens)) located.push(doc);
+    else if (typoLocates(doc, qTokens)) typo.push(doc);
     else if (doc.t.startsWith(qLower) || doc.s.startsWith(qLower)) prefix.push(doc);
-    if (exact.length + located.length + prefix.length >= limit * 2) break;
+    if (exact.length + located.length + typo.length + prefix.length >= limit * 2) break;
   }
 
   // Within a pass, order by what kind of page it is; a title-prefix match still
@@ -199,12 +216,14 @@ export async function rankResults(
     weightOf(b) - weightOf(a) || +!b.t.startsWith(qLower) - +!a.t.startsWith(qLower);
   exact.sort(byWeight);
   located.sort(byWeight);
+  typo.sort(byWeight);
   prefix.sort(byWeight);
 
-  const seen = new Set([...exact, ...located, ...prefix].map((d) => d.path));
+  const seen = new Set([...exact, ...located, ...typo, ...prefix].map((d) => d.path));
   const merged: RankedResult[] = [
     ...exact.map((d) => toResult(d, 1)),
     ...located.map((d) => toResult(d, 0.97)),
+    ...typo.map((d) => toResult(d, 0.96)),
     ...prefix.map((d) => toResult(d, 0.95)),
   ];
 
