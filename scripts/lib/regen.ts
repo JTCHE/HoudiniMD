@@ -209,6 +209,7 @@ export async function regenerateBatch(
   // Load index once so we can update it in memory and write back once at the end.
   const indexBefore = opts.dryRun ? [] : await fetchSearchIndex();
   const indexByPath = new Map(indexBefore.map((e) => [e.path, e]));
+  let indexChanged = false;
 
   let done = 0;
   const results = await runPool<string, RegenResult>(slugs, opts.concurrency, async (slug) => {
@@ -232,6 +233,11 @@ export async function regenerateBatch(
         };
         if (!("status" in res)) {
           indexByPath.set(res.entry.path, res.entry);
+          indexChanged = true;
+        } else if (indexByPath.delete(slug)) {
+          // SideFX confirmed this page is gone: retaining it makes search link
+          // to a local 404 until somebody manually repairs the index.
+          indexChanged = true;
         }
         done++;
         opts.onProgress?.(done, slugs.length, r);
@@ -256,8 +262,7 @@ export async function regenerateBatch(
   });
 
   // Write the merged index once at the end. Only update if at least one entry changed.
-  const okCount = results.filter((r) => r.status === "ok").length;
-  if (!opts.dryRun && okCount > 0) {
+  if (!opts.dryRun && indexChanged) {
     await putSearchIndex([...indexByPath.values()]);
   }
 

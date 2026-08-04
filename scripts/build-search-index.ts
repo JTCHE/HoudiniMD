@@ -40,6 +40,7 @@ import {
   type StoredHeading,
 } from "../lib/search/bm25";
 import { parseArgs, getNumber, c, fmtMs } from "./lib/cli";
+import { listR2Slugs, putSearchIndex } from "./lib/regen";
 
 /**
  * A title or slug match is worth far more than a body mention, so title tokens
@@ -196,9 +197,12 @@ async function main() {
   const res = await fetch(`${config!.publicUrl}/content/index.json`);
   if (!res.ok) throw new Error(`Cannot read content/index.json: ${res.status}`);
   const all: SearchIndexEntry[] = await res.json();
+  const stored = new Set(await listR2Slugs());
+  const live = all.filter((entry) => stored.has(entry.path));
+  if (live.length !== all.length && !DRY_RUN) await putSearchIndex(live);
 
   // Sort by path so docIds are reproducible across runs.
-  const entries = all.sort((a, b) => a.path.localeCompare(b.path));
+  const entries = live.sort((a, b) => a.path.localeCompare(b.path));
   const source = LIMIT > 0 ? entries.slice(0, LIMIT) : entries;
   console.log(`${c.bold(String(source.length))} pages, concurrency ${CONCURRENCY}`);
 

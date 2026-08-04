@@ -63,6 +63,16 @@ async function probeSlug(slug: string): Promise<boolean> {
   }
 }
 
+async function searchFallback(request: NextRequest, input: string): Promise<string | undefined> {
+  try {
+    const response = await fetch(new URL(`/api/search?q=${encodeURIComponent(input)}&limit=1`, request.url));
+    const body = await response.json() as { results?: Array<{ path?: string }> };
+    return response.ok ? body.results?.[0]?.path : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function GET(request: NextRequest) {
   const input = request.nextUrl.searchParams.get("name")?.trim().toLowerCase() ?? "";
   if (!input) {
@@ -88,6 +98,15 @@ export async function GET(request: NextRequest) {
   }
   if (entriesCache) {
     const { entries } = entriesCache;
+    const inputPath = input.replace(/^\/?docs\//, "").replace(/\.html$/, "").replace(/^\/+|\/+$/g, "");
+    const directMatch = entries.find((e) => e.path.toLowerCase() === inputPath);
+    if (directMatch) {
+      mark("hit:index-path");
+      return Response.json(
+        { slug: directMatch.path, source: "index-path" },
+        { headers: { "Cache-Control": "private, max-age=3600" } },
+      );
+    }
     // Built lazily, only when the fuzzy fallback is actually reached.
     const getFuse = () =>
       (fuseCache ??= new Fuse(entries, {
@@ -100,11 +119,25 @@ export async function GET(request: NextRequest) {
       // 1a. Try exact title or path slug match first (case-insensitive, spaces removed)
       mark("exact-scan:start");
       const nNorm = n.replace(/\s+/g, "");
-      const exactMatch = entries.find((e) => {
+      const exactMatches = entries.filter((e) => {
         return (e.t === nNorm || e.s === n) && !e.path.includes("/examples/");
       });
       mark("exact-scan:done");
+      const exactMatch = exactMatches[0];
       if (exactMatch) {
+        // Duplicate titles need the shared ranker's category weights; the lite
+        // index intentionally omits categories to keep cold resolves under CPU limits.
+        if (exactMatches.length > 1) {
+          mark("search-ambiguous:start");
+          const slug = await searchFallback(request, input);
+          if (slug) {
+            mark("hit:search-ambiguous");
+            return Response.json(
+              { slug, source: "search-ambiguous" },
+              { headers: { "Cache-Control": "private, max-age=3600" } },
+            );
+          }
+        }
         mark("hit:index-exact");
         return Response.json(
           { slug: exactMatch.path, source: "index-exact" },
@@ -179,6 +212,18 @@ export async function GET(request: NextRequest) {
         );
       }
     }
+  }
+
+  // Reuse the full search ranker as the final fallback. It handles path intent
+  // (for example, `houdini/nodes/sop/RBDcluster`) and ranks duplicate titles.
+  mark("search-fallback:start");
+  const slug = await searchFallback(request, input);
+  if (slug) {
+    mark("hit:search-fallback");
+    return Response.json(
+      { slug, source: "search-fallback" },
+      { headers: { "Cache-Control": "private, max-age=3600" } },
+    );
   }
 
   return Response.json(

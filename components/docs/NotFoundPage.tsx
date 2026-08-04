@@ -31,7 +31,7 @@ export default function NotFoundPage() {
     if (!q) return;
     fetch(`/api/search?q=${encodeURIComponent(q)}&limit=5`)
       .then((res) => res.json())
-      .then((data) => setSuggestions((data.results ?? []).filter((r: Suggestion) => (r.score ?? 0) >= HIGH_CONFIDENCE)))
+      .then((data) => setSuggestions((data.results ?? []).filter((r: Suggestion) => r.path !== pathname.replace(/^\/docs\//, "") && (r.score ?? 0) >= HIGH_CONFIDENCE)))
       .catch(() => {});
   }, [pathname]);
 
