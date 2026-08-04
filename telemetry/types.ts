@@ -7,4 +7,6 @@ export interface TelemetryEnv {
   VISITOR_SALT?: string;
 }
 
+export type WaitUntil = { waitUntil(promise: Promise<unknown>): void };
+
 export const canRecord = (env: TelemetryEnv) => Boolean(env.ANALYTICS && env.VISITOR_SALT);
