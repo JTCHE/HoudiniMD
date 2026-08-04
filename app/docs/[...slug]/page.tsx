@@ -10,7 +10,9 @@ import { PrintPagination } from "@/components/docs/PrintPagination";
 import { TableOfContents } from "@/components/docs/TableOfContents";
 import { markdownComponents } from "@/components/docs/markdown";
 import { createImageComponent } from "@/components/docs/markdown/MarkdownImage";
+import { createVideoComponent } from "@/components/docs/markdown/MarkdownVideo";
 import { probeImages } from "@/lib/images/probe";
+import { probeVideos } from "@/lib/videos/probe";
 import { extractHeadings } from "@/lib/markdown/headings";
 import { decodeEntities } from "@/lib/markdown/entities";
 import { parseFrontmatter } from "@/lib/markdown/frontmatter";
@@ -219,8 +221,14 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
   const imageMeta = await probeImages(blockImageUrls);
   const imageComponent = createImageComponent(imageMeta);
 
+  // Video dimensions probed the same way, from the WebM header's leading
+  // bytes, so the player's box locks in at the right aspect ratio up front.
+  const videoUrls = Array.from(bodyContent.matchAll(/<video\b[^>]*\ssrc="([^"]+)"/g)).map((m) => m[1]);
+  const videoMeta = await probeVideos(videoUrls);
+  const videoComponent = createVideoComponent(videoMeta);
+
   return (
-    <main className="mx-auto max-w-4xl px-page-x py-10">
+    <main className="mx-auto w-full min-w-0 max-w-4xl px-page-x py-10">
       <PrintPagination />
       <script
         type="application/ld+json"
@@ -244,7 +252,7 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
         <ReactMarkdown
           remarkPlugins={[remarkGfm, remarkCallouts, [remarkVex, { enabled: isVexPage }]]}
           rehypePlugins={[rehypeRaw, rehypeSlug, rehypeCards]}
-          components={{ ...markdownComponents, img: imageComponent }}
+          components={{ ...markdownComponents, img: imageComponent, video: videoComponent }}
         >
           {bodyContent}
         </ReactMarkdown>
