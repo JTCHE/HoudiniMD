@@ -6,16 +6,14 @@
  * score, because it is the answer rather than a guess at it. Remembering it
  * makes the same search better next time.
  *
- * Deliberately `localStorage` and nothing else. No beacon, no endpoint, no
- * aggregation: the data never leaves the machine that produced it, so there is
- * no privacy question to answer, no schema to migrate, and no way for one
- * user's clicks to degrade anybody else's results. Global aggregation is a
- * different feature with different problems (position bias, poisoning) and
- * should be built as one if it is ever wanted.
+ * Local learning stays in `localStorage`. A separate anonymous click beacon
+ * measures rank quality; it never feeds the ranker or identifies a browser.
  *
  * Client-only. `/api/search` must not use this — a server has no user to learn
  * from, and results would stop being reproducible.
  */
+
+import { recordSearchClick } from "./telemetry";
 
 const KEY = "houdinimd:clicks";
 /** Cap on remembered (query, page) pairs. Oldest use is dropped first. */
@@ -55,9 +53,11 @@ function save(rows: ClickRow[]): void {
 }
 
 /** Record that `path` was opened from `query`. Call on navigation, not hover. */
-export function recordClick(query: string, path: string): void {
+export function recordClick(query: string, path: string, rank?: number): void {
   const q = normalise(query);
   if (!q || !path) return;
+
+  if (rank) recordSearchClick(q, path, rank);
 
   const rows = load();
   const existing = rows.find((r) => r.q === q && r.path === path);

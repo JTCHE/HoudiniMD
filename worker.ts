@@ -126,6 +126,58 @@ function referrerHost(request: Request, url: URL): string {
  */
 type SearchSource = "api" | "resolve" | "generate" | "overlay" | "home";
 
+type TelemetryEvent =
+  | { event: "search"; query: string; results: number; source: "overlay" | "api" }
+  | { event: "click"; query: string; path: string; rank: number };
+
+function writeTelemetry(env: Env, event: TelemetryEvent): void {
+  if (!env.ANALYTICS) return;
+  if (event.event === "search") {
+    env.ANALYTICS.writeDataPoint({
+      indexes: ["search"],
+      blobs: ["search", event.query, event.source],
+      doubles: [event.results],
+    });
+    return;
+  }
+  env.ANALYTICS.writeDataPoint({
+    indexes: ["search"],
+    blobs: ["click", event.query, event.path],
+    doubles: [event.rank],
+  });
+}
+
+function isTelemetryEvent(value: unknown): value is TelemetryEvent {
+  if (!value || typeof value !== "object") return false;
+  const event = value as Record<string, unknown>;
+  if (event.event === "search") {
+    return typeof event.query === "string" && event.query.length <= 200 &&
+      typeof event.results === "number" && Number.isInteger(event.results) && event.results >= 0 && event.results <= 100 &&
+      (event.source === "overlay" || event.source === "api");
+  }
+  return event.event === "click" && typeof event.query === "string" && event.query.length <= 200 &&
+    typeof event.path === "string" && event.path.length <= 200 &&
+    typeof event.rank === "number" && Number.isInteger(event.rank) && event.rank > 0 && event.rank <= 100;
+}
+
+async function recordTelemetry(request: Request, url: URL, env: Env): Promise<Response | null> {
+  if (url.pathname !== "/api/telemetry") return null;
+  if (request.method !== "POST") return new Response(null, { status: 405 });
+  if (Number(request.headers.get("content-length")) > 1024) return new Response(null, { status: 413 });
+  const body = await request.text();
+  if (body.length > 1024) return new Response(null, { status: 413 });
+  const event = (() => {
+    try {
+      return JSON.parse(body) as unknown;
+    } catch {
+      return null;
+    }
+  })();
+  if (!isTelemetryEvent(event)) return new Response(null, { status: 400 });
+  writeTelemetry(env, event);
+  return new Response(null, { status: 204 });
+}
+
 function writeSearchRow(
   request: Request,
   env: Env,
@@ -169,7 +221,8 @@ function recordApiSearch(
   env: Env,
   ctx: { waitUntil(p: Promise<unknown>): void }
 ) {
-  if (!canRecord(env) || request.method !== "GET") return;
+  if (!env.ANALYTICS || request.method !== "GET") return;
+  const recordLegacySearch = canRecord(env);
 
   if (url.pathname === "/api/search" && response.status === 200) {
     const q = url.searchParams.get("q")?.trim();
@@ -181,7 +234,8 @@ function recordApiSearch(
         .json()
         .then((body: unknown) => {
           const total = typeof (body as { total?: unknown })?.total === "number" ? (body as { total: number }).total : 0;
-          writeSearchRow(request, env, { q, source: "api", dest: "", results: total, category });
+          if (recordLegacySearch) writeSearchRow(request, env, { q, source: "api", dest: "", results: total, category });
+          writeTelemetry(env, { event: "search", query: q, source: "api", results: total });
         })
         .catch(() => {})
     );
@@ -189,6 +243,7 @@ function recordApiSearch(
   }
 
   if (url.pathname === "/api/resolve") {
+    if (!recordLegacySearch) return;
     const q = url.searchParams.get("name")?.trim();
     if (!q) return;
     if (response.status !== 200) {
@@ -209,6 +264,7 @@ function recordApiSearch(
   }
 
   if (url.pathname === "/api/generate") {
+    if (!recordLegacySearch) return;
     const slug = url.searchParams.get("slug")?.trim();
     if (!slug) return;
     // An SSE response starts as 200 even when generation later reports that
@@ -251,6 +307,9 @@ function recordSearchBeacon(request: Request, url: URL, env: Env): Response | nu
 export default {
   async fetch(request: Request, env: Env, ctx: { waitUntil(p: Promise<unknown>): void; passThroughOnException(): void }) {
     const url = new URL(request.url);
+
+    const telemetry = await recordTelemetry(request, url, env);
+    if (telemetry) return telemetry;
 
     const beacon = recordSearchBeacon(request, url, env);
     if (beacon) return beacon;
