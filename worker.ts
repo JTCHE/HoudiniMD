@@ -1,5 +1,5 @@
 import handler, { DOQueueHandler, DOShardedTagCache, BucketCachePurge } from "./.open-next/worker.js";
-import { recordPageView, recordSearchBeacon } from "./telemetry";
+import { recordApiSearch, recordPageView, recordSearchBeacon } from "./telemetry";
 
 export { DOQueueHandler, DOShardedTagCache, BucketCachePurge };
 
@@ -40,6 +40,7 @@ export default {
 
     const response = await handler.fetch(request, env, ctx);
     recordPageView(request, url, response, env);
+    recordApiSearch(request, url, response, env, ctx);
 
     const contentType = response.headers.get("content-type") ?? "";
     if (

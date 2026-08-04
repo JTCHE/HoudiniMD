@@ -1,2 +1,2 @@
 export { recordPageView } from "./page-view";
-export { recordSearchBeacon } from "./search";
+export { recordApiSearch, recordSearchBeacon } from "./search";
