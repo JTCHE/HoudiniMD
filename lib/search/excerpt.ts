@@ -21,9 +21,8 @@ const cache = new Map<string, Promise<string | null>>();
 function fetchPage(path: string): Promise<string | null> {
   let pending = cache.get(path);
   if (!pending) {
-    // Same-origin `.md` route rather than R2 direct: it is already edge-cached
-    // for the agent traffic that reads it, so this is usually a cache hit.
-    pending = fetch(`/docs/${path}.md`)
+    // This is internal search data, not a page view.
+    pending = fetch(`/api/raw/${path}`)
       .then((r) => (r.ok ? r.text() : null))
       .catch(() => null);
     cache.set(path, pending);
