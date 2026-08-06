@@ -1,12 +1,17 @@
 import { SITE_URL } from "@/lib/site";
 import type { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 import ServiceWorkerRegistration from "@/components/ServiceWorker";
 import { ToastListener } from "@/components/ui/toast-notification";
 
 export const viewport: Viewport = {
   maximumScale: 1,
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "oklch(1 0 0)" },
+    { media: "(prefers-color-scheme: dark)", color: "oklch(0.145 0 0)" },
+  ],
 };
 
 const websiteInfo = {
@@ -72,7 +77,8 @@ export default function RootLayout({
           href="/llms.txt"
           title="API guide for AI agents"
         />
-        <script
+        <Script
+          id="website-jsonld"
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }}
         />
