@@ -8,7 +8,7 @@ const nextConfig: NextConfig = {
   // Next 16 blocks /_next/* dev requests from any host but localhost, so
   // opening the dev server from a phone on the LAN serves HTML whose scripts
   // never load: the page paints but never hydrates. Dev-only setting.
-  allowedDevOrigins: ["192.168.1.*"],
+  allowedDevOrigins: ["192.168.1.*", "*.trycloudflare.com"],
   // Pin a stable build id. By default Next.js generates a random id per build,
   // and the OpenNext R2 incremental cache namespaces every cache key by it
   // (`incremental-cache/<buildId>/<hash>.cache`). A fresh id each deploy means
