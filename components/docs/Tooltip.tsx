@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useLayoutEffect, useRef } from "react";
+import { createPortal } from "react-dom";
+import { getFirstSentence } from "@/lib/search/excerpt";
 
 interface MetaEntry {
   title: string;
@@ -78,24 +80,35 @@ fetch("/api/meta-all")
   })
   .catch(() => {});
 
-export function DocTooltip({ slug }: { slug: string }) {
+export function DocTooltip({ slug, anchorRef }: { slug: string; anchorRef: React.RefObject<HTMLElement | null> }) {
   const [meta, setMeta] = useState<MetaEntry | null>(() => metaCache.get(slug) ?? null);
+  const [fallbackSummary, setFallbackSummary] = useState<string | null>(null);
   const [error, setError] = useState(false);
   const mountedRef = useRef(true);
   const sseRef = useRef<EventSource | null>(null);
   const tooltipRef = useRef<HTMLSpanElement>(null);
   const [clampX, setClampX] = useState(0);
+  // Fixed-position coordinates anchored off the link, computed each mount so
+  // the tooltip escapes any ancestor's `overflow: clip` (e.g. the carousel).
+  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
+
+  useLayoutEffect(() => {
+    const anchor = anchorRef.current;
+    if (!anchor) return;
+    const anchorRect = anchor.getBoundingClientRect();
+    setPosition({ top: anchorRect.top - 4, left: anchorRect.left + anchorRect.width / 2 });
+  }, [anchorRef]);
 
   useLayoutEffect(() => {
     const el = tooltipRef.current;
-    if (!el) return;
+    if (!el || !position) return;
     const rect = el.getBoundingClientRect();
     const margin = 8;
     let offset = 0;
     if (rect.left < margin) offset = margin - rect.left;
     else if (rect.right > window.innerWidth - margin) offset = window.innerWidth - margin - rect.right;
     setClampX(offset);
-  }, [meta]);
+  }, [meta, position]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -165,25 +178,42 @@ export function DocTooltip({ slug }: { slug: string }) {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (error) return null;
+  // The generated summary is often missing for pages that haven't been
+  // regenerated yet — fall back to the page's opening sentence instead of
+  // showing the title alone.
+  useEffect(() => {
+    if (!meta || meta.summary) return;
+    let cancelled = false;
+    getFirstSentence(slug).then((sentence) => {
+      if (!cancelled && sentence) setFallbackSummary(sentence);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [meta, slug]);
 
-  return (
+  if (error || !position) return null;
+
+  const summary = meta?.summary || fallbackSummary;
+
+  return createPortal(
     <span
       ref={tooltipRef}
-      style={{ transform: `translateX(calc(-50% + ${clampX}px))` }}
-      className="[@media(hover:none)]:hidden rounded-sm absolute bottom-full left-1/2 mb-1 z-50 w-max max-w-[16rem] bg-background border border-border shadow-lg p-2 text-xs pointer-events-none whitespace-normal"
+      style={{ top: position.top, left: position.left, transform: `translate(calc(-50% + ${clampX}px), -100%)` }}
+      className="[@media(hover:none)]:hidden rounded-lg fixed z-50 w-max max-w-[16rem] bg-background border border-border shadow-lg p-2 text-xs pointer-events-none whitespace-normal"
     >
       {meta ? (
         <>
           <span className="block font-semibold text-foreground">{meta.title}</span>
-          {meta.summary && <span className="block text-muted-foreground mt-0.5 line-clamp-2">{meta.summary}</span>}
+          {summary && <span className="block text-muted-foreground mt-0.5 line-clamp-2">{summary}</span>}
         </>
       ) : (
         <>
-          <span className="sk block h-3 w-28 rounded-sm bg-muted" />
-          <span className="sk block h-2.5 w-40 rounded-sm bg-muted mt-1.5" />
+          <span className="sk block h-3 w-28 rounded-lg bg-muted" />
+          <span className="sk block h-2.5 w-40 rounded-lg bg-muted mt-1.5" />
         </>
       )}
-    </span>
+    </span>,
+    document.body,
   );
 }
