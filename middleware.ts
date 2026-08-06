@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { LATEST_NEWS_INDEX_SLUGS } from './lib/houdini';
 import { wantsMarkdown } from './lib/wants-markdown';
 
 // Verified renamed/duplicated slugs — exact matches only, never a fuzzy guess.
@@ -39,16 +38,9 @@ export function middleware(request: NextRequest) {
 
   // /docs/ paths
   if (pathname.startsWith('/docs/')) {
-    // The latest Houdini version's "What's new" page mirrors the current,
-    // unversioned docs root, so send it to our /docs/houdini instead of
-    // mirroring a duplicate. Match the bare slug (any .md/.html/slash variant).
     let bareSlug = pathname.slice('/docs/'.length);
     if (bareSlug.endsWith('.md')) bareSlug = bareSlug.slice(0, -3);
     bareSlug = stripExtensionsAndSlash(bareSlug);
-    if (LATEST_NEWS_INDEX_SLUGS.includes(bareSlug)) {
-      url.pathname = '/docs/houdini';
-      return NextResponse.redirect(url, 302);
-    }
 
     if (bareSlug in VERIFIED_SLUG_REDIRECTS) {
       url.pathname = `/docs/${VERIFIED_SLUG_REDIRECTS[bareSlug]}`;
