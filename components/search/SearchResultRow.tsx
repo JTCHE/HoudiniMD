@@ -115,6 +115,7 @@ export function SearchResultRow({
   subKind,
   excerpt,
   query,
+  rounded = true,
   onClick,
   onMouseMove,
 }: {
@@ -130,6 +131,12 @@ export function SearchResultRow({
   excerpt?: string;
   /** What the reader typed, bolded inside the excerpt. */
   query?: string;
+  /**
+   * Off when the row runs edge to edge (no side gutter around the list): a
+   * rounded highlight against a straight-sided panel shows a sliver of
+   * background at each corner instead of a clean full-bleed bar.
+   */
+  rounded?: boolean;
   onClick: () => void;
   onMouseMove: () => void;
 }) {
@@ -140,7 +147,9 @@ export function SearchResultRow({
     return (
       <button
         type="button"
-        className={`w-full text-left pr-4 flex items-stretch gap-2.5 transition-colors ${
+        // Rounded like the panel that holds it: a square highlight inside a
+        // rounded list reads as a rendering fault at the first and last row.
+        className={`w-full text-left pr-4 flex items-stretch gap-2.5 transition-colors ${rounded ? "rounded-lg" : ""} ${
           active ? "bg-muted" : "hover:bg-muted/50"
         }`}
         onClick={onClick}
@@ -177,7 +186,7 @@ export function SearchResultRow({
   return (
     <button
       type="button"
-      className={`w-full text-left px-4 py-2.5 flex items-center gap-3 transition-colors ${
+      className={`w-full text-left px-4 py-2.5 flex items-center gap-3 transition-colors ${rounded ? "rounded-lg" : ""} ${
         active ? "bg-muted" : "hover:bg-muted/50"
       }`}
       onClick={onClick}
