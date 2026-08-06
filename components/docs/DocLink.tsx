@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { DocTooltip, registerSlug } from "./Tooltip";
 import { showToast } from "@/components/ui/toast-notification";
-import { LATEST_NEWS_INDEX_SLUGS } from "@/lib/houdini";
 import { cn } from "@/lib/utils";
 
 export const DOC_LINK_CLASS_NAME = "underline underline-offset-2";
@@ -83,8 +82,9 @@ export default function DocLink({
   children,
   className,
   underline = true,
+  fullWidth = false,
   ...props
-}: React.AnchorHTMLAttributes<HTMLAnchorElement> & { underline?: boolean }) {
+}: React.AnchorHTMLAttributes<HTMLAnchorElement> & { underline?: boolean; fullWidth?: boolean }) {
   const slug = href?.startsWith("/docs/") ? href.slice(6).split("#")[0] : null;
   const anchor = href?.includes("#") ? href.slice(href.indexOf("#") + 1) : null;
   const [visible, setVisible] = useState(false);
@@ -132,7 +132,7 @@ export default function DocLink({
   }
 
   return (
-    <span className="relative inline-block">
+    <span className={cn("relative", fullWidth ? "block w-full" : "inline-block")}>
       {/* prefetch={false}: Link's own built-in viewport prefetch bursts dozens of RSC requests
           at once on a link-dense page, which cascades isolate teardowns on this CPU-capped
           Worker. Prefetch is manual instead, gated on hover/focus (show()) — real intent only. */}
@@ -146,8 +146,7 @@ export default function DocLink({
           // Navigate on mousedown (saves the ~100ms between mousedown and click).
           // Only plain left click — let browser handle Ctrl/Meta/Shift (new tab etc.)
           if (!isInternal || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
-          const resolvedSlug = LATEST_NEWS_INDEX_SLUGS.includes(slug!) ? "houdini" : slug;
-          if (window.location.pathname === `/docs/${resolvedSlug}`) {
+          if (window.location.pathname === `/docs/${slug}`) {
             const target = anchor ? document.getElementById(anchor) : null;
             if (target) {
               target.scrollIntoView({ behavior: "smooth" });
@@ -172,7 +171,7 @@ export default function DocLink({
       >
         {children}
       </Link>
-      {visible && isInternal && <DocTooltip slug={slug!} />}
+      {visible && isInternal && <DocTooltip slug={slug!} anchorRef={linkRef} />}
     </span>
   );
 }

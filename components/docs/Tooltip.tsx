@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { getFirstSentence } from "@/lib/search/excerpt";
+import { getPagePreview, getSummaryPreview } from "@/lib/markdown/page-preview";
 
 interface MetaEntry {
   title: string;
@@ -178,23 +178,27 @@ export function DocTooltip({ slug, anchorRef }: { slug: string; anchorRef: React
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // The generated summary is often missing for pages that haven't been
-  // regenerated yet — fall back to the page's opening sentence instead of
-  // showing the title alone.
+  const metaPreview = getSummaryPreview(meta?.summary ?? "");
+
+  // Generic summaries are less useful than the opening topic list.
   useEffect(() => {
-    if (!meta || meta.summary) return;
+    if (!meta || (metaPreview && metaPreview !== "Subtopics")) return;
     let cancelled = false;
-    getFirstSentence(slug).then((sentence) => {
-      if (!cancelled && sentence) setFallbackSummary(sentence);
-    });
+    fetch(`/api/raw/${slug}`)
+      .then((response) => (response.ok ? response.text() : null))
+      .then((markdown) => {
+        const preview = markdown && getPagePreview(markdown);
+        if (!cancelled && preview) setFallbackSummary(preview);
+      })
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
-  }, [meta, slug]);
+  }, [meta, metaPreview, slug]);
 
   if (error || !position) return null;
 
-  const summary = meta?.summary || fallbackSummary;
+  const summary = metaPreview === "Subtopics" ? fallbackSummary : metaPreview || fallbackSummary;
 
   return createPortal(
     <span
@@ -217,3 +221,5 @@ export function DocTooltip({ slug, anchorRef }: { slug: string; anchorRef: React
     document.body,
   );
 }
+
+
