@@ -4,7 +4,7 @@ import { ChevronDown, List } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { Heading } from "@/lib/markdown/headings";
 
-// The content column is max-w-4xl (56rem) and centred, so the sidebar only
+// The content column is max-w-page (56rem) and centred, so the sidebar only
 // appears once the right gutter is wide enough to hold it — below 1400px the
 // page falls back to the inline list plus the floating pill. Every breakpoint
 // class below is written out in full: Tailwind scans source text, so a class
@@ -289,7 +289,7 @@ export function TableOfContents({ headings }: { headings: Heading[] }) {
           floating ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
       >
-        <div className="mx-auto flex max-w-4xl px-page-x">
+        <div className="mx-auto flex max-w-page px-page-x">
           <div className="relative">
             <button
               type="button"

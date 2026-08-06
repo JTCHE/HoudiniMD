@@ -1,9 +1,9 @@
 // Content-only skeleton — the header lives in layout.tsx and never unmounts.
-// Mirrors <main className="mx-auto max-w-4xl px-page-x py-10"> from page.tsx.
+// Mirrors <main className="mx-auto max-w-page px-page-x py-10"> from page.tsx.
 
 export default function DocsSkeleton() {
   return (
-    <main className="mx-auto max-w-4xl px-page-x py-10" role="status" aria-label="Loading…">
+    <main className="mx-auto max-w-page px-page-x py-10" role="status" aria-label="Loading…">
       {/* Plain div, not <article> — this is a placeholder, not real document
           content. While Next streams in the real page, this and the real
           `<article className="prose">` from page.tsx can be in the DOM at

@@ -10,14 +10,14 @@ interface FooterProps {
 export function Footer({ className }: FooterProps) {
   return (
     <footer className={cn("border-t bg-background text-muted-foreground text-xs py-4 print:py-1.5", className)}>
-      <div className="max-w-4xl mx-auto px-page-x">
-        <div className="flex flex-wrap gap-x-2 gap-y-1">
+      <div className="max-w-page mx-auto px-page-x">
+        <div className="flex flex-wrap gap-x-[1.5px] md:gap-x-2 gap-y-1">
           <span className="hidden print:inline font-semibold text-foreground/80">HoudiniMD</span>
           <span
             className="hidden print:inline text-muted-foreground/40"
             aria-hidden
           >
-            ·
+            ∙
           </span>
           <span>
             Built by{" "}
@@ -34,7 +34,7 @@ export function Footer({ className }: FooterProps) {
             className="text-muted-foreground/40"
             aria-hidden
           >
-            ·
+            ∙
           </span>
           <a
             href="https://www.sidefx.com/docs/"
@@ -48,7 +48,7 @@ export function Footer({ className }: FooterProps) {
             className="text-muted-foreground/40 print:hidden"
             aria-hidden
           >
-            ·
+            ∙
           </span>
           <a
             href={DONATION_URL}
@@ -62,7 +62,7 @@ export function Footer({ className }: FooterProps) {
             className="text-muted-foreground/40 print:hidden"
             aria-hidden
           >
-            ·
+            ∙
           </span>
           <a
             href={"mailto:hi@jchd.me?subject=HoudiniMD Feedback"}
@@ -76,7 +76,7 @@ export function Footer({ className }: FooterProps) {
             className="text-muted-foreground/40 print:hidden"
             aria-hidden
           >
-            ·
+            ∙
           </span>
           <Link
             href="/privacy"

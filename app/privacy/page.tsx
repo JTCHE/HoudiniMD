@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 export default function PrivacyPage() {
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
-      <main className="flex-1 max-w-4xl mx-auto w-full px-page-x py-10">
+      <main className="flex-1 max-w-page mx-auto w-full px-page-x py-10">
         <article className="prose prose-neutral dark:prose-invert max-w-none prose-h2:text-lg prose-h2:mt-8">
           {/* The same heading treatment a doc page gets (markdownComponents.h1),
               so this page reads as part of the site and not as a second design. */}
