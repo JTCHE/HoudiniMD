@@ -1,5 +1,6 @@
 import { unstable_noStore } from "next/cache";
 import { notFound } from "next/navigation";
+import Script from "next/script";
 import type { Metadata } from "next";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -142,6 +143,7 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
 
   const { content: rawContent, data: frontmatter } = parseFrontmatter(rawMarkdown);
   const pageIcon = frontmatter.icon;
+  const pageBanner = frontmatter.banner;
   const since = frontmatter.since;
   // The VEX signature transform is scoped by slug rather than by sniffing the
   // markdown, so the other ~9,600 pages take the untouched path no matter what
@@ -219,13 +221,11 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
     mainEntityOfPage: canonical,
   };
 
-  // Block-figure images (not inline icons) get their dimensions probed from
-  // the source's first bytes, so the reserved space in the markdown img
-  // component below matches the real image and nothing shifts once it loads.
-  const blockImageUrls = Array.from(bodyContent.matchAll(/!\[[^\]]*\]\((https?:\/\/[^\s)]+)\)/g))
-    .map((m) => m[1])
-    .filter((src) => !/icons\//.test(src));
-  const imageMeta = await probeImages(blockImageUrls);
+  // Image and SVG dimensions come from their first bytes, so every image box
+  // exists at its final aspect ratio before the file finishes loading.
+  const bodyImageUrls = Array.from(bodyContent.matchAll(/!\[[^\]]*\]\((https?:\/\/[^\s)]+)\)/g)).map((m) => m[1]);
+  const extraImageUrls = [pageIcon, pageBanner].filter((url): url is string => Boolean(url));
+  const imageMeta = await probeImages([...extraImageUrls, ...bodyImageUrls]);
   const imageComponent = createImageComponent(imageMeta);
 
   // Video dimensions probed the same way, from the WebM header's leading
@@ -235,9 +235,10 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
   const videoComponent = createVideoComponent(videoMeta);
 
   return (
-    <main className="mx-auto w-full min-w-0 max-w-4xl px-page-x py-10">
+    <main className="mx-auto w-full min-w-0 max-w-page px-page-x py-10">
       <PrintPagination />
-      <script
+      <Script
+        id="article-jsonld"
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }}
       />
@@ -252,8 +253,11 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
           name={headerName}
           nodeType={headerNodeType}
           icon={pageIcon}
+          iconDimensions={pageIcon ? imageMeta.get(pageIcon) : undefined}
           since={since}
           summary={summary}
+          banner={pageBanner}
+          bannerDimensions={pageBanner ? imageMeta.get(pageBanner) : undefined}
         />
         <TableOfContents headings={extractHeadings(bodyContent)} />
         <ReactMarkdown

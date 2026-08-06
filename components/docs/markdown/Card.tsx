@@ -1,5 +1,7 @@
+import { Suspense } from "react";
 import DocLink from "@/components/docs/DocLink";
 import DocIconClient from "./DocIconClient";
+import { CardCaption, CardCaptionSkeleton } from "./CardCaption";
 
 type HastNode = {
   type?: string;
@@ -25,6 +27,8 @@ export function Card({ node, children, ...props }: React.ComponentProps<"li"> & 
   const link = title?.children?.find((child) => child.tagName === "a");
   const icon = title?.children?.find((child) => child.tagName === "img");
   const href = typeof link?.properties?.href === "string" ? link.properties.href : undefined;
+  const slug = href?.startsWith("/docs/") ? href.slice(6) : undefined;
+  const summaryText = summary && text(summary);
 
   return (
     <li {...props}>
@@ -32,7 +36,7 @@ export function Card({ node, children, ...props }: React.ComponentProps<"li"> & 
         {typeof icon?.properties?.src === "string" && <DocIconClient src={icon.properties.src} alt="" />}
         {href ? <DocLink href={href} underline={false}>{text(link!)}</DocLink> : text(title!)}
       </p>
-      {summary && <p>{text(summary)}</p>}
+      {summaryText && /[a-z]/i.test(summaryText) ? <p>{summaryText}</p> : slug && <Suspense fallback={<CardCaptionSkeleton />}><CardCaption slug={slug} /></Suspense>}
     </li>
   );
 }

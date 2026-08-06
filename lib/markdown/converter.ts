@@ -115,6 +115,7 @@ export async function convertToMarkdown(
   parts.push(`source: ${scraped.sourceUrl}`);
   if (scraped.since) parts.push(`since: ${scraped.since}`);
   if (scraped.icon) parts.push(`icon: ${scraped.icon}`);
+  if (scraped.banner) parts.push(`banner: ${scraped.banner}`);
   if (scraped.deprecation) parts.push('deprecated: true');
   parts.push(`generated_at: ${new Date().toISOString()}`);
   parts.push('---');

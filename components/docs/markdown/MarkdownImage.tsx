@@ -14,7 +14,7 @@ export function createImageComponent(metaMap: ImageMetaMap): Components["img"] {
   return function MarkdownImage({ src, alt }) {
     if (!src || typeof src !== "string") return null;
     if (/icons\//.test(src)) {
-      return <DocIconClient src={src} alt={alt ?? ""} />;
+      return <DocIconClient src={src} alt={alt ?? ""} {...metaMap.get(src)} />;
     }
 
     const meta = metaMap.get(src);
