@@ -17,3 +17,18 @@ test('keeps a video and its caption in one figure', async () => {
   expect(markdown).toContain('<figcaption class="mt-2 text-left text-sm text-muted-foreground">Demo caption</figcaption>');
   expect(markdown).not.toContain('>Video<');
 });
+
+test('converts Vimeo containers to the video component source', async () => {
+  const markdown = await convertToMarkdown({
+    title: 'Vimeo test',
+    summary: '',
+    breadcrumbs: [],
+    version: 'unknown',
+    category: '',
+    sourceUrl: 'https://www.sidefx.com/docs/houdini/nodes/sop/xform.html',
+    mainHtml: '<main><div id="content"><div class="video-container" title="Transform SOP"><iframe src="https://player.vimeo.com/video/406959576" title="Transform SOP"></iframe></div></div></main>',
+  });
+
+  expect(markdown).toContain('<video class="h-auto w-full rounded-lg" src="https://player.vimeo.com/video/406959576" type="video/vimeo" title="Transform SOP"></video>');
+  expect(markdown).not.toContain('<iframe');
+});
