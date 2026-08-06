@@ -16,6 +16,8 @@ export interface ScrapedContent {
   since?: string;
   /** Absolute URL of the node's page icon (from .pageicon img). */
   icon?: string;
+  /** Absolute URL of the page's top banner image (from .billboard's background-image), if any. */
+  banner?: string;
   /** Present when the page is marked as a deprecated node. */
   deprecation?: DeprecationInfo;
   /** Node/function/class kind, e.g. "Geometry Node", "VEX function". Empty when the page has no type (e.g. plain articles). */
@@ -210,6 +212,21 @@ export async function scrapeSideFXPage(url: string): Promise<ScrapedContent> {
     }
   }
 
+  // Top banner image — a `.billboard` div with a CSS background-image (not an
+  // <img> tag, so turndown's default handling silently drops it from the
+  // markdown body; pull the URL out here instead). Only listicle/index pages
+  // (e.g. /docs/houdini, /docs/houdini/solaris/index) carry one.
+  let banner: string | undefined;
+  const billboardStyle = doc.querySelector(".billboard")?.getAttribute("style") || "";
+  const bannerSrc = billboardStyle.match(/background-image:\s*url\(['"]?([^'")]+)['"]?\)/)?.[1];
+  if (bannerSrc) {
+    try {
+      banner = new URL(bannerSrc, effectiveUrl).href;
+    } catch {
+      banner = bannerSrc;
+    }
+  }
+
   // Deprecation banner — lives inside #premeta as .node-deprecation-warning.
   let deprecation: DeprecationInfo | undefined;
   const depEl = doc.querySelector(".node-deprecation-warning");
@@ -237,6 +254,7 @@ export async function scrapeSideFXPage(url: string): Promise<ScrapedContent> {
     mainHtml,
     since,
     icon,
+    banner,
     deprecation,
     nodeType,
   };

@@ -96,6 +96,25 @@ function parseWebp(bytes: Uint8Array): ImageDimensions | null {
   return null;
 }
 
+function parseSvg(bytes: Uint8Array): ImageDimensions | null {
+  const tag = new TextDecoder().decode(bytes).match(/<svg\b[^>]*>/i)?.[0];
+  if (!tag) return null;
+
+  const number = (name: string) =>
+    Number(tag.match(new RegExp(`\\b${name}\\s*=\\s*["']\\s*([0-9]*\\.?[0-9]+)(?:px)?\\s*["']`, "i"))?.[1]);
+  const width = number("width");
+  const height = number("height");
+  if (width > 0 && height > 0) return { width, height };
+
+  const viewBox = tag.match(/\bviewBox\s*=\s*["']([^"']+)["']/i)?.[1]
+    .trim()
+    .split(/[\s,]+/)
+    .map(Number);
+  return viewBox?.length === 4 && viewBox[2] > 0 && viewBox[3] > 0
+    ? { width: viewBox[2], height: viewBox[3] }
+    : null;
+}
+
 /** Parse width/height from an image's leading bytes. Returns null if the format is unrecognized or the header is incomplete (caller should fetch more bytes or give up). */
 export function parseImageDimensions(bytes: Uint8Array): ImageDimensions | null {
   if (bytes.length >= 8 && bytes[0] === 0x89 && isAscii(bytes, 1, "PNG")) return parsePng(bytes);
@@ -103,5 +122,5 @@ export function parseImageDimensions(bytes: Uint8Array): ImageDimensions | null 
   if (bytes.length >= 6 && isAscii(bytes, 0, "GIF89a")) return parseGif(bytes);
   if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xd8) return parseJpeg(bytes);
   if (bytes.length >= 12 && isAscii(bytes, 0, "RIFF") && isAscii(bytes, 8, "WEBP")) return parseWebp(bytes);
-  return null;
+  return parseSvg(bytes);
 }
