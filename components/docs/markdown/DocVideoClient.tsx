@@ -73,7 +73,7 @@ export default function DocVideoClient({ src, title, probedRatio }: DocVideoClie
       <MediaPlayer
         className="markdown-video"
         style={{ width: "100%", height: "100%" }}
-        src={src}
+        src={src.includes("vimeo.com") ? { src, type: "video/vimeo" } : src}
         title={title || "Documentation video"}
         viewType="video"
         streamType="on-demand"

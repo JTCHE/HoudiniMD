@@ -23,6 +23,8 @@ const probeCache = new Map<string, VideoProbe | null>();
  */
 export async function probeVideo(url: string): Promise<VideoProbe | null> {
   const cached = probeCache.get(url);
+  if (url.includes("vimeo.com")) return null;
+
   if (cached !== undefined) return cached;
 
   const controller = new AbortController();
