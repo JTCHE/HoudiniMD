@@ -7,7 +7,7 @@ import { showToast } from "@/components/ui/toast-notification";
 import { useDebouncedSearch } from "@/lib/search/useDebouncedSearch";
 import { recordClick } from "@/lib/search/clicks";
 import { logSearch } from "@/lib/search/log";
-import { SearchResultList, toRows, type ListResult } from "@/components/search/SearchResultList";
+import { SEARCH_LIST_CLASS, SearchResultList, toRows, type ListResult } from "@/components/search/SearchResultList";
 
 /**
  * The overlay's own result, which is a `ListResult` plus what recents need.
@@ -248,7 +248,7 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
           onClick={() => setOpen(false)}
         >
           <div
-            className="w-full max-w-lg mx-4 bg-background border rounded-xl shadow-2xl overflow-hidden"
+            className="w-full max-w-overlay mx-4 bg-background border rounded-xl shadow-2xl overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="relative border-b">
@@ -295,7 +295,8 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
                 selected={selected}
                 onSelect={setSelected}
                 onActivate={(result, anchor) => navigate(result, anchor)}
-                className="max-h-80 overflow-y-auto"
+                className={SEARCH_LIST_CLASS}
+                rowRounded={false}
                 header={
                   isQueryEmpty && recentSearches.length > 0 ? (
                     <li className="px-4 pt-2 pb-1 text-xs text-muted-foreground/60 select-none">

@@ -13,6 +13,25 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { SearchResultRow } from "@/components/search/SearchResultRow";
 import { getExcerpt } from "@/lib/search/excerpt";
 
+/**
+ * The look of the predictive list — the single source of truth for it, so the
+ * docs overlay and the landing field cannot drift apart again. Only the surface
+ * is here; where the list sits and how high it stacks stays with each caller,
+ * because the two put it in different places.
+ *
+ * No horizontal padding: the docs overlay has its own straight sides, so a
+ * highlighted row runs full width. Only the landing field's dropdown sits
+ * inside a card and needs a side gutter, so it adds one of its own below.
+ *
+ * The height is bounded by the viewport as well as by a row count: on a phone
+ * a fixed `max-h` runs off the bottom of the screen, where it cannot be
+ * scrolled to.
+ */
+export const SEARCH_LIST_CLASS = "py-xs overflow-y-auto overscroll-contain max-h-[min(20rem,60dvh)]";
+
+/** The list as a panel of its own — what a field drops below itself. */
+export const SEARCH_DROPDOWN_CLASS = `mt-sm rounded-xl bg-popover border border-hairline shadow-pane px-xs ${SEARCH_LIST_CLASS}`;
+
 export interface ListResult {
   path: string;
   title: string;
@@ -101,6 +120,7 @@ export function SearchResultList({
   header,
   footer,
   className,
+  rowRounded = true,
 }: {
   results: ListResult[];
   /** Drives the excerpts; pass "" to skip fetching (recent searches). */
@@ -113,6 +133,8 @@ export function SearchResultList({
   header?: React.ReactNode;
   footer?: React.ReactNode;
   className?: string;
+  /** Off for a list with no side gutter, where a rounded row shows corner slivers. */
+  rowRounded?: boolean;
 }) {
   const rows = useMemo(() => toRows(results, withSubHits), [results, withSubHits]);
   const excerpts = useExcerpts(rows, withSubHits ? query : "");
@@ -151,6 +173,7 @@ export function SearchResultList({
             excerpt={excerpts.get(rowKey(row))}
             query={query}
             active={i === selected}
+            rounded={rowRounded}
             onClick={() => onActivate(row.result, row.heading?.slug)}
             onMouseMove={() => onSelect(i)}
           />
