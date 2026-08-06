@@ -2,11 +2,118 @@
 @import "tw-animate-css";
 @plugin "@tailwindcss/typography";
 
+/* Hover only where a pointer can actually hover, so a tap on a phone does not
+   leave a chip or card stuck in its hover state until the next tap elsewhere. */
+@custom-variant pointer-hover {
+  @media (hover: hover) {
+    &:hover {
+      @slot;
+    }
+  }
+}
+
 html {
   scrollbar-gutter: stable;
+  background: var(--background);
+  color-scheme: light dark;
 }
 
 @theme inline {
+  /* ── Spacing ladder ────────────────────────────────────────────────────
+     One ladder, consumed by name. Responsiveness lives in the media query on
+     the raw values below, not in per-component breakpoint classes. The small
+     steps are absolute because they are component-internal (a chip's padding
+     is the same physical size on any screen); only the large steps, which set
+     page rhythm, grow on wide viewports. */
+  --spacing-thin: var(--thin);
+  --spacing-light: var(--light);
+  --spacing-2xs: var(--2xs);
+  --spacing-xs: var(--xs);
+  --spacing-sm: var(--sm);
+  --spacing-ms: var(--ms);
+  --spacing-md: var(--md);
+  --spacing-lg: var(--lg);
+  --spacing-xl: var(--xl);
+  --spacing-2xl: var(--2xl);
+  --spacing-3xl: var(--3xl);
+  --spacing-4xl: var(--4xl);
+
+  /* ── Content widths ───────────────────────────────────────────────────
+     Named, because the spacing ladder above shares its names with Tailwind's
+     built-in container scale (`sm`, `md`, `4xl`, …) and shadows it — a
+     `max-w-4xl` would silently resolve to the 128px spacing step, not 56rem.
+     Ask for the thing you mean instead: `max-w-page` is the content column
+     every page and the footer share. */
+  --container-page: 56rem;
+  --container-overlay: 32rem;
+
+  /* ── Type ladder ───────────────────────────────────────────────────────
+     Six roles, each carrying its own leading and tracking. Deliberately does
+     NOT redefine Tailwind's text-xs…text-xl scale, which the docs pages use. */
+  --text-display: var(--type-display);
+  --text-display--line-height: 0.92;
+  --text-display--letter-spacing: -0.045em;
+  --text-lede: var(--type-lede);
+  --text-lede--line-height: 1.45;
+  --text-lede--letter-spacing: -0.011em;
+  --text-title: var(--type-title);
+  --text-title--line-height: 1.2;
+  --text-title--letter-spacing: -0.01em;
+  --text-label: var(--type-label);
+  --text-label--line-height: 1.3;
+  --text-label--letter-spacing: -0.01em;
+  --text-meta: var(--type-meta);
+  --text-meta--line-height: 1.35;
+  --text-caption: var(--type-caption);
+  --text-caption--line-height: 1.35;
+
+  /* ── Neutral ramp ─────────────────────────────────────────────────────
+     The single palette. 0 is the page, 950 is the ink; the whole ramp flips
+     in dark mode so a component written against it needs no dark: variant.
+     The semantic shadcn tokens below are expressed on top of this ramp, so
+     there is one palette rather than two. */
+  --color-neutral-0: var(--neutral-0);
+  --color-neutral-50: var(--neutral-50);
+  --color-neutral-100: var(--neutral-100);
+  --color-neutral-200: var(--neutral-200);
+  --color-neutral-300: var(--neutral-300);
+  --color-neutral-400: var(--neutral-400);
+  --color-neutral-500: var(--neutral-500);
+  --color-neutral-600: var(--neutral-600);
+  --color-neutral-700: var(--neutral-700);
+  --color-neutral-800: var(--neutral-800);
+  --color-neutral-900: var(--neutral-900);
+  --color-neutral-950: var(--neutral-950);
+
+  /* Brand. Fixed in both themes — it is the one colour that identifies the
+     product, so it must not shift when the ramp flips. */
+  --color-brand: var(--brand);
+  --color-brand-bright: var(--brand-bright);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-plate: var(--brand-plate);
+
+  /* Surfaces and controls, named by elevation rather than by colour. */
+  --color-surface: var(--surface);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-elevated-top: var(--elevated-top);
+  --color-elevated-bottom: var(--elevated-bottom);
+  --color-elevated-edge: var(--elevated-edge);
+  --color-control-top: var(--control-top);
+  --color-control-bottom: var(--control-bottom);
+  --color-control-edge: var(--control-edge);
+  --color-control-foreground: var(--control-foreground);
+  --color-hairline: var(--hairline);
+  --color-control-sheen: var(--control-sheen);
+
+  --shadow-field: var(--elevation-field);
+  --shadow-keycap: var(--elevation-keycap);
+  --shadow-control: var(--elevation-control);
+  --shadow-pane: var(--elevation-pane);
+
+  --ease-out-quint: var(--easing-quint);
+  --default-transition-duration: var(--duration-base);
+  --default-transition-timing-function: var(--ease-out-quint);
+
   /* Page gutter — SSoT for horizontal padding on page-width containers.
      Same `px-page-x` class everywhere; only --page-x below shifts per media query. */
   --spacing-page-x: var(--page-x);
@@ -53,24 +160,110 @@ html {
 :root {
   --page-x: 1.5rem;
   --radius: 8px;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+
+  /* ── Base ladder values (small screens) ──────────────────────────────── */
+  --thin: 0.25px;
+  --light: 0.5px;
+  --2xs: 2px;
+  --xs: 4px;
+  --sm: 8px;
+  --ms: 12px;
+  --md: 16px;
+  --lg: 24px;
+  --xl: 32px;
+  --2xl: 40px;
+  --3xl: 56px;
+  --4xl: 72px;
+
+  --type-display: 34px;
+  --type-lede: 15px;
+  --type-title: 14px;
+  --type-label: 13px;
+  --type-meta: 12px;
+  --type-caption: 11px;
+
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --duration-slow: 420ms;
+  --easing-quint: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* ── Neutral ramp — light ─────────────────────────────────────────────── */
+  --neutral-0: oklch(1 0 0);
+  --neutral-50: oklch(0.985 0 0);
+  --neutral-100: oklch(0.97 0 0);
+  --neutral-200: oklch(0.922 0 0);
+  --neutral-300: oklch(0.87 0 0);
+  --neutral-400: oklch(0.708 0 0);
+  --neutral-500: oklch(0.556 0 0);
+  --neutral-600: oklch(0.44 0 0);
+  --neutral-700: oklch(0.35 0 0);
+  --neutral-800: oklch(0.269 0 0);
+  --neutral-900: oklch(0.205 0 0);
+  --neutral-950: oklch(0.145 0 0);
+
+  /* Brand — #f05f04 converted to OKLCH. Identical in both themes. */
+  --brand: oklch(0.664 0.195 43.1);
+  --brand-bright: oklch(0.71 0.19 43.1);
+  --brand-foreground: oklch(0.985 0 0);
+
+  /* Surfaces.
+
+     Everything below names a step of the ramp rather than a fresh colour, so
+     the palette stays one ladder. Elevation is the one thing that cannot be
+     derived: a light theme raises a surface toward white and a dark theme
+     raises it away from black, so the two themes pick DIFFERENT steps for the
+     same role. That is why each of these appears again in the dark block —
+     the value flips role, not just lightness. */
+  --surface: var(--neutral-0);
+  --surface-sunken: var(--neutral-100);
+  --hairline: oklch(0 0 0 / 9%);
+
+  /* A keycap and any other physically-raised chip: lit from the top, with a
+     hard bottom edge that reads as thickness rather than as a blur. */
+  --elevated-top: var(--neutral-0);
+  --elevated-bottom: var(--neutral-100);
+  --elevated-edge: var(--neutral-300);
+
+  /* The primary control (Paste & Search). Dark in light mode, light in dark
+     mode, so it always carries the strongest contrast on the page. Its label
+     is `--neutral-50` in both themes — the ramp flip alone gets that right. */
+  --control-top: var(--neutral-800);
+  --control-bottom: var(--neutral-900);
+  --control-edge: var(--neutral-800);
+  --control-foreground: var(--neutral-50);
+
+  --control-sheen: oklch(1 0 0 / 12%);
+
+  /* The plate the app mark is drawn on. Deliberately off the ramp and unique:
+     it is one step of contrast below the page in either theme, which is the
+     only thing that keeps a rounded-square icon visible against a page of its
+     own colour. #F8F8F8 in light, its mirror at HSV value 3% in dark. */
+  --brand-plate: oklch(0.979 0 0);
+
+  --elevation-field: 0 18px 50px 0 oklch(0 0 0 / 10%);
+  --elevation-keycap: 0 2px 0 0 var(--elevated-edge), 0 1px 1.5px 0 oklch(0 0 0 / 10%);
+  --elevation-control: 0 1px 0.75px 0 oklch(0 0 0 / 28%), 0 1px 2px 0 oklch(0 0 0 / 16%);
+  --elevation-pane: 0 4px 12px 0 oklch(0 0 0 / 8%);
+
+  /* ── Semantic tokens, expressed on the ramp above ─────────────────────── */
+  --background: var(--neutral-0);
+  --foreground: var(--neutral-950);
+  --card: var(--neutral-0);
+  --card-foreground: var(--neutral-950);
+  --popover: var(--neutral-0);
+  --popover-foreground: var(--neutral-950);
+  --primary: var(--neutral-900);
+  --primary-foreground: var(--neutral-50);
+  --secondary: var(--neutral-100);
+  --secondary-foreground: var(--neutral-900);
+  --muted: var(--neutral-100);
+  --muted-foreground: var(--neutral-500);
+  --accent: var(--neutral-100);
+  --accent-foreground: var(--neutral-900);
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0 0 0 / 10%);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --input: var(--neutral-200);
+  --ring: var(--neutral-400);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
@@ -86,26 +279,80 @@ html {
   --sidebar-ring: oklch(0.708 0 0);
 }
 
+/* Wide screens — only the layout-rhythm steps and the display type grow. The
+   component-internal steps stay put, so a chip is the same size on a phone and
+   on a 27" display. */
+@media (width >= 64rem) {
+  :root {
+    --xl: 40px;
+    --2xl: 56px;
+    --3xl: 80px;
+    --4xl: 128px;
+
+    --type-display: 66px;
+    --type-lede: 19px;
+    --type-label: 13.5px;
+    --type-meta: 12.5px;
+    --type-caption: 11.5px;
+  }
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.205 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
+    /* The ramp reverses. Everything expressed against it follows for free. */
+    --neutral-0: oklch(0.145 0 0);
+    --neutral-50: oklch(0.175 0 0);
+    --neutral-100: oklch(0.205 0 0);
+    --neutral-200: oklch(0.269 0 0);
+    --neutral-300: oklch(0.35 0 0);
+    --neutral-400: oklch(0.44 0 0);
+    --neutral-500: oklch(0.556 0 0);
+    --neutral-600: oklch(0.708 0 0);
+    --neutral-700: oklch(0.87 0 0);
+    --neutral-800: oklch(0.922 0 0);
+    --neutral-900: oklch(0.97 0 0);
+    --neutral-950: oklch(0.985 0 0);
+
+    /* Elevation is the one thing that does not mirror: a light theme raises a
+       surface by making it whiter than the page, a dark theme by making it
+       lighter than the page. Both are "one step up", but not the same ramp
+       index — so these pick their own steps rather than being derived. */
+    --surface: var(--neutral-100);
+    /* Sunken means below the page, in both themes: the light theme puts the
+       field one step under white, so the dark theme puts it one step under the
+       page rather than one step over it. The ramp has no step below
+       `--neutral-0`, which IS the dark page, so this one is stated. */
+    --surface-sunken: var(--neutral-0);
+    --hairline: oklch(1 0 0 / 10%);
+
+    --elevated-top: var(--neutral-200);
+    --elevated-bottom: var(--neutral-100);
+    --elevated-edge: var(--neutral-0);
+
+    --control-top: var(--neutral-900);
+    --control-bottom: var(--neutral-700);
+    --control-edge: oklch(1 0 0 / 18%);
+
+    --control-sheen: oklch(0 0 0 / 10%);
+
+    /* A wide black shadow on a near-black page is invisible; what reads as
+       depth here is the field's own edge pair. */
+    --elevation-field: 0 12px 28px 0 oklch(0 0 0 / 45%);
+    --elevation-pane: 0 4px 12px 0 oklch(0 0 0 / 45%);
+
+    --brand-plate: oklch(0.134 0 0);
+
+    --card: var(--neutral-100);
+    --popover: var(--neutral-100);
+    --primary: var(--neutral-800);
+    --primary-foreground: var(--neutral-100);
+    --secondary: var(--neutral-200);
+    --muted: var(--neutral-200);
+    --accent: var(--neutral-200);
     --destructive: oklch(0.704 0.191 22.216);
     --border: oklch(1 0 0 / 15%);
     --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
+    --ring: var(--neutral-500);
     --chart-1: oklch(0.488 0.243 264.376);
     --chart-2: oklch(0.696 0.17 162.48);
     --chart-3: oklch(0.769 0.188 70.08);
@@ -177,7 +424,11 @@ html {
 }
 
 /* ── Syntax highlighting (hljs / rehype-highlight) ─────────────────────── */
-pre {
+/* Scoped to a `pre` that actually holds code. A bare `pre` selector is
+   unlayered, so it beat every utility class — a `<pre>` used for anything else
+   (the ASCII background, for one) came out as a black code panel and needed an
+   `!important` to escape. */
+pre:has(code) {
   background: oklch(0.13 0 0);
 }
 
@@ -334,7 +585,7 @@ button:active kbd.kbd-button {
   --page-x: var(--print-page-x);
 }
 
-/* main/footer are capped at max-w-4xl (56rem ≈ 896px) — wider than A4's
+/* main/footer are capped at max-w-page (56rem ≈ 896px) — wider than A4's
    printable width even after margins. Without this, PrintPagination.tsx
    measures text wrapped at that wider on-screen width (fewer, longer
    lines) while the real print pass wraps it at A4's ~695px (more, shorter
@@ -342,7 +593,7 @@ button:active kbd.kbd-button {
    real printed one, so its break/margin decisions drift off actual
    content. Capping the width here makes measurement-time wrapping match
    print-time wrapping exactly. */
-:root[data-print-measure] .max-w-4xl {
+:root[data-print-measure] .max-w-page {
   max-width: calc(210mm - 2 * var(--print-page-x)) !important;
 }
 
@@ -819,13 +1070,17 @@ pre code.hljs {
 }
 
 /* Inline icon images — override prose display:block and max-width:100% */
-img.doc-icon {
-  display: inline !important;
+span.doc-icon {
+  display: inline-grid !important;
   width: 1em !important;
   height: 1em !important;
   max-width: none !important;
   vertical-align: -0.15em;
   margin: 0 0.5em 0 0;
+}
+
+span.doc-icon > img {
+  margin: 0;
 }
 
 /* ── Card-grid list items ───────────────────────────────────────────────
@@ -855,13 +1110,18 @@ img.doc-icon {
 }
 .shelf-grid li > p {
   margin: 0;
+  overflow-wrap: anywhere;
 }
 .shelf-grid li > p:first-child {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  min-width: 0;
   font-weight: 600;
   color: var(--card-foreground);
+}
+.shelf-grid li > p:first-child > span {
+  min-width: 0;
 }
 .shelf-grid li > p:last-child:not(:first-child) {
   font-size: 0.8125rem;

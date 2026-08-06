@@ -62,7 +62,7 @@ export function DocsHeader({ breadcrumbs, sourceUrl, markdownUrl, searchRef }: D
       ref={header}
       className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur print:static print:bg-background"
     >
-      <div className="mx-auto grid max-w-4xl grid-cols-[1fr_auto] sm:grid-cols-[auto_1fr_auto] items-center gap-2 px-page-x py-3 text-xs text-muted-foreground">
+      <div className="mx-auto grid max-w-page grid-cols-[1fr_auto] sm:grid-cols-[auto_1fr_auto] items-center gap-2 px-page-x py-3 text-xs text-muted-foreground">
         <Link
           href="/"
           className="row-start-1 shrink-0 font-semibold text-foreground hover:opacity-70 transition-opacity"

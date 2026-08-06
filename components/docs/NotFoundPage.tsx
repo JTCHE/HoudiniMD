@@ -36,7 +36,7 @@ export default function NotFoundPage() {
   }, [pathname]);
 
   return (
-    <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col justify-center px-page-x py-10">
+    <main className="mx-auto flex w-full max-w-page flex-1 flex-col justify-center px-page-x py-10">
       {/* Negative margin cancels the box's own padding, so its border bleeds
           past the page gutter while the text inside stays on the same left
           edge as everything else on the page (same trick as .callout). */}
