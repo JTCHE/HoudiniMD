@@ -2,10 +2,13 @@
 
 import { useEffect } from "react";
 import { recordVisit } from "@/lib/landing/recent-visits";
+import { logView } from "@/lib/view-log";
 import type { DocChip } from "@/lib/landing/types";
 
 /**
- * Reports how long this page was read, so the landing page can offer it back.
+ * Reports how long this page was read, so the landing page can offer it back,
+ * and reports the view itself to analytics — a page opened from the router
+ * cache never reaches the server, so nothing else can (see lib/view-log.ts).
  *
  * A phone reader usually leaves by switching app or locking the screen, not by
  * navigating, and neither of those unmounts anything — so the clock is also
@@ -23,6 +26,8 @@ export function VisitRecorder({ chip }: { chip: DocChip }) {
 
   useEffect(() => {
     const openedAt = Date.now();
+    // A chip carries the index path; the address bar carries `/docs/` in front.
+    logView(`/docs/${path}`);
 
     function report() {
       recordVisit({ path, title, icon }, Date.now() - openedAt);

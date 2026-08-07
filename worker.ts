@@ -1,5 +1,5 @@
 import handler, { DOQueueHandler, DOShardedTagCache, BucketCachePurge } from "./.open-next/worker.js";
-import { recordApiSearch, recordPageView, recordSearchBeacon } from "./telemetry";
+import { recordApiSearch, recordPageView, recordSearchBeacon, recordViewBeacon } from "./telemetry";
 
 export { DOQueueHandler, DOShardedTagCache, BucketCachePurge };
 
@@ -22,7 +22,7 @@ const STATIC_ARCHIVE_MIME: Record<string, string> = {
 export default {
   async fetch(request: Request, env: Env, ctx: { waitUntil(promise: Promise<unknown>): void; passThroughOnException(): void }) {
     const url = new URL(request.url);
-    const beacon = recordSearchBeacon(request, url, env);
+    const beacon = recordSearchBeacon(request, url, env) ?? recordViewBeacon(request, url, env);
     if (beacon) return beacon;
 
     if (url.pathname.startsWith("/_next/static/") && request.method === "GET") {
