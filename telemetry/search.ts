@@ -1,14 +1,20 @@
-import { visitorKind } from "../lib/wants-markdown";
+import { visitorKind, type VisitorKind } from "../lib/wants-markdown";
 import { visitorHash } from "../lib/visitor-hash";
 import { visitorLabel } from "../lib/visitor-label";
 import { canRecord, type TelemetryEnv, type WaitUntil } from "./types";
 
 type SearchSource = "api" | "resolve" | "generate" | "overlay" | "home";
-type SearchKind = "human" | "agent" | "crawler";
+type SearchKind = VisitorKind;
 
+/**
+ * Nothing that reads the search API is a reader, whatever its headers claim —
+ * a browser-shaped client calling JSON is automation. It stays an "agent"
+ * rather than an unidentified "bot": it came in through the agent-facing API,
+ * which is an identification.
+ */
 function apiKind(request: Request): SearchKind {
   const kind = visitorKind(request.headers.get("user-agent"), request.headers);
-  return kind === "human" ? "agent" : kind;
+  return kind === "human" || kind === "bot" ? "agent" : kind;
 }
 
 function writeSearchRow(request: Request, env: TelemetryEnv, ev: { q: string; source: SearchSource; dest: string; results: number; kind?: SearchKind; rank?: number }) {
