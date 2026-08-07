@@ -44,7 +44,7 @@ function readingLine() {
  * an id is neither a unique key nor a usable handle here.
  */
 /** Rows the inline list shows before it clips itself behind a "Show all". */
-const LONG = 14;
+const LONG = 5;
 
 function headingEls() {
   return document.querySelectorAll<HTMLElement>("article :is(h2,h3,h4,h5,h6)[id]");
