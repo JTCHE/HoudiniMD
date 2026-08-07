@@ -87,17 +87,21 @@ export function botFamily(ua: string | null): string | null {
   return ua?.match(BOT_FAMILY_RE)?.[1] ?? null;
 }
 
-export type VisitorKind = 'human' | 'crawler' | 'agent';
+export type VisitorKind = 'human' | 'crawler' | 'agent' | 'bot';
 
 /**
- * Who is asking. Analytics needs the three-way split (a Googlebot hit is not a
- * reader), the redirect only needs to know whether it is a human.
+ * Who is asking. Analytics needs the split (a Googlebot hit is not a reader),
+ * the redirect only needs to know whether it is a human.
  *
  * A bot that names itself is taken at its word first: both the browser check
- * and `Sec-Fetch-Dest` are forgeable, and several bots forge them. Only an
- * unnamed visitor is judged on the shape of its UA — so a new crawler still
- * lands in 'agent' rather than 'human', and passing a bare family name (the
- * `bot` column of an archived row) through here re-derives its kind.
+ * and `Sec-Fetch-Dest` are forgeable, and several bots forge them. Passing a
+ * bare family name (the `bot` column of an archived row) through here
+ * re-derives its kind.
+ *
+ * Three of the four kinds are claims the visitor made about itself. 'bot' is
+ * the absence of one: no name we know, no browser we can corroborate. It is
+ * not 'agent', which means a named LLM fetcher and is drawn as the loudest
+ * thing on the dashboard — an unidentified client is the quietest.
  *
  * A browser-shaped UA that arrives with NONE of the four headers a browser
  * always sends is a copied string, not a browser. That is a deliberately weak
@@ -115,7 +119,7 @@ export function visitorKind(
   // A top-level navigation is the strongest browser signal there is: no HTTP
   // client library sends it, so it beats even a missing user-agent.
   if (headers?.get('sec-fetch-dest') === 'document') return 'human';
-  if (!ua) return 'agent';
-  if (!BROWSER_RE.test(ua) && !IOS_WEBVIEW_RE.test(ua)) return 'agent';
-  return !headers || browserEvidence(headers) !== NO_EVIDENCE ? 'human' : 'agent';
+  if (!ua) return 'bot';
+  if (!BROWSER_RE.test(ua) && !IOS_WEBVIEW_RE.test(ua)) return 'bot';
+  return !headers || browserEvidence(headers) !== NO_EVIDENCE ? 'human' : 'bot';
 }
