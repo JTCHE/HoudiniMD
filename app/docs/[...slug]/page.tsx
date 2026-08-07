@@ -9,6 +9,7 @@ import rehypeSlug from "rehype-slug";
 import { PageHeader } from "@/components/docs/PageHeader";
 import { PrintPagination } from "@/components/docs/PrintPagination";
 import { TableOfContents } from "@/components/docs/TableOfContents";
+import { VisitRecorder } from "@/components/docs/VisitRecorder";
 import { markdownComponents } from "@/components/docs/markdown";
 import { createImageComponent } from "@/components/docs/markdown/MarkdownImage";
 import { createVideoComponent } from "@/components/docs/markdown/MarkdownVideo";
@@ -237,6 +238,10 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
   return (
     <main className="mx-auto w-full min-w-0 max-w-page px-page-x py-10">
       <PrintPagination />
+      {/* Reports the read: to analytics, which cannot see a navigation served
+          from the router cache, and to the landing page's "recently visited"
+          row. Renders nothing. */}
+      <VisitRecorder chip={{ path: slugPath, title: headerName, icon: pageIcon ?? "" }} />
       <Script
         id="article-jsonld"
         type="application/ld+json"
