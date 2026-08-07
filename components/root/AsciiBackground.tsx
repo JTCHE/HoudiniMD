@@ -113,7 +113,8 @@ export function AsciiBackground({ className }: { className?: string }) {
       </pre>
       {/* The soft centre glow. It sits over the field and under the content, so
           the hero column stays readable against the pattern. */}
-      <div className="absolute top-1/2 left-1/2 h-2/5 w-[90%] scale-110 -translate-x-1/2 -translate-y-1/2 bg-background/90 blur-3xl" />
+          {/* To do: fix strong banding. Look at obsidian spec for image */}
+      <div className="absolute top-1/2 left-1/2 h-2/5 max-w-page w-full scale-110 -translate-x-1/2 -translate-y-1/2 bg-background/90 blur-3xl" />
     </div>
   );
 }
