@@ -1,7 +1,7 @@
 import { botFamily, browserEvidence, visitorKind } from "../lib/wants-markdown";
 import { visitorHash } from "../lib/visitor-hash";
 import { visitorLabel } from "../lib/visitor-label";
-import { canRecord, type TelemetryEnv } from "./types";
+import { canRecord, type TelemetryEnv, type WaitUntil } from "./types";
 
 /** Where `lib/view-log.ts` reports a client-side navigation. */
 export const VIEW_BEACON_PATH = "/api/view-log";
@@ -21,23 +21,45 @@ const referrerHost = (request: Request, url: URL) => {
 /** A page address we count. Everything else on the site is not a doc read. */
 const isTracked = (path: string) => path === "/" || path.startsWith("/docs/");
 
-function writeView(
+/**
+ * The same read can reach the worker twice under one source IP each —
+ * search-result and omnibox prefetch races land on a different connection
+ * (and so a different `cf-connecting-ip`) than the click that follows. IP
+ * is exactly what differs between the two, so it can't be part of the dedupe
+ * key; path/referrer/country is what the two requests still agree on.
+ *
+ * ponytail: Cache API as a 5s dedupe window, not a durable counter. A cold
+ * colo or a genuinely distinct visitor sharing the key is undercounted by
+ * one row, which is a smaller error than the double-count this replaces.
+ */
+async function seenRecently(key: string, ctx: WaitUntil): Promise<boolean> {
+  const cache = (caches as unknown as { default: Cache }).default;
+  const cacheKey = new Request(`https://dedupe.internal/view/${encodeURIComponent(key)}`);
+  if (await cache.match(cacheKey)) return true;
+  ctx.waitUntil(cache.put(cacheKey, new Response(null, { headers: { "cache-control": "max-age=5" } })));
+  return false;
+}
+
+async function writeView(
   request: Request,
   env: TelemetryEnv,
+  ctx: WaitUntil,
   ev: { path: string; referrer: string; status: number; markdown: boolean },
 ) {
   const ua = request.headers.get("user-agent");
   const ip = request.headers.get("cf-connecting-ip") ?? "";
+  const country = request.headers.get("cf-ipcountry") ?? "";
+  const kind = visitorKind(ua, request.headers);
+  if (await seenRecently(`${ev.path}|${country}|${ev.referrer}|${kind}`, ctx)) return;
   const salt = env.VISITOR_SALT!;
   const visitor = visitorHash(`${ip}|${ua ?? ""}`, salt);
-  const kind = visitorKind(ua, request.headers);
   env.ANALYTICS!.writeDataPoint({
     indexes: [visitor],
     blobs: [
       ev.path,
       kind,
       visitorHash(ip, salt),
-      request.headers.get("cf-ipcountry") ?? "",
+      country,
       botFamily(ua) ?? "",
       ((request as Request & { cf?: { city?: string } }).cf?.city) ?? "",
       browserEvidence(request.headers),
@@ -61,17 +83,17 @@ function writeView(
  * most reads and double-count the rest. So the worker counts document loads
  * and the browser reports its own navigations — see recordViewBeacon.
  */
-export function recordPageView(request: Request, url: URL, response: Response, env: TelemetryEnv) {
+export function recordPageView(request: Request, url: URL, response: Response, env: TelemetryEnv, ctx: WaitUntil) {
   if (!canRecord(env) || request.method !== "GET" || (response.status >= 300 && response.status < 400)) return;
   if (request.headers.get("rsc")) return;
   const path = url.pathname;
   if (!isTracked(path)) return;
-  writeView(request, env, {
+  ctx.waitUntil(writeView(request, env, ctx, {
     path: path.endsWith(".md") ? path.slice(0, -3) : path,
     referrer: referrerHost(request, url),
     status: response.status,
     markdown: path.endsWith(".md"),
-  });
+  }));
 }
 
 /**
@@ -80,16 +102,16 @@ export function recordPageView(request: Request, url: URL, response: Response, e
  * `self:` form referrerHost() writes, so reading on inside the site looks the
  * same however the browser got there.
  */
-export function recordViewBeacon(request: Request, url: URL, env: TelemetryEnv): Response | null {
+export function recordViewBeacon(request: Request, url: URL, env: TelemetryEnv, ctx: WaitUntil): Response | null {
   if (url.pathname !== VIEW_BEACON_PATH) return null;
   const path = url.searchParams.get("path") ?? "";
   const from = url.searchParams.get("from") ?? "";
   if (canRecord(env) && isTracked(path))
-    writeView(request, env, {
+    ctx.waitUntil(writeView(request, env, ctx, {
       path,
       referrer: from.startsWith("/") ? `self:${from}` : "",
       status: 200,
       markdown: false,
-    });
+    }));
   return new Response(null, { status: 204 });
 }

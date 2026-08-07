@@ -22,7 +22,7 @@ const STATIC_ARCHIVE_MIME: Record<string, string> = {
 export default {
   async fetch(request: Request, env: Env, ctx: { waitUntil(promise: Promise<unknown>): void; passThroughOnException(): void }) {
     const url = new URL(request.url);
-    const beacon = recordSearchBeacon(request, url, env) ?? recordViewBeacon(request, url, env);
+    const beacon = recordSearchBeacon(request, url, env) ?? recordViewBeacon(request, url, env, ctx);
     if (beacon) return beacon;
 
     if (url.pathname.startsWith("/_next/static/") && request.method === "GET") {
@@ -39,7 +39,7 @@ export default {
     }
 
     const response = await handler.fetch(request, env, ctx);
-    recordPageView(request, url, response, env);
+    recordPageView(request, url, response, env, ctx);
     recordApiSearch(request, url, response, env, ctx);
 
     const contentType = response.headers.get("content-type") ?? "";
