@@ -122,7 +122,15 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
   // Fast R2 check — returns null if content is missing or stale (before CACHE_INVALIDATE_BEFORE).
   // If not ready, return a client component immediately so the browser gets instant feedback
   // and can show the skeleton + SSE progress log while generation happens client-side.
-  const rawMarkdown = await fetchFromR2(`content/${slugPath}.md`);
+  // A read failure (R2 hiccup, not a real cache miss) degrades the same way — retryable via
+  // GeneratingPage's SSE call, instead of crashing the whole request.
+  let rawMarkdown: string | null;
+  try {
+    rawMarkdown = await fetchFromR2(`content/${slugPath}.md`);
+  } catch {
+    unstable_noStore();
+    return <GeneratingPage slug={slugPath} />;
+  }
   if (!rawMarkdown) {
     // Distinguish "not generated yet" (200, show progress) from "SideFX has no
     // such page" (real 404) — without this, every dead link served a 200 page

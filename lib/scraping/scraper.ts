@@ -159,7 +159,10 @@ export async function scrapeSideFXPage(url: string): Promise<ScrapedContent> {
   const nodeType = subtitleEl?.textContent.replace(/\s+/g, " ").trim() || undefined;
   subtitleEl?.remove();
   const rawTitle = titleH1?.textContent || "";
-  const title = rawTitle.replace(/\s+/g, " ").trim();
+  // Doxygen-generated trees (e.g. /docs/hengine/*) carry no #title block at
+  // all — only a <title> tag ("Houdini Engine 9.0: Documentation"). Falling
+  // back to it beats an empty page title.
+  const title = (rawTitle || doc.querySelector("title")?.textContent || "").replace(/\s+/g, " ").trim();
 
   const rawSummary = doc.querySelector("#title p.summary")?.textContent || "";
   const summary = rawSummary.replace(/\s+/g, " ").trim();
@@ -168,7 +171,12 @@ export async function scrapeSideFXPage(url: string): Promise<ScrapedContent> {
   // node-html-parser can misparse certain SideFX index pages, placing body content
   // as direct children of <html> instead of nesting under <main>/<body>. When that
   // happens, parse just the <main> block in isolation — it reliably works there.
-  let mainElement = doc.querySelector("main");
+  //
+  // A few trees under /docs (e.g. hengine/*, the Doxygen-built C++ API docs)
+  // use a completely different template with no <main> tag at all — content
+  // lives in #doc-content > .contents instead. (#doc-content also carries the
+  // search-box dropdown markup — .contents is the real article body.)
+  let mainElement = doc.querySelector("main") ?? doc.querySelector("#doc-content .contents") ?? doc.querySelector("#doc-content");
   if (!mainElement) {
     const mainStart = html.indexOf("<main");
     const mainEnd = html.lastIndexOf("</main>");
