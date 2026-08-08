@@ -1,7 +1,7 @@
 import { visitorKind, type VisitorKind } from "../lib/wants-markdown";
 import { visitorHash } from "../lib/visitor-hash";
 import { visitorLabel } from "../lib/visitor-label";
-import { canRecord, type TelemetryEnv, type WaitUntil } from "./types";
+import { canRecord, nowStamp, type TelemetryEnv, type WaitUntil } from "./types";
 
 type SearchSource = "api" | "resolve" | "generate" | "overlay" | "home";
 type SearchKind = VisitorKind;
@@ -23,11 +23,24 @@ function writeSearchRow(request: Request, env: TelemetryEnv, ev: { q: string; so
   const salt = env.VISITOR_SALT!;
   const ua = request.headers.get("user-agent");
   const visitor = visitorHash(`${ip}|${ua ?? ""}`, salt);
-  env.ANALYTICS!.writeDataPoint({
-    indexes: [visitor],
-    blobs: [ev.q.slice(0, 200), "search", visitorHash(ip, salt), request.headers.get("cf-ipcountry") ?? "", ev.source, "", ev.dest.slice(0, 200), "", ev.kind ?? visitorKind(ua, request.headers), visitorLabel(visitor)],
-    doubles: [ev.results, ev.rank ?? 0],
-  });
+  return env.DB!.prepare(
+    `INSERT OR IGNORE INTO searches (ts, visitor, q, country, category, results, source, dest, kind, alias, rank)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+  )
+    .bind(
+      nowStamp(),
+      visitorHash(ip, salt),
+      ev.q.slice(0, 200),
+      request.headers.get("cf-ipcountry") ?? "",
+      "",
+      ev.results,
+      ev.source,
+      ev.dest.slice(0, 200),
+      ev.kind ?? visitorKind(ua, request.headers),
+      visitorLabel(visitor),
+      String(ev.rank ?? 0),
+    )
+    .run();
 }
 
 export function recordApiSearch(request: Request, url: URL, response: Response, env: TelemetryEnv, ctx: WaitUntil) {
@@ -38,17 +51,17 @@ export function recordApiSearch(request: Request, url: URL, response: Response, 
     if (!q) return;
     ctx.waitUntil(response.clone().json().then((body: unknown) => {
       const total = typeof (body as { total?: unknown })?.total === "number" ? (body as { total: number }).total : 0;
-      writeSearchRow(request, env, { q, source: "api", dest: "", results: total, kind });
+      return writeSearchRow(request, env, { q, source: "api", dest: "", results: total, kind });
     }).catch(() => {}));
     return;
   }
   if (url.pathname === "/api/resolve") {
     const q = url.searchParams.get("name")?.trim();
     if (!q) return;
-    if (response.status !== 200) return writeSearchRow(request, env, { q, source: "resolve", dest: "", results: 0, kind });
+    if (response.status !== 200) return ctx.waitUntil(Promise.resolve(writeSearchRow(request, env, { q, source: "resolve", dest: "", results: 0, kind })));
     ctx.waitUntil(response.clone().json().then((body: unknown) => {
       const slug = typeof (body as { slug?: unknown })?.slug === "string" ? (body as { slug: string }).slug : "";
-      writeSearchRow(request, env, { q, source: "resolve", dest: slug, results: slug ? 1 : 0, kind });
+      return writeSearchRow(request, env, { q, source: "resolve", dest: slug, results: slug ? 1 : 0, kind });
     }).catch(() => {}));
     return;
   }
@@ -57,20 +70,20 @@ export function recordApiSearch(request: Request, url: URL, response: Response, 
     if (!slug) return;
     ctx.waitUntil(response.clone().text().then((body) => {
       const found = response.status === 200 && !body.includes('"stage":"error"');
-      writeSearchRow(request, env, { q: slug, source: "generate", dest: found ? slug : "", results: found ? 1 : 0, kind });
+      return writeSearchRow(request, env, { q: slug, source: "generate", dest: found ? slug : "", results: found ? 1 : 0, kind });
     }).catch(() => writeSearchRow(request, env, { q: slug, source: "generate", dest: "", results: 0, kind })));
   }
 }
 
-export function recordSearchBeacon(request: Request, url: URL, env: TelemetryEnv): Response | null {
+export function recordSearchBeacon(request: Request, url: URL, env: TelemetryEnv, ctx: WaitUntil): Response | null {
   if (url.pathname !== "/api/search-log") return null;
   const q = url.searchParams.get("q")?.trim();
-  if (q) writeSearchRow(request, env, {
+  if (q) ctx.waitUntil(Promise.resolve(writeSearchRow(request, env, {
     q,
     source: url.searchParams.get("src") === "home" ? "home" : "overlay",
     dest: url.searchParams.get("dest")?.trim() ?? "",
     results: Number(url.searchParams.get("n")) || 0,
     rank: Number(url.searchParams.get("rank")) || 0,
-  });
+  })));
   return new Response(null, { status: 204 });
 }

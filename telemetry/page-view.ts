@@ -1,7 +1,7 @@
 import { botFamily, browserEvidence, visitorKind } from "../lib/wants-markdown";
 import { visitorHash } from "../lib/visitor-hash";
 import { visitorLabel } from "../lib/visitor-label";
-import { canRecord, type TelemetryEnv, type WaitUntil } from "./types";
+import { canRecord, nowStamp, type TelemetryEnv, type WaitUntil } from "./types";
 
 /** Where `lib/view-log.ts` reports a client-side navigation. */
 export const VIEW_BEACON_PATH = "/api/view-log";
@@ -53,22 +53,25 @@ async function writeView(
   if (await seenRecently(`${ev.path}|${country}|${ev.referrer}|${kind}`, ctx)) return;
   const salt = env.VISITOR_SALT!;
   const visitor = visitorHash(`${ip}|${ua ?? ""}`, salt);
-  env.ANALYTICS!.writeDataPoint({
-    indexes: [visitor],
-    blobs: [
+  await env.DB!.prepare(
+    `INSERT OR IGNORE INTO views (ts, visitor, path, kind, country, city, bot, evidence, status, referrer, markdown, alias)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+  )
+    .bind(
+      nowStamp(),
+      visitorHash(ip, salt),
       ev.path,
       kind,
-      visitorHash(ip, salt),
       country,
-      botFamily(ua) ?? "",
       ((request as Request & { cf?: { city?: string } }).cf?.city) ?? "",
+      botFamily(ua) ?? "",
       browserEvidence(request.headers),
+      String(ev.status),
       ev.referrer,
-      kind,
+      ev.markdown ? "1" : "",
       visitorLabel(visitor),
-    ],
-    doubles: [ev.status, ev.markdown ? 1 : 0],
-  });
+    )
+    .run();
 }
 
 /**

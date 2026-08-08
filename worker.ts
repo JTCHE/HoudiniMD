@@ -1,11 +1,13 @@
 import handler, { DOQueueHandler, DOShardedTagCache, BucketCachePurge } from "./.open-next/worker.js";
 import { recordApiSearch, recordPageView, recordSearchBeacon, recordViewBeacon } from "./telemetry";
+import { pruneAnalytics } from "./telemetry/prune";
+import type { D1Database } from "./telemetry/types";
 
 export { DOQueueHandler, DOShardedTagCache, BucketCachePurge };
 
 interface Env {
   NEXT_INC_CACHE_R2_BUCKET: { get(key: string): Promise<{ body: ReadableStream } | null> };
-  ANALYTICS?: { writeDataPoint(event: { indexes?: string[]; blobs?: string[]; doubles?: number[] }): void };
+  DB?: D1Database;
   VISITOR_SALT?: string;
   [key: string]: unknown;
 }
@@ -22,7 +24,7 @@ const STATIC_ARCHIVE_MIME: Record<string, string> = {
 export default {
   async fetch(request: Request, env: Env, ctx: { waitUntil(promise: Promise<unknown>): void; passThroughOnException(): void }) {
     const url = new URL(request.url);
-    const beacon = recordSearchBeacon(request, url, env) ?? recordViewBeacon(request, url, env, ctx);
+    const beacon = recordSearchBeacon(request, url, env, ctx) ?? recordViewBeacon(request, url, env, ctx);
     if (beacon) return beacon;
 
     if (url.pathname.startsWith("/_next/static/") && request.method === "GET") {
@@ -52,5 +54,9 @@ export default {
       return patched;
     }
     return response;
+  },
+
+  async scheduled(_controller: unknown, env: Env, ctx: { waitUntil(promise: Promise<unknown>): void }) {
+    if (env.DB) ctx.waitUntil(pruneAnalytics(env.DB));
   },
 };
