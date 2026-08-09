@@ -39,8 +39,9 @@ const nextConfig: NextConfig = {
         headers: [
           {
             key: "Cache-Control",
-            value:
-              "public, max-age=0, must-revalidate, s-maxage=86400, stale-while-revalidate=2592000",
+            value: process.env.NODE_ENV === "development"
+              ? "no-store"
+              : "public, max-age=0, must-revalidate, s-maxage=86400, stale-while-revalidate=2592000",
           },
         ],
       },
