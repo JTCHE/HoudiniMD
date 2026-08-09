@@ -94,12 +94,12 @@ export async function getExcerpt(
   const md = await fetchPage(path);
   if (!md) return null;
 
-  let scope = md;
+  let scope = md.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "");
   if (heading) {
     // Take from this heading to the next one of any level.
-    const at = md.search(new RegExp(`^[^\\n]*${escapeRe(heading)}[^\\n]*$`, "im"));
+    const at = scope.search(new RegExp(`^[^\\n]*${escapeRe(heading)}[^\\n]*$`, "im"));
     if (at >= 0) {
-      const rest = md.slice(at);
+      const rest = scope.slice(at);
       const next = rest.slice(1).search(/^\s*(#{1,6}\s|<h[2-6])/m);
       scope = next > 0 ? rest.slice(0, next + 1) : rest;
     }
