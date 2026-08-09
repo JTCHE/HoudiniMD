@@ -22,7 +22,7 @@ export async function convertToMarkdown(
     import('turndown-plugin-gfm'),
   ]);
 
-  const root = parse(scraped.mainHtml);
+  const root = parse(scraped.mainHtml.replace(/click the image to zoom\.\s*/gi, ''));
   const codeLanguage = options.codeLanguage || 'vex';
 
   // Remove unwanted elements
