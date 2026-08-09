@@ -415,6 +415,10 @@ html {
   color: var(--foreground);
 }
 
+.markdown-video .vds-play-button:is([data-paused], [data-ended]) svg {
+  transform: translateX(1px);
+}
+
 .markdown-video .vds-video-layout:not([data-sm]) .vds-controls-group:last-child {
   padding-left: 8px;
 }

@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, type SVGProps } from "react";
-import { MediaPlayer, MediaProvider } from "@vidstack/react";
+import { MediaPlayer, MediaProvider, PlayButton, useMediaState } from "@vidstack/react";
 import {
   DefaultVideoLayout,
   defaultLayoutIcons,
 } from "@vidstack/react/player/layouts/default";
+import "@vidstack/react/player/styles/base.css";
 import "@vidstack/react/player/styles/default/theme.css";
 import "@vidstack/react/player/styles/default/layouts/video.css";
 
@@ -40,6 +41,18 @@ const playerIcons = {
   FullscreenButton: { Enter: ExpandIcon, Exit: CompressIcon },
 };
 
+function ClickToPlay() {
+  const paused = useMediaState("paused");
+  if (!paused) return null;
+
+  return (
+    <PlayButton
+      aria-label="Play video"
+      className="absolute inset-0 z-1 cursor-pointer bg-transparent"
+    />
+  );
+}
+
 export interface DocVideoClientProps {
   src: string;
   title?: string;
@@ -60,7 +73,7 @@ export default function DocVideoClient({ src, title, probedRatio }: DocVideoClie
 
   return (
     <div
-      className="markdown-media my-4"
+      className="markdown-media isolate my-4 bg-muted"
       style={{ aspectRatio: ratio }}
       onLoadedMetadataCapture={(e) => {
         if (probedRatio) return;
@@ -71,7 +84,7 @@ export default function DocVideoClient({ src, title, probedRatio }: DocVideoClie
       }}
     >
       <MediaPlayer
-        className="markdown-video"
+        className="markdown-video relative"
         style={{ width: "100%", height: "100%" }}
         src={src.includes("vimeo.com") ? { src, type: "video/vimeo" } : src}
         title={title || "Documentation video"}
@@ -81,6 +94,7 @@ export default function DocVideoClient({ src, title, probedRatio }: DocVideoClie
         preload="metadata"
       >
         <MediaProvider />
+        <ClickToPlay />
         <DefaultVideoLayout
           colorScheme="dark"
           icons={playerIcons}
