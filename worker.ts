@@ -2,11 +2,13 @@ import handler, { DOQueueHandler, DOShardedTagCache, BucketCachePurge } from "./
 import { recordApiSearch, recordPageView, recordSearchBeacon, recordViewBeacon } from "./telemetry";
 import { pruneAnalytics } from "./telemetry/prune";
 import type { D1Database } from "./telemetry/types";
+import { iconNeedsRefresh, iconResponse, refreshIcon, validIconPath, type IconBucket } from "./lib/icon-cache";
 
 export { DOQueueHandler, DOShardedTagCache, BucketCachePurge };
 
 interface Env {
   NEXT_INC_CACHE_R2_BUCKET: { get(key: string): Promise<{ body: ReadableStream } | null> };
+  HOUDINIMD_ICONS: IconBucket;
   DB?: D1Database;
   VISITOR_SALT?: string;
   [key: string]: unknown;
@@ -24,6 +26,29 @@ const STATIC_ARCHIVE_MIME: Record<string, string> = {
 export default {
   async fetch(request: Request, env: Env, ctx: { waitUntil(promise: Promise<unknown>): void; passThroughOnException(): void }) {
     const url = new URL(request.url);
+    if (url.pathname.startsWith("/icons/") && (request.method === "GET" || request.method === "HEAD")) {
+      const path = url.pathname.slice(7);
+      if (!validIconPath(path)) return new Response("Not found", { status: 404 });
+
+      const cached = await env.HOUDINIMD_ICONS.get(path);
+      if (cached) {
+        if (iconNeedsRefresh(cached)) {
+          ctx.waitUntil(refreshIcon(path, env.HOUDINIMD_ICONS).catch((error) => console.error(`Icon refresh failed: ${error}`)));
+        }
+        const response = iconResponse(request.method === "HEAD" ? null : cached.body, cached.httpEtag);
+        return request.headers.get("if-none-match") === cached.httpEtag
+          ? new Response(null, { status: 304, headers: response.headers })
+          : response;
+      }
+
+      try {
+        const svg = await refreshIcon(path, env.HOUDINIMD_ICONS);
+        return iconResponse(request.method === "HEAD" ? null : svg);
+      } catch (error) {
+        console.error(`Icon fill failed: ${error}`);
+        return new Response("Not found", { status: 404 });
+      }
+    }
     const beacon = recordSearchBeacon(request, url, env, ctx) ?? recordViewBeacon(request, url, env, ctx);
     if (beacon) return beacon;
 

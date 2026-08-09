@@ -10,6 +10,7 @@ import { useDebouncedSearch } from "@/lib/search/useDebouncedSearch";
 import { logSearch } from "@/lib/search/log";
 import { SearchResultList, toRows } from "@/components/search/SearchResultList";
 import ProgressLogEntry from "@/components/root/progress-log-entry/ProgressLogEntry";
+import { HOUDINI_DOCS_ROOT } from "@/lib/houdini";
 
 // Must match ProgressStage from lib/generator.ts
 type ProgressStage = "checking-cache" | "verifying" | "scraping" | "converting" | "saving" | "indexing" | "complete" | "error";
@@ -27,7 +28,7 @@ const PLACEHOLDER_EXAMPLES = [
   "Read point attribute",
   "MPM vs other solvers",
   "vex/functions/abs",
-  "https://www.sidefx.com/docs/houdini/nodes/sop/scatter.html",
+  `${HOUDINI_DOCS_ROOT}/nodes/sop/scatter.html`,
   "Karma Texture Maps",
 ];
 

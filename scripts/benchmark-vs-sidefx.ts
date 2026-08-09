@@ -1,4 +1,5 @@
 import { SITE_URL } from "../lib/site";
+import { HOUDINI_DOCS_ROOT } from "../lib/houdini";
 /**
  * Measures real page-load speed of HoudiniMD against the official SideFX docs
  * over a throttled connection, so marketing claims rest on measured numbers.
@@ -24,7 +25,7 @@ const PAGES = [
 	{ label: "VEX noise()", sidefx: "vex/functions/noise.html", houdinimd: "vex/functions/noise" },
 ];
 
-const SIDEFX = "https://www.sidefx.com/docs/houdini/";
+const SIDEFX = `${HOUDINI_DOCS_ROOT}/`;
 const HOUDINIMD = `${SITE_URL}/docs/houdini/`;
 
 type Sample = { ttfb: number; dcl: number; load: number; lcp: number; bytes: number; requests: number };

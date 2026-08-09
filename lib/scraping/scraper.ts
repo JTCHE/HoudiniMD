@@ -1,4 +1,5 @@
 import { SITE_URL } from "@/lib/site";
+import { localIconUrl } from "@/lib/icons";
 export interface DeprecationInfo {
   reason?: string;
   version?: string;
@@ -214,7 +215,7 @@ export async function scrapeSideFXPage(url: string): Promise<ScrapedContent> {
   const iconSrc = doc.querySelector(".pageicon img")?.getAttribute("src");
   if (iconSrc) {
     try {
-      icon = new URL(iconSrc, effectiveUrl).href;
+      icon = localIconUrl(new URL(iconSrc, effectiveUrl).href);
     } catch {
       icon = iconSrc;
     }

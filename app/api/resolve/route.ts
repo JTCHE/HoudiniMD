@@ -3,6 +3,7 @@ import { fetchIndexJson, fetchFromR2 } from "@/lib/r2/read";
 import { LITE_INDEX_PATH, toLiteIndex, type LiteIndexEntry } from "@/lib/r2/search-index";
 import { stageLogger } from "@/lib/perf-log";
 import Fuse from "fuse.js";
+import { SIDEFX_DOCS_ROOT } from "@/lib/houdini";
 
 // Ordered by how commonly nodes are looked up
 const CANDIDATE_PATTERNS = [
@@ -18,7 +19,6 @@ const CANDIDATE_PATTERNS = [
   (name: string) => `houdini/expressions/${name}`,
 ];
 
-const SIDEFX_BASE = "https://www.sidefx.com/docs";
 
 // Warm-isolate caches. This route only ever needs `path`+`title`, so it reads
 // the slim, pre-normalized `content/index-lite.json` (~34% the size of the
@@ -56,7 +56,7 @@ async function loadLiteEntries(mark: (stage: string) => void): Promise<LiteIndex
 
 async function probeSlug(slug: string): Promise<boolean> {
   try {
-    const res = await fetch(`${SIDEFX_BASE}/${slug}.html`, { method: "HEAD" });
+    const res = await fetch(`${SIDEFX_DOCS_ROOT}/${slug}.html`, { method: "HEAD" });
     return res.ok;
   } catch {
     return false;

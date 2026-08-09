@@ -8,11 +8,9 @@
  * stops appearing instead of rendering a dead chip.
  */
 import { fetchIndexEntries } from "@/lib/r2/read";
+import { localIconUrl } from "@/lib/icons";
+import { HOUDINI_ICON_ROOT } from "@/lib/houdini";
 import type { ChipCollection, DocChip } from "./types";
-
-// To do: move DOCS_ROOT to houdini.ts and use it as SSoT Reference
-const DOCS_ROOT = "https://www.sidefx.com/docs/houdini";
-const ICON_ROOT = `${DOCS_ROOT}/icons`;
 
 export interface QuickLink {
   title: string;
@@ -33,19 +31,19 @@ export const QUICK_LINKS: QuickLink[] = [
     title: "Nodes",
     description: "SOP · DOP · LOP · VOP",
     path: "houdini/nodes",
-    icon: `${ICON_ROOT}/NETWORKS/sop.svg`,
+    icon: localIconUrl(`${HOUDINI_ICON_ROOT}/NETWORKS/sop.svg`),
   },
   // {
   //   title: "Copernicus",
   //   description: "Real-time image manipulation",
   //   path: "houdini/copernicus",
-  //   icon: `${ICON_ROOT}/NETWORKS/cop.svg`,
+  //   icon: `${HOUDINI_ICON_ROOT}/NETWORKS/cop.svg`,
   // },
   {
     title: "VEX",
     description: "Functions & language",
     path: "houdini/vex/functions",
-    icon: `${ICON_ROOT}/SOP/attribwrangle.svg`,
+    icon: localIconUrl(`${HOUDINI_ICON_ROOT}/SOP/attribwrangle.svg`),
   },
   // {
   //   title: "Solaris",
@@ -57,7 +55,7 @@ export const QUICK_LINKS: QuickLink[] = [
     title: "Python",
     description: "HOM API reference",
     path: "houdini/hom",
-    icon: `${ICON_ROOT}/MISC/python.svg`,
+    icon: localIconUrl(`${HOUDINI_ICON_ROOT}/MISC/python.svg`),
   },
 ];
 
@@ -135,7 +133,7 @@ export async function resolveCollection(seed: number): Promise<ChipCollection | 
 
   const chips = pick.paths.reduce<DocChip[]>((out, path) => {
     const entry = byPath.get(path);
-    if (entry?.icon) out.push({ path, title: entry.title, icon: entry.icon });
+    if (entry?.icon) out.push({ path, title: entry.title, icon: localIconUrl(entry.icon) });
     return out;
   }, []);
 

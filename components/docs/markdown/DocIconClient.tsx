@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ImageDimensions } from "@/lib/images/dimensions";
+import { localIconUrl } from "@/lib/icons";
 
 /**
  * Node/tool icons (icons/ paths) are too many per page to dimension-probe over
@@ -51,7 +52,7 @@ export default function DocIconClient({
       {state !== "broken" && (
         <img
           ref={ref}
-          src={src}
+          src={localIconUrl(src)}
           alt={alt}
           width={width}
           height={height}
