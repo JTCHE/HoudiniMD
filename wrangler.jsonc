@@ -25,6 +25,10 @@
   },
   "r2_buckets": [
     {
+      "binding": "HOUDINIMD_ICONS",
+      "bucket_name": "houdinimd-icons",
+    },
+    {
       // R2 bucket used for ISR/SSG page cache.
       // Create with: npx wrangler r2 bucket create houdinimd-cache
       "binding": "NEXT_INC_CACHE_R2_BUCKET",

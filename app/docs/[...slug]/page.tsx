@@ -28,6 +28,7 @@ import { slugExistsOnSideFX } from "@/lib/generator";
 import GeneratingPage from "@/components/docs/GeneratingPage";
 import type { SearchIndexEntry } from "@/lib/r2/search-index";
 import { SITE_URL } from "@/lib/site";
+import { localIconUrl, localizeIconUrls } from "@/lib/icons";
 
 export const revalidate = 2592000;
 export const maxDuration = 60;
@@ -71,7 +72,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     if (data.title) {
       title = data.title;
       nodeType = data.nodeType;
-      icon = data.icon;
+      icon = data.icon ? localIconUrl(data.icon) : undefined;
     } else if (h1Match) {
       title = h1Match[1].trim();
     }
@@ -151,7 +152,7 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
   }
 
   const { content: rawContent, data: frontmatter } = parseFrontmatter(rawMarkdown);
-  const pageIcon = frontmatter.icon;
+  const pageIcon = frontmatter.icon ? localIconUrl(frontmatter.icon) : undefined;
   const pageBanner = frontmatter.banner;
   const since = frontmatter.since;
   // The VEX signature transform is scoped by slug rather than by sniffing the
@@ -213,7 +214,7 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
     summary = decodeEntities(summaryMatch[1].trim());
     bodyContent = bodyContent.slice(summaryMatch[0].length);
   }
-  bodyContent = legacyWarningMarkdown(slugPath) + bodyContent;
+  bodyContent = localizeIconUrls(legacyWarningMarkdown(slugPath) + bodyContent);
   const mdSummary = summary ?? bodyContent.match(/^(?!#|>)[^\n]{20,}/m)?.[0]?.trim();
   const canonical = `${SITE_URL}/docs/${slugPath}`;
 

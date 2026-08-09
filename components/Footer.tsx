@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils";
 import Link from "next/link";
+import { SIDEFX_DOCS_ROOT } from "@/lib/houdini";
 
 const DONATION_URL = "https://github.com/sponsors/JTCHE?frequency=one-time";
 
@@ -37,7 +38,7 @@ export function Footer({ className }: FooterProps) {
             ∙
           </span>
           <a
-            href="https://www.sidefx.com/docs/"
+            href={SIDEFX_DOCS_ROOT}
             target="_blank"
             rel="noopener noreferrer"
             className="text-foreground/80 hover:text-foreground transition-colors underline-offset-4 hover:underline"

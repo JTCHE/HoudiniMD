@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { tokenize } from "@/lib/search/bm25";
+import { localIconUrl } from "@/lib/icons";
 
 /**
  * A single result row (icon + title + category) shared by the docs search
@@ -198,7 +199,7 @@ export function SearchResultRow({
             {!loaded && <span className="absolute inset-0 rounded-sm bg-muted-foreground/20 animate-pulse" aria-hidden="true" />}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={icon}
+              src={localIconUrl(icon!)}
               alt=""
               aria-hidden="true"
               className={`size-5 shrink-0 select-none transition-opacity ${loaded ? "opacity-100" : "opacity-0"}`}

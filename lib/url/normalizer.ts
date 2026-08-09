@@ -1,4 +1,4 @@
-const SIDEFX_DOCS_BASE = "https://www.sidefx.com/docs";
+import { SIDEFX_DOCS_ROOT } from "@/lib/houdini";
 const HOUDINIMD_BASE = "";
 
 /**
@@ -22,17 +22,17 @@ export function normalizeInput(input: string): string {
   // Bare domain without protocol: "sidefx.com/docs/..." or "www.sidefx.com/docs/..."
   const domainMatch = trimmed.match(/^(?:www\.)?sidefx\.com\/docs\/(.+)/i);
   if (domainMatch) {
-    return `${SIDEFX_DOCS_BASE}/${domainMatch[1]}`;
+    return `${SIDEFX_DOCS_ROOT}/${domainMatch[1]}`;
   }
 
   // Absolute path starting with /docs/...
   if (trimmed.startsWith("/docs/")) {
-    return `${SIDEFX_DOCS_BASE}/${trimmed.slice(6)}`;
+    return `${SIDEFX_DOCS_ROOT}/${trimmed.slice(6)}`;
   }
 
   // Bare path like /nodes/sop/carve — assume it lives under houdini/
   if (trimmed.startsWith("/")) {
-    return `${SIDEFX_DOCS_BASE}/houdini${trimmed}`;
+    return `${SIDEFX_DOCS_ROOT}/houdini${trimmed}`;
   }
 
   return trimmed;
@@ -107,5 +107,5 @@ export function convertToHoudiniMDUrl(relativeUrl: string, sourceUrl: string): s
  */
 export function toSideFXUrl(slug: string): string {
   const cleanSlug = slug.split("#")[0];
-  return `https://www.sidefx.com/docs/${cleanSlug}`;
+  return `${SIDEFX_DOCS_ROOT}/${cleanSlug}`;
 }

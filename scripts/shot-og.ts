@@ -9,6 +9,7 @@
  */
 import { chromium } from "playwright";
 import { mkdir } from "node:fs/promises";
+import { HOUDINI_ICON_ROOT } from "../lib/houdini";
 
 const outDir = process.argv[2] ?? "shots/og";
 const base = process.env.SHOT_BASE ?? "http://localhost:3000";
@@ -21,7 +22,7 @@ const SAMPLES: [string, Record<string, string>][] = [
       title: "Box",
       type: "geometry node",
       summary: "Creates a cube or six-sided rectangular box.",
-      icon: "https://www.sidefx.com/docs/houdini/icons/SOP/box.svg",
+      icon: `${HOUDINI_ICON_ROOT}/SOP/box.svg`,
     },
   ],
   [
@@ -48,7 +49,7 @@ const SAMPLES: [string, Record<string, string>][] = [
       title: "Bound",
       type: "geometry node",
       summary: "Creates a bounding box, sphere, or rectangle for the input geometry.",
-      icon: "https://www.sidefx.com/docs/houdini/icons/SOP/bound.svg",
+      icon: `${HOUDINI_ICON_ROOT}/SOP/bound.svg`,
     },
   ],
   [
@@ -58,7 +59,7 @@ const SAMPLES: [string, Record<string, string>][] = [
       title: "Agent Transform Group",
       type: "geometry node",
       summary: "Adds new transform groups to agent primitives.",
-      icon: "https://www.sidefx.com/docs/houdini/icons/SOP/agenttransformgroup.svg",
+      icon: `${HOUDINI_ICON_ROOT}/SOP/agenttransformgroup.svg`,
     },
   ],
   [
@@ -77,7 +78,7 @@ const SAMPLES: [string, Record<string, string>][] = [
       title: "Attribute Delete",
       type: "TOP node",
       summary: "Removes attributes from work items.",
-      icon: "https://www.sidefx.com/docs/houdini/icons/SOP/attribdelete.svg",
+      icon: `${HOUDINI_ICON_ROOT}/SOP/attribdelete.svg`,
     },
   ],
   [
@@ -87,7 +88,7 @@ const SAMPLES: [string, Record<string, string>][] = [
       title: "Component Geometry Variants Setup",
       type: "lop node",
       summary: "Creates geometry variants for a component.",
-      icon: "https://www.sidefx.com/docs/houdini/icons/LOP/componentgeometry.svg",
+      icon: `${HOUDINI_ICON_ROOT}/LOP/componentgeometry.svg`,
     },
   ],
   [
@@ -97,7 +98,7 @@ const SAMPLES: [string, Record<string, string>][] = [
       title: "Add",
       type: "vop node",
       summary: "Adds the values of the inputs.",
-      icon: "https://www.sidefx.com/docs/houdini/icons/VOP/add.svg",
+      icon: `${HOUDINI_ICON_ROOT}/VOP/add.svg`,
     },
   ],
 ];

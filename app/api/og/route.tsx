@@ -104,7 +104,7 @@ export async function GET(req: NextRequest) {
  */
 async function resolveIcon(icon: string): Promise<string | undefined> {
   try {
-    const res = await fetch(icon);
+    const res = await fetch(icon.startsWith("/") ? `${SITE_URL}${icon}` : icon);
     const type = res.headers.get("content-type") ?? "";
     if (!res.ok || !(type.includes("svg") || type.startsWith("image/"))) return undefined;
     if (!type.includes("svg")) return icon;

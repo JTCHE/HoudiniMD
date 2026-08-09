@@ -78,16 +78,7 @@ async function CarouselSection() {
 export default function Home() {
   return (
     <main className="relative flex min-h-dvh flex-col overflow-hidden">
-      {/* Icons are plain <img src> pointing at sidefx.com, a third-party
-          origin the browser has no reason to know about until it parses the
-          tag deep in the tree. Preconnecting pays the DNS/TLS/TCP cost up
-          front, and preloading the four quick-link icons (known statically,
-          unlike the carousel's) starts their fetch in parallel with the rest
-          of the page. */}
-      <link
-        rel="preconnect"
-        href="https://www.sidefx.com"
-      />
+      {/* Fetch the fixed quick-link icons with the first page resources. */}
       {QUICK_LINKS.map((link) => (
         <link
           key={link.icon}

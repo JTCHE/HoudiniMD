@@ -4,6 +4,7 @@ import { convertToMarkdown, detectLanguage } from "@/lib/markdown";
 import { fetchFromR2, saveToR2, updateSearchIndex } from "@/lib/r2";
 import { withLock } from "@/lib/lock-manager";
 import { toSideFXUrl } from "@/lib/url";
+import { SIDEFX_DOCS_ROOT } from "@/lib/houdini";
 
 export type ProgressStage =
   | "checking-cache"
@@ -46,8 +47,8 @@ export async function resolveSideFXUrl(slug: string): Promise<string> {
     const slugBase = slug.split("#")[0];
     // ponytail: slug ending /index means the file IS index.html, not a subdirectory
     const fallbackUrl = slugBase.endsWith("/index")
-      ? `https://www.sidefx.com/docs/${slugBase}.html`
-      : `https://www.sidefx.com/docs/${slugBase}/index.html`;
+      ? `${SIDEFX_DOCS_ROOT}/${slugBase}.html`
+      : `${SIDEFX_DOCS_ROOT}/${slugBase}/index.html`;
     await checkPageExists(fallbackUrl); // re-throws PageNotFoundError if also missing
     return fallbackUrl;
   }

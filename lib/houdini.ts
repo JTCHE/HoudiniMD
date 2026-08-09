@@ -1,3 +1,8 @@
+export const SIDEFX_ORIGIN = "https://www.sidefx.com";
+export const SIDEFX_DOCS_ROOT = `${SIDEFX_ORIGIN}/docs`;
+export const HOUDINI_DOCS_ROOT = `${SIDEFX_DOCS_ROOT}/houdini`;
+export const HOUDINI_ICON_ROOT = `${HOUDINI_DOCS_ROOT}/icons`;
+
 /**
  * The latest/current major Houdini version.
  *

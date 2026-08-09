@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import { SITE_URL } from "../lib/site";
+import { SIDEFX_ORIGIN } from "../lib/houdini";
 /**
  * Crawl the SideFX docs site and build a JSON index of every reachable page.
  *

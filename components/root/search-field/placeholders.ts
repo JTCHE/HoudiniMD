@@ -1,3 +1,5 @@
+import { HOUDINI_DOCS_ROOT } from "@/lib/houdini";
+
 /**
  * The placeholder rotation for the search field — the single source of truth
  * for what the field suggests. The first entry tells the reader what the field
@@ -21,7 +23,7 @@ export const PLACEHOLDER_EXAMPLES: PlaceholderExample[] = [
   { wide: "Read point attribute" },
   { wide: "MPM vs other solvers" },
   { wide: "vex/functions/abs" },
-  { wide: "https://www.sidefx.com/docs/houdini/nodes/sop/scatter.html", narrow: "sidefx.com/…/sop/scatter" },
+  { wide: `${HOUDINI_DOCS_ROOT}/nodes/sop/scatter.html`, narrow: "sidefx.com/…/sop/scatter" },
   { wide: "Karma Texture Maps" },
   { wide: "Attribute wrangle" },
   { wide: "Copernicus" },

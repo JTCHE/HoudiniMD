@@ -12,6 +12,7 @@ import { GetObjectCommand, PutObjectCommand, ListObjectsV2Command } from "@aws-s
 import { scrapeSideFXPage, PageNotFoundError } from "../../lib/scraping";
 import { convertToMarkdown, detectLanguage } from "../../lib/markdown";
 import { toSideFXUrl } from "../../lib/url";
+import { SIDEFX_DOCS_ROOT } from "../../lib/houdini";
 import { saveToR2 } from "../../lib/r2";
 import { getConfig, getS3Client } from "../../lib/r2/config";
 import { putLiteIndex, type SearchIndexEntry } from "../../lib/r2/search-index";
@@ -149,7 +150,7 @@ async function regenerateOnce(
     if (err instanceof PageNotFoundError) {
       // Try the /index.html variant — same fallback the generator uses
       try {
-        scraped = await scrapeSideFXPage(`https://www.sidefx.com/docs/${slug}/index.html`);
+        scraped = await scrapeSideFXPage(`${SIDEFX_DOCS_ROOT}/${slug}/index.html`);
       } catch (err2) {
         if (err2 instanceof PageNotFoundError) return { status: "404" };
         throw err2;
