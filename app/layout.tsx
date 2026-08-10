@@ -17,7 +17,7 @@ export const viewport: Viewport = {
 const websiteInfo = {
   title: "HoudiniMD - Houdini Documentation for AI",
   description:
-    "LLM-optimized documentation for SideFX Houdini. VEX functions, Python API, nodes, and more in clean markdown following the llms.txt standard.",
+    "A clean Markdown mirror of the Houdini docs. Built for Humans to read, and Agents to understand. VEX functions, Python API, nodes, and more in clean markdown following the llms.txt standard.",
 };
 
 export const metadata: Metadata = {
