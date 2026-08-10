@@ -8,7 +8,7 @@
 <div align="center">
   <a target="_blank" href="https://houdinimd.com"><img src="public/badges/website.svg" height="42" alt="Open HoudiniMD"></a>
   <a target="_blank" href="https://github.com/JTCHE/houdini-mcp"><img src="public/badges/mcp.svg" height="42" alt="Houdini MCP"></a>
-  <a target="_blank" href="https://ko-fi.com/A0R223KA7G"><img src="public/badges/kofi.svg" height="42" alt="Buy me a coffee on Ko-fi"></a>
+  <a target="_blank" href="https://github.com/sponsors/JTCHE?frequency=one-time"><img src="public/badges/sponsor.svg" height="42" alt="Sponsor on GitHub"></a>
 </div>
 <br>
 
@@ -29,4 +29,8 @@ It follows the [llms.txt](https://llmstxt.org) standard. AI agents are automatic
 
 ## Credits & license
 
-Built by [John C](https://jchd.me). The documentation content is mirrored from SideFX and remains their intellectual property and © SideFX. All rights to the actual docs content belong to them. HoudiniMD is an unofficial, independent project and is not affiliated with or endorsed by SideFX.
+Built by [John C](https://jchd.me). HoudiniMD is an unofficial, independent project and is not affiliated with or endorsed by SideFX.
+
+**The code in this repository** is released under the [MIT License](LICENSE).
+
+**The documentation content is not.** Every Houdini doc page is mirrored from SideFX, remains their intellectual property, and stays © SideFX. No documentation content is stored in this repository, and the MIT License above gives you no rights over it. HoudiniMD stands on the work of the SideFX documentation team; the content is theirs, only the presentation is mine.
