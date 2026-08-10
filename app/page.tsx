@@ -8,6 +8,7 @@ import { SearchField } from "@/components/root/search-field/SearchField";
 import { Carousel } from "@/components/root/carousel/Carousel";
 import { FeatureCards } from "@/components/root/feature-cards/FeatureCards";
 import { QUICK_LINKS, resolveCollection } from "@/lib/landing/collections";
+import { ViewRecorder } from "@/components/ViewRecorder";
 
 /**
  * The landing page is static except for one thing: which curated collection the
@@ -87,6 +88,11 @@ export default function Home() {
           href={link.icon}
         />
       ))}
+
+      {/* The landing page is counted like any doc page, and a reader who comes
+          back to it mid-session arrives out of the router cache — so it has to
+          report itself. Renders nothing. */}
+      <ViewRecorder path="/" />
 
       <AsciiBackground />
 
