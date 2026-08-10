@@ -1,6 +1,16 @@
 import type { HTMLElement } from 'node-html-parser';
 import { convertToHoudiniMDUrl } from '../url';
 
+function iconMarkdown(link: HTMLElement, sourceUrl: string): string {
+  const src = link.querySelector('img')?.getAttribute('src');
+  if (!src) return '';
+  try {
+    return `![](${new URL(src, sourceUrl).href})`;
+  } catch {
+    return `![](${src})`;
+  }
+}
+
 /**
  * Extract "See Also" links from postmeta table
  */
@@ -18,7 +28,7 @@ export function extractSeeAlso(root: HTMLElement, sourceUrl: string): string | n
     const text = link.textContent?.trim() || '';
     if (text && href) {
       const houdinimdUrl = convertToHoudiniMDUrl(href, sourceUrl);
-      lines.push(`- [${text}](${houdinimdUrl})`);
+      lines.push(`- [${iconMarkdown(link, sourceUrl)}${text}](${houdinimdUrl})`);
     }
   });
 

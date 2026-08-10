@@ -22,8 +22,9 @@ import { legacyWarningMarkdown } from "@/lib/markdown/legacy-warning";
 import { formatPageTitle } from "@/lib/markdown/page-title";
 import { remarkCallouts } from "@/lib/markdown/remark-callouts";
 import { remarkVex } from "@/lib/markdown/remark-vex";
+import { addSeeAlsoIcons, normalizeIconLinks } from "@/lib/markdown/utils";
 import { rehypeCards } from "@/lib/markdown/rehype-cards";
-import { fetchFromR2 } from "@/lib/r2/read";
+import { fetchFromR2, fetchIndexEntries } from "@/lib/r2/read";
 import { slugExistsOnSideFX } from "@/lib/generator";
 import GeneratingPage from "@/components/docs/GeneratingPage";
 import type { SearchIndexEntry } from "@/lib/r2/search-index";
@@ -214,7 +215,13 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
     summary = decodeEntities(summaryMatch[1].trim());
     bodyContent = bodyContent.slice(summaryMatch[0].length);
   }
-  bodyContent = localizeIconUrls(legacyWarningMarkdown(slugPath) + bodyContent);
+  bodyContent = legacyWarningMarkdown(slugPath) + bodyContent;
+  if (/^## See Also\s*$/m.test(bodyContent)) {
+    const entries = await fetchIndexEntries().catch(() => null);
+    const iconByPath = new Map(entries?.flatMap(({ path, icon }) => icon ? [[path, icon] as const] : []) ?? []);
+    bodyContent = addSeeAlsoIcons(bodyContent, iconByPath);
+  }
+  bodyContent = normalizeIconLinks(localizeIconUrls(bodyContent));
   const mdSummary = summary ?? bodyContent.match(/^(?!#|>)[^\n]{20,}/m)?.[0]?.trim();
   const canonical = `${SITE_URL}/docs/${slugPath}`;
 

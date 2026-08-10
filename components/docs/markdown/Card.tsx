@@ -25,7 +25,8 @@ export function Card({ node, children, ...props }: React.ComponentProps<"li"> & 
   const paragraphs = node.children?.filter((child) => child.tagName === "p") ?? [];
   const [title, summary] = paragraphs.length ? paragraphs : [node];
   const link = title?.children?.find((child) => child.tagName === "a");
-  const icon = title?.children?.find((child) => child.tagName === "img");
+  const icon = link?.children?.find((child) => child.tagName === "img")
+    ?? title?.children?.find((child) => child.tagName === "img");
   const href = typeof link?.properties?.href === "string" ? link.properties.href : undefined;
   const slug = href?.startsWith("/docs/") ? href.slice(6) : undefined;
   const summaryText = summary && text(summary);
@@ -33,8 +34,14 @@ export function Card({ node, children, ...props }: React.ComponentProps<"li"> & 
   return (
     <li {...props}>
       <p>
-        {typeof icon?.properties?.src === "string" && <DocIconClient src={icon.properties.src} alt="" />}
-        {href ? <DocLink href={href} underline={false}>{text(link!)}</DocLink> : text(title!)}
+        {href ? (
+          <DocLink href={href} underline={false}>
+            {typeof icon?.properties?.src === "string" && <DocIconClient src={icon.properties.src} alt="" />}
+            {text(link!)}
+          </DocLink>
+        ) : (
+          <>{typeof icon?.properties?.src === "string" && <DocIconClient src={icon.properties.src} alt="" />}{text(title!)}</>
+        )}
       </p>
       {summaryText && /[a-z]/i.test(summaryText) ? <p>{summaryText}</p> : slug && <Suspense fallback={<CardCaptionSkeleton />}><CardCaption slug={slug} /></Suspense>}
     </li>
