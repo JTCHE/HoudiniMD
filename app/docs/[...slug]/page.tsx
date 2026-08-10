@@ -10,6 +10,7 @@ import { PageHeader } from "@/components/docs/PageHeader";
 import { PrintPagination } from "@/components/docs/PrintPagination";
 import { TableOfContents } from "@/components/docs/TableOfContents";
 import { VisitRecorder } from "@/components/docs/VisitRecorder";
+import { ViewRecorder } from "@/components/ViewRecorder";
 import { markdownComponents } from "@/components/docs/markdown";
 import { createImageComponent } from "@/components/docs/markdown/MarkdownImage";
 import { createVideoComponent } from "@/components/docs/markdown/MarkdownVideo";
@@ -256,7 +257,8 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
       <PrintPagination />
       {/* Reports the read: to analytics, which cannot see a navigation served
           from the router cache, and to the landing page's "recently visited"
-          row. Renders nothing. */}
+          row. Both render nothing. */}
+      <ViewRecorder path={`/docs/${slugPath}`} />
       <VisitRecorder chip={{ path: slugPath, title: headerName, icon: pageIcon ?? "" }} />
       <Script
         id="article-jsonld"
