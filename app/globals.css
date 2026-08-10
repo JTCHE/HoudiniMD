@@ -1080,7 +1080,7 @@ span.doc-icon {
   height: 1em !important;
   max-width: none !important;
   vertical-align: -0.15em;
-  margin: 0 0.5em 0 0;
+  margin: 0 0.18em 0 0;
 }
 
 span.doc-icon > img {
@@ -1138,7 +1138,7 @@ span.doc-icon > img {
 }
 /* Stretch the title link over the whole card (a "stretched link"), so the
    icon and summary text are clickable too, not just the title. DocLink wraps
-   every <a> in <span class="relative inline-block">; turn that positioning
+   every <a> in a positioned <span>; turn that positioning
    off so the card <li> above (position: relative) becomes the ::after
    overlay's containing block instead of that small inline span. */
 .shelf-grid li > p:first-child > span {

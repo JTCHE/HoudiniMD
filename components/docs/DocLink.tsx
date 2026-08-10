@@ -132,7 +132,7 @@ export default function DocLink({
   }
 
   return (
-    <span className={cn("relative", fullWidth ? "block w-full" : "inline-block")}>
+    <span className={cn("relative", fullWidth ? "block w-full" : "inline")}>
       {/* prefetch={false}: Link's own built-in viewport prefetch bursts dozens of RSC requests
           at once on a link-dense page, which cascades isolate teardowns on this CPU-capped
           Worker. Prefetch is manual instead, gated on hover/focus (show()) — real intent only. */}

@@ -10,11 +10,49 @@ export function detectLanguage(slug: string): CodeLanguage {
   return 'vex';
 }
 
+export function normalizeIconLinks(markdown: string): string {
+  return markdown
+    // SideFX can emit a section icon beside a link that already has a page
+    // icon. Keep the page icon inside the link.
+    .replace(
+      /!\[[^\]]*\]\([^)\s]*\/icons\/[^)\s]+\)\s*\[!\[([^\]]*)\]\(([^)\s]*\/icons\/[^)\s]+)\)\s*([^\]]*)\]\(([^)\s]+)\)/g,
+      '[![$1]($2)$3]($4)',
+    )
+    // Other SideFX templates put the only icon beside the link. Move it into
+    // the link so every page icon has the same clickable structure.
+    .replace(
+      /!\[([^\]]*)\]\(([^)\s]*\/icons\/[^)\s]+)\)\s*\[(?!\!)([^\]]+)\]\(([^)\s]+)\)/g,
+      '[![$1]($2)$3]($4)',
+    );
+}
+
+export function addSeeAlsoIcons(
+  markdown: string,
+  iconByPath: ReadonlyMap<string, string>,
+): string {
+  const heading = markdown.match(/^## See Also\s*$/m);
+  if (heading?.index === undefined) return markdown;
+
+  const sectionStart = heading.index + heading[0].length;
+  const rest = markdown.slice(sectionStart);
+  const nextHeading = rest.match(/^## /m);
+  const sectionEnd = nextHeading?.index ?? rest.length;
+  const section = rest.slice(0, sectionEnd).replace(
+    /(?<!!)\[([^\]]+)\]\(\/docs\/([^\s)#?]+)([^)]*)\)/g,
+    (link, text: string, path: string, suffix: string) => {
+      const icon = iconByPath.get(path);
+      return icon ? `[![](${icon})${text}](/docs/${path}${suffix})` : link;
+    },
+  );
+
+  return markdown.slice(0, sectionStart) + section + rest.slice(sectionEnd);
+}
+
 /**
  * Clean up generated markdown
  */
 export function cleanMarkdown(markdown: string): string {
-  return markdown
+  return normalizeIconLinks(markdown)
     .replace(/\n{3,}/g, '\n\n')
     .replace(/&nbsp;/g, ' ')
     .replace(/&lt;/g, '<')
