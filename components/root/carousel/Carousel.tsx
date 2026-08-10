@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import type { ChipCollection, DocChip } from "@/lib/landing/types";
 import { clearVisits, readVisits } from "@/lib/landing/recent-visits";
@@ -14,14 +14,16 @@ import { ChipLink } from "./ChipLink";
  * who has read pages before gets those instead, still and scrollable, because
  * a list they built themselves is a destination rather than an advert.
  *
- * Which face shows depends on local storage, which the server cannot see, so
- * the first paint is always the still one and the effect below swaps after
- * mount. Both faces render the same `ChipLink`, so the row is the same height
- * either way and the swap moves nothing on the page.
+ * Which face shows depends on local storage, which the server cannot see. The
+ * layout effect below resolves that choice and the random curated start before
+ * React reveals the row. The server copy reserves the same height but stays
+ * hidden, so it cannot flash the deterministic order while hydration waits.
  */
 
 /** Drift speed of the looping run, in pixels per second. */
 const CRUISE_PIXELS_PER_SECOND = 26;
+/** Amount of the first chip tucked under the left fade on the first frame. */
+const INITIAL_CLIP_PIXELS = 64;
 /**
  * Time constants of the two eases. Speed is the slower of the two, so the row
  * settles under the pointer instead of stopping dead; the reveal is quicker,
@@ -51,11 +53,12 @@ interface EdgeOverflow {
 const NO_OVERFLOW: EdgeOverflow = { left: false, right: false };
 
 export function Carousel({ collection, className }: { collection: ChipCollection | null; className?: string }) {
-  // `null` until the first effect has run. It doubles as the mounted flag, so
+  // `null` until the first layout effect has run. It doubles as the mounted flag, so
   // nothing reads local storage or the motion preference during render.
   const [visits, setVisits] = useState<DocChip[] | null>(null);
   const [reducedMotion, setReducedMotion] = useState(false);
   const [overflow, setOverflow] = useState<EdgeOverflow>(NO_OVERFLOW);
+  const [startIndex, setStartIndex] = useState(0);
 
   const viewportRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
@@ -67,6 +70,7 @@ export function Carousel({ collection, className }: { collection: ChipCollection
   const pitchRef = useRef(0);
   const offsetRef = useRef(0);
   const speedRef = useRef(0);
+  const initialOffsetSetRef = useRef(false);
   const hoveredRef = useRef(false);
   const focusedRef = useRef(false);
   /** Offset that brings the focused chip inside the viewport, or `null`. */
@@ -77,23 +81,44 @@ export function Carousel({ collection, className }: { collection: ChipCollection
   const revealRef = useRef<number | null>(null);
 
   const showsVisits = visits !== null && visits.length > 0;
-  const chips = useMemo(() => (showsVisits ? visits : (collection?.chips ?? [])), [showsVisits, visits, collection]);
+  const collectionLength = collection?.chips.length ?? 0;
+  const chips = useMemo(() => {
+    const source = showsVisits ? visits : (collection?.chips ?? []);
+    if (showsVisits || startIndex === 0) return source;
+    return [...source.slice(startIndex), ...source.slice(0, startIndex)];
+  }, [showsVisits, visits, collection, startIndex]);
   const label = showsVisits ? "Recently visited" : (collection?.label ?? "");
   const autoScrolls = visits !== null && !showsVisits && !reducedMotion && chips.length > 0;
   // A second copy only earns its place once the first one runs off the edge.
   const loops = autoScrolls && overflow.right;
 
-  // Swap to the reader's own history, and honour the motion preference. Both
-  // are client facts, so both land after the first paint.
-  useEffect(() => {
-    setVisits(readVisits());
+  // Resolve all client-only choices before paint. This keeps hydration markup
+  // deterministic without exposing the server's index-zero order for a frame.
+  useLayoutEffect(() => {
+    const storedVisits = readVisits();
+    setVisits(storedVisits);
+    if (storedVisits.length === 0 && collectionLength) {
+      setStartIndex(Math.floor(Math.random() * collectionLength));
+    }
 
     const query = window.matchMedia("(prefers-reduced-motion: reduce)");
     setReducedMotion(query.matches);
     const onChange = (event: MediaQueryListEvent) => setReducedMotion(event.matches);
     query.addEventListener("change", onChange);
     return () => query.removeEventListener("change", onChange);
-  }, []);
+  }, [collectionLength]);
+
+  // Start between chips rather than on the page axis. The clipped leading chip
+  // makes the row's horizontal movement clear before it has drifted a pixel.
+  useLayoutEffect(() => {
+    const track = trackRef.current;
+    if (!autoScrolls || !track || initialOffsetSetRef.current) return;
+
+    initialOffsetSetRef.current = true;
+    offsetRef.current = INITIAL_CLIP_PIXELS;
+    track.style.transform = `translate3d(${-INITIAL_CLIP_PIXELS}px, 0, 0)`;
+    if (leftFadeRef.current) leftFadeRef.current.style.opacity = "1";
+  }, [autoScrolls]);
 
   // Measure what is really clipped. An edge gradient that lies is worse than no
   // gradient, so nothing here is inferred from the mode alone.
@@ -160,8 +185,6 @@ export function Carousel({ collection, className }: { collection: ChipCollection
         }
 
         offsetRef.current = ((offsetRef.current % pitch) + pitch) % pitch;
-      } else {
-        offsetRef.current = 0;
       }
 
       track.style.transform = `translate3d(${-offsetRef.current}px, 0, 0)`;
@@ -178,6 +201,7 @@ export function Carousel({ collection, className }: { collection: ChipCollection
       cancelAnimationFrame(frame);
       offsetRef.current = 0;
       speedRef.current = 0;
+      initialOffsetSetRef.current = false;
       revealRef.current = null;
       track.style.transform = "";
       if (leftFadeRef.current) leftFadeRef.current.style.opacity = "";
@@ -213,7 +237,7 @@ export function Carousel({ collection, className }: { collection: ChipCollection
 
   function handleWheel(event: React.WheelEvent<HTMLDivElement>) {
     const viewport = viewportRef.current;
-    const distance = -(event.deltaX || event.deltaY);
+    const distance = (event.deltaX || event.deltaY);
     if (!viewport || distance === 0) return;
 
     if (autoScrolls) {
@@ -306,6 +330,7 @@ export function Carousel({ collection, className }: { collection: ChipCollection
           }}
           className={cn(
             "px-ms",
+            visits === null && "invisible",
             // The edge gradients are the overflow affordance. A native bar
             // under the chips would say the same thing and change the row
             // height between the two modes.
