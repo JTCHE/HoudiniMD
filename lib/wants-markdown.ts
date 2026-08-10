@@ -123,3 +123,32 @@ export function visitorKind(
   if (!BROWSER_RE.test(ua) && !IOS_WEBVIEW_RE.test(ua)) return 'bot';
   return !headers || browserEvidence(headers) !== NO_EVIDENCE ? 'human' : 'bot';
 }
+
+export type DeviceKind = 'mobile' | 'desktop';
+
+// A phone or a small touch UA names itself in one of these tokens. Checked
+// against DeviceAtlas's UA sample set (deviceatlas.com/blog/list-of-user-agent-strings)
+// across phones, tablets, desktop OSes, TVs, consoles and bots: every phone,
+// Android tablet and iPad in the set matches, every plain desktop browser
+// does not. Two false positives surfaced there, both accepted: a Fire TV and
+// an old Xbox One, which spoof "Android"/"Windows Phone" in their platform
+// string — living-room devices this docs site does not expect traffic from.
+// iPadOS 13+ is the deliberate gap in the other direction: Safari's default
+// UA on iPad is a plain Macintosh string with no token here and no
+// `sec-ch-ua-mobile` (Chromium-only), so a real iPad browsing in Safari reads
+// as desktop. That is the same gap every UA-based device split has; it is not
+// worth a client-side beacon to close for one device family.
+const MOBILE_UA_RE = /\b(Mobile|Android|iPhone|iPod|IEMobile|Windows Phone|BlackBerry|Opera Mini)\b/;
+
+/**
+ * Mobile vs desktop, for the Devices rollup. Chromium sends `Sec-CH-UA-Mobile`
+ * on every request and it survives a UA override where the UA string itself
+ * would not, so it is checked first; Safari and Firefox never send it and fall
+ * back to the UA token.
+ */
+export function deviceKind(ua: string | null, headers?: HeaderBag | null): DeviceKind {
+  const chMobile = headers?.get('sec-ch-ua-mobile');
+  if (chMobile === '?1') return 'mobile';
+  if (chMobile === '?0') return 'desktop';
+  return ua && MOBILE_UA_RE.test(ua) ? 'mobile' : 'desktop';
+}
