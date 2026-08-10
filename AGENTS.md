@@ -18,7 +18,13 @@ Available at @README.md
 - Avoid single letter variable names wherever possible. Prefer self-explanatory ones. Example: `positionX` instead of `pX`. `transformX` instead of `tX`
 - Unless explicitely mentionned, test suites and smoke tests should never be comitted to the work tree, since they are often one-offs, and do not contribute later to the codebase.
 
-## Visual verification & Testing in WebKit
+## Front-End
+
+Design language :
+
+1. Components should always have a negative margin equal to their padding, so that every main visual element from each component are aligned on the same vertical axis throughout the page.
+
+### Visual verification & Testing in WebKit
 
 For UI changes, always verify your changes using the `Claude Browser` MCP or a similar Browser MCP, not headless CLIs like Curl.
 
@@ -38,6 +44,7 @@ node scripts/webkit-shot.ts houdini/nodes/dop/pyrosolver
 
 # Deploys
 
+Never run **`bun run deploy`** locally.
 Deploy by committing and pushing to GitHub. The Cloudflare app is installed in
 the repo, so a push to `main` runs `bun run deploy` in Cloudflare CI.
 
@@ -57,4 +64,5 @@ writes to R2.
 When committing/pushing features to Git, and when an issue/feature has explicitely been marked by the user as complete, please verify inside the Obsidian base that the "Status" of the corresponding spec has been set to "Closed".
 
 ## Location
+
 Obsidian vault : <value of OBSIDIAN_VAULT_PATH in @.env.obsidian>/vault/side projects/Houdini/HoudiniMD/HoudiniMD — Issue Tracker.base
