@@ -34,7 +34,7 @@ export function PageHeader({
 }: PageHeaderProps) {
   return (
     <header className="not-prose border-b border-border pb-3 mb-6">
-      {banner && bannerDimensions && (
+      {banner && bannerDimensions.width > bannerDimensions.height && (
         <DocImageClient
           src={banner}
           alt=""
