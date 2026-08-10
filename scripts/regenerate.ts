@@ -1,5 +1,4 @@
 #!/usr/bin/env bun
-import { SITE_URL as BASE_URL } from "../lib/site";
 /**
  * Regenerate markdown pages into the R2 cache.
  *
@@ -24,7 +23,7 @@ import { SITE_URL as BASE_URL } from "../lib/site";
  *   --dry-run              List what would be regenerated, don't fetch/save
  *   --verbose              One line per page (default: live progress on a single line)
  *   --skip-warm             Don't pre-render regenerated pages into the ISR cache
- *   --skip-indexnow        Don't notify IndexNow/Bing about the pages just regenerated
+ *   --skip-indexnow        Don't notify IndexNow about the pages just regenerated
  *
  * Examples:
  *   bun scripts/regenerate.ts --all --concurrency 6
@@ -45,7 +44,7 @@ import {
 import { parseArgs, getNumber, c } from "./lib/cli";
 import { CACHE_INVALIDATE_BEFORE } from "../lib/r2/read";
 import { extractSlugFromUrl } from "../lib/url";
-import { submitToIndexNow } from "../lib/indexnow";
+import { INDEXNOW_SITE_URL, submitToIndexNow } from "../lib/indexnow";
 
 const WARM_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 
@@ -58,7 +57,7 @@ async function warmCache(slugs: string[], concurrency: number) {
     while (cursor < slugs.length) {
       const slug = slugs[cursor++];
       try {
-        const res = await fetch(`${BASE_URL}/docs/${slug}`, { headers: { "User-Agent": WARM_UA } });
+        const res = await fetch(`${INDEXNOW_SITE_URL}/docs/${slug}`, { headers: { "User-Agent": WARM_UA } });
         if (res.ok) ok++; else failed++;
       } catch {
         failed++;
@@ -70,8 +69,8 @@ async function warmCache(slugs: string[], concurrency: number) {
 }
 
 async function notifyIndexNow(slugs: string[]) {
-  const host = new URL(BASE_URL).host;
-  const urls = slugs.map((slug) => `${BASE_URL}/docs/${slug}`);
+  const host = new URL(INDEXNOW_SITE_URL).host;
+  const urls = slugs.map((slug) => `${INDEXNOW_SITE_URL}/docs/${slug}`);
   console.log(`\n${c.bold("IndexNow")}  notifying ${urls.length} page(s) on ${host}...`);
   try {
     const results = await submitToIndexNow(host, urls);
@@ -291,7 +290,7 @@ Options:
   --dry-run                List what would be done
   --verbose                One line per page
   --skip-warm              Don't pre-render regenerated pages into the ISR cache
-  --skip-indexnow          Don't notify IndexNow/Bing about regenerated pages
+  --skip-indexnow          Don't notify IndexNow about regenerated pages
 `);
     return;
   }

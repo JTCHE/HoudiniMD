@@ -2,18 +2,17 @@
  * IndexNow — https://www.indexnow.org
  *
  * A single push to the shared endpoint fans out to every participating
- * search engine (Bing, Yandex, Seznam.cz, Naver, …). We also POST straight
- * to Bing's own IndexNow endpoint so Bing picks up the change even if the
- * shared relay is ever slow to propagate.
+ * search engine (Bing, Yandex, Seznam.cz, Naver, …).
  *
  * Ownership of the host is proven by serving the key verbatim at
  * https://<host>/<INDEXNOW_KEY>.txt — see public/<key>.txt, which must be
  * kept in sync with the key below.
  */
 
+export const INDEXNOW_SITE_URL = "https://houdinimd.com";
 export const INDEXNOW_KEY = "0a93ae91427554a6fe1bcd060786eb72";
 
-const ENDPOINTS = ["https://api.indexnow.org/indexnow", "https://www.bing.com/indexnow"];
+const ENDPOINTS = ["https://api.indexnow.org/indexnow"];
 
 export interface IndexNowResult {
   endpoint: string;
