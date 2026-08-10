@@ -1,8 +1,7 @@
 #!/usr/bin/env bun
-import { SITE_URL } from "../lib/site";
 /**
- * Submit the live sitemap to IndexNow — which fans out to Bing, Yandex,
- * Seznam.cz, Naver, etc. — and directly to Bing's own IndexNow endpoint.
+ * Submit the live sitemap to IndexNow, which fans out to Bing, Yandex,
+ * Seznam.cz, Naver, etc.
  *
  * Requires the key file at public/<key>.txt (see lib/indexnow.ts) to already
  * be deployed, since search engines verify ownership by fetching it.
@@ -15,10 +14,10 @@ import { SITE_URL } from "../lib/site";
  *   bun scripts/submit-indexnow.ts --dry-run             # show what would be submitted
  */
 
-import { submitToIndexNow, INDEXNOW_KEY } from "../lib/indexnow";
+import { submitToIndexNow, INDEXNOW_KEY, INDEXNOW_SITE_URL } from "../lib/indexnow";
 import { parseArgs, getNumber, c } from "./lib/cli";
 
-const DEFAULT_SITEMAP_URL = `${SITE_URL}/sitemap.xml`;
+const DEFAULT_SITEMAP_URL = `${INDEXNOW_SITE_URL}/sitemap.xml`;
 
 async function fetchSitemapUrls(sitemapUrl: string): Promise<string[]> {
   const res = await fetch(sitemapUrl);
