@@ -28,6 +28,7 @@ const nextConfig: NextConfig = {
     staleTimes: {
       dynamic: 30,
     },
+    turbopackImportTypeText: true,
   },
   images: {
     minimumCacheTTL: 31536000,
