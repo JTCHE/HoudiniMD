@@ -61,7 +61,7 @@ writes to R2.
 
 # Obsidian Base
 
-When committing/pushing features to Git, and when an issue/feature has explicitely been marked by the user as complete, please verify inside the Obsidian base that the "Status" of the corresponding spec has been set to "Closed".
+When committing/pushing features to Git, please tick the "Status" property of the corresponding spec to "Closed".
 
 ## Location
 
