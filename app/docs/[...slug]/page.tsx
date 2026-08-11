@@ -115,6 +115,8 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 export default async function DocsPage({ params }: { params: Promise<{ slug: string[] }> }) {
   const { slug } = await params;
   const slugPath = slug.join("/");
+  // Uncomment to feel the DocsSkeleton loading state at a normal connection speed.
+  // await new Promise((r) => setTimeout(r, 6000));
 
   // Fast R2 check — returns null if content is missing or stale (before CACHE_INVALIDATE_BEFORE).
   // If not ready, return a client component immediately so the browser gets instant feedback
