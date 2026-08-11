@@ -1,5 +1,5 @@
 /**
- * Pixel dimensions read from a WebM (Matroska/EBML) file's leading bytes
+ * Display dimensions read from a WebM (Matroska/EBML) file's leading bytes
  * only — no full decode. SideFX serves docs videos as WebM exclusively.
  */
 export interface VideoDimensions {
@@ -15,6 +15,8 @@ const TRACK_ENTRY = 0xae;
 const VIDEO = 0xe0;
 const PIXEL_WIDTH = 0xb0;
 const PIXEL_HEIGHT = 0xba;
+const DISPLAY_WIDTH = 0x54b0;
+const DISPLAY_HEIGHT = 0x54ba;
 
 const CONTAINERS = new Set([SEGMENT, TRACKS, TRACK_ENTRY, VIDEO]);
 
@@ -55,15 +57,18 @@ function readUint(bytes: Uint8Array, offset: number, length: number): number {
 }
 
 /**
- * Walk the container's leading bytes for the first video track's
- * PixelWidth/PixelHeight. Tracks precedes the actual frame data, so a
- * header-sized prefix is normally enough. Returns null if the fetched prefix
+ * Walk the container's leading bytes for the first video track's display
+ * dimensions, with its encoded pixel size as the fallback. The Tracks element
+ * precedes the actual frame data, so a header-sized prefix is normally enough.
+ * Returns null if the fetched prefix
  * didn't reach far enough, or the file isn't recognized as WebM — callers
  * must treat that as "no hint available", not a parse error.
  */
 export function parseWebmDimensions(bytes: Uint8Array): VideoDimensions | null {
-  let width: number | null = null;
-  let height: number | null = null;
+  let pixelWidth: number | null = null;
+  let pixelHeight: number | null = null;
+  let displayWidth: number | null = null;
+  let displayHeight: number | null = null;
 
   function walk(start: number, end: number): void {
     let offset = start;
@@ -75,22 +80,31 @@ export function parseWebmDimensions(bytes: Uint8Array): VideoDimensions | null {
       const dataStart = offset + idResult.length + sizeResult.length;
       const dataEnd = sizeResult.size === -1 ? end : dataStart + sizeResult.size;
 
-      if (idResult.id === PIXEL_WIDTH || idResult.id === PIXEL_HEIGHT) {
+      if (
+        idResult.id === PIXEL_WIDTH ||
+        idResult.id === PIXEL_HEIGHT ||
+        idResult.id === DISPLAY_WIDTH ||
+        idResult.id === DISPLAY_HEIGHT
+      ) {
         if (dataEnd > bytes.length) return; // element body not fully fetched
         const value = readUint(bytes, dataStart, sizeResult.size);
-        if (idResult.id === PIXEL_WIDTH) width = value;
-        else height = value;
+        if (idResult.id === PIXEL_WIDTH) pixelWidth = value;
+        else if (idResult.id === PIXEL_HEIGHT) pixelHeight = value;
+        else if (idResult.id === DISPLAY_WIDTH) displayWidth = value;
+        else displayHeight = value;
       } else if (CONTAINERS.has(idResult.id)) {
         if (dataStart > bytes.length) return;
         walk(dataStart, Math.min(dataEnd, bytes.length));
       }
 
-      if (width !== null && height !== null) return;
+      if (displayWidth !== null && displayHeight !== null) return;
       if (dataEnd > bytes.length) return; // this element's body wasn't fully fetched
       offset = dataEnd;
     }
   }
 
   walk(0, bytes.length);
+  const width = displayWidth ?? pixelWidth;
+  const height = displayHeight ?? pixelHeight;
   return width && height ? { width, height } : null;
 }
