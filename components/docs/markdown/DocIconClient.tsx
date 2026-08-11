@@ -43,12 +43,17 @@ export default function DocIconClient({
 
   return (
     <span
-      className={`relative inline-grid ${className}`}
+      className={`relative inline-grid mr-2 ${className}`}
       data-doc-icon=""
       data-image-state={state}
       style={{ aspectRatio: `${width} / ${height}` }}
     >
-      {state === "skeleton" && <span className="col-start-1 row-start-1 size-full animate-pulse rounded bg-muted" aria-hidden="true" />}
+      {state === "skeleton" && (
+        <span
+          className="col-start-1 row-start-1 size-full animate-pulse rounded bg-muted"
+          aria-hidden="true"
+        />
+      )}
       {state !== "broken" && (
         <img
           ref={ref}
@@ -71,7 +76,7 @@ export default function DocIconClient({
           onLoad={(event) => {
             const img = event.currentTarget;
             if (img.naturalWidth <= 1 || img.naturalHeight <= 1) return setState("broken");
-            setState((current) => current === "skeleton" ? "loaded" : "instant");
+            setState((current) => (current === "skeleton" ? "loaded" : "instant"));
           }}
           onError={() => setState("broken")}
         />
