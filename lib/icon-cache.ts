@@ -1,6 +1,8 @@
 import { HOUDINI_ICON_ROOT } from "./houdini";
 
-const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
+const MONTH_SECONDS = 30 * 24 * 60 * 60;
+const MONTH_MS = MONTH_SECONDS * 1000;
+const DAY_SECONDS = 24 * 60 * 60;
 
 export interface IconObject {
   body: ReadableStream;
@@ -57,7 +59,7 @@ export async function refreshIcon(path: string, bucket: IconBucket): Promise<str
 
 export function iconResponse(body: BodyInit, etag?: string): Response {
   const headers = new Headers({
-    "cache-control": "public, max-age=86400, s-maxage=86400, stale-while-revalidate=2592000",
+    "cache-control": `public, max-age=${MONTH_SECONDS}, s-maxage=${DAY_SECONDS}`,
     "content-type": "image/svg+xml; charset=utf-8",
   });
   if (etag) headers.set("etag", etag);

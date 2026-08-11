@@ -30,20 +30,32 @@ export default {
       const path = url.pathname.slice(7);
       if (!validIconPath(path)) return new Response("Not found", { status: 404 });
 
+      const edgeCache = (caches as unknown as { default: Cache }).default;
+      const cacheRequest = new Request(request, { method: "GET" });
+      const edgeResponse = await edgeCache.match(cacheRequest);
+      if (edgeResponse) {
+        return request.method === "HEAD" ? new Response(null, edgeResponse) : edgeResponse;
+      }
+
       const cached = await env.HOUDINIMD_ICONS.get(path);
       if (cached) {
         if (iconNeedsRefresh(cached)) {
           ctx.waitUntil(refreshIcon(path, env.HOUDINIMD_ICONS).catch((error) => console.error(`Icon refresh failed: ${error}`)));
         }
-        const response = iconResponse(request.method === "HEAD" ? null : cached.body, cached.httpEtag);
+        const response = iconResponse(cached.body, cached.httpEtag);
+        ctx.waitUntil(edgeCache.put(cacheRequest, response.clone()));
         return request.headers.get("if-none-match") === cached.httpEtag
           ? new Response(null, { status: 304, headers: response.headers })
-          : response;
+          : request.method === "HEAD"
+            ? new Response(null, response)
+            : response;
       }
 
       try {
         const svg = await refreshIcon(path, env.HOUDINIMD_ICONS);
-        return iconResponse(request.method === "HEAD" ? null : svg);
+        const response = iconResponse(svg);
+        ctx.waitUntil(edgeCache.put(cacheRequest, response.clone()));
+        return request.method === "HEAD" ? new Response(null, response) : response;
       } catch (error) {
         console.error(`Icon fill failed: ${error}`);
         return new Response("Not found", { status: 404 });
