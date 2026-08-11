@@ -1,18 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { SearchButton } from "./SearchButton";
+import { HeaderSearchButton } from "./HeaderSearchButton";
 import { useCallback, useEffect, useRef } from "react";
 import type { SearchOverlayRef } from "./SearchOverlay";
 
 interface DocsHeaderProps {
-  breadcrumbs: React.ReactNode;
   sourceUrl: string;
   markdownUrl: string;
   searchRef: React.RefObject<SearchOverlayRef>;
 }
 
-export function DocsHeader({ breadcrumbs, sourceUrl, markdownUrl, searchRef }: DocsHeaderProps) {
+export function DocsHeader({ sourceUrl, markdownUrl, searchRef }: DocsHeaderProps) {
   const header = useRef<HTMLElement>(null);
 
   const handleSearchClick = useCallback(() => {
@@ -20,8 +19,8 @@ export function DocsHeader({ breadcrumbs, sourceUrl, markdownUrl, searchRef }: D
   }, [searchRef]);
 
   // Publish the real header height. Anchor targets clear it via --header-h
-  // (globals.css) — it changes with the breadcrumb wrap, the font, and the
-  // device, so no rem constant can stand in for measuring it.
+  // (globals.css) — it changes with the font and the device, so no rem
+  // constant can stand in for measuring it.
   useEffect(() => {
     const el = header.current;
     if (!el) return;
@@ -35,8 +34,10 @@ export function DocsHeader({ breadcrumbs, sourceUrl, markdownUrl, searchRef }: D
   // Two "alternate view" links — same pattern, sibling treatment.
   // .md goes first as the canonical/internal representation; SideFX is the
   // upstream source. Both new-tab so the reader doesn't lose their place.
+  // Hidden below sm: the centered search bar is the priority control on a
+  // narrow header, and there isn't room for both.
   const externalLinks = (
-    <span className="flex items-center gap-3 print:hidden">
+    <span className="hidden sm:flex items-center gap-3 print:hidden">
       <a
         href={markdownUrl}
         target="_blank"
@@ -62,21 +63,20 @@ export function DocsHeader({ breadcrumbs, sourceUrl, markdownUrl, searchRef }: D
       ref={header}
       className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur print:static print:bg-background"
     >
-      <div className="mx-auto grid max-w-page grid-cols-[1fr_auto] sm:grid-cols-[auto_1fr_auto] items-center gap-2 px-page-x py-3 text-xs text-muted-foreground">
+      <div className="mx-auto grid max-w-page grid-cols-[auto_1fr_auto] items-center gap-3 px-page-x py-3 text-xs text-muted-foreground">
         <Link
           href="/"
-          className="row-start-1 shrink-0 font-semibold text-foreground hover:opacity-70 transition-opacity"
+          className="shrink-0 font-semibold text-foreground hover:opacity-70 transition-opacity"
         >
           HoudiniMD
         </Link>
 
-        <span className="@container col-span-2 row-start-2 block w-full min-w-0 truncate text-left sm:col-span-1 sm:row-start-1 sm:before:content-['·'] sm:before:mr-2 sm:before:text-muted-foreground/30">
-          {breadcrumbs}
-        </span>
+        <div className="flex justify-center">
+          <HeaderSearchButton onOpenSearch={handleSearchClick} />
+        </div>
 
-        <div className="row-start-1 flex items-center justify-end gap-2 sm:gap-3 shrink-0 print:hidden">
+        <div className="flex items-center justify-end gap-3 shrink-0 print:hidden">
           {externalLinks}
-          <SearchButton onOpenSearch={handleSearchClick} />
         </div>
       </div>
     </header>

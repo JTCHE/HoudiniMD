@@ -28,7 +28,7 @@ export default async function DocsLayout({
       sourceUrl={sourceUrl}
       markdownUrl={markdownUrl}
       breadcrumbs={
-        <Suspense fallback={<span className="sk bg-muted inline-block h-3 w-44" />}>
+        <Suspense fallback={<span className="sk bg-muted inline-block h-4 w-48 rounded" />}>
           <BreadcrumbsAsync slug={slugPath} />
         </Suspense>
       }

@@ -19,12 +19,12 @@ export function DocsPageContent({ breadcrumbs, sourceUrl, markdownUrl, children 
   return (
     <div className="docs-shell min-h-screen flex flex-col bg-background text-foreground">
       <SearchOverlay ref={searchRef} />
-      <DocsHeader
-        breadcrumbs={breadcrumbs}
-        sourceUrl={sourceUrl}
-        markdownUrl={markdownUrl}
-        searchRef={searchRef}
-      />
+      <DocsHeader sourceUrl={sourceUrl} markdownUrl={markdownUrl} searchRef={searchRef} />
+      {/* Breadcrumbs sit atop the page title, outside the sticky header — but
+          still rendered from layout.tsx (via the `breadcrumbs` prop threaded
+          in from DocsLayout) so they persist untouched across a page.tsx
+          remount instead of flashing on every navigation. */}
+      <div className="@container mx-auto w-full max-w-page px-page-x pt-5">{breadcrumbs}</div>
       <div className="flex-1 flex min-w-0 flex-col">{children}</div>
       <Footer />
     </div>

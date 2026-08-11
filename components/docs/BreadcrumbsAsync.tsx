@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import { fetchFromR2 } from "@/lib/r2/read";
 
 function parseFrontmatterData(md: string): Record<string, string> {
@@ -36,20 +37,18 @@ function truncateChain(chain: Crumb[], keep: number): Crumb[] {
 function renderChain(items: Crumb[]) {
   return items.map((item, i) => {
     const isLast = i === items.length - 1;
-    const sep = !isLast && " > ";
     return (
-      <span key={`${item.href ?? item.label}-${i}`}>
+      <span key={`${item.href ?? item.label}-${i}`} className="inline-flex items-center">
         {item.href ? (
-          <Link
-            href={item.href}
-            className="hover:text-foreground transition-colors cursor-pointer"
-          >
+          <Link href={item.href} className="hover:text-foreground transition-colors">
             {item.label}
           </Link>
         ) : (
-          item.label
+          <span className={isLast ? "text-foreground" : undefined}>{item.label}</span>
         )}
-        {sep}
+        {!isLast && (
+          <ChevronRight className="mx-1 size-3.5 shrink-0 text-muted-foreground/40" aria-hidden="true" />
+        )}
       </span>
     );
   });
@@ -110,23 +109,24 @@ export default async function BreadcrumbsAsync({ slug }: { slug: string }) {
   // overflows or hides one that would have fit — the breakpoint must scale with
   // the tier's own text. Container queries can't measure rendered pixel width,
   // so approximate it from character count instead: canvas measureText on real
-  // breadcrumb strings at the fixed 12px text-xs size these render in gives
-  // 5.4px/char average (ui-sans-serif) — round up to 6 for a safety margin
-  // against the tier clipping before its threshold is reached.
-  const PX_PER_CHAR = 6;
+  // breadcrumb strings at the 14px text-sm size these render in gives 6.3px/char
+  // average (ui-sans-serif) — round up to 7 for a safety margin against the
+  // tier clipping before its threshold is reached.
+  const PX_PER_CHAR = 7;
+  // The chevron separator (14px glyph + 4px margin each side) replaces what
+  // used to be a plain " > " string, so it gets its own fixed pixel width
+  // instead of being folded into the character count above.
+  const SEPARATOR_WIDTH = 22;
   const chainWidth = (items: Crumb[]) =>
-    PX_PER_CHAR *
-    items.reduce((total, item, i) => {
-      const sep = i < items.length - 1 ? " > " : "";
-      return total + item.label.length + sep.length;
-    }, 0);
+    PX_PER_CHAR * items.reduce((total, item) => total + item.label.length, 0) +
+    SEPARATOR_WIDTH * Math.max(items.length - 1, 0);
 
   const tier1Width = chainWidth(tier1Items);
   const tier2Width = chainWidth(tier2Items);
   const tier3Width = chainWidth(tier3Items);
 
   return (
-    <span className="cursor-default">
+    <span className="text-sm text-muted-foreground">
       <style>{`
         .bc-t1, .bc-t2, .bc-t3 { display: none; }
         .bc-t4 { display: inline; }
