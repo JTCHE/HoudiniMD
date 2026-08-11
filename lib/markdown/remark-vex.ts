@@ -135,9 +135,9 @@ export function remarkVex({ enabled }: { enabled: boolean }) {
             (caption.data ??= {}).hName = 'div';
             caption.data.hProperties = { ...caption.data.hProperties, className: 'vex-sig-caption' };
             i++;
-            groups.push(box('vexGroup', 'vex-sig-card', [...rows, caption]));
+            groups.push(box('vexGroup', 'vex-sig-card code-panel', [...rows, caption]));
           } else {
-            groups.push(box('vexGroup', 'vex-sig-card', rows));
+            groups.push(box('vexGroup', 'vex-sig-card code-panel', rows));
           }
         }
         argIndex = indexArguments(current);

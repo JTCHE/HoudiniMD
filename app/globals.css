@@ -428,12 +428,13 @@ html {
 }
 
 /* ── Syntax highlighting (hljs / rehype-highlight) ─────────────────────── */
-/* Scoped to a `pre` that actually holds code. A bare `pre` selector is
-   unlayered, so it beat every utility class — a `<pre>` used for anything else
-   (the ASCII background, for one) came out as a black code panel and needed an
-   `!important` to escape. */
-pre:has(code) {
+/* Shared by fenced examples and VEX signature cards. */
+.code-panel {
+  --code-copy-clearance: 3rem;
   background: oklch(0.13 0 0);
+  border: 1px solid oklch(1 0 0 / 10%);
+  border-radius: var(--radius-lg);
+  overflow-x: auto;
 }
 
 /* Reset: scoped to code elements our renderer outputs (always have a class attr, even if empty) */
@@ -453,14 +454,14 @@ pre code[class] {
   line-height: 1.7;
 }
 
-.hljs-keyword {
+.hljs-keyword,
+.vex-tk-out {
   color: oklch(0.72 0.14 245);
   font-weight: 600;
 }
-.hljs-type {
-  color: oklch(0.72 0.12 195);
-}
-.hljs-built_in {
+.hljs-type,
+.hljs-built_in,
+.vex-tk-type {
   color: oklch(0.72 0.12 195);
 }
 .hljs-number,
@@ -475,15 +476,18 @@ pre code[class] {
   font-style: italic;
 }
 .hljs-function .hljs-title,
-.hljs-title.function_ {
+.hljs-title.function_,
+.vex-tk-fn {
   color: oklch(0.84 0.11 80);
 }
 .hljs-params,
-.hljs-variable {
+.hljs-variable,
+.vex-tk-arg {
   color: oklch(0.88 0 0);
 }
 .hljs-operator,
-.hljs-punctuation {
+.hljs-punctuation,
+.vex-tk-punct {
   color: oklch(0.75 0 0);
 }
 .hljs-attr,
@@ -854,8 +858,8 @@ pre code.hljs {
 
 /* ── VEX function signatures ─────────────────────────────────────────────
    Built by lib/markdown/remark-vex.ts, which only runs on pages under
-   vex/functions/. Two palettes, deliberately kept apart: STRUCTURE lives on
-   the dark panel and reuses the hljs colours above (type, function, params);
+   vex/functions/. Signature structure and fenced examples use the shared
+   code-panel surface and semantic colour rules above;
    VALUES live in prose and keep the ordinary pink inline-code chip. A token
    never changes meaning by moving between them. */
 
@@ -868,13 +872,6 @@ pre code.hljs {
   flex-direction: column;
   gap: 0.5rem;
   margin: 0 calc(-1rem - 1px) 1.5rem;
-}
-
-.vex-sig-card {
-  background: oklch(0.13 0 0);
-  border: 1px solid oklch(1 0 0 / 10%);
-  border-radius: var(--radius-lg);
-  overflow-x: auto;
 }
 
 .vex-sig-row {
@@ -890,6 +887,17 @@ pre code.hljs {
 }
 .vex-sig-row:last-child {
   padding-bottom: 0.7rem;
+}
+
+@media (max-width: 640px), (pointer: coarse) {
+  pre code[class] {
+    width: max-content;
+    padding-right: calc(1.25rem + var(--code-copy-clearance));
+  }
+  .vex-sig-row {
+    width: max-content;
+    padding-right: calc(1rem + var(--code-copy-clearance));
+  }
 }
 
 /* A caption binds to the overloads directly above it. Without this grouping,
@@ -910,25 +918,6 @@ pre code.hljs {
 }
 .vex-sig-caption a {
   color: inherit;
-}
-
-/* The panel is dark in both themes (like every other code surface here), so
-   these are set outright rather than through the light/dark tokens. */
-.vex-tk-type {
-  color: oklch(0.72 0.12 195);
-}
-.vex-tk-fn {
-  color: oklch(0.84 0.11 80);
-}
-.vex-tk-arg {
-  color: oklch(0.88 0 0);
-}
-.vex-tk-punct {
-  color: oklch(0.75 0 0);
-}
-.vex-tk-out {
-  color: oklch(0.72 0.14 245);
-  font-weight: 700;
 }
 
 /* Section labels. One rule, so the gap above Arguments and above Returns is
