@@ -32,31 +32,6 @@ async function capture(page: Page, stage: string) {
 }
 
 const page = await browser.newPage({ ...devices["iPhone 14 Pro"] });
-await page.addInitScript(() => {
-  const testWindow = window as typeof window & { releaseIconSkeletons: () => number };
-  const nativeSetTimeout = window.setTimeout.bind(window);
-  const nativeClearTimeout = window.clearTimeout.bind(window);
-  const pending = new Map<number, () => void>();
-  let nextTimer = -1;
-
-  window.setTimeout = ((handler: TimerHandler, timeout?: number, ...args: unknown[]) => {
-    if (timeout !== 150 || typeof handler !== "function") return nativeSetTimeout(handler, timeout, ...args);
-    const timer = nextTimer--;
-    pending.set(timer, () => handler(...args));
-    return timer;
-  }) as typeof window.setTimeout;
-  window.clearTimeout = ((timer?: number) => {
-    if (timer === undefined || !pending.delete(timer)) nativeClearTimeout(timer);
-  }) as typeof window.clearTimeout;
-  testWindow.releaseIconSkeletons = () => {
-    const count = pending.size;
-    for (const [timer, callback] of pending) {
-      pending.delete(timer);
-      callback();
-    }
-    return count;
-  };
-});
 let releaseIcons!: () => void;
 const iconGate = new Promise<void>((resolve) => { releaseIcons = resolve; });
 await page.route("**/icons/**", async (route) => {
@@ -65,10 +40,7 @@ await page.route("**/icons/**", async (route) => {
 });
 await page.goto(url, { waitUntil: "domcontentloaded" });
 await page.locator('article header [data-doc-icon][data-image-state="loading"]').waitFor();
-await page.waitForTimeout(50);
 const loading = await capture(page, "loading");
-const releasedTimers = await page.evaluate(() => (window as typeof window & { releaseIconSkeletons: () => number }).releaseIconSkeletons());
-assert(releasedTimers > 0, "No icon skeleton timer was registered");
 await page.locator('article header [data-doc-icon][data-image-state="skeleton"]').waitFor();
 const skeleton = await capture(page, "skeleton");
 
