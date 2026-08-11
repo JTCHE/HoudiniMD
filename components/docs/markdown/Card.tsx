@@ -12,7 +12,7 @@ type HastNode = {
 };
 
 function text(node: HastNode): string {
-  return node.type === "text" ? node.value ?? "" : node.children?.map(text).join("") ?? "";
+  return node.type === "text" ? (node.value ?? "") : (node.children?.map(text).join("") ?? "");
 }
 
 export function Card({ node, children, ...props }: React.ComponentProps<"li"> & { node?: HastNode }) {
@@ -25,8 +25,8 @@ export function Card({ node, children, ...props }: React.ComponentProps<"li"> & 
   const paragraphs = node.children?.filter((child) => child.tagName === "p") ?? [];
   const [title, summary] = paragraphs.length ? paragraphs : [node];
   const link = title?.children?.find((child) => child.tagName === "a");
-  const icon = link?.children?.find((child) => child.tagName === "img")
-    ?? title?.children?.find((child) => child.tagName === "img");
+  const icon =
+    link?.children?.find((child) => child.tagName === "img") ?? title?.children?.find((child) => child.tagName === "img");
   const href = typeof link?.properties?.href === "string" ? link.properties.href : undefined;
   const slug = href?.startsWith("/docs/") ? href.slice(6) : undefined;
   const summaryText = summary && text(summary);
@@ -35,15 +35,43 @@ export function Card({ node, children, ...props }: React.ComponentProps<"li"> & 
     <li {...props}>
       <p>
         {href ? (
-          <DocLink href={href} underline={false}>
-            {typeof icon?.properties?.src === "string" && <DocIconClient src={icon.properties.src} alt="" />}
+          <DocLink
+            href={href}
+            underline={false}
+          >
+            {typeof icon?.properties?.src === "string" && (
+              <span className="mr-2">
+                <DocIconClient
+                  src={icon.properties.src}
+                  alt=""
+                />
+              </span>
+            )}
             {text(link!)}
           </DocLink>
         ) : (
-          <>{typeof icon?.properties?.src === "string" && <DocIconClient src={icon.properties.src} alt="" />}{text(title!)}</>
+          <>
+            {typeof icon?.properties?.src === "string" && (
+              <span className="mr-2">
+                <DocIconClient
+                  src={icon.properties.src}
+                  alt=""
+                />
+              </span>
+            )}
+            {text(title!)}
+          </>
         )}
       </p>
-      {summaryText && /[a-z]/i.test(summaryText) ? <p>{summaryText}</p> : slug && <Suspense fallback={<CardCaptionSkeleton />}><CardCaption slug={slug} /></Suspense>}
+      {summaryText && /[a-z]/i.test(summaryText) ? (
+        <p>{summaryText}</p>
+      ) : (
+        slug && (
+          <Suspense fallback={<CardCaptionSkeleton />}>
+            <CardCaption slug={slug} />
+          </Suspense>
+        )
+      )}
     </li>
   );
 }
