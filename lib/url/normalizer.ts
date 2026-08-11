@@ -65,6 +65,11 @@ export function normalizePath(pathname: string): string {
   return normalized;
 }
 
+/** Remove trailing separators from a docs slug before it becomes a cache key. */
+export function normalizeDocSlug(slug: string): string {
+  return slug.replace(/\/+$/, "");
+}
+
 /**
  * Convert a relative SideFX URL to an absolute HoudiniMD URL.
  *

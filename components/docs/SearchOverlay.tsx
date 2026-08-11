@@ -7,6 +7,7 @@ import { showToast } from "@/components/ui/toast-notification";
 import { useDebouncedSearch } from "@/lib/search/useDebouncedSearch";
 import { recordClick } from "@/lib/search/clicks";
 import { logSearch } from "@/lib/search/log";
+import { extractSlugFromUrl, isValidDocUrl } from "@/lib/url";
 import { SEARCH_LIST_CLASS, SearchResultList, toRows, type ListResult } from "@/components/search/SearchResultList";
 
 /**
@@ -20,8 +21,6 @@ interface SearchResult extends ListResult {
 export interface SearchOverlayRef {
   openSearch: () => void;
 }
-
-const SIDEFX_URL_RE = /sidefx\.com\/docs\/(.+?)(?:\.html)?(?:#.*)?$/;
 
 const RECENT_SEARCHES_KEY = "houdinimd:recent-searches";
 const MAX_RECENT = 5;
@@ -99,10 +98,13 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
 
   // Detect SideFX URL paste — direct navigation result, bypasses the search index
   const trimmedQuery = query.trim();
-  const sideFXMatch = useMemo(() => trimmedQuery.match(SIDEFX_URL_RE), [trimmedQuery]);
+  const directSlug = useMemo(
+    () => (isValidDocUrl(trimmedQuery) ? extractSlugFromUrl(trimmedQuery) : null),
+    [trimmedQuery],
+  );
 
   // Shared debounced search (same source as the homepage search field)
-  const liveResults = useDebouncedSearch(sideFXMatch ? "" : query);
+  const liveResults = useDebouncedSearch(directSlug ? "" : query);
 
   useEffect(() => {
     if (!trimmedQuery) {
@@ -110,8 +112,8 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
       return;
     }
 
-    if (sideFXMatch) {
-      const slug = sideFXMatch[1].replace(/\.html$/, "");
+    if (directSlug) {
+      const slug = directSlug;
       const title = slug.split("/").pop()?.replace(/-/g, " ") ?? slug;
       setResults([
         {
@@ -138,7 +140,7 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
     setResults(res);
     setSelected(0);
     res.slice(0, 3).forEach((r) => router.prefetch(`/docs/${r.path}`));
-  }, [trimmedQuery, sideFXMatch, liveResults, router]);
+  }, [trimmedQuery, directSlug, liveResults, router]);
 
   const isQueryEmpty = !query.trim();
   const isDirect = !isQueryEmpty && results.length === 1 && results[0].category === "Direct link";
