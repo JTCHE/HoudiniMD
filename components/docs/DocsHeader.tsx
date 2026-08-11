@@ -32,7 +32,7 @@ export function DocsHeader({ sourceUrl, searchRef }: DocsHeaderProps) {
   }, []);
 
   const externalLinks = (
-    <span className="hidden sm:flex items-center gap-3 print:hidden">
+    <span className="flex items-center gap-3 print:hidden">
       <a
         href={sourceUrl}
         target="_blank"
