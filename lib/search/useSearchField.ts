@@ -69,10 +69,14 @@ export function useSearchField(source: "overlay" | "home"): SearchFieldState {
   // navigation counts rows, not results.
   const rows = useMemo(() => toRows(results), [results]);
 
-  useEffect(() => {
+  // Reset selection/dropdown in response to a new result set, during render
+  // rather than in an effect, so the list never paints stale before it closes.
+  const [prevResults, setPrevResults] = useState(results);
+  if (results !== prevResults) {
+    setPrevResults(results);
     setSelected(0);
     setDropdownOpen(!isProcessing && !isUrlLike && results.length > 0);
-  }, [results, isProcessing, isUrlLike]);
+  }
 
   useEffect(() => () => abortRef.current?.abort(), []);
 

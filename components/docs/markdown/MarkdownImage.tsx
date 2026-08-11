@@ -21,6 +21,7 @@ export function createImageComponent(metaMap: ImageMetaMap): Components["img"] {
     if (!meta) {
       // Degenerate case: probing failed or was skipped (e.g. page has more
       // no reserved space, but never a broken image.
+      // eslint-disable-next-line @next/next/no-img-element -- arbitrary markdown-sourced URL, not a configured next/image domain.
       return <img src={src} alt={alt ?? ""} className="markdown-media my-4 block h-auto w-full" />;
     }
 

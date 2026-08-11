@@ -23,7 +23,7 @@ const STATIC_ARCHIVE_MIME: Record<string, string> = {
   svg: "image/svg+xml",
 };
 
-export default {
+const worker = {
   async fetch(request: Request, env: Env, ctx: { waitUntil(promise: Promise<unknown>): void; passThroughOnException(): void }) {
     const url = new URL(request.url);
     if (url.pathname.startsWith("/icons/") && (request.method === "GET" || request.method === "HEAD")) {
@@ -97,3 +97,5 @@ export default {
     if (env.DB) ctx.waitUntil(pruneAnalytics(env.DB));
   },
 };
+
+export default worker;

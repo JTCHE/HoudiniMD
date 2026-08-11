@@ -15,6 +15,7 @@ interface PageTitleProps {
 export function PageTitle({ name, nodeType, icon, iconDimensions }: PageTitleProps) {
   const nameRef = useRef<HTMLSpanElement>(null);
   const separatorRef = useRef<HTMLSpanElement>(null);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- read by the disabled separator below; see the to-do there.
   const [showSeparator, setShowSeparator] = useState(false);
 
   useLayoutEffect(() => {

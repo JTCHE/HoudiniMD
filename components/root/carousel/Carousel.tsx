@@ -197,6 +197,7 @@ export function Carousel({ collection, className }: { collection: ChipCollection
       frame = requestAnimationFrame(step);
     });
 
+    const leftFade = leftFadeRef.current;
     return () => {
       cancelAnimationFrame(frame);
       offsetRef.current = 0;
@@ -204,7 +205,7 @@ export function Carousel({ collection, className }: { collection: ChipCollection
       initialOffsetSetRef.current = false;
       revealRef.current = null;
       track.style.transform = "";
-      if (leftFadeRef.current) leftFadeRef.current.style.opacity = "";
+      if (leftFade) leftFade.style.opacity = "";
     };
   }, [autoScrolls]);
 

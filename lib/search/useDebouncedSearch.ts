@@ -4,6 +4,10 @@ import { useEffect, useState } from "react";
 import { searchClient, prewarmSearchIndex } from "./client";
 import type { RankedResult } from "./ranking";
 
+// Stable identity so callers comparing results by reference (e.g. resetting
+// selection when the set changes) don't see a "new" empty array every render.
+const EMPTY: RankedResult[] = [];
+
 /**
  * Debounced client-side search — single source of truth for querying the
  * in-browser BM25 index, shared by the docs search overlay and the homepage
@@ -16,16 +20,14 @@ export function useDebouncedSearch(query: string, limit = 6): RankedResult[] {
     prewarmSearchIndex();
   }, []);
 
+  const trimmed = query.trim();
+
   useEffect(() => {
-    const q = query.trim();
-    if (!q) {
-      setResults([]);
-      return;
-    }
+    if (!trimmed) return;
 
     let cancelled = false;
     const timer = setTimeout(() => {
-      searchClient(q, limit)
+      searchClient(trimmed, limit)
         .then((ranked) => {
           if (!cancelled) {
             setResults(ranked);
@@ -38,7 +40,7 @@ export function useDebouncedSearch(query: string, limit = 6): RankedResult[] {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [query, limit]);
+  }, [trimmed, limit]);
 
-  return results;
+  return trimmed ? results : EMPTY;
 }

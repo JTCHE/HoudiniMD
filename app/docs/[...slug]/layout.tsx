@@ -21,12 +21,9 @@ export default async function DocsLayout({
   const raw = await fetchFromR2(`content/${slugPath}.md`);
   const sourceUrl = raw?.match(/\nsource:\s*(\S+)/)?.[1] ?? toSideFXUrl(slugPath);
 
-  const markdownUrl = `/docs/${slugPath}.md`;
-
   return (
     <DocsPageContent
       sourceUrl={sourceUrl}
-      markdownUrl={markdownUrl}
       breadcrumbs={
         <Suspense fallback={<span className="sk bg-muted inline-block h-4 w-48 rounded" />}>
           <BreadcrumbsAsync slug={slugPath} />

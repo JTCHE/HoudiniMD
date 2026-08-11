@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 
 export interface DocImageClientProps {
   src: string;
@@ -19,12 +19,12 @@ export interface DocImageClientProps {
  */
 export default function DocImageClient({ src, alt, width, height, blurDataURL }: DocImageClientProps) {
   const [loaded, setLoaded] = useState(false);
-  const ref = useRef<HTMLImageElement>(null);
 
-  // A cached image can finish before hydration, so its load event never fires.
-  useEffect(() => {
-    if (ref.current?.complete && ref.current.naturalWidth > 0) setLoaded(true);
-  }, [src]);
+  // A cached image can finish before hydration, so its load event never fires;
+  // catch that the moment the element mounts instead.
+  const ref = useCallback((node: HTMLImageElement | null) => {
+    if (node?.complete && node.naturalWidth > 0) setLoaded(true);
+  }, []);
 
   return (
     <span
@@ -48,6 +48,7 @@ export default function DocImageClient({ src, alt, width, height, blurDataURL }:
             className="absolute inset-0 block animate-pulse bg-muted"
           />
         ))}
+      {/* eslint-disable-next-line @next/next/no-img-element -- needs a raw <img> to track cached/load state directly. */}
       <img
         ref={ref}
         src={src}

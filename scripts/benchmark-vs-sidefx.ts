@@ -117,7 +117,7 @@ async function main() {
 				try {
 					samples.push(await measure(page, cdp, base + path, profile));
 					process.stdout.write(".");
-				} catch (e) {
+				} catch {
 					process.stdout.write("x");
 				}
 				await ctx.close();

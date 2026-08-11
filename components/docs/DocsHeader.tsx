@@ -1,6 +1,6 @@
 "use client";
 
-import { LucideArrowRight, LucideArrowUpRight, LucideSquareArrowOutUpRight } from "lucide-react";
+import { LucideArrowUpRight } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef } from "react";
 import { HeaderSearchButton } from "./HeaderSearchButton";
@@ -8,11 +8,10 @@ import type { SearchOverlayRef } from "./SearchOverlay";
 
 interface DocsHeaderProps {
   sourceUrl: string;
-  markdownUrl: string;
   searchRef: React.RefObject<SearchOverlayRef>;
 }
 
-export function DocsHeader({ sourceUrl, markdownUrl, searchRef }: DocsHeaderProps) {
+export function DocsHeader({ sourceUrl, searchRef }: DocsHeaderProps) {
   const header = useRef<HTMLElement>(null);
 
   const handleSearchClick = useCallback(() => {
@@ -34,15 +33,6 @@ export function DocsHeader({ sourceUrl, markdownUrl, searchRef }: DocsHeaderProp
 
   const externalLinks = (
     <span className="hidden sm:flex items-center gap-3 print:hidden">
-      {/* <a
-        href={markdownUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        title="View as raw Markdown"
-        className="hover:text-foreground transition-colors"
-      >
-        .md ↗︎
-      </a> */}
       <a
         href={sourceUrl}
         target="_blank"

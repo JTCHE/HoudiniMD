@@ -55,6 +55,7 @@ export default function DocIconClient({
         />
       )}
       {state !== "broken" && (
+        // eslint-disable-next-line @next/next/no-img-element -- needs a raw <img> to track load/error state directly.
         <img
           ref={ref}
           src={localIconUrl(src)}
