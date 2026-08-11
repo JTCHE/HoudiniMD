@@ -34,7 +34,7 @@ export function PageHeader({
 }: PageHeaderProps) {
   return (
     <header className="not-prose border-b border-border pb-3 mb-6">
-      {banner && bannerDimensions.width > bannerDimensions.height && (
+      {banner && bannerDimensions && bannerDimensions.width > bannerDimensions.height && (
         <DocImageClient
           src={banner}
           alt=""
@@ -57,7 +57,7 @@ export function PageHeader({
           )}
         </div>
         <div className="shrink-0 pt-0.5">
-          <MarkdownActions slug={slug} />
+          <MarkdownActions slug={slug} title={name} />
         </div>
         {summary && <p className="w-full basis-full m-0 text-sm italic text-muted-foreground">{summary}</p>}
       </div>
