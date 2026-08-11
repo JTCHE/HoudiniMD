@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { getPagePreview, getSummaryPreview } from "@/lib/markdown/page-preview";
+import { getPagePreview, getSectionPreview, getSummaryPreview } from "@/lib/markdown/page-preview";
 
 interface MetaEntry {
   title: string;
@@ -80,7 +80,15 @@ fetch("/api/meta-all")
   })
   .catch(() => {});
 
-export function DocTooltip({ slug, anchorRef }: { slug: string; anchorRef: React.RefObject<HTMLElement | null> }) {
+export function DocTooltip({
+  slug,
+  anchor,
+  anchorRef,
+}: {
+  slug: string;
+  anchor?: string | null;
+  anchorRef: React.RefObject<HTMLElement | null>;
+}) {
   const [meta, setMeta] = useState<MetaEntry | null>(() => metaCache.get(slug) ?? null);
   const [fallbackSummary, setFallbackSummary] = useState<string | null>(null);
   const [error, setError] = useState(false);
@@ -93,9 +101,9 @@ export function DocTooltip({ slug, anchorRef }: { slug: string; anchorRef: React
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
 
   useLayoutEffect(() => {
-    const anchor = anchorRef.current;
-    if (!anchor) return;
-    const anchorRect = anchor.getBoundingClientRect();
+    const anchorEl = anchorRef.current;
+    if (!anchorEl) return;
+    const anchorRect = anchorEl.getBoundingClientRect();
     setPosition({ top: anchorRect.top - 4, left: anchorRect.left + anchorRect.width / 2 });
   }, [anchorRef]);
 
@@ -180,25 +188,31 @@ export function DocTooltip({ slug, anchorRef }: { slug: string; anchorRef: React
 
   const metaPreview = getSummaryPreview(meta?.summary ?? "");
 
-  // Generic summaries are less useful than the opening topic list.
+  // meta.summary is always page-level, so an anchor link (pointing at one
+  // section) can never use it as-is — go straight to the raw markdown and
+  // pull that section's own text. Generic page-level summaries ("Subtopics")
+  // are also less useful than the opening topic list, so both cases fall
+  // back to the same raw-markdown fetch.
   useEffect(() => {
-    if (!meta || (metaPreview && metaPreview !== "Subtopics")) return;
+    if (!meta) return;
+    if (!anchor && metaPreview && metaPreview !== "Subtopics") return;
     let cancelled = false;
     fetch(`/api/raw/${slug}`)
       .then((response) => (response.ok ? response.text() : null))
       .then((markdown) => {
-        const preview = markdown && getPagePreview(markdown);
+        if (!markdown) return;
+        const preview = anchor ? (getSectionPreview(markdown, anchor) ?? getPagePreview(markdown)) : getPagePreview(markdown);
         if (!cancelled && preview) setFallbackSummary(preview);
       })
       .catch(() => {});
     return () => {
       cancelled = true;
     };
-  }, [meta, metaPreview, slug]);
+  }, [meta, metaPreview, slug, anchor]);
 
   if (error || !position) return null;
 
-  const summary = metaPreview === "Subtopics" ? fallbackSummary : metaPreview || fallbackSummary;
+  const summary = anchor ? fallbackSummary : metaPreview === "Subtopics" ? fallbackSummary : metaPreview || fallbackSummary;
 
   return createPortal(
     <span
