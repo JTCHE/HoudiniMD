@@ -44,7 +44,7 @@ function renderChain(items: Crumb[]) {
             {item.label}
           </Link>
         ) : (
-          <span className={isLast ? "text-foreground" : undefined}>{item.label}</span>
+          <span className={isLast ? "text-foreground cursor-default" : undefined}>{item.label}</span>
         )}
         {!isLast && (
           <ChevronRight className="mx-1 size-3.5 shrink-0 text-muted-foreground/40" aria-hidden="true" />
