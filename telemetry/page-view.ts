@@ -1,4 +1,4 @@
-import { botFamily, browserEvidence, deviceKind, visitorKind } from "../lib/wants-markdown";
+import { botFamily, browserEvidence, browserKind, deviceKind, visitorKind } from "../lib/wants-markdown";
 import { visitorHash } from "../lib/visitor-hash";
 import { visitorLabel } from "../lib/visitor-label";
 import { canRecord, nowStamp, type TelemetryEnv, type WaitUntil } from "./types";
@@ -54,8 +54,8 @@ async function writeView(
   const salt = env.VISITOR_SALT!;
   const visitor = visitorHash(`${ip}|${ua ?? ""}`, salt);
   await env.DB!.prepare(
-    `INSERT OR IGNORE INTO views (ts, visitor, path, kind, country, city, bot, evidence, status, referrer, markdown, alias, device)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    `INSERT OR IGNORE INTO views (ts, visitor, path, kind, country, city, bot, evidence, status, referrer, markdown, alias, device, browser)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
   )
     .bind(
       nowStamp(),
@@ -71,6 +71,7 @@ async function writeView(
       ev.markdown ? "1" : "",
       visitorLabel(visitor),
       deviceKind(ua, request.headers),
+      browserKind(ua, request.headers),
     )
     .run();
 }

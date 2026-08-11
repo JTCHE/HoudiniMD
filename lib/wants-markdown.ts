@@ -124,6 +124,22 @@ export function visitorKind(
   return !headers || browserEvidence(headers) !== NO_EVIDENCE ? 'human' : 'bot';
 }
 
+export type BrowserKind = 'chrome' | 'firefox' | 'safari' | 'edge' | 'opera' | 'vivaldi' | 'samsung' | 'in-app' | 'unknown';
+
+/** Browser family for the Browsers rollup. More specific Chromium brands must win before Chrome. */
+export function browserKind(ua: string | null, headers?: HeaderBag | null): BrowserKind {
+  if (!ua || visitorKind(ua, headers) !== 'human') return 'unknown';
+  if (/\bEdg(?:e|A|iOS)?\//.test(ua)) return 'edge';
+  if (/\b(?:OPR|OPiOS)\//.test(ua)) return 'opera';
+  if (/\bVivaldi\//.test(ua)) return 'vivaldi';
+  if (/\bSamsungBrowser\//.test(ua)) return 'samsung';
+  if (/\b(?:Firefox|FxiOS)\//.test(ua)) return 'firefox';
+  if (/\b(?:Chrome|CriOS|Chromium)\//.test(ua)) return 'chrome';
+  if (/\bSafari\//.test(ua)) return 'safari';
+  if (IOS_WEBVIEW_RE.test(ua)) return 'in-app';
+  return 'unknown';
+}
+
 export type DeviceKind = 'mobile' | 'desktop';
 
 // A phone or a small touch UA names itself in one of these tokens. Checked
