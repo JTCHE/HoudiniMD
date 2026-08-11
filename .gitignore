@@ -67,7 +67,7 @@ playwright.config.ts
 
 .open-next*
 
-.claude
+.claude/
 
 # log files
 *.log
