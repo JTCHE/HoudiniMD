@@ -61,7 +61,7 @@ export function DocsHeader({ sourceUrl, searchRef }: DocsHeaderProps) {
           HoudiniMD
         </Link>
 
-        <div className="flex justify-center">
+        <div className="flex justify-center print:hidden">
           <HeaderSearchButton onOpenSearch={handleSearchClick} />
         </div>
 
