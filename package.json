@@ -6,6 +6,7 @@
     "build": "next build",
     "dev": "next dev",
     "start": "next start",
+    "tbuild": "next build && next start",
     "lint": "eslint",
     "regen": "bun scripts/regenerate.ts",
     "audit:perf": "bun scripts/audit-perf.ts",
