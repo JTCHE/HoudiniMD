@@ -88,15 +88,20 @@ export default function RootLayout({
             actually failed, so a healthy load pays nothing. This has to be
             inline and ahead of the chunks: when they 404 React never boots, so
             a listener attached from a component would never run. The flag stops
-            a repeat if the asset is missing for some other reason. */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html:
-              "addEventListener('error',function(e){var t=e.target,u=t&&(t.src||t.href);" +
-              "if(typeof u=='string'&&u.indexOf('/_next/static/')>-1&&!sessionStorage.getItem('hmd-heal')){" +
-              "sessionStorage.setItem('hmd-heal','1');location.reload()}},true)",
-          }}
-        />
+            a repeat if the asset is missing for some other reason.
+            Production only: in dev, Turbopack serves chunks on demand, so a
+            transient 404 while a page is still compiling is normal, not a
+            stale deploy — reloading on it can loop instead of healing. */}
+        {process.env.NODE_ENV === "production" && (
+          <script
+            dangerouslySetInnerHTML={{
+              __html:
+                "addEventListener('error',function(e){var t=e.target,u=t&&(t.src||t.href);" +
+                "if(typeof u=='string'&&u.indexOf('/_next/static/')>-1&&!sessionStorage.getItem('hmd-heal')){" +
+                "sessionStorage.setItem('hmd-heal','1');location.reload()}},true)",
+            }}
+          />
+        )}
       </head>
       <body>
         <ServiceWorkerRegistration />
