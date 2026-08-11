@@ -395,8 +395,11 @@ export function addCustomRules(
       );
     },
     replacement: (content, node) => {
-      const codeElement = (node as Element).querySelector('code, pre');
-      let codeContent = codeElement?.textContent || content;
+      const element = node as Element;
+      const codeElement = element.querySelector('code');
+      let codeContent = element.nodeName === 'PRE'
+        ? element.textContent
+        : codeElement?.textContent || content;
 
       codeContent = codeContent
         .replace(/&lt;/g, '<')
@@ -433,13 +436,25 @@ export function addCustomRules(
     replacement: (content) => `<kbd>${content}</kbd>`,
   });
 
+  turndown.addRule('sphinxAnchors', {
+    filter: (node) => node.nodeName === 'SPAN' && (node as Element).classList.contains('sphinx-anchor'),
+    replacement: (_content, node) => {
+      const id = (node as Element).getAttribute('id') || '';
+      return id ? `<span id="${id.replace(/"/g, '&quot;')}"></span>` : '';
+    },
+  });
+
   // Links - convert to houdinimd URLs
   turndown.addRule('links', {
     filter: 'a',
     replacement: (content, node) => {
-      const href = (node as Element).getAttribute('href') || '';
+      const link = node as Element;
+      const href = link.getAttribute('href') || '';
       if (!href || href.startsWith('#')) {
         return content;
+      }
+      if (link.classList.contains('download')) {
+        return `[${content}](${new URL(href, sourceUrl).href})`;
       }
       const houdinimdUrl = convertToHoudiniMDUrl(href, sourceUrl);
       return `[${content}](${houdinimdUrl})`;
@@ -621,7 +636,9 @@ export function addCustomRules(
       const el = node as Element;
       const level = parseInt(el.nodeName[1]);
       const id = el.getAttribute('id');
-      const text = content.trim();
+      const text = el.classList.contains('sphinx-function') || el.classList.contains('doxygen-member')
+        ? el.textContent.replace(/\s+/g, ' ').trim()
+        : content.trim();
       if (id) {
         return `\n\n<h${level} id="${id}">${text}</h${level}>\n\n`;
       }
