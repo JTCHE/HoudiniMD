@@ -6,16 +6,15 @@ import c from "highlight.js/lib/languages/c";
 import python from "highlight.js/lib/languages/python";
 import type { CodeLanguage } from "@/lib/markdown";
 
-const withFunctionCalls = (languageFactory: typeof c) =>
-  (highlightJs: Parameters<typeof c>[0]) => {
-    const language = languageFactory(highlightJs);
-    language.contains.unshift({
-      className: "title function_",
-      begin: /\b[A-Za-z_]\w*(?=\s*\()/,
-      relevance: 0,
-    });
-    return language;
-  };
+const withFunctionCalls = (languageFactory: typeof c) => (highlightJs: Parameters<typeof c>[0]) => {
+  const language = languageFactory(highlightJs);
+  language.contains.unshift({
+    className: "title function_",
+    begin: /\b[A-Za-z_]\w*(?=\s*\()/,
+    relevance: 0,
+  });
+  return language;
+};
 
 hljs.registerLanguage("c", withFunctionCalls(c));
 hljs.registerLanguage("python", withFunctionCalls(python));
@@ -57,12 +56,15 @@ export function CodePanel({ children, language }: CodePanelProps) {
   }, []);
 
   return (
-    <div ref={panelRef} className="group relative">
+    <div
+      ref={panelRef}
+      className="group relative"
+    >
       <button
         type="button"
         onClick={handleCopy}
         aria-label="Copy code"
-        className="absolute right-2 top-2 select-none rounded-md border border-white/15 bg-white/10 px-2.5 py-1 text-xs font-medium text-white/70 backdrop-blur-sm transition-all duration-150 hover:bg-white/20 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 active:scale-95"
+        className="absolute cursor-pointer right-2 top-2 select-none rounded-md border border-white/15 bg-white/10 px-2.5 py-1 text-xs font-medium text-white/70 backdrop-blur-sm transition-all duration-150 hover:bg-white/20 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 active:scale-95"
       >
         {copied ? "Copied" : "Copy"}
       </button>
