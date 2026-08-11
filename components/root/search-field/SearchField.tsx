@@ -34,6 +34,9 @@ export function SearchField({
     }
     document.addEventListener("pointerdown", closeOnOutsidePress);
     return () => document.removeEventListener("pointerdown", closeOnOutsidePress);
+    // field.closeDropdown is stable (useCallback with no deps); the rest of
+    // `field` changes every render and would reattach the listener for nothing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [field.closeDropdown]);
 
   useEffect(() => {

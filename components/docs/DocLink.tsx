@@ -113,6 +113,9 @@ export default function DocLink({
       observer.unobserve(el);
       observedSlugs.delete(el);
     };
+    // href excluded: an anchor-only change (same slug) must not force a
+    // re-observe, or a page with many in-view anchor links re-queues them.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
 
   function show(immediate: boolean) {

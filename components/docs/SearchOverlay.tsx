@@ -48,16 +48,17 @@ function saveRecentSearch(result: SearchResult) {
   sessionStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(updated));
 }
 
-const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_, ref) {
+const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverlay(_, ref) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<SearchResult[]>([]);
   const [recentSearches, setRecentSearches] = useState<SearchResult[]>([]);
   const [selected, setSelected] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   // Always-current query value — avoids stale closure in navigate()
   const queryRef = useRef("");
-  queryRef.current = query;
+  useEffect(() => {
+    queryRef.current = query;
+  }, [query]);
   const router = useRouter();
 
   useImperativeHandle(ref, () => ({
@@ -82,18 +83,23 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
     return () => document.removeEventListener("keydown", onKey);
   }, []);
 
-  // Focus input when opened, load recent searches (filter current page)
-  useEffect(() => {
+  // Reset the query and load recent searches (filter current page) the
+  // moment `open` flips true, during render rather than in an effect.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
     if (open) {
       setQuery("");
-      setResults([]);
-      setSelected(0);
       const currentSlug = window.location.pathname.replace(/^\/docs\//, "");
       setRecentSearches(
         getRecentSearches().filter((r) => r.path !== currentSlug),
       );
-      inputRef.current?.focus();
     }
+  }
+
+  // Focus input when opened
+  useEffect(() => {
+    if (open) inputRef.current?.focus();
   }, [open]);
 
   // Detect SideFX URL paste — direct navigation result, bypasses the search index
@@ -106,16 +112,13 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
   // Shared debounced search (same source as the homepage search field)
   const liveResults = useDebouncedSearch(directSlug ? "" : query);
 
-  useEffect(() => {
-    if (!trimmedQuery) {
-      setResults([]);
-      return;
-    }
+  const results = useMemo<SearchResult[]>(() => {
+    if (!trimmedQuery) return [];
 
     if (directSlug) {
       const slug = directSlug;
       const title = slug.split("/").pop()?.replace(/-/g, " ") ?? slug;
-      setResults([
+      return [
         {
           path: slug,
           title,
@@ -123,12 +126,10 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
           category: "Direct link",
           docs_url: `/docs/${slug}`,
         },
-      ]);
-      setSelected(0);
-      return;
+      ];
     }
 
-    const res: SearchResult[] = liveResults.map((r) => ({
+    return liveResults.map((r) => ({
       path: r.path,
       title: r.title,
       summary: r.summary,
@@ -137,10 +138,19 @@ const SearchOverlay = forwardRef<SearchOverlayRef, {}>(function SearchOverlay(_,
       icon: r.icon,
       headings: r.headings,
     }));
-    setResults(res);
+  }, [trimmedQuery, directSlug, liveResults]);
+
+  // Reset selection whenever the result set changes, during render rather
+  // than in an effect, so arrow-key state never points at a stale row.
+  const [prevResults, setPrevResults] = useState(results);
+  if (results !== prevResults) {
+    setPrevResults(results);
     setSelected(0);
-    res.slice(0, 3).forEach((r) => router.prefetch(`/docs/${r.path}`));
-  }, [trimmedQuery, directSlug, liveResults, router]);
+  }
+
+  useEffect(() => {
+    results.slice(0, 3).forEach((r) => router.prefetch(`/docs/${r.path}`));
+  }, [results, router]);
 
   const isQueryEmpty = !query.trim();
   const isDirect = !isQueryEmpty && results.length === 1 && results[0].category === "Direct link";

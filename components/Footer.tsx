@@ -87,7 +87,7 @@ export function Footer({ className }: FooterProps) {
           </Link>
         </div>
         <p className="mt-1.5 text-[11px] leading-tight text-muted-foreground/60">
-          HoudiniMD is an unofficial, independent project, and isn't affiliated with or endorsed by SideFX.
+          HoudiniMD is an unofficial, independent project, and isn&apos;t affiliated with or endorsed by SideFX.
         </p>
       </div>
     </footer>
