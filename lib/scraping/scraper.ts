@@ -1,5 +1,7 @@
 import { SITE_URL } from "@/lib/site";
 import { localIconUrl } from "@/lib/icons";
+import { extractDoxygenMetadata, isDoxygenDocument } from "./doxygen";
+import { extractSphinxMetadata, isSphinxDocument } from "./sphinx";
 export interface DeprecationInfo {
   reason?: string;
   version?: string;
@@ -23,6 +25,8 @@ export interface ScrapedContent {
   deprecation?: DeprecationInfo;
   /** Node/function/class kind, e.g. "Geometry Node", "VEX function". Empty when the page has no type (e.g. plain articles). */
   nodeType?: string;
+  /** The source renderer when its HTML needs a dedicated normalization pass. */
+  renderer?: "doxygen" | "sphinx";
 }
 
 export class PageNotFoundError extends Error {
@@ -78,7 +82,8 @@ export async function scrapeSideFXPage(url: string): Promise<ScrapedContent> {
   //   section/index pages: trailing slash required — without it, a stale page is served
   //   leaf pages: trailing slash causes 404 — must omit it
   // Always fetch with a trailing slash first (correct for section pages). When that 404s,
-  // retry without — handles leaf pages. Keeps toSideFXUrl clean (no slash, canonical display).
+  // retry without — handles leaf pages. Sphinx links normalize from .html to
+  // extensionless paths, so retry that source extension for docs/api pages.
   let response: Response;
   let rawHtml = "";
 
@@ -100,7 +105,17 @@ export async function scrapeSideFXPage(url: string): Promise<ScrapedContent> {
         response = retry;
         url = noSlashUrl;
       } else {
-        throw new PageNotFoundError(url, response.status);
+        const isApiPath = new URL(noSlashUrl).pathname.startsWith("/docs/api/");
+        const htmlUrl = `${noSlashUrl}.html`;
+        const htmlRetry = isApiPath
+          ? await fetch(htmlUrl, { headers: { "User-Agent": USER_AGENT } })
+          : undefined;
+        if (htmlRetry?.ok) {
+          response = htmlRetry;
+          url = htmlUrl;
+        } else {
+          throw new PageNotFoundError(url, htmlRetry?.status || retry.status);
+        }
       }
     } else {
       url = slashUrl;
@@ -142,6 +157,10 @@ export async function scrapeSideFXPage(url: string): Promise<ScrapedContent> {
   // scraping only happens when generating a new (uncached) page.
   const { parse } = await import("node-html-parser");
   const doc = parse(html);
+  const isDoxygen = isDoxygenDocument(doc);
+  const doxygen = isDoxygen ? extractDoxygenMetadata(doc) : undefined;
+  const isSphinx = isSphinxDocument(doc, effectiveUrl);
+  const sphinx = isSphinx ? extractSphinxMetadata(doc) : undefined;
 
   // Extract metadata from header/title area
   // The #title div contains the breadcrumbs, h1, and summary for the current page
@@ -157,16 +176,16 @@ export async function scrapeSideFXPage(url: string): Promise<ScrapedContent> {
   // plain articles — pull it out first so `title` is name-only.
   const titleH1 = doc.querySelector("#title h1.title");
   const subtitleEl = titleH1?.querySelector(".subtitle");
-  const nodeType = subtitleEl?.textContent.replace(/\s+/g, " ").trim() || undefined;
+  const nodeType = doxygen?.nodeType || subtitleEl?.textContent.replace(/\s+/g, " ").trim() || undefined;
   subtitleEl?.remove();
   const rawTitle = titleH1?.textContent || "";
   // Doxygen-generated trees (e.g. /docs/hengine/*) carry no #title block at
   // all — only a <title> tag ("Houdini Engine 9.0: Documentation"). Falling
   // back to it beats an empty page title.
-  const title = (rawTitle || doc.querySelector("title")?.textContent || "").replace(/\s+/g, " ").trim();
+  const title = doxygen?.title || sphinx?.title || (rawTitle || doc.querySelector("title")?.textContent || "").replace(/\s+/g, " ").trim();
 
   const rawSummary = doc.querySelector("#title p.summary")?.textContent || "";
-  const summary = rawSummary.replace(/\s+/g, " ").trim();
+  const summary = doxygen?.summary || sphinx?.summary || rawSummary.replace(/\s+/g, " ").trim();
 
   // Extract main content HTML.
   // node-html-parser can misparse certain SideFX index pages, placing body content
@@ -177,7 +196,10 @@ export async function scrapeSideFXPage(url: string): Promise<ScrapedContent> {
   // use a completely different template with no <main> tag at all — content
   // lives in #doc-content > .contents instead. (#doc-content also carries the
   // search-box dropdown markup — .contents is the real article body.)
-  let mainElement = doc.querySelector("main") ?? doc.querySelector("#doc-content .contents") ?? doc.querySelector("#doc-content");
+  let mainElement = doc.querySelector("main")
+    ?? doc.querySelector('.rst-content div[role="main"].document')
+    ?? doc.querySelector("#doc-content .contents")
+    ?? doc.querySelector("#doc-content");
   if (!mainElement) {
     const mainStart = html.indexOf("<main");
     const mainEnd = html.lastIndexOf("</main>");
@@ -192,8 +214,9 @@ export async function scrapeSideFXPage(url: string): Promise<ScrapedContent> {
   }
   const mainHtml = mainElement.innerHTML;
 
-  const version = breadcrumbs[0]?.match(/\d+\.\d+/)?.[0] || "unknown";
-  const category = breadcrumbs.slice(1).join(" > ");
+  const resolvedBreadcrumbs = doxygen?.breadcrumbs || sphinx?.breadcrumbs || breadcrumbs;
+  const version = doxygen?.version || sphinx?.version || breadcrumbs[0]?.match(/\d+\.\d+/)?.[0] || "unknown";
+  const category = doxygen?.category || sphinx?.category || breadcrumbs.slice(1).join(" > ");
 
   // ── Page metadata extracted from the #premeta table / page header ──────────
   // These live outside #content (and #premeta is stripped during conversion),
@@ -256,7 +279,7 @@ export async function scrapeSideFXPage(url: string): Promise<ScrapedContent> {
   return {
     title,
     summary,
-    breadcrumbs,
+    breadcrumbs: resolvedBreadcrumbs,
     version,
     category,
     sourceUrl: effectiveUrl,
@@ -266,5 +289,6 @@ export async function scrapeSideFXPage(url: string): Promise<ScrapedContent> {
     banner,
     deprecation,
     nodeType,
+    renderer: isDoxygen ? "doxygen" : isSphinx ? "sphinx" : undefined,
   };
 }

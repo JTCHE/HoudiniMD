@@ -3,6 +3,8 @@ import type { ConversionOptions } from './types';
 import { addCustomRules } from './turndown-rules';
 import { extractSeeAlso, extractTaggedLinks } from './extractors';
 import { cleanMarkdown } from './utils';
+import { prepareDoxygenRoot } from './doxygen';
+import { prepareSphinxRoot } from './sphinx';
 
 /**
  * Convert scraped HTML content to llms.txt-compliant markdown.
@@ -24,6 +26,13 @@ export async function convertToMarkdown(
 
   const root = parse(scraped.mainHtml.replace(/click the image to zoom\.\s*/gi, ''));
   const codeLanguage = options.codeLanguage || 'vex';
+
+  if (scraped.renderer === 'doxygen') {
+    prepareDoxygenRoot(root, scraped.summary);
+  }
+  if (scraped.renderer === 'sphinx') {
+    prepareSphinxRoot(root, scraped.summary);
+  }
 
   // Remove unwanted elements
   root.querySelectorAll('.headerlink, .pathsep, #premeta, .fa').forEach((el) => {
@@ -99,7 +108,7 @@ export async function convertToMarkdown(
     }
     bodyMarkdown = turndown.turndown(contentDiv.innerHTML);
   } else {
-    bodyMarkdown = turndown.turndown(scraped.mainHtml);
+    bodyMarkdown = turndown.turndown(root.innerHTML);
   }
 
   bodyMarkdown = cleanMarkdown(bodyMarkdown);
