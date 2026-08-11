@@ -4,7 +4,7 @@ import type { CodeLanguage } from './types';
  * Detect the appropriate code language based on the URL slug
  */
 export function detectLanguage(slug: string): CodeLanguage {
-  if (slug.includes('hom/') || slug.includes('python/')) return 'python';
+  if (slug.includes('hom/') || slug.includes('python/') || slug.endsWith('model/verbs')) return 'python';
   if (slug.includes('hscript/')) return 'hscript';
   if (slug.includes('expressions/')) return 'hscript';
   return 'vex';

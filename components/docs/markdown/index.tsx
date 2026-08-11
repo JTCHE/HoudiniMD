@@ -1,6 +1,6 @@
 import type { Components } from "react-markdown";
 import DocLink from "@/components/docs/DocLink";
-import { CodeBlock } from "@/components/docs/CodeBlock";
+import { CodeBlock, CodePanel } from "@/components/docs/CodeBlock";
 import { Table, Th, Td } from "./MarkdownTable";
 import { Blockquote } from "./MarkdownBlockquote";
 import { Code } from "./MarkdownCode";
@@ -8,12 +8,22 @@ import { Image } from "./MarkdownImage";
 import { Video } from "./MarkdownVideo";
 import { Card } from "./Card";
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const Div: Components["div"] = ({ className, children, node: _node, ...props }) =>
+  className?.split(" ").includes("code-panel") ? (
+    <CodePanel>
+      <div className={className} {...props}>{children}</div>
+    </CodePanel>
+  ) : (
+    <div className={className} {...props}>{children}</div>
+  );
 /** Single source of truth for how docs markdown renders. */
 export const markdownComponents: Components = {
   h1: ({ children }) => (
     <h1 className="not-prose text-2xl font-bold tracking-tight border-b border-border pb-3 mb-6 mt-0">{children}</h1>
   ),
   blockquote: Blockquote,
+  div: Div,
   table: Table,
   th: Th,
   td: Td,

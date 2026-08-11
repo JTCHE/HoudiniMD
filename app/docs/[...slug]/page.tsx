@@ -12,6 +12,7 @@ import { TableOfContents } from "@/components/docs/TableOfContents";
 import { VisitRecorder } from "@/components/docs/VisitRecorder";
 import { ViewRecorder } from "@/components/ViewRecorder";
 import { markdownComponents } from "@/components/docs/markdown";
+import { CodeBlock } from "@/components/docs/CodeBlock";
 import { createImageComponent } from "@/components/docs/markdown/MarkdownImage";
 import { createVideoComponent } from "@/components/docs/markdown/MarkdownVideo";
 import { probeImages } from "@/lib/images/probe";
@@ -23,7 +24,7 @@ import { legacyWarningMarkdown } from "@/lib/markdown/legacy-warning";
 import { formatPageTitle } from "@/lib/markdown/page-title";
 import { remarkCallouts } from "@/lib/markdown/remark-callouts";
 import { remarkVex } from "@/lib/markdown/remark-vex";
-import { addSeeAlsoIcons, normalizeIconLinks } from "@/lib/markdown/utils";
+import { addSeeAlsoIcons, detectLanguage, normalizeIconLinks } from "@/lib/markdown/utils";
 import { rehypeCards } from "@/lib/markdown/rehype-cards";
 import { fetchFromR2, fetchIndexEntries } from "@/lib/r2/read";
 import { slugExistsOnSideFX } from "@/lib/generator";
@@ -286,7 +287,12 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
         <ReactMarkdown
           remarkPlugins={[remarkGfm, remarkCallouts, [remarkVex, { enabled: isVexPage }]]}
           rehypePlugins={[rehypeRaw, rehypeSlug, rehypeCards]}
-          components={{ ...markdownComponents, img: imageComponent, video: videoComponent }}
+          components={{
+            ...markdownComponents,
+            pre: ({ children }) => <CodeBlock language={detectLanguage(slugPath)}>{children}</CodeBlock>,
+            img: imageComponent,
+            video: videoComponent,
+          }}
         >
           {bodyContent}
         </ReactMarkdown>

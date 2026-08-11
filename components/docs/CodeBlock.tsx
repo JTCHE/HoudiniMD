@@ -4,61 +4,79 @@ import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import hljs from "highlight.js/lib/core";
 import c from "highlight.js/lib/languages/c";
 import python from "highlight.js/lib/languages/python";
+import type { CodeLanguage } from "@/lib/markdown";
 
-// Syntax highlighting runs on the CLIENT (not server-side via rehype-highlight)
-// so the cached/prerendered HTML stays small and the Worker render stays cheap
-// enough to fit the 10ms free-tier CPU limit. Only the languages we actually
-// emit are registered, keeping the client bundle minimal. vex/hscript reuse the
-// C grammar — matching the previous rehype-highlight aliases.
-hljs.registerLanguage("c", c);
-hljs.registerLanguage("python", python);
+const withFunctionCalls = (languageFactory: typeof c) =>
+  (highlightJs: Parameters<typeof c>[0]) => {
+    const language = languageFactory(highlightJs);
+    language.contains.unshift({
+      className: "title function_",
+      begin: /\b[A-Za-z_]\w*(?=\s*\()/,
+      relevance: 0,
+    });
+    return language;
+  };
+
+hljs.registerLanguage("c", withFunctionCalls(c));
+hljs.registerLanguage("python", withFunctionCalls(python));
 hljs.registerAliases(["vex", "hscript"], { languageName: "c" });
 
-/**
- * Renders a fenced code block with a snappy "Copy" button in the top-right
- * corner. Only block-level code (rendered as <pre>) gets the button — small
- * inline snippets use the <code> renderer instead.
- */
-export function CodeBlock({ children }: { children: React.ReactNode }) {
-  const preRef = useRef<HTMLPreElement>(null);
+interface CodePanelProps {
+  children: React.ReactNode;
+  language?: CodeLanguage;
+}
+
+/** Shared panel behavior for fenced examples and VEX signature cards. */
+export function CodePanel({ children, language }: CodePanelProps) {
+  const panelRef = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Highlight in useLayoutEffect (synchronous, before the browser paints the
-  // hydrated tree) so there's no visible flash from plain → coloured code once
-  // React takes over on the client.
   useLayoutEffect(() => {
-    const code = preRef.current?.querySelector("code");
-    if (code && !(code as HTMLElement).dataset.highlighted) {
-      hljs.highlightElement(code as HTMLElement);
-    }
-  }, []);
+    const code = panelRef.current?.querySelector("code");
+    if (!code || (code as HTMLElement).dataset.highlighted) return;
+    if (language) code.className = `language-${language}`;
+    hljs.highlightElement(code as HTMLElement);
+  }, [language]);
 
   const handleCopy = useCallback(async () => {
-    const text = preRef.current?.innerText ?? "";
+    const panel = panelRef.current;
+    if (!panel) return;
+    const signatureRows = panel.querySelectorAll<HTMLElement>(".vex-sig-row");
+    const targets = signatureRows.length ? signatureRows : panel.querySelectorAll<HTMLElement>("code");
+    const text = Array.from(targets, (target) => target.innerText).join("\n");
+
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
       if (timer.current) clearTimeout(timer.current);
       timer.current = setTimeout(() => setCopied(false), 1600);
     } catch {
-      /* clipboard unavailable — silently ignore */
+      // The browser does not provide clipboard access.
     }
   }, []);
 
   return (
-    <div className="not-prose group relative my-4">
+    <div ref={panelRef} className="group relative">
       <button
         type="button"
         onClick={handleCopy}
         aria-label="Copy code"
-        className="absolute right-2 top-2 z-10 select-none rounded-md border border-white/15 bg-white/10 px-2.5 py-1 text-xs font-medium text-white/70 opacity-0 backdrop-blur-sm transition-all duration-150 hover:bg-white/20 hover:text-white focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 active:scale-95 group-hover:opacity-100"
+        className="absolute right-2 top-2 z-10 select-none rounded-md border border-white/15 bg-white/10 px-2.5 py-1 text-xs font-medium text-white/70 backdrop-blur-sm transition-all duration-150 hover:bg-white/20 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 active:scale-95"
       >
         {copied ? "Copied" : "Copy"}
       </button>
-      <pre ref={preRef} className="rounded-lg overflow-x-auto border border-border/50">
-        {children}
-      </pre>
+      {children}
+    </div>
+  );
+}
+
+export function CodeBlock({ children, language }: CodePanelProps) {
+  return (
+    <div className="not-prose my-4 -mx-5.25">
+      <CodePanel language={language}>
+        <pre className="code-panel">{children}</pre>
+      </CodePanel>
     </div>
   );
 }
