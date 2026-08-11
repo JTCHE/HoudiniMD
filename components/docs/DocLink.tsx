@@ -171,7 +171,7 @@ export default function DocLink({
       >
         {children}
       </Link>
-      {visible && isInternal && <DocTooltip slug={slug!} anchorRef={linkRef} />}
+      {visible && isInternal && <DocTooltip slug={slug!} anchor={anchor} anchorRef={linkRef} />}
     </span>
   );
 }
