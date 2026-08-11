@@ -534,7 +534,7 @@ button:active kbd.kbd-button {
 /* ── Skeleton shimmer ────────────────────────────────────────────────────── */
 @keyframes sk-shimmer {
   to {
-    transform: translateX(200%);
+    transform: translateX(150%);
   }
 }
 
@@ -543,13 +543,28 @@ button:active kbd.kbd-button {
   overflow: hidden;
 }
 
+/* currentColor-relative, not a fixed white: at 22% white over the near-white
+   light-mode --muted (L 0.97), the old sweep was nearly invisible. Mixing
+   against --foreground instead keeps it visible in both themes. --sk-delay
+   lets callers offset the loop per-element (see DocsSkeleton) so a row of
+   bars shimmers as a loose ripple instead of one mechanical wipe. Linear,
+   not the site's --easing-quint: that ease-out curve front-loads all the
+   visible motion into the first instant, then crawls off-screen for the
+   rest of the loop — reads as a burst followed by dead air. A constant-speed
+   sweep reads as one continuous pass. */
 .sk::after {
   content: "";
   position: absolute;
   inset: 0;
-  transform: translateX(-200%);
-  background: linear-gradient(90deg, transparent 0%, oklch(1 0 0 / 22%) 50%, transparent 100%);
-  animation: sk-shimmer 1.6s ease-in-out infinite;
+  transform: translateX(-150%);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in oklch, var(--foreground) 14%, transparent) 50%,
+    transparent 100%
+  );
+  animation: sk-shimmer 2.6s linear infinite;
+  animation-delay: var(--sk-delay, 0s);
 }
 
 @media (prefers-reduced-motion: reduce) {
