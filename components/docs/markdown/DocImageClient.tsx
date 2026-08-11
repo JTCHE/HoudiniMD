@@ -58,7 +58,7 @@ export default function DocImageClient({ src, alt, width, height, blurDataURL }:
         decoding="async"
         onLoad={() => setLoaded(true)}
         onError={() => setLoaded(true)}
-        className="relative block h-full w-full object-cover transition-opacity duration-300"
+        className="relative block h-full w-full object-cover transition-opacity duration-300 bg-muted"
         // `.prose img` carries a 2em margin. Inside the reserved box that
         // offsets the image and pushes its bottom under overflow-hidden, so
         // the spacing lives on the wrapper (my-4) and the image sits flush.
