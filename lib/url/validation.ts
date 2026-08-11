@@ -1,4 +1,4 @@
-import { normalizeInput } from './normalizer';
+import { normalizeDocSlug, normalizeInput, normalizePath } from './normalizer';
 
 /**
  * Client-side URL validation utilities
@@ -43,13 +43,13 @@ export function extractSlugFromUrl(input: string): string | null {
     new RegExp(`${HOUDINIMD_HOSTS}/docs/(.+?)(?:\\.html)?(?:\\.md)?$`, "i"),
   );
   if (houdinimdMatch) {
-    return houdinimdMatch[1].replace(/\.html$/, "").replace(/\.md$/, "");
+    return normalizeDocSlug(normalizePath(houdinimdMatch[1]));
   }
 
   // Handle SideFX URLs
   const sidefxMatch = urlWithoutFragment.match(/sidefx\.com\/docs\/(.+?)(?:\.html)?$/i);
   if (sidefxMatch) {
-    return sidefxMatch[1].replace(/\.html$/, "");
+    return normalizeDocSlug(normalizePath(sidefxMatch[1]));
   }
 
   return null;

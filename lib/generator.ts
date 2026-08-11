@@ -3,7 +3,7 @@ import { scrapeSideFXPage, checkPageExists, PageNotFoundError } from "@/lib/scra
 import { convertToMarkdown, detectLanguage } from "@/lib/markdown";
 import { fetchFromR2, saveToR2, updateSearchIndex } from "@/lib/r2";
 import { withLock } from "@/lib/lock-manager";
-import { toSideFXUrl } from "@/lib/url";
+import { normalizeDocSlug, toSideFXUrl } from "@/lib/url";
 import { SIDEFX_DOCS_ROOT } from "@/lib/houdini";
 
 export type ProgressStage =
@@ -74,6 +74,7 @@ export async function generateMarkdownForSlug(
   skipCache: boolean = false,
   onProgress?: ProgressCallback,
 ): Promise<GenerateResult> {
+  slug = normalizeDocSlug(slug);
   const contentPath = `content/${slug}.md`;
 
   const progress = (stage: ProgressStage, message: string, detail?: string) => {
