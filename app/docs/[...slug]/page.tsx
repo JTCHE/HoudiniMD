@@ -29,25 +29,13 @@ import { rehypeCards } from "@/lib/markdown/rehype-cards";
 import { fetchFromR2, fetchIndexEntries } from "@/lib/r2/read";
 import { slugExistsOnSideFX } from "@/lib/generator";
 import GeneratingPage from "@/components/docs/GeneratingPage";
-import type { SearchIndexEntry } from "@/lib/r2/search-index";
 import { SITE_URL } from "@/lib/site";
 import { localIconUrl, localizeIconUrls } from "@/lib/icons";
 
 export const revalidate = 2592000;
 export const maxDuration = 60;
 
-// Pre-render all known routes at build time (static → full RSC prefetch, no skeleton).
-// dynamicParams=true (default) allows new/unknown slugs to be server-rendered on demand.
-export async function generateStaticParams() {
-  try {
-    const raw = await fetchFromR2("content/index.json", true);
-    if (!raw) return [];
-    const entries: SearchIndexEntry[] = JSON.parse(raw);
-    return entries.map((e) => ({ slug: e.path.split("/") }));
-  } catch {
-    return [];
-  }
-}
+// Render docs pages on demand so a missing cache object cannot become a build-time error.
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string[] }> }): Promise<Metadata> {
   const { slug } = await params;
@@ -63,7 +51,12 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   // component below — Next.js dedupes identical fetch() calls in one request)
   // instead of parsing the ~3MB search index, which was expensive enough to
   // brush the Workers 10ms CPU limit on every request, including MISSes.
-  const rawMarkdown = await fetchFromR2(`content/${slugPath}.md`);
+  let rawMarkdown: string | null = null;
+  try {
+    rawMarkdown = await fetchFromR2("content/" + slugPath + ".md");
+  } catch {
+    unstable_noStore();
+  }
   if (rawMarkdown) {
     const { content, data } = parseFrontmatter(rawMarkdown);
     const h1Match = content.match(/^#[ \t]+(\S[^\n]*)$/m);
@@ -255,6 +248,7 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
 
   return (
     <main className="mx-auto w-full min-w-0 max-w-page px-page-x py-10">
+      {pageIcon && <link rel="preload" as="image" type="image/svg+xml" href={pageIcon} fetchPriority="high" />}
       <PrintPagination />
       {/* Reports the read: to analytics, which cannot see a navigation served
           from the router cache, and to the landing page's "recently visited"
