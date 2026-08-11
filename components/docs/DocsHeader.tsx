@@ -1,8 +1,9 @@
 "use client";
 
+import { LucideArrowRight, LucideArrowUpRight, LucideSquareArrowOutUpRight } from "lucide-react";
 import Link from "next/link";
-import { HeaderSearchButton } from "./HeaderSearchButton";
 import { useCallback, useEffect, useRef } from "react";
+import { HeaderSearchButton } from "./HeaderSearchButton";
 import type { SearchOverlayRef } from "./SearchOverlay";
 
 interface DocsHeaderProps {
@@ -31,14 +32,9 @@ export function DocsHeader({ sourceUrl, markdownUrl, searchRef }: DocsHeaderProp
     return () => ro.disconnect();
   }, []);
 
-  // Two "alternate view" links — same pattern, sibling treatment.
-  // .md goes first as the canonical/internal representation; SideFX is the
-  // upstream source. Both new-tab so the reader doesn't lose their place.
-  // Hidden below sm: the centered search bar is the priority control on a
-  // narrow header, and there isn't room for both.
   const externalLinks = (
     <span className="hidden sm:flex items-center gap-3 print:hidden">
-      <a
+      {/* <a
         href={markdownUrl}
         target="_blank"
         rel="noopener noreferrer"
@@ -46,14 +42,18 @@ export function DocsHeader({ sourceUrl, markdownUrl, searchRef }: DocsHeaderProp
         className="hover:text-foreground transition-colors"
       >
         .md ↗︎
-      </a>
+      </a> */}
       <a
         href={sourceUrl}
         target="_blank"
         rel="noopener noreferrer"
-        className="hover:text-foreground transition-colors"
+        className="hover:text-foreground transition-colors group flex items-center"
       >
-        SideFX ↗︎
+        SideFX
+        <LucideArrowUpRight
+          strokeWidth="1.75"
+          className="size-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform"
+        />
       </a>
     </span>
   );
@@ -75,9 +75,7 @@ export function DocsHeader({ sourceUrl, markdownUrl, searchRef }: DocsHeaderProp
           <HeaderSearchButton onOpenSearch={handleSearchClick} />
         </div>
 
-        <div className="flex items-center justify-end gap-3 shrink-0 print:hidden">
-          {externalLinks}
-        </div>
+        <div className="flex items-center justify-end gap-3 shrink-0 print:hidden">{externalLinks}</div>
       </div>
     </header>
   );
