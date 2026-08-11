@@ -4,19 +4,77 @@
 import type TurndownService from 'turndown';
 import { convertToHoudiniMDUrl } from '../url';
 import type { CodeLanguage } from './types';
+function absoluteMediaUrl(src: string, sourceUrl: string): string {
+  try {
+    return new URL(src, sourceUrl).href;
+  } catch {
+    return src;
+  }
+}
 
-function videoFigureHtml(figure: Element, sourceUrl: string): string {
-  const video = figure.querySelector('video[src]') as Element;
-  const src = video.getAttribute('src') || '';
-  const type = video.getAttribute('type') || '';
-  const caption = figure.querySelector('figcaption')?.textContent.replace(/\s+/g, ' ').trim() || '';
-  const absoluteSrc = new URL(src, sourceUrl).href.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+function htmlAttribute(tag: string, name: string): string {
+  const match = tag.match(new RegExp(`\\b${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, 'i'));
+  return match?.[1] ?? match?.[2] ?? match?.[3] ?? '';
+}
+
+function markdownImageHtml(tag: string, sourceUrl: string): string {
+  const src = htmlAttribute(tag, 'src');
+  if (!src) return '';
+  const title = htmlAttribute(tag, 'title') || htmlAttribute(tag, 'alt');
+  return `![${title}](${absoluteMediaUrl(src, sourceUrl)})`;
+}
+
+function videoFigureMarkup(src: string, type: string, caption: string, sourceUrl: string): string {
+  const absoluteSrc = absoluteMediaUrl(src, sourceUrl).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
   const typeAttr = type ? ` type="${type.replace(/"/g, '&quot;')}"` : '';
   const captionHtml = caption
     ? `<figcaption class="mt-2 text-left text-sm text-muted-foreground">${caption.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</figcaption>`
     : '';
 
   return `<figure class="not-prose my-6"><video class="h-auto w-full rounded-lg" src="${absoluteSrc}"${typeAttr} controls preload="metadata"></video>${captionHtml}</figure>`;
+}
+
+function preserveMedia(html: string, sourceUrl: string): { html: string; media: string[] } {
+  const media: string[] = [];
+  const stash = (value: string) => {
+    const index = media.push(value) - 1;
+    return ` MEDIA_PLACEHOLDER_${index} `;
+  };
+  const captionText = (value: string) => value
+    .replace(/<[^>]+>/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  html = html.replace(/<figure\b[^>]*>([\s\S]*?)<\/figure>/gi, (figure) => {
+    const video = figure.match(/<video\b[^>]*>/i)?.[0];
+    const src = video ? htmlAttribute(video, 'src') : '';
+    if (!src) return figure;
+    const type = htmlAttribute(video || '', 'type');
+    const caption = figure.match(/<figcaption\b[^>]*>([\s\S]*?)<\/figcaption>/i)?.[1] || '';
+    return stash(videoFigureMarkup(src, type, captionText(caption), sourceUrl));
+  });
+  html = html.replace(/<video\b[^>]*>[\s\S]*?<\/video>/gi, (video) => {
+    const src = htmlAttribute(video, 'src');
+    return src ? stash(videoFigureMarkup(src, htmlAttribute(video, 'type'), '', sourceUrl)) : video;
+  });
+  html = html.replace(/<img\b[^>]*>/gi, (image) => {
+    const markdown = markdownImageHtml(image, sourceUrl);
+    return markdown ? stash(markdown) : '';
+  });
+
+  return { html, media };
+}
+
+function restoreMedia(markdown: string, media: string[]): string {
+  return markdown.replace(/MEDIA_PLACEHOLDER_(\d+)/g, (_, index) => media[Number(index)] || '');
+}
+
+function videoFigureHtml(figure: Element, sourceUrl: string): string {
+  const video = figure.querySelector('video[src]') as Element;
+  const src = video.getAttribute('src') || '';
+  const type = video.getAttribute('type') || '';
+  const caption = figure.querySelector('figcaption')?.textContent.replace(/\s+/g, ' ').trim() || '';
+  return src ? videoFigureMarkup(src, type, caption, sourceUrl) : '';
 }
 
 /**
@@ -63,7 +121,11 @@ function getCellText(cell: Element, sourceUrl: string): string {
 
   // Preserve <a href> elements as markdown links (before stripping other tags)
   html = html.replace(/<a\b[^>]*\bhref="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, (_, href, inner) => {
-    const linkText = inner.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+    const linkText = inner
+      .replace(/<img\b[^>]*>/gi, (image: string) => markdownImageHtml(image, sourceUrl))
+      .replace(/<[^>]+>/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
     if (!href || href.startsWith('#')) return linkText;
     const url = convertToHoudiniMDUrl(href, sourceUrl);
     return `[${linkText}](${url})`;
@@ -160,11 +222,16 @@ function noticeToCalloutMarkdown(classAttr: string, contentHtml: string, sourceU
  * blocks, and strips everything else to plain text.
  */
 function contentHtmlToMarkdown(html: string, sourceUrl: string): string {
-  let text = html;
+  const prepared = preserveMedia(html, sourceUrl);
+  let text = prepared.html;
 
   // Preserve <a href> as markdown links
   text = text.replace(/<a\b[^>]*\bhref="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, (_, href, inner) => {
-    const linkText = inner.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+    const linkText = inner
+      .replace(/<img\b[^>]*>/gi, (image: string) => markdownImageHtml(image, sourceUrl))
+      .replace(/<[^>]+>/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
     if (!href || href.startsWith('#')) return linkText;
     const url = convertToHoudiniMDUrl(href, sourceUrl);
     return `[${linkText}](${url})`;
@@ -201,12 +268,13 @@ function contentHtmlToMarkdown(html: string, sourceUrl: string): string {
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'");
 
-  return text
+  const markdown = text
     .split('\n')
     .map((line) => line.replace(/[ \t]{2,}/g, ' ').trimEnd())
     .join('\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+  return restoreMedia(markdown, prepared.media);
 }
 
 /**
@@ -288,14 +356,20 @@ export function addCustomRules(
             // Markdown table cells can't hold a blockquote, so emit an inline-HTML
             // mini-callout (rendered via rehype-raw, styled by .cell-callout CSS).
             // Encode entities so the cell stays a single, valid markdown-table line.
-            const txt = (n.querySelector('.content')?.textContent || '')
+            const noticeContent = n.querySelector('.content') as Element | null;
+            const noticeHtml = (noticeContent as unknown as { innerHTML: string } | null)?.innerHTML ?? '';
+            const { media } = preserveMedia(noticeHtml, sourceUrl);
+            const txt = (noticeContent?.textContent || '')
               .replace(/\s+/g, ' ')
               .trim()
               .replace(/&/g, '&amp;')
               .replace(/</g, '&lt;')
               .replace(/>/g, '&gt;')
               .replace(/\|/g, '&#124;');
-            return `<span class="callout callout-${kind}"><span class="callout-title">${pretty}</span>${txt}</span>`;
+            const inlineMedia = media
+              .map((asset) => asset.replace(/^<figure\b[^>]*>/, '').replace(/<\/figure>$/, '').replace(/\|/g, '&#124;'))
+              .join('<br>');
+            return `<span class="callout callout-${kind}"><span class="callout-title">${pretty}</span>${txt}</span>${inlineMedia}`;
           });
           noticeEls.forEach((n) => (n as unknown as { remove: () => void }).remove());
 
@@ -424,15 +498,8 @@ export function addCustomRules(
           (n as unknown as { remove: () => void }).remove();
         }
 
-        let html = (contentEl as unknown as { innerHTML: string }).innerHTML ?? '';
-        // Preserve links before stripping tags
-        html = html.replace(/<a\b[^>]*\bhref="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, (_, href, inner) => {
-          const linkText = inner.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
-          if (!href || href.startsWith('#')) return linkText;
-          const url = convertToHoudiniMDUrl(href, sourceUrl);
-          return `[${linkText}](${url})`;
-        });
-        desc = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+        const html = (contentEl as unknown as { innerHTML: string }).innerHTML ?? '';
+        desc = contentHtmlToMarkdown(html, sourceUrl);
       }
       return `\n\n**${label}**  \n${desc}\n${callouts}\n`;
     },
