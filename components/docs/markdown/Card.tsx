@@ -40,24 +40,20 @@ export function Card({ node, children, ...props }: React.ComponentProps<"li"> & 
             underline={false}
           >
             {typeof icon?.properties?.src === "string" && (
-              <span className="mr-2">
-                <DocIconClient
-                  src={icon.properties.src}
-                  alt=""
-                />
-              </span>
+              <DocIconClient
+                src={icon.properties.src}
+                alt=""
+              />
             )}
             {text(link!)}
           </DocLink>
         ) : (
           <>
             {typeof icon?.properties?.src === "string" && (
-              <span className="mr-2">
-                <DocIconClient
-                  src={icon.properties.src}
-                  alt=""
-                />
-              </span>
+              <DocIconClient
+                src={icon.properties.src}
+                alt=""
+              />
             )}
             {text(title!)}
           </>
