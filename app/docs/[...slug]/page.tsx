@@ -29,13 +29,29 @@ import { rehypeCards } from "@/lib/markdown/rehype-cards";
 import { fetchFromR2, fetchIndexEntries } from "@/lib/r2/read";
 import { slugExistsOnSideFX } from "@/lib/generator";
 import GeneratingPage from "@/components/docs/GeneratingPage";
+import type { SearchIndexEntry } from "@/lib/r2/search-index";
 import { SITE_URL } from "@/lib/site";
 import { localIconUrl, localizeIconUrls } from "@/lib/icons";
 
 export const revalidate = 2592000;
 export const maxDuration = 60;
 
-// Render docs pages on demand so a missing cache object cannot become a build-time error.
+// Pre-render every known route at build time. A static route gets a full RSC
+// prefetch, so a navigation paints the page itself, never the loading skeleton.
+// Removing this made /docs/[...slug] dynamic: the build stopped emitting the
+// ~11.4k page cache entries, cache-sync pruned them from R2 as orphans, and
+// every first visit paid a cold render behind the skeleton.
+// dynamicParams=true (default) keeps new/unknown slugs server-rendered on demand.
+export async function generateStaticParams() {
+  try {
+    const raw = await fetchFromR2("content/index.json", true);
+    if (!raw) return [];
+    const entries: SearchIndexEntry[] = JSON.parse(raw);
+    return entries.map((e) => ({ slug: e.path.split("/") }));
+  } catch {
+    return [];
+  }
+}
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string[] }> }): Promise<Metadata> {
   const { slug } = await params;
