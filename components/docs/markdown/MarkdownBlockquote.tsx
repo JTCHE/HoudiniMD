@@ -5,7 +5,9 @@ import type { Components } from "react-markdown";
 export const Blockquote: Components["blockquote"] = ({ children, className, ...props }) => {
   const calloutType = (props as Record<string, string>)["data-callout"];
   if (calloutType) {
-    const label = calloutType.charAt(0).toUpperCase() + calloutType.slice(1);
+    const label =
+      (props as Record<string, string>)["data-callout-title"] ??
+      calloutType.charAt(0).toUpperCase() + calloutType.slice(1);
     return (
       <blockquote
         className={`not-prose ${className ?? ""}`}
