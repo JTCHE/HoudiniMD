@@ -40,7 +40,7 @@ export default function DocsSkeleton() {
         {/* Header — mirrors PageHeader.tsx: icon + name + "Since" badge on the
             left, the copy-as-markdown action pill on the right, and the summary
             caption on its own full-width row beneath them. */}
-        <div className="border-b border-border pb-4 mb-6">
+        <div className="border-b border-border pb-3 mb-6">
           <div className="flex flex-wrap items-start justify-between gap-x-8 gap-y-3">
             <div className="flex items-center gap-3 min-w-0">
               <div
@@ -63,11 +63,13 @@ export default function DocsSkeleton() {
               style={{ "--sk-delay": "-1.3s" } as React.CSSProperties}
             />
           </div>
+          
+          {/* Caption */}
           <div className="mt-3">
             <Line
               w="w-2/3"
               d="-0.7s"
-              h="h-3.5"
+              h="h-4.5"
             />
           </div>
         </div>
