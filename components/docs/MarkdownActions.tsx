@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, ChevronDown, Copy, LucideArrowUpRightFromSquare } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { showToast } from "@/components/ui/toast-notification";
 
 interface MarkdownActionsProps {
@@ -42,9 +42,11 @@ export function MarkdownActions({ slug, title }: MarkdownActionsProps) {
   const [copied, setCopied] = useState(false);
   const [pressed, setPressed] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const copyButtonRef = useRef<HTMLButtonElement>(null);
   const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const pressedTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const [menuLeft, setMenuLeft] = useState<number | null>(null);
 
   function celebrateCopy() {
     setPressed(true);
@@ -110,6 +112,24 @@ export function MarkdownActions({ slug, title }: MarkdownActionsProps) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [copyMarkdown]);
+
+  // The menu is right-aligned to the button by default, but that overflows
+  // off-screen when the button sits close to the left edge on mobile. Clamp
+  // it inside the viewport, nudging it right of the button if needed.
+  useLayoutEffect(() => {
+    if (!open) {
+      setMenuLeft(null);
+      return;
+    }
+    const menu = menuRef.current;
+    const container = containerRef.current;
+    if (!menu || !container) return;
+    const margin = 8;
+    const containerRect = container.getBoundingClientRect();
+    const naturalLeft = containerRect.right - menu.offsetWidth;
+    const clampedLeft = Math.min(naturalLeft, window.innerWidth - menu.offsetWidth - margin);
+    setMenuLeft(Math.max(clampedLeft, margin) - containerRect.left);
+  }, [open]);
 
   // Close on outside click / Escape.
   useEffect(() => {
@@ -206,8 +226,10 @@ export function MarkdownActions({ slug, title }: MarkdownActionsProps) {
 
       {open && (
         <div
+          ref={menuRef}
           role="menu"
-          className="absolute right-0 top-[calc(100%+4px)] z-50 w-56 origin-top-right rounded-lg border border-border bg-popover text-popover-foreground shadow-lg p-xs animate-[dropdown-in_120ms_cubic-bezier(0.2,0,0,1)]"
+          style={menuLeft !== null ? { left: menuLeft } : { right: 0, visibility: "hidden" }}
+          className="absolute top-[calc(100%+4px)] z-50 w-56 origin-top-right rounded-lg border border-border bg-popover text-popover-foreground shadow-lg p-xs animate-[dropdown-in_120ms_cubic-bezier(0.2,0,0,1)]"
         >
           {menuItems.map((item) => (
             <button
@@ -215,7 +237,7 @@ export function MarkdownActions({ slug, title }: MarkdownActionsProps) {
               type="button"
               role="menuitem"
               onClick={item.onSelect}
-              className="flex w-full items-center gap-3 px-3 py-2 text-xs font-medium text-left transition-colors hover:bg-accent hover:text-accent-foreground outline-none focus-visible:bg-accent cursor-pointer rounded-sm"
+              className="flex w-full items-center gap-3 px-3 py-2.5 text-xs font-medium text-left transition-colors hover:bg-accent hover:text-accent-foreground outline-none focus-visible:bg-accent cursor-pointer rounded-sm"
             >
               {item.icon}
               {item.label}
