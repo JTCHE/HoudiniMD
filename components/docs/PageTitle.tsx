@@ -1,6 +1,3 @@
-"use client";
-
-import { useLayoutEffect, useRef, useState } from "react";
 import { toTitleCase } from "@/lib/markdown/page-title";
 import DocIconClient from "@/components/docs/markdown/DocIconClient";
 import type { ImageDimensions } from "@/lib/images/dimensions";
@@ -12,29 +9,14 @@ interface PageTitleProps {
   iconDimensions?: ImageDimensions;
 }
 
+/**
+ * Name and type share a line when they fit and stack when they do not — the
+ * same rule the OG image applies. The separator is a bar in the flex gap, half
+ * a gap left of the type. A type that wraps starts at the content edge, which
+ * puts its bar outside the clip, so the bar disappears with the line break.
+ * No measurement, no state, and no layout shift.
+ */
 export function PageTitle({ name, nodeType, icon, iconDimensions }: PageTitleProps) {
-  const nameRef = useRef<HTMLSpanElement>(null);
-  const separatorRef = useRef<HTMLSpanElement>(null);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- read by the disabled separator below; see the to-do there.
-  const [showSeparator, setShowSeparator] = useState(false);
-
-  useLayoutEffect(() => {
-    const nameElement = nameRef.current;
-    const separatorElement = separatorRef.current;
-    if (!nameElement || !separatorElement) return;
-
-    const measure = () => {
-      const nameLines = nameElement.getClientRects();
-      const nameLine = nameLines[nameLines.length - 1];
-      const inline = !!nameLine && Math.abs(nameLine.top - separatorElement.getBoundingClientRect().top) < 1;
-      setShowSeparator((current) => (current === inline ? current : inline));
-    };
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(nameElement.parentElement!);
-    return () => observer.disconnect();
-  }, [name, nodeType]);
-
   return (
     <div className="flex items-center gap-3 min-w-0">
       {icon && (
@@ -46,24 +28,16 @@ export function PageTitle({ name, nodeType, icon, iconDimensions }: PageTitlePro
           {...iconDimensions}
         />
       )}
-      <h1 className="text-2xl font-bold tracking-tight leading-tight m-0 wrap-break-word">
-        <span ref={nameRef}>{name}</span>
-        {nodeType && (
-          <>
-            <span className="font-extralight text-muted-foreground">
-              {/* To do : broken showSeparator logic. Need to improve robustness and bring back separator. */}
-              {/* <span
-                ref={separatorRef}
-                aria-hidden="true"
-                className={showSeparator ? "" : "invisible"}
-              >
-                {" | "}
-              </span> */}{" "}
+      <div className="min-w-0 overflow-hidden">
+        <h1 className="flex flex-wrap items-baseline gap-x-4 m-0 text-2xl font-bold tracking-tight leading-tight">
+          <span className="min-w-0 wrap-break-word">{name}</span>
+          {nodeType && (
+            <span className="relative font-extralight text-muted-foreground before:absolute before:top-1/2 before:-left-2 before:h-6 before:w-px before:-translate-y-1/2 before:bg-border">
               {toTitleCase(nodeType)}
             </span>
-          </>
-        )}
-      </h1>
+          )}
+        </h1>
+      </div>
     </div>
   );
 }
