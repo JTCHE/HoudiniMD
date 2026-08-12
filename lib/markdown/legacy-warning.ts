@@ -7,7 +7,7 @@ export function legacyWarningMarkdown(slugPath: string): string {
   const version = legacyVersion(slugPath);
   if (!version) return "";
   const currentSlug = currentVersionSlug(slugPath);
-  return `> [!NOTE]\n> This page documents Houdini ${version}, no longer the current version. If you're on Houdini ${LATEST_HOUDINI_VERSION}, see the [current page](/docs/${currentSlug}) instead.\n\n`;
+  return `> [!WARNING] Warning\n> This page documents Houdini ${version}, no longer the current version. If you're on Houdini ${LATEST_HOUDINI_VERSION}, see the [current page](/docs/${currentSlug}) instead.\n\n`;
 }
 
 /** Inserts the legacy-version callout into a full page's markdown, after any
