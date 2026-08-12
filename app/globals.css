@@ -462,7 +462,7 @@ pre code[class] {
 .hljs-type,
 .hljs-built_in,
 .vex-tk-type {
-  color: oklch(0.72 0.12 195);
+  color: oklch(0.66 0.08 242.84);
 }
 .hljs-number,
 .hljs-literal {
@@ -478,12 +478,12 @@ pre code[class] {
 .hljs-function .hljs-title,
 .hljs-title.function_,
 .vex-tk-fn {
-  color: oklch(0.84 0.11 80);
+  color: oklch(0.71 0.13 308.92);
 }
 .hljs-params,
 .hljs-variable,
 .vex-tk-arg {
-  color: oklch(0.88 0 0);
+  color: var(--foreground);
 }
 .hljs-operator,
 .hljs-punctuation,
@@ -946,14 +946,50 @@ pre code.hljs {
   color: inherit;
 }
 
+/* GFM tables and the VEX arguments table below are the same component in two
+   shapes: row lines only (no outer frame, no column rules), no rule after the
+   last row, edge-to-edge via a negative margin against the cells' own inset.
+   One definition of that inset — --md — is what stops them drifting apart. */
+.md-table-wrap {
+  overflow-x: auto;
+  margin: 2rem calc(var(--md) * -1);
+}
+.md-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+.md-table th {
+  padding: 0.75rem var(--md);
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+.md-table td {
+  padding: 0.75rem var(--md);
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+  color: var(--foreground);
+}
+.md-table tr:last-child td {
+  border-bottom: 0;
+}
+.md-table td code {
+  white-space: nowrap;
+}
+.md-table tr > :first-child {
+  width: 20%;
+  color: var(--muted-foreground);
+}
+
 /* Section labels. One rule, so the gap above Arguments and above Returns is
    identical by construction. */
 .prose p.vex-section-label {
   margin: 2rem 0 0.75rem;
-  font-size: 0.7rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  font-weight: 600;
+  font-size: 0.8rem;
+  font-weight: 500;
   color: var(--muted-foreground);
 }
 /* Returns is a single line rather than a ruled table: more air above it to
@@ -972,35 +1008,42 @@ pre code.hljs {
   display: grid;
   grid-template-columns: 16.5rem 1fr;
   border-top: 1px solid var(--border);
+  margin: 0 calc(var(--md) * -1);
 }
 .vex-arg-sig,
 .vex-arg-desc {
   padding: 0.75rem 0;
   border-bottom: 1px solid var(--border);
 }
+.vex-arg-sig:nth-last-child(-n + 2),
+.vex-arg-desc:nth-last-child(-n + 2) {
+  border-bottom: 0;
+}
 .vex-arg-sig {
   display: grid;
   grid-template-columns: 6.5rem 1fr;
   align-items: start;
   gap: 0 0.5rem;
+  padding-left: var(--md);
   padding-right: 1.25rem;
   font-family: ui-monospace, "Geist Mono", "Fira Code", Menlo, Consolas, monospace;
   font-size: 0.82rem;
   line-height: 1.6;
 }
 .vex-arg-type {
-  color: oklch(0.72 0.12 195);
+  color: oklch(0.66 0.08 242.84);
   overflow-wrap: anywhere;
 }
 .vex-arg-name {
   color: var(--foreground);
-  font-weight: 600;
+  /* font-weight: 600; */
   overflow-wrap: anywhere;
 }
 .vex-arg-amp {
   color: oklch(0.72 0.14 245);
 }
 .vex-arg-desc {
+  padding-right: var(--md);
   font-size: 0.9rem;
   color: var(--muted-foreground);
 }
@@ -1046,12 +1089,11 @@ pre code.hljs {
   line-height: 1.6;
 }
 .vex-ret-arrow {
-  color: oklch(0.72 0.12 195);
+  color: oklch(0.66 0.08 242.84);
   opacity: 0.7;
 }
 .vex-ret-type {
-  color: oklch(0.72 0.12 195);
-  font-weight: 600;
+  color: oklch(0.66 0.08 242.84);
   overflow-wrap: anywhere;
 }
 .vex-ret-desc {
@@ -1075,6 +1117,7 @@ pre code.hljs {
   }
   .vex-arg-desc {
     padding-top: 0;
+    padding-left: var(--md);
   }
 }
 
