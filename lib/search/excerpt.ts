@@ -30,12 +30,13 @@ function fetchPage(path: string): Promise<string | null> {
   return pending;
 }
 
-/** Frontmatter, headings and table pipes are structure, not prose. */
+/** Frontmatter, headings, callouts and table pipes are structure, not prose. */
 function clean(md: string): string {
   return md
     .replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "")
     .replace(/^\s*<h[2-6][^>]*>[\s\S]*?<\/h[2-6]>\s*$/gim, "\n")
     .replace(/^#{1,6}\s+.*$/gm, "\n")
+    .replace(/^>.*$/gm, "\n")
     .replace(/<[^>]+>/g, "")
     .replace(/[|>*_`]/g, " ")
     .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1");

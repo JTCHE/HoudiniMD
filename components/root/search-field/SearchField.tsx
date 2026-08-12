@@ -141,9 +141,9 @@ export function SearchField({
             aria-invalid={!!field.error}
             aria-describedby={field.error ? errorId : undefined}
             autoComplete="off"
-            autoCorrect="off"
+            autoCorrect="on"
             autoCapitalize="off"
-            spellCheck={false}
+            spellCheck={true}
             className={cn(
               "w-full min-w-0 border-0 bg-transparent text-label text-sm text-foreground shadow-none outline-none",
               "placeholder:text-transparent disabled:cursor-wait",
