@@ -19,7 +19,10 @@ const CALLOUT_TYPES: Record<string, string> = {
   CAUTION: "caution",
 };
 
-const MARKER = /^\s*\[!(\w+)\]\s*\n?/;
+// Any trailing text on the marker line becomes the callout's title,
+// overriding the type's default capitalized label (e.g. `[!CAUTION] Beta` →
+// styled as a caution callout but titled "Beta").
+const MARKER = /^\s*\[!(\w+)\][ \t]*([^\n]*)\n?/;
 
 /**
  * remark plugin: turn GitHub-style admonition blockquotes (`> [!NOTE]`) into
@@ -42,8 +45,9 @@ export function remarkCallouts() {
 
       const type = CALLOUT_TYPES[match[1].toUpperCase()];
       if (!type) return;
+      const title = match[2].trim() || undefined;
 
-      // Strip the "[!TYPE]" marker (and its trailing newline) from the body.
+      // Strip the "[!TYPE] title" marker (and its trailing newline) from the body.
       text.value = text.value.slice(match[0].length);
       if (text.value === "") {
         para.children.shift();
@@ -57,6 +61,7 @@ export function remarkCallouts() {
         ...data.hProperties,
         className: `callout callout-${type}`,
         "data-callout": type,
+        ...(title ? { "data-callout-title": title } : {}),
       };
     });
   };

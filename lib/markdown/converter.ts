@@ -34,6 +34,19 @@ export async function convertToMarkdown(
     prepareSphinxRoot(root, scraped.summary);
   }
 
+  // SideFX "beta feature" notices: an icon div (beta.svg) beside a text div,
+  // both children of a wrapper div. Recast as a standard notice box so the
+  // noticeBox rule turns it into a "> [!NOTE]" callout and the svg is dropped.
+  root.querySelectorAll('img[src*="beta.svg"]').forEach((img) => {
+    const wrapper = img.parentNode?.parentNode;
+    if (!wrapper || wrapper.tagName !== 'DIV') return;
+    const textDiv = wrapper.children.find((child) => !child.querySelector('img[src*="beta.svg"]'));
+    if (!textDiv) return;
+    wrapper.replaceWith(
+      `<div class="notice ind-item caution" data-callout-title="Beta"><div class="content">${textDiv.innerHTML}</div></div>`
+    );
+  });
+
   // Remove unwanted elements
   root.querySelectorAll('.headerlink, .pathsep, #premeta, .fa').forEach((el) => {
     el.remove();

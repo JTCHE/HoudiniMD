@@ -204,7 +204,7 @@ const NOTICE_TYPE_MAP: Record<string, string> = {
  * attribute and inner `.content` HTML. Shared by the standalone-notice rule and
  * the `.def` rule (Inputs), so callouts survive in both contexts.
  */
-function noticeToCalloutMarkdown(classAttr: string, contentHtml: string, sourceUrl: string): string {
+function noticeToCalloutMarkdown(classAttr: string, contentHtml: string, sourceUrl: string, title?: string): string {
   const classes = classAttr.split(/\s+/);
   const cls = classes.find((c) => c in NOTICE_TYPE_MAP) ?? 'note';
   const type = NOTICE_TYPE_MAP[cls];
@@ -213,7 +213,8 @@ function noticeToCalloutMarkdown(classAttr: string, contentHtml: string, sourceU
     .split('\n')
     .map((line) => (line ? `> ${line}` : '>'))
     .join('\n');
-  return `\n\n> [!${type}]\n${quoted}\n`;
+  const marker = title ? `[!${type}] ${title}` : `[!${type}]`;
+  return `\n\n> ${marker}\n${quoted}\n`;
 }
 
 /**
@@ -480,7 +481,8 @@ export function addCustomRules(
       const el = node as Element;
       const contentEl = el.querySelector('.content') as Element | null;
       const contentHtml = contentEl ? (contentEl as unknown as { innerHTML: string }).innerHTML : '';
-      return noticeToCalloutMarkdown(el.getAttribute('class') || '', contentHtml, sourceUrl) + '\n';
+      const title = el.getAttribute('data-callout-title') || undefined;
+      return noticeToCalloutMarkdown(el.getAttribute('class') || '', contentHtml, sourceUrl, title) + '\n';
     },
   });
 
