@@ -270,15 +270,15 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
                 inputMode="search"
                 autoComplete="off"
                 autoCapitalize="off"
-                autoCorrect="off"
-                spellCheck="false"
+                autoCorrect="on"
+                spellCheck={true}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={onKeyDown}
                 placeholder="Search docs or paste a SideFX URL…"
                 // [&::-webkit-search-cancel-button]:appearance-none hides the
                 // native macOS/iOS blue clear glyph; we render our own thin X.
-                className="w-full px-4 py-3 pr-11 text-sm bg-transparent outline-none font-mono [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:appearance-none"
+                className="w-full px-4 py-3 pr-11 text-sm bg-transparent outline-none [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:appearance-none"
               />
               {query && (
                 <button
