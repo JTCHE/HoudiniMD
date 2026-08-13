@@ -291,7 +291,9 @@ async function main() {
   const apply = process.argv.includes("--apply");
   const stage = process.argv.includes("--stage");
   const verify = process.argv.includes("--verify");
-  const cachedAliases = (await listR2Slugs()).filter((slug) => slug.endsWith("/index"));
+  // Verification starts from published mappings. It must not rescan the whole
+  // content corpus before it can check the migrated state.
+  const cachedAliases = verify ? [] : (await listR2Slugs()).filter((slug) => slug.endsWith("/index"));
   const aliases = [...new Set([...cachedAliases, ...await listStoredAliases()])].sort();
   const results: AuditResult[] = [];
   let cursor = 0;
