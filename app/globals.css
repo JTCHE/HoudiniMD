@@ -427,6 +427,32 @@ html {
   margin-inline: -1rem;
 }
 
+/* Small comparison thumbnails SideFX groups side by side in the source
+   (a shared <p>, or a .row of .col_* divs) — see imageGroupInline /
+   imageGroupColumns in turndown-rules.ts. Flex row instead of the default
+   one-full-width-image-per-line stack; items shrink together on narrow
+   viewports rather than overflowing. */
+.image-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-block: 1.5rem;
+}
+.image-group figure {
+  flex: 1 1 200px;
+  min-width: 0;
+  margin: 0;
+}
+.image-group .markdown-media {
+  margin: 0;
+}
+.image-group .markdown-media + figcaption {
+  margin-inline: 0;
+  padding-inline: 0;
+  text-align: center;
+}
+
 /* ── Syntax highlighting (hljs / rehype-highlight) ─────────────────────── */
 /* Shared by fenced examples and VEX signature cards. */
 .code-panel {

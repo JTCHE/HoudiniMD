@@ -24,14 +24,36 @@ function markdownImageHtml(tag: string, sourceUrl: string): string {
   return `![${title}](${absoluteMediaUrl(src, sourceUrl)})`;
 }
 
-function videoFigureMarkup(src: string, type: string, caption: string, sourceUrl: string): string {
+/**
+ * SideFX groups small comparison thumbnails as siblings inside one source
+ * container (a shared `<p>`, or a `.row` of `.col_*` divs) instead of one
+ * image per paragraph — that grouping is itself the "these are meant to sit
+ * side by side" signal, so it is reused directly instead of guessing from
+ * pixel dimensions. Rendered as raw HTML (like videoFigureMarkup) so the
+ * `.image-group` flex row and each `img`/`figcaption` survive into the
+ * rendered page via rehype-raw.
+ */
+function imageGroupMarkup(items: { src: string; alt: string; caption?: string }[], sourceUrl: string): string {
+  const figures = items.map(({ src, alt, caption }) => {
+    const absoluteSrc = absoluteMediaUrl(src, sourceUrl).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+    const altAttr = alt.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+    const figcaptionHtml = caption
+      ? `<figcaption>${caption.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</figcaption>`
+      : '';
+    return `<figure><img src="${absoluteSrc}" alt="${altAttr}" />${figcaptionHtml}</figure>`;
+  }).join('');
+  return `<div class="not-prose image-group">${figures}</div>`;
+}
+
+function videoFigureMarkup(src: string, type: string, caption: string, sourceUrl: string, title?: string): string {
   const absoluteSrc = absoluteMediaUrl(src, sourceUrl).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
   const typeAttr = type ? ` type="${type.replace(/"/g, '&quot;')}"` : '';
+  const titleAttr = title ? ` title="${title.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}"` : '';
   const captionHtml = caption
     ? `<figcaption class="mt-2 text-left text-sm text-muted-foreground">${caption.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</figcaption>`
     : '';
 
-  return `<figure class="not-prose my-6"><video class="h-auto w-full rounded-lg" src="${absoluteSrc}"${typeAttr} controls preload="metadata"></video>${captionHtml}</figure>`;
+  return `<figure class="not-prose my-6"><video class="h-auto w-full rounded-lg" src="${absoluteSrc}"${typeAttr}${titleAttr} controls preload="metadata"></video>${captionHtml}</figure>`;
 }
 
 function preserveMedia(html: string, sourceUrl: string): { html: string; media: string[] } {
@@ -102,6 +124,38 @@ function getCellText(cell: Element, sourceUrl: string): string {
     if (!figure.querySelector('video[src]')) continue;
     videoFigures.push(videoFigureHtml(figure, sourceUrl));
     html = html.replace(figure.outerHTML, ` VIDEO${videoFigures.length - 1} `);
+  }
+
+  // A `.defs` group (a parameter's per-mode/per-option breakdown, e.g.
+  // "Material Sync Mode"'s three modes) is several nested `.def` blocks —
+  // each a bold name plus one or more description paragraphs. The generic
+  // tag-stripping below flattens every paragraph and heading into one
+  // run-on sentence with no visual separation, so build a real bullet list
+  // instead: one `<li>` per mode, bold name, paragraphs joined by a blank
+  // line. Stashed behind a placeholder (like the video figures above) so
+  // none of the generic passes below — in particular the plain `<ul>/<ol>`
+  // rule further down, which strips everything but `kbd` from `<li>`
+  // content — can flatten it back out.
+  const defLists: string[] = [];
+  for (const defsGroup of Array.from(cell.querySelectorAll('.defs'))) {
+    const items = Array.from(defsGroup.querySelectorAll('.def'))
+      .filter((def) => def.parentElement === defsGroup)
+      .map((def) => {
+        const label = def.querySelector('p.label')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+        if (!label) return '';
+        const contentEl = def.querySelector('.content') as Element | null;
+        const paragraphs = contentEl
+          ? Array.from(contentEl.querySelectorAll('p'))
+              .map((p) => contentHtmlToMarkdown((p as unknown as { innerHTML: string }).innerHTML, sourceUrl).replace(/\s+/g, ' ').trim())
+              .filter(Boolean)
+          : [];
+        const desc = paragraphs.join('<br><br>');
+        return `<li><strong>${label}</strong>${desc ? `<br>${desc}` : ''}</li>`;
+      })
+      .filter(Boolean);
+    if (items.length === 0) continue;
+    const index = defLists.push(`<ul>${items.join('')}</ul>`) - 1;
+    html = html.replace(defsGroup.outerHTML, ` DEFLIST${index} `);
   }
 
   // Extract <pre> code blocks first and stash them behind placeholders. Markdown
@@ -198,6 +252,7 @@ function getCellText(cell: Element, sourceUrl: string): string {
   // Restore stashed <pre> code blocks (escaped above; safe to inject verbatim).
   text = text.replace(/PRE(\d+)/g, (_, n) => preBlocks[Number(n)] ?? '');
   text = text.replace(/VIDEO(\d+)/g, (_, n) => videoFigures[Number(n)] ?? '');
+  text = text.replace(/DEFLIST(\d+)/g, (_, n) => defLists[Number(n)] ?? '');
 
   return text;
 }
@@ -657,6 +712,67 @@ export function addCustomRules(
     },
   });
 
+  // A `<p>` whose only content is 2+ sibling `<img>`s (no other text) is
+  // SideFX's plain thumbnail-comparison pattern (e.g. rbdmaterialfracture's
+  // "Using different displays" section) — render as a horizontal row instead
+  // of one full-width image per line.
+  turndown.addRule('imageGroupInline', {
+    filter: (node) => {
+      if (node.nodeName !== 'P') return false;
+      const el = node as Element;
+      const children = Array.from(el.children);
+      if (children.length < 2 || !children.every((child) => child.tagName === 'IMG')) return false;
+      const text = Array.from(el.childNodes)
+        .filter((child) => child.nodeType === 3)
+        .map((child) => child.textContent || '')
+        .join('')
+        .trim();
+      return text === '';
+    },
+    replacement: (_content, node) => {
+      const items = Array.from((node as Element).children)
+        .map((img) => ({
+          src: img.getAttribute('src') || '',
+          alt: img.getAttribute('title') || img.getAttribute('alt') || '',
+        }))
+        .filter((item) => item.src);
+      if (items.length < 2) return '';
+      return `\n\n${imageGroupMarkup(items, sourceUrl)}\n\n`;
+    },
+  });
+
+  // SideFX's other thumbnail pattern: a `.row` of `.col_*` divs, each holding
+  // one image and an optional caption — either a `.box-label` above the image
+  // (polyreduce's 100%/50%/10% comparison) or a native `<figcaption>` beside
+  // it (geometrylight's Material Sync Mode comparison) — where the caption
+  // currently gets orphaned instead of staying attached to its image. Falls
+  // back to the default recursive markdown (`content`) for any `.row` that
+  // isn't this clean one-image-per-column shape, so unrelated column layouts
+  // are untouched.
+  turndown.addRule('imageGroupColumns', {
+    filter: (node) => {
+      if (node.nodeName !== 'DIV' || !(node as Element).classList.contains('row')) return false;
+      const cols = Array.from((node as Element).children).filter((child) => /\bcol_/.test(child.getAttribute('class') || ''));
+      return cols.length >= 2;
+    },
+    replacement: (content, node) => {
+      const cols = Array.from((node as Element).children).filter((child) => /\bcol_/.test(child.getAttribute('class') || ''));
+      const items: { src: string; alt: string; caption?: string }[] = [];
+      for (const col of cols) {
+        const imgs = Array.from(col.querySelectorAll('img'));
+        if (imgs.length !== 1) return content;
+        const src = imgs[0].getAttribute('src') || '';
+        if (!src) return content;
+        const caption = (col.querySelector('.box-label') || col.querySelector('figcaption'))
+          ?.textContent?.replace(/\s+/g, ' ').trim() || '';
+        const alt = imgs[0].getAttribute('title') || imgs[0].getAttribute('alt') || caption;
+        items.push({ src, alt, caption: caption || undefined });
+      }
+      if (items.length < 2) return content;
+      return `\n\n${imageGroupMarkup(items, sourceUrl)}\n\n`;
+    },
+  });
+
   // Keep video captions attached to their native player.
   turndown.addRule('videoFigure', {
     filter: (node) => node.nodeName === 'FIGURE' && !!(node as Element).querySelector('video[src]'),
@@ -666,7 +782,7 @@ export function addCustomRules(
 
   turndown.addRule('vimeoVideo', {
     filter: (node) => node.nodeName === 'DIV' && (node as Element).classList.contains('video-container') && !!(node as Element).querySelector('iframe[src*="vimeo.com"]'),
-    replacement: (_content, node) => `\n\n${vimeoVideoHtml(node as Element)}\n\n`,
+    replacement: (_content, node) => `\n\n${vimeoVideoHtml(node as Element, sourceUrl)}\n\n`,
   });
   // Images - resolve relative URLs to absolute SideFX; keyicons → <kbd>
   turndown.addRule('images', {
@@ -697,12 +813,18 @@ export function addCustomRules(
   });
 }
 
-function vimeoVideoHtml(container: Element): string {
+/**
+ * `<video>` isn't one of CommonMark's block-level HTML tag names, so a bare
+ * `<video>` (no wrapping `<figure>`) parses as inline content and lands
+ * inside a `<p>` — DocVideoClient's root `<div>` then can't legally nest
+ * there, which fails hydration and leaves the player unmounted. Route
+ * through videoFigureMarkup like every other video path so it's always
+ * `<figure>`-wrapped (a recognized block tag) and stays its own HTML block.
+ */
+function vimeoVideoHtml(container: Element, sourceUrl: string): string {
   const iframe = container.querySelector('iframe[src*="vimeo.com"]');
   const src = iframe?.getAttribute('src') || '';
   const title = iframe?.getAttribute('title') || container.getAttribute('title') || '';
   if (!src) return '';
-  const escapedSrc = src.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
-  const titleAttr = title ? ` title="${title.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}"` : '';
-  return `<video class="h-auto w-full rounded-lg" src="${escapedSrc}" type="video/vimeo"${titleAttr}></video>`;
+  return videoFigureMarkup(src, 'video/vimeo', '', sourceUrl, title);
 }
