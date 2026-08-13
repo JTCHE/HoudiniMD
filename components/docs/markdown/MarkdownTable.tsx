@@ -18,7 +18,7 @@ function tableHeading(node: Element | undefined): string {
  */
 export const Table: Components["table"] = ({ children, node }) => (
   <div className="not-prose md-table-wrap">
-    <table className={tableHeading(node).startsWith("TypeDeclarationDescription") ? "md-table md-table-declarations" : "md-table"}>
+    <table className={tableHeading(node).startsWith("TypeDeclaration") ? "md-table md-table-declarations" : "md-table"}>
       {children}
     </table>
   </div>
