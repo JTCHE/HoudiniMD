@@ -215,8 +215,20 @@ async function audit(alias: string): Promise<AuditResult> {
       if (aliasFingerprint !== canonicalFingerprint) {
         return { alias, canonical, aliasFingerprint, canonicalFingerprint, reason: "source-mismatch" };
       }
+      // Both spellings returned the same parsed document. Convert the alias in
+      // the canonical URL context so relative links and media URLs do not make
+      // the alias look different merely because it was requested through
+      // `/index`. Real scraped metadata differences remain part of the check.
+      const comparableAliasSource = {
+        ...aliasSource,
+        sourceUrl: canonicalSource.sourceUrl,
+        // These values are resolved from relative source attributes. Use the
+        // canonical base just as we do for body links and media.
+        icon: canonicalSource.icon,
+        banner: canonicalSource.banner,
+      };
       const [aliasMarkdown, canonicalMarkdown] = await Promise.all([
-        convertToMarkdown(aliasSource, { codeLanguage: detectLanguage(alias) }),
+        convertToMarkdown(comparableAliasSource, { codeLanguage: detectLanguage(canonical) }),
         convertToMarkdown(canonicalSource, { codeLanguage: detectLanguage(canonical) }),
       ]);
       return {
@@ -291,10 +303,16 @@ async function main() {
   const apply = process.argv.includes("--apply");
   const stage = process.argv.includes("--stage");
   const verify = process.argv.includes("--verify");
+  const requestedAlias = process.argv.find((argument) => argument.startsWith("--alias="))?.slice("--alias=".length);
   // Verification starts from published mappings. It must not rescan the whole
   // content corpus before it can check the migrated state.
   const cachedAliases = verify ? [] : (await listR2Slugs()).filter((slug) => slug.endsWith("/index"));
-  const aliases = [...new Set([...cachedAliases, ...await listStoredAliases()])].sort();
+  const aliases = requestedAlias
+    ? [requestedAlias]
+    : [...new Set([...cachedAliases, ...await listStoredAliases()])].sort();
+  if (aliases.some((alias) => !alias.endsWith("/index"))) {
+    throw new Error("Alias audit targets must end with /index");
+  }
   const results: AuditResult[] = [];
   let cursor = 0;
   const workers = Array.from({ length: 4 }, async () => {
@@ -370,15 +388,13 @@ async function main() {
     const direct = results.filter((result) =>
       result.reason === "parent-missing" || result.reason === "source-mismatch" || result.reason === "artifact-mismatch"
     );
-    const metadataKeys = await listKeys(`${ALIAS_ROOT}/`);
-    const identityKeys = await listKeys(`${IDENTITY_ROOT}/`);
     await backUpObjects([
       "content/index.json",
       LITE_INDEX_PATH,
       "metadata/source-alias-audit.json",
-      ...metadataKeys,
-      ...identityKeys,
       ...results.flatMap((result) => [
+        `${ALIAS_ROOT}/${result.alias}.json`,
+        ...(result.aliasFingerprint ? [`${IDENTITY_ROOT}/${result.aliasFingerprint}.json`] : []),
         `content/${result.alias}.md`,
         ...(result.canonical ? [`content/${result.canonical}.md`] : []),
       ]),
