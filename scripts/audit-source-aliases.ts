@@ -250,18 +250,27 @@ async function audit(alias: string): Promise<AuditResult> {
 async function verifyRedirects(results: AuditResult[]): Promise<boolean[]> {
   const verified = new Array<boolean>(results.length);
   let cursor = 0;
+  const fetchRedirect = async (url: string): Promise<Response> => {
+    let lastError: unknown;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        return await fetch(url, {
+          redirect: "manual",
+          headers: { "User-Agent": "Mozilla/5.0" },
+          signal: AbortSignal.timeout(10_000),
+        });
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError;
+  };
   const workers = Array.from({ length: Math.min(8, results.length) }, async () => {
     while (cursor < results.length) {
       const index = cursor++;
       const result = results[index];
-      const html = await fetch(`https://houdinimd.com/docs/${result.alias}?alias_audit=1`, {
-        redirect: "manual",
-        headers: { "User-Agent": "Mozilla/5.0" },
-      });
-      const raw = await fetch(`https://houdinimd.com/docs/${result.alias}.md?alias_audit=1`, {
-        redirect: "manual",
-        headers: { "User-Agent": "Mozilla/5.0" },
-      });
+      const html = await fetchRedirect(`https://houdinimd.com/docs/${result.alias}?alias_audit=1`);
+      const raw = await fetchRedirect(`https://houdinimd.com/docs/${result.alias}.md?alias_audit=1`);
       const htmlLocation = html.headers.get("location");
       const rawLocation = raw.headers.get("location");
       verified[index] = html.status === 308
