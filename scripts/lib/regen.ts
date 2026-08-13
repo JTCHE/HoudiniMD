@@ -11,6 +11,7 @@
 import { GetObjectCommand, PutObjectCommand, ListObjectsV2Command } from "@aws-sdk/client-s3";
 import { scrapeSideFXPage, PageNotFoundError, resolveSideFXUrl } from "../../lib/scraping";
 import { convertToMarkdown, detectLanguage } from "../../lib/markdown";
+import { parseFrontmatter } from "../../lib/markdown/frontmatter";
 import { saveToR2 } from "../../lib/r2";
 import { getConfig, getS3Client } from "../../lib/r2/config";
 import { mutateSearchIndex, putLiteIndex, type SearchIndexEntry } from "../../lib/r2/search-index";
@@ -150,11 +151,17 @@ async function regenerateOnce(
   const markdown = await convertToMarkdown(scraped, { codeLanguage: detectLanguage(slug) });
   await saveToR2(`content/${slug}.md`, markdown);
 
+  // The search index's summary feeds /api/meta-all's tooltip prefill, so it
+  // must match what the tooltip actually shows — the frontmatter `description`
+  // (see converter.ts), not the raw scrape, which may differ once patched pages
+  // fall back to getPagePreview(body) instead of the summary blockquote.
+  const { data } = parseFrontmatter(markdown);
+
   return {
     entry: {
       path: slug,
       title: scraped.title,
-      summary: scraped.summary,
+      summary: data.description ?? "",
       category: scraped.category,
       version: scraped.version,
       icon: scraped.icon,
