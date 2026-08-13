@@ -497,6 +497,18 @@ export function addCustomRules(
     replacement: (content) => `<kbd>${content}</kbd>`,
   });
 
+  // VEX signature argument types: SideFX trails a real type name with `&nbsp;`
+  // (e.g. `<span class="vextype vexstring">string&nbsp;</span>`), which survives
+  // turndown's tag-stripping as a literal space. A union/placeholder type
+  // (`int|string`, `<type>`) is instead rendered as `.vexpattern` with no
+  // trailing `&nbsp;`, so the following `.vexname` (the argument name) glues
+  // straight onto it — `int|stringchannel`, `<type>defvalue`. Add the same
+  // trailing space here so both type spans behave alike.
+  turndown.addRule('vexPatternType', {
+    filter: (node) => node.nodeName === 'SPAN' && (node as Element).classList.contains('vexpattern'),
+    replacement: (content) => `${content.trim()} `,
+  });
+
   turndown.addRule('sphinxAnchors', {
     filter: (node) => node.nodeName === 'SPAN' && (node as Element).classList.contains('sphinx-anchor'),
     replacement: (_content, node) => {
