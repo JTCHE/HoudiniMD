@@ -12,18 +12,17 @@ export interface DocImageClientProps {
 }
 
 /**
- * The real <img> stays transparent until it has fully decoded, so it never
- * paints top-to-bottom on a slow connection. The preview sits underneath and
- * leaves the DOM the moment the image is ready, so a loaded page never holds
- * two images per figure.
+ * The preview sits under the image while it loads. The reserved wrapper prevents
+ * layout shift, and the browser can paint the real image as soon as pixels arrive.
  */
 export default function DocImageClient({ src, alt, width, height, blurDataURL }: DocImageClientProps) {
   const [loaded, setLoaded] = useState(false);
 
-  // A cached image can finish before hydration, so its load event never fires;
-  // catch that the moment the element mounts instead.
   const ref = useCallback((node: HTMLImageElement | null) => {
-    if (node?.complete && node.naturalWidth > 0) setLoaded(true);
+    if (!node) return;
+    const reveal = () => setLoaded(true);
+    node.addEventListener("load", reveal, { once: true });
+    if (node.complete && node.naturalWidth > 0) queueMicrotask(reveal);
   }, []);
 
   return (
@@ -59,11 +58,11 @@ export default function DocImageClient({ src, alt, width, height, blurDataURL }:
         decoding="async"
         onLoad={() => setLoaded(true)}
         onError={() => setLoaded(true)}
-        className="relative block h-full w-full object-cover transition-opacity duration-300 bg-muted"
+        className="relative block h-full w-full object-cover bg-muted"
         // `.prose img` carries a 2em margin. Inside the reserved box that
         // offsets the image and pushes its bottom under overflow-hidden, so
         // the spacing lives on the wrapper (my-4) and the image sits flush.
-        style={{ opacity: loaded ? 1 : 0, margin: 0 }}
+        style={{ margin: 0 }}
       />
     </span>
   );
