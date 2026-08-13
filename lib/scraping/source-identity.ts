@@ -12,12 +12,21 @@ function normalizeIdentityHtml(value: string): string {
 
 /** Identity of the parsed source document, before markdown presentation is added. */
 export async function sourceFingerprint(
-  source: Pick<ScrapedContent, "title" | "summary" | "mainHtml">,
+  source: ScrapedContent,
 ): Promise<string> {
   const identity = JSON.stringify({
     title: normalizeIdentityText(source.title),
     summary: normalizeIdentityText(source.summary),
     mainHtml: normalizeIdentityHtml(source.mainHtml),
+    breadcrumbs: source.breadcrumbs.map(normalizeIdentityText),
+    version: normalizeIdentityText(source.version),
+    category: normalizeIdentityText(source.category),
+    since: source.since ? normalizeIdentityText(source.since) : undefined,
+    iconSource: source.iconSource?.normalize("NFC"),
+    bannerSource: source.bannerSource?.normalize("NFC"),
+    deprecation: source.deprecation,
+    nodeType: source.nodeType ? normalizeIdentityText(source.nodeType) : undefined,
+    renderer: source.renderer,
   });
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(identity));
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
