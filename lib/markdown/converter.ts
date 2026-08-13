@@ -7,25 +7,69 @@ import { cleanMarkdown } from './utils';
 import { prepareDoxygenRoot } from './doxygen';
 import { prepareSphinxRoot } from './sphinx';
 
-function normalizeSectionLabels(root: HTMLElement): void {
-  const nestedHeadingLevel = (element: HTMLElement) => {
+function normalizeIndentedItemGroups(root: HTMLElement): void {
+  root.querySelectorAll('div.item_group').forEach((group) => {
+    const items = group.children.filter((child) =>
+      child.classList.contains('item') && !child.classList.contains('pref')
+    );
+    if (items.length === 0 || items.length !== group.children.length) return;
+
+    const listItems = items.map((item) => {
+      const label = item.children.find((child) => child.classList.contains('label'));
+      const content = item.children.find((child) => child.classList.contains('content'));
+      if (!label) return '';
+      return `<li><strong>${label.innerHTML}</strong>${content?.innerHTML || ''}</li>`;
+    }).filter(Boolean);
+    if (listItems.length !== items.length) return;
+
+    group.replaceWith(`<ul>${listItems.join('')}</ul>`);
+  });
+}
+
+function normalizeHeadingHierarchy(root: HTMLElement): void {
+  const directHeading = (element: HTMLElement) =>
+    element.children.find((child) => /^H[1-6]$/.test(child.tagName));
+
+  const parentSectionHeadingLevel = (element: HTMLElement) => {
     let ancestor = element.parentNode as HTMLElement | null;
     while (ancestor) {
-      const heading = ancestor.children.find((child) => /^H[1-6]$/.test(child.tagName));
-      if (ancestor.tagName === 'SECTION' && ancestor.classList.contains('heading') && heading) {
+      const heading = directHeading(ancestor);
+      if (ancestor.tagName === 'SECTION' && heading) {
         return Math.min(Number(heading.tagName[1]) + 1, 6);
       }
       ancestor = ancestor.parentNode as HTMLElement | null;
     }
-    return 2;
+    return null;
   };
 
-  root.querySelectorAll('div.sep.titled, div.item_group > div.item').forEach((section) => {
+  const labelHeadingLevel = (element: HTMLElement) => {
+    // SideFX puts named groups after their section as siblings, not children.
+    const siblings = element.parentNode?.children || [];
+    for (let index = siblings.indexOf(element) - 1; index >= 0; index--) {
+      if (siblings[index].tagName !== 'SECTION') continue;
+      const heading = directHeading(siblings[index]);
+      if (heading) return Math.min(Number(heading.tagName[1]) + 1, 6);
+    }
+    return parentSectionHeadingLevel(element) ?? 2;
+  };
+
+  root.querySelectorAll('section').forEach((section) => {
+    const heading = directHeading(section);
+    if (!heading) return;
+
+    const level = parentSectionHeadingLevel(section);
+    if (level === null) return;
+    if (heading.tagName === `H${level}`) return;
+    const attributes = heading.rawAttrs ? ` ${heading.rawAttrs}` : '';
+    heading.replaceWith(`<h${level}${attributes}>${heading.innerHTML}</h${level}>`);
+  });
+
+  root.querySelectorAll('div.sep.titled').forEach((section) => {
     const label = section.children.find((child) => child.classList.contains('label'));
     const text = label?.textContent.replace(/\s+/g, ' ').trim();
     if (!label || !text) return;
 
-    const level = nestedHeadingLevel(section);
+    const level = labelHeadingLevel(section);
     const id = section.getAttribute('id');
     const idAttribute = id ? ` id="${id.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}"` : '';
     if (id) section.removeAttribute('id');
@@ -80,7 +124,8 @@ export async function convertToMarkdown(
     prepareSphinxRoot(root, scraped.summary);
   }
 
-  normalizeSectionLabels(root);
+  normalizeIndentedItemGroups(root);
+  normalizeHeadingHierarchy(root);
 
   // SideFX "beta feature" notices: an icon div (beta.svg) beside a text div,
   // both children of a wrapper div. Recast as a standard notice box so the
