@@ -12,6 +12,7 @@
  * touch no network. Pass 3 runs only when they cannot fill the limit.
  */
 import { searchBm25, tokenize, type DocsTable, type SearchDoc, type DocHeading } from "./bm25";
+import { currentVersionSlug, legacyVersion } from "@/lib/houdini";
 
 export interface RankedResult {
   path: string;
@@ -114,6 +115,32 @@ function toResult(doc: SearchDoc, score: number | null, headings?: DocHeading[])
   };
 }
 type PathIntent = { doc?: SearchDoc; query?: string };
+
+/** One identity for current, legacy-version, fragment, and `/index` aliases. */
+function pageIdentity(path: string): string {
+  const base = path.split("#")[0].replace(/\/index$/, "");
+  return legacyVersion(base) ? currentVersionSlug(base) : base;
+}
+
+/** Add one page once, replacing its legacy alias when the current page appears. */
+function addUniqueResult(
+  results: RankedResult[],
+  positions: Map<string, number>,
+  result: RankedResult,
+): void {
+  const identity = pageIdentity(result.path);
+  const position = positions.get(identity);
+  if (position === undefined) {
+    positions.set(identity, results.length);
+    results.push(result);
+    return;
+  }
+
+  const previousVersion = legacyVersion(results[position].path);
+  const nextVersion = legacyVersion(result.path);
+  if (!previousVersion || (nextVersion && Number(nextVersion) <= Number(previousVersion))) return;
+  results[position] = result;
+}
 
 function oneEditAway(a: string, b: string): boolean {
   if (Math.abs(a.length - b.length) > 1) return false;
@@ -219,13 +246,15 @@ export async function rankResults(
   typo.sort(byWeight);
   prefix.sort(byWeight);
 
-  const seen = new Set([...exact, ...located, ...typo, ...prefix].map((d) => d.path));
-  const merged: RankedResult[] = [
+  const candidates: RankedResult[] = [
     ...exact.map((d) => toResult(d, 1)),
     ...located.map((d) => toResult(d, 0.97)),
     ...typo.map((d) => toResult(d, 0.96)),
     ...prefix.map((d) => toResult(d, 0.95)),
   ];
+  const merged: RankedResult[] = [];
+  const positions = new Map<string, number>();
+  for (const result of candidates) addUniqueResult(merged, positions, result);
 
   if (merged.length < limit) {
     // Ask for extra: category filtering and dedup below both drop rows.
@@ -237,9 +266,10 @@ export async function rankResults(
     const top = weighted.get(hits[0]?.docId) || 1;
     for (const hit of hits) {
       const doc = table.docs[hit.docId];
-      if (!doc || seen.has(doc.path) || !inCategory(doc)) continue;
-      seen.add(doc.path);
-      merged.push(
+      if (!doc || !inCategory(doc)) continue;
+      addUniqueResult(
+        merged,
+        positions,
         toResult(
           doc,
           Math.round((weighted.get(hit.docId)! / top) * 90) / 100,
@@ -259,22 +289,11 @@ export async function rankResults(
   // save it — scan for a near-miss before giving up.
   if (merged.length === 0 && qLower.length > 1) {
     for (const doc of lastResort(table, qLower, limit, inCategory)) {
-      merged.push(toResult(doc, 0.1));
+      addUniqueResult(merged, positions, toResult(doc, 0.1));
     }
   }
 
-  // Collapse anchor fragments ("foo" over "foo#bar") and the `/index` twin the
-  // scrape produces — `houdini/nodes/lop` and `houdini/nodes/lop/index` are one
-  // page, and listing both wastes a slot on a literal duplicate.
-  const seenBase = new Set<string>();
-  return merged
-    .filter((r) => {
-      const base = r.path.split("#")[0].replace(/\/index$/, "");
-      if (seenBase.has(base)) return false;
-      seenBase.add(base);
-      return true;
-    })
-    .slice(0, limit);
+  return merged.slice(0, limit);
 }
 
 /**

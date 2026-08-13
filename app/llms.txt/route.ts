@@ -1,73 +1,75 @@
-import { SITE_URL as root } from "@/lib/site";
+import { HOUDINI_DOC_VERSIONS } from "@/lib/houdini";
+import { SITE_URL } from "@/lib/site";
+
 export async function GET() {
+  const body = `# HoudiniMD — SideFX documentation for LLMs
 
-  const body = `# HoudiniMD — Houdini Docs for LLMs
+HoudiniMD converts pages from the SideFX documentation site to clean Markdown. It supports the current and archived Houdini documentation trees for ${HOUDINI_DOC_VERSIONS.join(", ")}, including Houdini, HQueue, HDK, Houdini Engine, HAPI, and the application plug-ins.
 
-HoudiniMD provides SideFX Houdini documentation as clean, LLM-optimised markdown.
-All pages are generated on-demand from the official SideFX docs and cached for 30 days.
+## Start here
 
-## Raw Markdown (per-page)
+- Documentation catalog: ${SITE_URL}/docs.md
+- Search: ${SITE_URL}/api/search?q={query}
+- Browse the indexed corpus: ${SITE_URL}/api/index
 
-Every rendered page has a raw markdown equivalent at the same URL with \`.md\` appended,
-following the llmstxt.org spec:
+## Page URLs
 
-  ${root}/docs/houdini/nodes/sop/fuse       ← rendered HTML (humans)
-  ${root}/docs/houdini/nodes/sop/fuse.md    ← raw markdown  (LLMs)
+Append \`.md\` to a rendered documentation URL to get raw Markdown:
 
-Pages are generated on first request (~5-10s), then cached. Use \`?regenerate=true\` to force a refresh.
+- Rendered page: ${SITE_URL}/docs/houdini/nodes/sop/fuse
+- Raw Markdown: ${SITE_URL}/docs/houdini/nodes/sop/fuse.md
+
+A page that is not stored yet is generated from SideFX on its first request and then reused. Add \`?regenerate=true\` to a raw Markdown URL to refresh that page from SideFX.
 
 ## Search API
 
-GET ${root}/api/search?q={query}
+\`GET ${SITE_URL}/api/search?q={query}\`
 
-Fuzzy search across all indexed pages. Returns \`docs_url\` (rendered) and \`raw_url\` (markdown).
+Search checks exact names and slugs first, then title and slug prefixes, and then the full page content with BM25 ranking. Results can include matching section headings.
 
 Parameters:
-- q         (required) Search query
-- category  (optional) e.g. "VEX Functions", "Nodes > Geometry nodes"
-- limit     (optional) Default: 20. Max: 100
 
-Example response:
-{
-  "results": [
+- \`q\` (required): Search text. A missing or blank value returns HTTP 400.
+- \`category\` (optional): Exact category name, matched without case sensitivity.
+- \`limit\` (optional): Number of results from 1 to 100. The default is 20. Invalid values use the default.
+
+The response contains \`query\`, \`total\`, and \`results\`. Each result contains \`path\`, \`title\`, \`summary\`, \`category\`, \`version\`, \`score\`, \`docs_url\`, and \`raw_url\`. A result can also contain \`icon\` and matching \`headings\`, where each heading has \`text\` and \`slug\` fields. \`total\` is the number of results returned, not the number of all possible matches.
+
+Example result:
+
     {
       "path": "houdini/vex/functions/abs",
       "title": "abs",
       "summary": "Returns the absolute value of the argument.",
       "category": "VEX Functions",
-      "score": 0.95,
-      "docs_url": "${root}/docs/houdini/vex/functions/abs",
-      "raw_url":  "${root}/docs/houdini/vex/functions/abs.md"
+      "version": "22.0",
+      "score": 1,
+      "docs_url": "${SITE_URL}/docs/houdini/vex/functions/abs",
+      "raw_url": "${SITE_URL}/docs/houdini/vex/functions/abs.md"
     }
-  ]
-}
 
-## Browse Index
+## Browse API
 
-GET ${root}/api/index
+\`GET ${SITE_URL}/api/index\`
 
-List all indexed pages. Same \`docs_url\` / \`raw_url\` fields per entry.
-Parameters: category, page, limit (max 200).
+This endpoint lists indexed pages without relevance ranking.
 
-## Common Path Patterns
+Parameters:
 
-| Category       | Raw markdown URL pattern                          |
-|----------------|---------------------------------------------------|
-| VEX Functions  | /docs/houdini/vex/functions/{name}.md             |
-| HOM (Python)   | /docs/houdini/hom/hou/{class}.md                  |
-| SOP nodes      | /docs/houdini/nodes/sop/{name}.md                 |
-| DOP nodes      | /docs/houdini/nodes/dop/{name}.md                 |
-| VOP nodes      | /docs/houdini/nodes/vop/{name}.md                 |
+- \`category\` (optional): Exact category name, matched without case sensitivity.
+- \`page\` (optional): One-based page number. The default is 1. Invalid values use the default.
+- \`limit\` (optional): Entries per page from 1 to 200. The default is 50. Invalid values use the default.
 
-## Recommended Workflow
+The response contains \`total\`, \`page\`, \`limit\`, \`pages\`, \`categories\`, and \`entries\`. Each entry includes absolute \`docs_url\` and \`raw_url\` fields.
 
-1. GET ${root}/api/search?q={topic} — find relevant pages
-2. Use raw_url from results to fetch raw markdown directly
-3. If the path is known, fetch ${root}/docs/houdini/{path}.md directly
+## Recommended workflow
 
-## Notes
-- No authentication required
-- Content mirrors Houdini 20.5–21.0 docs from sidefx.com
+1. Search for the concept with \`/api/search\`.
+2. Fetch the result's \`raw_url\`.
+3. Use a returned heading slug as a URL fragment when only one section is relevant.
+4. Use \`/docs.md\` or \`/api/index\` when you need to browse instead of search.
+
+No authentication is required.
 `;
 
   return new Response(body, {
