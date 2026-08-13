@@ -53,6 +53,12 @@ const BROWSER_HEADERS = {
   m: 'sec-fetch-mode',
   l: 'accept-language', // every browser ever, and few HTTP clients
   c: 'sec-ch-ua', // Chromium only
+  // Only on a navigation the user activated: a click, a bookmark, the address
+  // bar. An automated page.goto() never carries it. Absent on reload, on
+  // back/forward, on a scripted location change and on every prefetch, so it
+  // can only ever ADD evidence — this map is an OR, and requiring `u` would
+  // demote a reader who pressed F5 and redirect them to markdown.
+  u: 'sec-fetch-user',
 } as const;
 
 export const NO_EVIDENCE = '-';
@@ -64,6 +70,37 @@ export function browserEvidence(headers: HeaderBag): string {
     .join('');
   return seen || NO_EVIDENCE;
 }
+
+/**
+ * Where the browser says the request came from — 'none' (address bar, bookmark),
+ * 'same-origin', 'same-site' or 'cross-site'. Every browser that sends any
+ * `sec-fetch-*` sends this one, on every request, and a script cannot override
+ * it: it is computed from the real initiator, not from anything a fetcher sets.
+ *
+ * That is what makes it worth storing beside `referrer`. A `Referer` naming our
+ * own origin next to `sec-fetch-site: none` is a combination a browser cannot
+ * produce — it means the Referer was written by hand. Stored, not judged here:
+ * the dashboard decides what to do with the contradiction, so nothing about
+ * this can change what a reader is served.
+ *
+ * '' means the client sent no `sec-fetch-site` at all (a browser older than
+ * Chrome 76 / Firefox 90 / Safari 16.4, or not a browser). Silence is not
+ * evidence, and every rule reading this column must skip the row.
+ */
+export const fetchSite = (headers: HeaderBag): string => headers.get('sec-fetch-site') ?? '';
+
+/**
+ * The primary language tag, lowercased — "en-us,en;q=0.9" is "en-us".
+ *
+ * Recorded for the language rollup, and NOT used to classify anyone. A reader
+ * in France with an English desktop is completely ordinary, so this header
+ * disagreeing with `cf-ipcountry` says nothing about one visitor. It is only
+ * worth reading across many: one identical tag shared by a few hundred first-
+ * seen visitors in sixty countries in one hour is a proxy pool, and that is a
+ * question to ask of a burst, never of a row.
+ */
+export const primaryLanguage = (headers: HeaderBag): string =>
+  (headers.get('accept-language') ?? '').split(',')[0]!.split(';')[0]!.trim().toLowerCase().slice(0, 12);
 
 /**
  * True for programmatic / AI fetchers: not a browser and not a known HTML

@@ -1,4 +1,4 @@
-import { botFamily, browserEvidence, browserKind, deviceKind, visitorKind } from "../lib/wants-markdown";
+import { botFamily, browserEvidence, browserKind, deviceKind, fetchSite, primaryLanguage, visitorKind } from "../lib/wants-markdown";
 import { visitorHash } from "../lib/visitor-hash";
 import { visitorLabel } from "../lib/visitor-label";
 import { canRecord, nowStamp, type TelemetryEnv, type WaitUntil } from "./types";
@@ -54,8 +54,8 @@ async function writeView(
   const salt = env.VISITOR_SALT!;
   const visitor = visitorHash(`${ip}|${ua ?? ""}`, salt);
   await env.DB!.prepare(
-    `INSERT OR IGNORE INTO views (ts, visitor, path, kind, country, city, bot, evidence, status, referrer, markdown, alias, device, browser)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    `INSERT OR IGNORE INTO views (ts, visitor, path, kind, country, city, bot, evidence, status, referrer, markdown, alias, device, browser, fetch_site, lang)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
   )
     .bind(
       nowStamp(),
@@ -72,6 +72,12 @@ async function writeView(
       visitorLabel(visitor),
       deviceKind(ua, request.headers),
       browserKind(ua, request.headers),
+      // On a beacon these describe the beacon's own fetch, not the navigation
+      // it reports — that request really is same-origin — so a beacon row can
+      // never contradict its `from`. Only a document load can, which is the
+      // only place the dashboard reads the pair. See fetchSite().
+      fetchSite(request.headers),
+      primaryLanguage(request.headers),
     )
     .run();
 }
