@@ -6,6 +6,7 @@ Project information: @README.md
 
 - [Architecture](agents/architecture.md) — the four layers, and which file owns what.
 - [Deployment](agents/deployment.md) — Cloudflare CI deploys. You do not.
+- [Page Content](agents/page-content.md) — regenerate the pages your change affects.
 - [Code](agents/code.md) — one source of truth, small modules, no legacy paths.
 - [Front-end](agents/frontend.md) — the design language, and how to look at a change.
 - [Testing](agents/testing.md) — test the change, do not commit the test.
@@ -25,3 +26,6 @@ Project information: @README.md
   in a temporary directory.
 - Look at a UI change before you report it done. A build that compiles is not a
   page that reads.
+- When you change how content is scraped or rendered, regenerate every affected
+  page with `bun run regen`. It does not change the live site — see
+  [Content](agents/content.md).
