@@ -82,12 +82,24 @@ function headingId(node: MarkdownNode): string | null {
   return node.value.match(/^<h[1-6]\s+id="([^"]+)"/i)?.[1] ?? null;
 }
 
+// Doxygen (/docs/hengine/*) and Sphinx (/docs/api/*) open their pages with
+// template chrome rather than prose, so the first paragraph is a caption for a
+// call graph or a toctree, not a description of the page.
+const BOILERPLATE = [
+  /^#include /,
+  /^Go to the (documentation|source code) of this file/,
+  /^This graph shows which files/,
+  /^(Include dependency|Collaboration|Inheritance) (graph|diagram) for /,
+  /^Here is a list of all/,
+  /^Definition at line /,
+  /^(Value|Contents):$/,
+];
+
 /** A preview candidate for one top-level node, or null if it isn't one
- * (headings, images, tables, etc). Shared by whole-page and per-section preview. */
+ * (headings, images, tables, etc) or it is source-template chrome. */
 function nodePreview(node: MarkdownNode): string | null {
-  if (node.type === "list") return listPreview(node);
-  if (node.type === "paragraph") return prosePreview(paragraphText(node));
-  return null;
+  const preview = node.type === "list" ? listPreview(node) : node.type === "paragraph" ? prosePreview(paragraphText(node)) : null;
+  return preview && BOILERPLATE.some((re) => re.test(preview)) ? null : preview;
 }
 
 /** First readable paragraph, or the titles of the opening topic list. */
