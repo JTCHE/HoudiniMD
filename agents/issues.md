@@ -5,8 +5,9 @@ Issues and features live as specs in an Obsidian base, not in this repo.
 **Vault path:** `<value of OBSIDIAN_VAULT_PATH in @.env.obsidian>/vault/side projects/Houdini/HoudiniMD/HoudiniMD — Issue Tracker.base`
 
 The base reads the spec files in `specs/<Type>/<Status>/`. The folder and the
-frontmatter must agree: a closed issue is `Type: Issue`, `Status: Closed`, and
-sits in `specs/Issue/Closed/`.
+frontmatter must agree: a closed issue is `Type: Issue`, `Status: Closed`.
+
+Files are moved automatically, so no need to manually place them under `specs/####/Closed/`
 
 ## Spec format
 
@@ -18,6 +19,6 @@ to make. A pasted screenshot is welcome. No code blocks, no steps, no history.
 
 ## Status
 
-When you commit work that closes a spec, and the user confirms it is complete,
-set `Status: Closed` in that spec and move the file to the matching `Closed`
-folder.
+When you commit work that closes a spec, set `Status: Closed` in that spec
+The `/commit` command does this on its own — no need to ask for it
+separately once the user has called it.
