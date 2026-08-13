@@ -222,10 +222,11 @@ async function audit(alias: string): Promise<AuditResult> {
       const comparableAliasSource = {
         ...aliasSource,
         sourceUrl: canonicalSource.sourceUrl,
-        // These values are resolved from relative source attributes. Use the
-        // canonical base just as we do for body links and media.
-        icon: canonicalSource.icon,
-        banner: canonicalSource.banner,
+        // The fingerprint proves the raw source attributes match. Resolve the
+        // same relative values against the canonical base just as we do for
+        // body links and media.
+        icon: aliasSource.iconSource === canonicalSource.iconSource ? canonicalSource.icon : aliasSource.icon,
+        banner: aliasSource.bannerSource === canonicalSource.bannerSource ? canonicalSource.banner : aliasSource.banner,
       };
       const [aliasMarkdown, canonicalMarkdown] = await Promise.all([
         convertToMarkdown(comparableAliasSource, { codeLanguage: detectLanguage(canonical) }),
@@ -306,7 +307,9 @@ async function main() {
   const requestedAlias = process.argv.find((argument) => argument.startsWith("--alias="))?.slice("--alias=".length);
   // Verification starts from published mappings. It must not rescan the whole
   // content corpus before it can check the migrated state.
-  const cachedAliases = verify ? [] : (await listR2Slugs()).filter((slug) => slug.endsWith("/index"));
+  const cachedAliases = verify || requestedAlias
+    ? []
+    : (await listR2Slugs()).filter((slug) => slug.endsWith("/index"));
   const aliases = requestedAlias
     ? [requestedAlias]
     : [...new Set([...cachedAliases, ...await listStoredAliases()])].sort();
@@ -384,7 +387,7 @@ async function main() {
 
   }
 
-  if (apply) {
+  if (apply && !requestedAlias) {
     const direct = results.filter((result) =>
       result.reason === "parent-missing" || result.reason === "source-mismatch" || result.reason === "artifact-mismatch"
     );

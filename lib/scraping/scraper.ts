@@ -19,8 +19,12 @@ export interface ScrapedContent {
   since?: string;
   /** Absolute URL of the node's page icon (from .pageicon img). */
   icon?: string;
+  /** Raw source attribute used to prove equivalent relative icon references. */
+  iconSource?: string;
   /** Absolute URL of the page's top banner image (from .billboard's background-image), if any. */
   banner?: string;
+  /** Raw source attribute used to prove equivalent relative banner references. */
+  bannerSource?: string;
   /** Present when the page is marked as a deprecated node. */
   deprecation?: DeprecationInfo;
   /** Node/function/class kind, e.g. "Geometry Node", "VEX function". Empty when the page has no type (e.g. plain articles). */
@@ -290,7 +294,9 @@ export async function scrapeSideFXPage(url: string): Promise<ScrapedContent> {
     mainHtml,
     since,
     icon,
+    iconSource: iconSrc || undefined,
     banner,
+    bannerSource: bannerSrc,
     deprecation,
     nodeType,
     renderer: isDoxygen ? "doxygen" : isSphinx ? "sphinx" : undefined,
