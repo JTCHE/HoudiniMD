@@ -20,8 +20,10 @@ export async function OPTIONS() {
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
   const category = searchParams.get("category")?.trim();
-  const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
-  const limit = Math.min(parseInt(searchParams.get("limit") ?? "50", 10), 200);
+  const requestedPage = parseInt(searchParams.get("page") ?? "1", 10);
+  const requestedLimit = parseInt(searchParams.get("limit") ?? "50", 10);
+  const page = Number.isFinite(requestedPage) ? Math.max(1, requestedPage) : 1;
+  const limit = Number.isFinite(requestedLimit) ? Math.max(1, Math.min(requestedLimit, 200)) : 50;
 
   const raw = await fetchIndexJson();
   if (!raw) {

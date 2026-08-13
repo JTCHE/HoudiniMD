@@ -26,7 +26,8 @@ export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
   const q = searchParams.get("q")?.trim();
   const category = searchParams.get("category")?.trim();
-  const limit = Math.min(parseInt(searchParams.get("limit") ?? "20", 10), 100);
+  const requestedLimit = parseInt(searchParams.get("limit") ?? "20", 10);
+  const limit = Number.isFinite(requestedLimit) ? Math.max(1, Math.min(requestedLimit, 100)) : 20;
 
   if (!q) {
     return Response.json(
@@ -70,7 +71,7 @@ export async function GET(request: NextRequest) {
 
   const results = ranked.map((r) => ({
     ...r,
-    docs_url: `/docs/${r.path}`,
+    docs_url: `${ROOT}/docs/${r.path}`,
     raw_url: `${ROOT}/docs/${r.path}.md`,
   }));
 
