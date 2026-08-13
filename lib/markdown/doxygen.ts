@@ -52,32 +52,58 @@ function detailedMemberNames(root: HTMLElement): Map<string, string> {
   return names;
 }
 
-function normalizeMemberDeclarations(root: HTMLElement, detailedIds: ReadonlySet<string>): void {
+function normalizeMemberDeclarations(root: HTMLElement): void {
   for (const table of root.querySelectorAll("table.memberdecls")) {
     const rows = table.querySelectorAll("tr");
     const heading = cleanText(rows.find((row) => row.classList.contains("heading"))?.textContent || "Members");
-    const descriptions = new Map<string, string>();
-
+    const items: Array<{ type: string; declaration: string; description: string }> = [];
     for (const row of rows) {
-      const id = (row.getAttribute("class") || "").match(/(?:^|\s)memdesc:([^\s]+)/)?.[1];
-      if (id) descriptions.set(id, cleanText(row.textContent));
-    }
-
-    const items: string[] = [];
-    for (const row of rows) {
-      const id = (row.getAttribute("class") || "").match(/(?:^|\s)memitem:([^\s]+)/)?.[1];
-      if (!id || detailedIds.has(id)) continue;
-      const declaration = cleanText(row.textContent);
-      if (!declaration) continue;
-      const description = descriptions.get(id);
-      items.push(`<li><code>${escapeHtml(declaration)}</code>${description ? ` — ${escapeHtml(description)}` : ""}</li>`);
+      const classes = row.getAttribute("class") || "";
+      if (/(?:^|\s)memitem:/.test(classes)) {
+        const cells = row.querySelectorAll("td");
+        const type = cleanText(cells[0]?.textContent || "");
+        const declaration = cleanText(cells[1]?.textContent || row.textContent);
+        if (declaration) items.push({ type, declaration, description: "" });
+        continue;
+      }
+      if (/(?:^|\s)memdesc:/.test(classes) && items.length > 0) {
+        items[items.length - 1].description = cleanText(row.textContent);
+      }
     }
 
     if (items.length === 0) {
       table.remove();
       continue;
     }
-    table.replaceWith(`<h2>${escapeHtml(heading)}</h2><ul>${items.join("")}</ul>`);
+    const hasDescriptions = items.some((item) => item.description);
+    const headers = hasDescriptions
+      ? "<th>Type</th><th>Declaration</th><th>Description</th>"
+      : "<th>Type</th><th>Declaration</th>";
+    const body = items.map((item) => (
+      `<tr><td><code>${escapeHtml(item.type)}</code></td><td><code>${escapeHtml(item.declaration)}</code></td>`
+      + `${hasDescriptions ? `<td>${escapeHtml(item.description)}</td>` : ""}</tr>`
+    )).join("");
+    table.replaceWith(
+      `<h2>${escapeHtml(heading)}</h2><table><thead><tr>${headers}</tr></thead><tbody>${body}</tbody></table>`,
+    );
+  }
+}
+
+function normalizeDynamicGraphs(root: HTMLElement): void {
+  for (const header of root.querySelectorAll(".dynheader")) {
+    const sectionId = header.getAttribute("id") || "";
+    const content = sectionId ? root.querySelector(`#${sectionId}-content`) : undefined;
+    const image = content?.querySelector("img[src]");
+    if (!image) continue;
+
+    const label = cleanText(header.textContent);
+    const source = image.getAttribute("src") || "";
+    header.replaceWith(
+      `<figure><img src="${escapeHtml(source)}" alt="${escapeHtml(label)}">`
+      + `<figcaption>${escapeHtml(label)}</figcaption></figure>`,
+    );
+    root.querySelector(`#${sectionId}-summary`)?.remove();
+    content?.remove();
   }
 }
 
@@ -168,15 +194,14 @@ function removeRepeatedSummary(root: HTMLElement, summary: string): void {
 
 export function prepareDoxygenRoot(root: HTMLElement, summary: string): void {
   const names = detailedMemberNames(root);
-  const detailedIds = new Set(root.querySelectorAll("div.memitem").map(memberAnchor).filter(Boolean));
-
-  normalizeMemberDeclarations(root, detailedIds);
+  normalizeMemberDeclarations(root);
   normalizeDetailedMembers(root, names);
   normalizeParameterSections(root);
   normalizeSourceFragments(root);
   normalizeDirectories(root);
+  normalizeDynamicGraphs(root);
 
-  root.querySelectorAll(".dynheader, .dyncontent, .memSeparator, .permalink, .icona, .arrow").forEach((item) => item.remove());
+  root.querySelectorAll(".dynheader, .dynsummary, .dyncontent, .memSeparator, .permalink, .icona, .arrow").forEach((item) => item.remove());
   root.querySelectorAll("p").forEach((paragraph) => {
     if (/^(?:Definition at line|Referenced by|References)\b/i.test(cleanText(paragraph.textContent))) {
       paragraph.remove();

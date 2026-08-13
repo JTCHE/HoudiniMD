@@ -1,4 +1,14 @@
 import type { Components } from "react-markdown";
+import type { Element, Root, Text } from "hast";
+
+function tableHeading(node: Element | undefined): string {
+  function textContent(child: Element | Root | Text): string {
+    if (child.type === "text") return child.value;
+    return child.children.map((item) => textContent(item as Element | Text)).join("");
+  }
+
+  return node ? textContent(node).trim() : "";
+}
 
 /**
  * GFM table rendering. The visual rule — row lines only, no rule after the
@@ -6,9 +16,11 @@ import type { Components } from "react-markdown";
  * own inset — is the `.md-table` component in globals.css, shared with the
  * VEX arguments table so the two can't drift apart.
  */
-export const Table: Components["table"] = ({ children }) => (
+export const Table: Components["table"] = ({ children, node }) => (
   <div className="not-prose md-table-wrap">
-    <table className="md-table">{children}</table>
+    <table className={tableHeading(node).startsWith("TypeDeclarationDescription") ? "md-table md-table-declarations" : "md-table"}>
+      {children}
+    </table>
   </div>
 );
 
