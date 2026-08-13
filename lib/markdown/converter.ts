@@ -1,10 +1,37 @@
 import type { ScrapedContent } from '../scraping';
 import type { ConversionOptions } from './types';
+import type { HTMLElement } from 'node-html-parser';
 import { addCustomRules } from './turndown-rules';
 import { extractSeeAlso, extractTaggedLinks } from './extractors';
 import { cleanMarkdown } from './utils';
 import { prepareDoxygenRoot } from './doxygen';
 import { prepareSphinxRoot } from './sphinx';
+
+function normalizeSectionLabels(root: HTMLElement): void {
+  const nestedHeadingLevel = (element: HTMLElement) => {
+    let ancestor = element.parentNode as HTMLElement | null;
+    while (ancestor) {
+      const heading = ancestor.children.find((child) => /^H[1-6]$/.test(child.tagName));
+      if (ancestor.tagName === 'SECTION' && ancestor.classList.contains('heading') && heading) {
+        return Math.min(Number(heading.tagName[1]) + 1, 6);
+      }
+      ancestor = ancestor.parentNode as HTMLElement | null;
+    }
+    return 2;
+  };
+
+  root.querySelectorAll('div.sep.titled, div.item_group > div.item').forEach((section) => {
+    const label = section.children.find((child) => child.classList.contains('label'));
+    const text = label?.textContent.replace(/\s+/g, ' ').trim();
+    if (!label || !text) return;
+
+    const level = nestedHeadingLevel(section);
+    const id = section.getAttribute('id');
+    const idAttribute = id ? ` id="${id.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}"` : '';
+    if (id) section.removeAttribute('id');
+    label.replaceWith(`<h${level}${idAttribute}>${label.innerHTML}</h${level}>`);
+  });
+}
 
 /**
  * Convert scraped HTML content to llms.txt-compliant markdown.
@@ -52,6 +79,8 @@ export async function convertToMarkdown(
   if (scraped.renderer === 'sphinx') {
     prepareSphinxRoot(root, scraped.summary);
   }
+
+  normalizeSectionLabels(root);
 
   // SideFX "beta feature" notices: an icon div (beta.svg) beside a text div,
   // both children of a wrapper div. Recast as a standard notice box so the
