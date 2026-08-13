@@ -13,6 +13,7 @@
     "audit:source-aliases": "bun scripts/audit-source-aliases.ts",
     "stage:source-aliases": "bun scripts/audit-source-aliases.ts --stage",
     "backfill:source-aliases": "bun scripts/audit-source-aliases.ts --apply",
+    "verify:source-aliases": "bun scripts/audit-source-aliases.ts --verify",
     "bench:sidefx": "bun scripts/benchmark-vs-sidefx.ts",
     "sidefx:index": "bun scripts/build-sidefx-index.ts",
     "search:index": "bun scripts/build-search-index.ts",
