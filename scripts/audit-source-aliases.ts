@@ -290,6 +290,7 @@ async function verifyRedirects(results: AuditResult[]): Promise<boolean[]> {
 async function main() {
   const apply = process.argv.includes("--apply");
   const stage = process.argv.includes("--stage");
+  const verify = process.argv.includes("--verify");
   const cachedAliases = (await listR2Slugs()).filter((slug) => slug.endsWith("/index"));
   const aliases = [...new Set([...cachedAliases, ...await listStoredAliases()])].sort();
   const results: AuditResult[] = [];
@@ -305,7 +306,7 @@ async function main() {
   await Promise.all(workers);
 
   const fetchErrors = results.filter((result) => result.reason === "fetch-error");
-  if ((apply || stage) && fetchErrors.length) {
+  if ((apply || stage || verify) && fetchErrors.length) {
     throw new Error(`Audit had ${fetchErrors.length} fetch error(s); refusing to mutate production`);
   }
 
@@ -352,7 +353,7 @@ async function main() {
     }
   }
 
-  if (apply) {
+  if (apply || verify) {
     const productionProbe = await fetch("https://houdinimd.com/api/source-alias-version", { cache: "no-store" });
     const productionVersion = productionProbe.ok
       ? (await productionProbe.json() as { version?: number }).version
@@ -361,6 +362,9 @@ async function main() {
       throw new Error("Production is not running alias-aware redirect code; deploy it before applying the backfill");
     }
 
+  }
+
+  if (apply) {
     const direct = results.filter((result) =>
       result.reason === "parent-missing" || result.reason === "source-mismatch" || result.reason === "artifact-mismatch"
     );
@@ -414,6 +418,9 @@ async function main() {
     await deleteVerifiedMarkdown(verified.map((result) => result.alias));
     await deleteAliasIsr(verified.map((result) => result.alias));
 
+  }
+
+  if (apply || verify) {
     const finalIndex = await fetchSearchIndex();
     const finalPaths = new Set(finalIndex.map((entry) => entry.path));
     const liteIndex = await getJson<Array<{ path: string }>>(LITE_INDEX_PATH);
@@ -481,8 +488,8 @@ async function main() {
   for (const reason of ["verified", "parent-missing", "source-mismatch", "artifact-mismatch", "fetch-error"] as const) {
     console.log(`  ${reason.padEnd(15)} ${counts.get(reason) ?? 0}`);
   }
-  if (!apply && !stage) console.log("\nRun with --stage to publish mappings safely, then --apply after deployment to deduplicate content and indexes.");
-  if (!apply && !stage && missingTargets.length) process.exitCode = 1;
+  if (!apply && !stage && !verify) console.log("\nRun with --stage to publish mappings safely, then --apply after deployment to deduplicate content and indexes.");
+  if (!apply && !stage && !verify && missingTargets.length) process.exitCode = 1;
 }
 
 await main();

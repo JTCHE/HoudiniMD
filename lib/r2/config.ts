@@ -58,6 +58,12 @@ export async function getS3Client(): Promise<S3Client | null> {
   cachedClient = new S3Client({
     region: 'auto',
     endpoint: `https://${config.accountId}.r2.cloudflarestorage.com`,
+    requestHandler: {
+      connectionTimeout: 5_000,
+      requestTimeout: 30_000,
+      socketTimeout: 30_000,
+      throwOnRequestTimeout: true,
+    },
     credentials: {
       accessKeyId: config.accessKeyId,
       secretAccessKey: config.secretAccessKey,
