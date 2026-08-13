@@ -18,6 +18,10 @@ const ENTITIES: Record<string, string> = {
 function plainText(source: string): string {
   return source
     .replace(/<[^>]+>/g, "")
+    // Images are links in Markdown syntax too. Remove them first, otherwise the
+    // generic link rule consumes only `[alt](url)` and leaves a stray `!` in
+    // the table of contents.
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
     .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
     .replace(/[`*_]/g, "")
     .replace(/&(lt|gt|amp|quot|#39);/g, (m) => ENTITIES[m])

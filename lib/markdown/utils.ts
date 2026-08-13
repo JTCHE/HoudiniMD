@@ -54,7 +54,13 @@ export function addSeeAlsoIcons(
  * Clean up generated markdown
  */
 export function cleanMarkdown(markdown: string): string {
-  return normalizeIconLinks(markdown)
+  const code: string[] = [];
+  const stashCode = (value: string) => `\u0000CODE${code.push(value) - 1}\u0000`;
+  const withoutCode = normalizeIconLinks(markdown)
+    .replace(/```[\s\S]*?```/g, stashCode)
+    .replace(/(`+)([^\n]*?)\1/g, stashCode);
+
+  return withoutCode
     .replace(/\n{3,}/g, '\n\n')
     .replace(/&nbsp;/g, ' ')
     .replace(/&lt;/g, '<')
@@ -64,5 +70,6 @@ export function cleanMarkdown(markdown: string): string {
     .replace(/&#39;/g, "'")
     .replace(/<!--[\s\S]*?-->/g, '')
     .replace(/‹([^›]+)›/g, '*$1*')
+    .replace(/\u0000CODE(\d+)\u0000/g, (_, index) => code[Number(index)] || '')
     .trim();
 }

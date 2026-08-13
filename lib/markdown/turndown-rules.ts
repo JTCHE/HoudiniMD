@@ -69,6 +69,18 @@ function restoreMedia(markdown: string, media: string[]): string {
   return markdown.replace(/MEDIA_PLACEHOLDER_(\d+)/g, (_, index) => media[Number(index)] || '');
 }
 
+function inlineCodeMarkdown(value: string): string {
+  const cleaned = value
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .trim();
+  const longestRun = Math.max(0, ...Array.from(cleaned.matchAll(/`+/g), (match) => match[0].length));
+  const delimiter = '`'.repeat(longestRun + 1);
+  const padding = cleaned.startsWith('`') || cleaned.endsWith('`') ? ' ' : '';
+  return `${delimiter}${padding}${cleaned}${padding}${delimiter}`;
+}
+
 function videoFigureHtml(figure: Element, sourceUrl: string): string {
   const video = figure.querySelector('video[src]') as Element;
   const src = video.getAttribute('src') || '';
@@ -422,14 +434,7 @@ export function addCustomRules(
         node.parentNode?.nodeName !== 'PRE'
       );
     },
-    replacement: (content) => {
-      const cleaned = content
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&amp;/g, '&')
-        .trim();
-      return `\`${cleaned}\``;
-    },
+    replacement: (content) => inlineCodeMarkdown(content),
   });
 
   turndown.addRule('keyboardKeys', {
@@ -465,7 +470,7 @@ export function addCustomRules(
   // Var elements (variable names)
   turndown.addRule('varElements', {
     filter: 'var',
-    replacement: (content) => `*${content}*`,
+    replacement: (content, node) => (node.parentNode as Element | null)?.tagName === 'CODE' ? content : `*${content}*`,
   });
 
   // SideFX callout/notice boxes (.notice.ind-item) → GitHub-style admonition
@@ -499,7 +504,8 @@ export function addCustomRules(
     filter: (node) => node.nodeName === 'DIV' && (node as Element).classList.contains('def'),
     replacement: (_content, node) => {
       const el = node as Element;
-      const label = el.querySelector('p.label')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+      const labelEl = el.querySelector('p.label') as Element | null;
+      const label = labelEl?.textContent?.replace(/\s+/g, ' ').trim() || '';
       const contentEl = el.querySelector('.content') as Element | null;
       if (!label) return _content;
       let desc = '';
@@ -518,7 +524,10 @@ export function addCustomRules(
         const html = (contentEl as unknown as { innerHTML: string }).innerHTML ?? '';
         desc = contentHtmlToMarkdown(html, sourceUrl);
       }
-      return `\n\n**${label}**  \n${desc}\n${callouts}\n`;
+      const labelMarkdown = labelEl?.querySelector('code')
+        ? contentHtmlToMarkdown(labelEl.innerHTML, sourceUrl)
+        : `**${label}**`;
+      return `\n\n${labelMarkdown}  \n${desc}\n${callouts}\n`;
     },
   });
 
