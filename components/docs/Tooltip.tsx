@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { getPagePreview, getSectionPreview, getSummaryPreview } from "@/lib/markdown/page-preview";
 
 interface MetaEntry {
   title: string;
@@ -11,10 +10,6 @@ interface MetaEntry {
 
 // Module-level caches shared across all DocTooltip instances in this session
 const metaCache = new Map<string, MetaEntry>();
-// Derived preview text (raw-markdown fetch + remark parse), keyed by slug+anchor.
-// DocTooltip unmounts on mouseleave, so without this every repeat hover re-fetches
-// and re-parses the same page.
-const previewCache = new Map<string, string>();
 const fetchingMeta = new Set<string>();
 const generatedSlugs = new Set<string>();
 
@@ -86,16 +81,13 @@ fetch("/api/meta-all")
 
 export function DocTooltip({
   slug,
-  anchor,
   anchorRef,
 }: {
   slug: string;
   anchor?: string | null;
   anchorRef: React.RefObject<HTMLElement | null>;
 }) {
-  const previewKey = `${slug}#${anchor ?? ""}`;
   const [meta, setMeta] = useState<MetaEntry | null>(() => metaCache.get(slug) ?? null);
-  const [fallbackSummary, setFallbackSummary] = useState<string | null>(() => previewCache.get(previewKey) ?? null);
   const [error, setError] = useState(false);
   const mountedRef = useRef(true);
   const sseRef = useRef<EventSource | null>(null);
@@ -200,39 +192,9 @@ export function DocTooltip({
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const metaPreview = getSummaryPreview(meta?.summary ?? "");
-
-  // meta.summary is always page-level, so an anchor link (pointing at one
-  // section) can never use it as-is — go straight to the raw markdown and
-  // pull that section's own text. Generic page-level summaries ("Subtopics")
-  // are also less useful than the opening topic list, so both cases fall
-  // back to the same raw-markdown fetch.
-  useEffect(() => {
-    if (!meta) return;
-    if (!anchor && metaPreview && metaPreview !== "Subtopics") return;
-    if (previewCache.has(previewKey)) {
-      setFallbackSummary(previewCache.get(previewKey)!);
-      return;
-    }
-    let cancelled = false;
-    fetch(`/api/raw/${slug}`)
-      .then((response) => (response.ok ? response.text() : null))
-      .then((markdown) => {
-        if (!markdown) return;
-        const preview = anchor ? (getSectionPreview(markdown, anchor) ?? getPagePreview(markdown)) : getPagePreview(markdown);
-        if (!preview) return;
-        previewCache.set(previewKey, preview);
-        if (!cancelled) setFallbackSummary(preview);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [meta, metaPreview, slug, anchor, previewKey]);
-
   if (error || !position) return null;
 
-  const summary = anchor ? fallbackSummary : metaPreview === "Subtopics" ? fallbackSummary : metaPreview || fallbackSummary;
+  const summary = meta?.summary;
 
   return createPortal(
     <span

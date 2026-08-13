@@ -6,6 +6,7 @@ import { extractSeeAlso, extractTaggedLinks } from './extractors';
 import { cleanMarkdown } from './utils';
 import { prepareDoxygenRoot } from './doxygen';
 import { prepareSphinxRoot } from './sphinx';
+import { getPagePreview } from './page-preview';
 
 function normalizeIndentedItemGroups(root: HTMLElement): void {
   root.querySelectorAll('div.item_group').forEach((group) => {
@@ -222,20 +223,27 @@ export async function convertToMarkdown(
     bodyMarkdown = bodyMarkdown.replace(/^- {3}/gm, '- ');
   }
 
+  // The tooltip needs this before it mounts, or the title paints first and the
+  // box grows once a description arrives — never `null`/`unknown`, since
+  // parseFrontmatter is a string splitter and an absent key is the only falsy
+  // read (see lib/markdown/frontmatter.ts).
+  const description = scraped.summary || getPagePreview(bodyMarkdown) || undefined;
+
   // Build the final markdown document
   const parts: string[] = [];
 
   // YAML front matter
   parts.push('---');
-  parts.push(`breadcrumbs: ${scraped.breadcrumbs.join(' > ')}`);
   parts.push(`title: ${scraped.title}`);
+  if (description) parts.push(`description: ${description}`);
+  parts.push(`breadcrumbs: ${scraped.breadcrumbs.join(' > ')}`);
   if (scraped.nodeType) parts.push(`nodeType: ${scraped.nodeType}`);
   parts.push(`source: ${scraped.sourceUrl}`);
-  if (new URL(scraped.sourceUrl).pathname === '/docs/') parts.push('source_template: sidefx-docs-root-v1');
   if (scraped.since) parts.push(`since: ${scraped.since}`);
   if (scraped.icon) parts.push(`icon: ${scraped.icon}`);
   if (scraped.banner) parts.push(`banner: ${scraped.banner}`);
   if (scraped.deprecation) parts.push('deprecated: true');
+  if (new URL(scraped.sourceUrl).pathname === '/docs/') parts.push('source_template: sidefx-docs-root-v1');
   parts.push(`generated_at: ${new Date().toISOString()}`);
   parts.push('---');
   parts.push('');
