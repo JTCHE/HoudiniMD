@@ -18,6 +18,9 @@ you run it. The new markdown reaches the site on the next CI deploy.
 So the cost is a few requests to SideFX, not a production change. Do not ask
 for permission to run it, and do not stop at one sample page.
 
+The only case where you must get explicit permission from the user is when regenerating
+the full R2 bucket (approx. 12k pages), since R2 is capped at 1M writes/month.
+
 ## Pick every affected page
 
 Name the pages your change touches, then regenerate all of them:
