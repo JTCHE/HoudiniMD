@@ -1,4 +1,5 @@
 import { revalidatePath } from "next/cache";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import {
   scrapeSideFXPage,
   PageNotFoundError,
@@ -141,19 +142,26 @@ export async function generateMarkdownForSlug(
     progress("indexing", "Updating search index", scraped.title);
     // `/docs` is a navigation page, not a search result. Keep it in the same
     // generation and storage path without adding an empty path to the index.
+    //
+    // Fired through ctx.waitUntil instead of awaited: mutateSearchIndex() does
+    // up to 8 GET-3MB/sort-11k/PUT rounds against the single shared
+    // content/index.json, plus up to 5 more inside syncLiteIndex(). Under
+    // concurrent generation (normal crawler/bot traffic on old pages) that
+    // pushed the SSE stream past the 60s route timeout. The index update no
+    // longer needs to finish before the caller sees "complete" — page content
+    // is already saved to R2 above.
     if (slug) {
-      try {
-        await updateSearchIndex({
+      const { ctx } = await getCloudflareContext({ async: true });
+      ctx.waitUntil(
+        updateSearchIndex({
           path: slug,
           title: scraped.title,
           summary: scraped.summary,
           category: scraped.category,
           version: scraped.version,
           icon: scraped.icon,
-        });
-      } catch (err) {
-        console.error(`Failed to update search index: ${err}`);
-      }
+        }).catch((err) => console.error(`Failed to update search index: ${err}`)),
+      );
     }
     return { content: generatedMarkdown, fromCache: false, canonicalSlug: slug };
   });
