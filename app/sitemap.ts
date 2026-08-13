@@ -7,6 +7,7 @@ export const revalidate = 3600;
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base: MetadataRoute.Sitemap = [
     { url: BASE_URL, lastModified: new Date(), changeFrequency: "monthly", priority: 1 },
+    { url: `${BASE_URL}/docs`, changeFrequency: "monthly", priority: 0.8 },
   ];
 
   try {

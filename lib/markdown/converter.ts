@@ -27,6 +27,25 @@ export async function convertToMarkdown(
   const root = parse(scraped.mainHtml.replace(/click the image to zoom\.\s*/gi, ''));
   const codeLanguage = options.codeLanguage || 'vex';
 
+  // The SideFX documentation root uses its marketing-site template instead of
+  // the article template used by the rest of /docs. Its section icons are
+  // decorative, and its version cells are visual rows rather than prose
+  // paragraphs. Normalize those source elements before the shared Turndown
+  // rules run so the mirror stays faithful without leaking presentation assets
+  // into headings or producing a sequence of loose links.
+  if (new URL(scraped.sourceUrl).pathname === '/docs/') {
+    root.querySelectorAll('h2 img').forEach((img) => img.remove());
+    root.querySelectorAll('div.doc').forEach((group) => {
+      const items = group.querySelectorAll(':scope > div.cell')
+        .map((cell) => `<li>${cell.innerHTML}</li>`)
+        .join('');
+      group.replaceWith(`<ul>${items}</ul>`);
+    });
+    root.querySelectorAll('a.btn[href*="?download"]').forEach((link) => {
+      link.classList.add('download');
+    });
+  }
+
   if (scraped.renderer === 'doxygen') {
     prepareDoxygenRoot(root, scraped.summary);
   }
@@ -125,6 +144,9 @@ export async function convertToMarkdown(
   }
 
   bodyMarkdown = cleanMarkdown(bodyMarkdown);
+  if (new URL(scraped.sourceUrl).pathname === '/docs/') {
+    bodyMarkdown = bodyMarkdown.replace(/^- {3}/gm, '- ');
+  }
 
   // Build the final markdown document
   const parts: string[] = [];
@@ -135,6 +157,7 @@ export async function convertToMarkdown(
   parts.push(`title: ${scraped.title}`);
   if (scraped.nodeType) parts.push(`nodeType: ${scraped.nodeType}`);
   parts.push(`source: ${scraped.sourceUrl}`);
+  if (new URL(scraped.sourceUrl).pathname === '/docs/') parts.push('source_template: sidefx-docs-root-v1');
   if (scraped.since) parts.push(`since: ${scraped.since}`);
   if (scraped.icon) parts.push(`icon: ${scraped.icon}`);
   if (scraped.banner) parts.push(`banner: ${scraped.banner}`);

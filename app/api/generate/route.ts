@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
   const slug = request.nextUrl.searchParams.get("slug");
   const skipCache = request.nextUrl.searchParams.get("regenerate") === "true";
 
-  if (!slug) {
+  if (slug === null) {
     return new Response(JSON.stringify({ error: "Missing slug parameter" }), {
       status: 400,
       headers: { "Content-Type": "application/json" },

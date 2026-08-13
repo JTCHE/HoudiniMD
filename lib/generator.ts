@@ -1,10 +1,14 @@
 import { revalidatePath } from "next/cache";
-import { scrapeSideFXPage, checkPageExists, PageNotFoundError } from "@/lib/scraping";
+import {
+  scrapeSideFXPage,
+  PageNotFoundError,
+  resolveSideFXUrl,
+} from "@/lib/scraping";
 import { convertToMarkdown, detectLanguage } from "@/lib/markdown";
 import { fetchFromR2, saveToR2, updateSearchIndex } from "@/lib/r2";
 import { withLock } from "@/lib/lock-manager";
 import { normalizeDocSlug, toSideFXUrl } from "@/lib/url";
-import { SIDEFX_DOCS_ROOT } from "@/lib/houdini";
+import { fetchSourceAlias } from "@/lib/source-aliases";
 
 export type ProgressStage =
   | "checking-cache"
@@ -28,31 +32,27 @@ export interface GenerateResult {
   markdown: string;
   fromCache: boolean;
   slug: string;
+  canonicalSlug: string;
 }
 
 export { PageNotFoundError };
+
+/** R2 key for a normalized docs slug. The empty slug is SideFX `/docs/`. */
+export function contentPathForSlug(slug: string): string {
+  return slug ? `content/${slug}.md` : "content/_docs-root.md";
+}
+
+/** Whether cached content uses the current source-specific conversion format. */
+export function cachedContentIsCurrent(slug: string, markdown: string): boolean {
+  return slug !== "" || /^source_template: sidefx-docs-root-v1$/m.test(markdown);
+}
 
 /**
  * Resolve a slug to the SideFX URL that actually serves it, trying the two
  * index-page fallback patterns generation already relied on. Throws
  * PageNotFoundError if none of them exist.
  */
-export async function resolveSideFXUrl(slug: string): Promise<string> {
-  const sideFXUrl = toSideFXUrl(slug);
-  try {
-    await checkPageExists(sideFXUrl);
-    return sideFXUrl;
-  } catch (err) {
-    if (!(err instanceof PageNotFoundError)) throw err;
-    const slugBase = slug.split("#")[0];
-    // ponytail: slug ending /index means the file IS index.html, not a subdirectory
-    const fallbackUrl = slugBase.endsWith("/index")
-      ? `${SIDEFX_DOCS_ROOT}/${slugBase}.html`
-      : `${SIDEFX_DOCS_ROOT}/${slugBase}/index.html`;
-    await checkPageExists(fallbackUrl); // re-throws PageNotFoundError if also missing
-    return fallbackUrl;
-  }
-}
+export { resolveSideFXUrl };
 
 /** Cheap existence check for the HTML route — true if SideFX has this page, false if not. */
 export async function slugExistsOnSideFX(slug: string): Promise<boolean> {
@@ -75,7 +75,12 @@ export async function generateMarkdownForSlug(
   onProgress?: ProgressCallback,
 ): Promise<GenerateResult> {
   slug = normalizeDocSlug(slug);
-  const contentPath = `content/${slug}.md`;
+  const knownAlias = slug ? await fetchSourceAlias(slug) : null;
+  if (knownAlias && knownAlias.canonical !== slug) {
+    const canonical = await generateMarkdownForSlug(knownAlias.canonical, skipCache, onProgress);
+    return { ...canonical, slug, canonicalSlug: knownAlias.canonical };
+  }
+  const contentPath = contentPathForSlug(slug);
 
   const progress = (stage: ProgressStage, message: string, detail?: string) => {
     onProgress?.({ stage, message, detail });
@@ -86,13 +91,13 @@ export async function generateMarkdownForSlug(
     progress("checking-cache", "Checking cache", "Looking for existing content");
 
     const cachedContent = await fetchFromR2(contentPath);
-    if (cachedContent) {
+    if (cachedContent && cachedContentIsCurrent(slug, cachedContent)) {
       // The static route may still be pinned to a stale ISR snapshot (e.g. one
       // rendered while this content was momentarily missing) — refresh it so the
       // next visitor gets real content instead of a frozen "generating" page.
       revalidatePath(`/docs/${slug}`);
       progress("complete", "Found in cache", `/docs/${slug}`);
-      return { markdown: cachedContent, fromCache: true, slug };
+      return { markdown: cachedContent, fromCache: true, slug, canonicalSlug: slug };
     }
   } else {
     progress("checking-cache", "Skipping cache", "Regenerating content");
@@ -109,8 +114,8 @@ export async function generateMarkdownForSlug(
     // Double-check cache after acquiring lock (unless skipCache)
     if (!skipCache) {
       const cachedAfterLock = await fetchFromR2(contentPath);
-      if (cachedAfterLock) {
-        return { content: cachedAfterLock, fromCache: true };
+      if (cachedAfterLock && cachedContentIsCurrent(slug, cachedAfterLock)) {
+        return { content: cachedAfterLock, fromCache: true, canonicalSlug: slug };
       }
     }
 
@@ -134,28 +139,33 @@ export async function generateMarkdownForSlug(
 
     // Stage 6: Update search index
     progress("indexing", "Updating search index", scraped.title);
-    try {
-      await updateSearchIndex({
-        path: slug,
-        title: scraped.title,
-        summary: scraped.summary,
-        category: scraped.category,
-        version: scraped.version,
-        icon: scraped.icon,
-      });
-    } catch (err) {
-      console.error(`Failed to update search index: ${err}`);
+    // `/docs` is a navigation page, not a search result. Keep it in the same
+    // generation and storage path without adding an empty path to the index.
+    if (slug) {
+      try {
+        await updateSearchIndex({
+          path: slug,
+          title: scraped.title,
+          summary: scraped.summary,
+          category: scraped.category,
+          version: scraped.version,
+          icon: scraped.icon,
+        });
+      } catch (err) {
+        console.error(`Failed to update search index: ${err}`);
+      }
     }
-
-    return { content: generatedMarkdown, fromCache: false };
+    return { content: generatedMarkdown, fromCache: false, canonicalSlug: slug };
   });
 
   revalidatePath(`/docs/${slug}`);
-  progress("complete", "Generation complete", `/docs/${slug}`);
+  if (markdown.canonicalSlug !== slug) revalidatePath(`/docs/${markdown.canonicalSlug}`);
+  progress("complete", "Generation complete", `/docs/${markdown.canonicalSlug}`);
 
   return {
     markdown: markdown.content,
     fromCache: markdown.fromCache,
     slug,
+    canonicalSlug: markdown.canonicalSlug,
   };
 }

@@ -1,5 +1,5 @@
 import { unstable_noStore } from "next/cache";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import Script from "next/script";
 import type { Metadata } from "next";
 import ReactMarkdown from "react-markdown";
@@ -27,11 +27,12 @@ import { remarkVex } from "@/lib/markdown/remark-vex";
 import { addSeeAlsoIcons, detectLanguage, normalizeIconLinks } from "@/lib/markdown/utils";
 import { rehypeCards } from "@/lib/markdown/rehype-cards";
 import { fetchFromR2, fetchIndexEntries } from "@/lib/r2/read";
-import { slugExistsOnSideFX } from "@/lib/generator";
+import { cachedContentIsCurrent, contentPathForSlug, slugExistsOnSideFX } from "@/lib/generator";
 import GeneratingPage from "@/components/docs/GeneratingPage";
 import type { SearchIndexEntry } from "@/lib/r2/search-index";
 import { SITE_URL } from "@/lib/site";
 import { localIconUrl, localizeIconUrls } from "@/lib/icons";
+import { fetchSourceAlias } from "@/lib/source-aliases";
 
 export const revalidate = 2592000;
 export const maxDuration = 60;
@@ -56,7 +57,9 @@ export async function generateStaticParams() {
 export async function generateMetadata({ params }: { params: Promise<{ slug: string[] }> }): Promise<Metadata> {
   const { slug } = await params;
   const slugPath = slug.join("/");
-  const fallbackTitle = slug[slug.length - 1].replace(/-/g, " ");
+  const alias = slugPath ? await fetchSourceAlias(slugPath) : null;
+  const metadataSlug = alias?.canonical ?? slugPath;
+  const fallbackTitle = slug.at(-1)?.replace(/-/g, " ") ?? "SideFX documentation";
 
   let title = fallbackTitle;
   let nodeType: string | undefined;
@@ -69,11 +72,11 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   // brush the Workers 10ms CPU limit on every request, including MISSes.
   let rawMarkdown: string | null = null;
   try {
-    rawMarkdown = await fetchFromR2("content/" + slugPath + ".md");
+    rawMarkdown = await fetchFromR2(contentPathForSlug(metadataSlug));
   } catch {
     unstable_noStore();
   }
-  if (rawMarkdown) {
+  if (rawMarkdown && cachedContentIsCurrent(metadataSlug, rawMarkdown)) {
     const { content, data } = parseFrontmatter(rawMarkdown);
     const h1Match = content.match(/^#[ \t]+(\S[^\n]*)$/m);
     // Prefer the frontmatter's own name/type split — the H1 is only their
@@ -94,7 +97,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   }
 
   const pageTitle = `${formatPageTitle(title, nodeType)} | HoudiniMD`;
-  const canonical = `${SITE_URL}/docs/${slugPath}`;
+  const canonical = metadataSlug ? `${SITE_URL}/docs/${metadataSlug}` : `${SITE_URL}/docs`;
   // The OG image keeps name and type as separate params — it renders its own
   // bold-name/thin-type hierarchy (see lib/og/og-image.tsx), not the
   // Title Cased/dash-joined <title> string.
@@ -109,7 +112,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     description,
     alternates: {
       canonical,
-      types: { "text/markdown": `${SITE_URL}/docs/${slugPath}.md` },
+      types: { "text/markdown": slugPath ? `${SITE_URL}/docs/${slugPath}.md` : `${SITE_URL}/docs.md` },
     },
     openGraph: {
       title: pageTitle,
@@ -131,6 +134,8 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 export default async function DocsPage({ params }: { params: Promise<{ slug: string[] }> }) {
   const { slug } = await params;
   const slugPath = slug.join("/");
+  const alias = slugPath ? await fetchSourceAlias(slugPath) : null;
+  if (alias && alias.canonical !== slugPath) permanentRedirect(`/docs/${alias.canonical}`);
   // Uncomment to feel the DocsSkeleton loading state at a normal connection speed.
   // await new Promise((r) => setTimeout(r, 1000));
 
@@ -141,7 +146,8 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
   // GeneratingPage's SSE call, instead of crashing the whole request.
   let rawMarkdown: string | null;
   try {
-    rawMarkdown = await fetchFromR2(`content/${slugPath}.md`);
+    rawMarkdown = await fetchFromR2(contentPathForSlug(slugPath));
+    if (rawMarkdown && !cachedContentIsCurrent(slugPath, rawMarkdown)) rawMarkdown = null;
   } catch {
     unstable_noStore();
     return <GeneratingPage slug={slugPath} />;
@@ -200,7 +206,7 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
   // Title is pulled from the RAW (pre-escape) markdown and entity-decoded, so a
   // generic node like "Add<T>" renders as text instead of literal "Add&lt;T&gt;".
   const rawH1Match = rawContent.match(/^#[ \t]+(\S[^\n]*)$/m);
-  const mdTitle = decodeEntities(rawH1Match?.[1]?.trim() ?? slug[slug.length - 1].replace(/-/g, " "));
+  const mdTitle = decodeEntities(rawH1Match?.[1]?.trim() ?? slug.at(-1)?.replace(/-/g, " ") ?? "SideFX documentation");
   const h1Match = content.match(/^#[ \t]+(\S[^\n]*)$/m);
 
   // The header displays the page name and its type as two visually distinct
@@ -236,7 +242,7 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
   }
   bodyContent = normalizeIconLinks(localizeIconUrls(bodyContent));
   const mdSummary = summary ?? bodyContent.match(/^(?!#|>)[^\n]{20,}/m)?.[0]?.trim();
-  const canonical = `${SITE_URL}/docs/${slugPath}`;
+  const canonical = slugPath ? `${SITE_URL}/docs/${slugPath}` : `${SITE_URL}/docs`;
 
   const articleJsonLd = {
     "@context": "https://schema.org",
@@ -271,7 +277,7 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
       {/* Reports the read: to analytics, which cannot see a navigation served
           from the router cache, and to the landing page's "recently visited"
           row. Both render nothing. */}
-      <ViewRecorder path={`/docs/${slugPath}`} />
+      <ViewRecorder path={slugPath ? `/docs/${slugPath}` : "/docs"} />
       <VisitRecorder chip={{ path: slugPath, title: headerName, icon: pageIcon ?? "" }} />
       <Script
         id="article-jsonld"
