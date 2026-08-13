@@ -90,6 +90,9 @@ export default function DocLink({
   const [visible, setVisible] = useState(false);
   const preventNextClick = useRef(false);
   const linkRef = useRef<HTMLAnchorElement>(null);
+  // Which visual line the pointer entered on, for wrapped multi-line links —
+  // null on keyboard focus, where there's no cursor position to anchor to.
+  const hoverPosRef = useRef<{ x: number; y: number } | null>(null);
   const router = useRouter();
   const isInternal = !!slug;
 
@@ -167,14 +170,22 @@ export default function DocLink({
             preventNextClick.current = false;
           }
         }}
-        onMouseEnter={() => show(true)}
+        onMouseEnter={(e) => {
+          hoverPosRef.current = { x: e.clientX, y: e.clientY };
+          show(true);
+        }}
         onMouseLeave={hide}
-        onFocus={() => show(false)}
+        onFocus={() => {
+          hoverPosRef.current = null;
+          show(false);
+        }}
         onBlur={hide}
       >
         {children}
       </Link>
-      {visible && isInternal && <DocTooltip slug={slug!} anchor={anchor} anchorRef={linkRef} />}
+      {visible && isInternal && (
+        <DocTooltip slug={slug!} anchor={anchor} anchorRef={linkRef} hoverPosRef={hoverPosRef} />
+      )}
     </span>
   );
 }

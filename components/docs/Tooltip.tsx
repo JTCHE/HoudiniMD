@@ -82,10 +82,12 @@ fetch("/api/meta-all")
 export function DocTooltip({
   slug,
   anchorRef,
+  hoverPosRef,
 }: {
   slug: string;
   anchor?: string | null;
   anchorRef: React.RefObject<HTMLElement | null>;
+  hoverPosRef?: React.RefObject<{ x: number; y: number } | null>;
 }) {
   const [meta, setMeta] = useState<MetaEntry | null>(() => metaCache.get(slug) ?? null);
   const [error, setError] = useState(false);
@@ -100,9 +102,33 @@ export function DocTooltip({
   useLayoutEffect(() => {
     const anchorEl = anchorRef.current;
     if (!anchorEl) return;
-    const anchorRect = anchorEl.getBoundingClientRect();
-    setPosition({ top: anchorRect.top - 4, left: anchorRect.left + anchorRect.width / 2 });
-  }, [anchorRef]);
+    // Card-grid links use a "stretched link" ::after overlay (globals.css) so the
+    // whole card is clickable — the <a> itself is only the title text. Anchoring
+    // to the <a>'s own rect centers the tooltip on that title, well off-center
+    // from the visually-clickable card, so anchor to the card instead.
+    const card = anchorEl.closest<HTMLElement>(".shelf-grid li");
+    if (card) {
+      const rect = card.getBoundingClientRect();
+      setPosition({ top: rect.top - 4, left: rect.left + rect.width / 2 });
+      return;
+    }
+    // getBoundingClientRect() on a wrapped link returns the union of every
+    // line's box — its horizontal center can float over blank space between
+    // lines, nowhere near the line the cursor is actually on. getClientRects()
+    // gives one rect per visual line, so pick the one the pointer entered on.
+    const rects = anchorEl.getClientRects();
+    const hoverPos = hoverPosRef?.current;
+    let rect = rects[0] ?? anchorEl.getBoundingClientRect();
+    if (hoverPos) {
+      for (const r of rects) {
+        if (hoverPos.y >= r.top && hoverPos.y <= r.bottom) {
+          rect = r;
+          break;
+        }
+      }
+    }
+    setPosition({ top: rect.top - 4, left: rect.left + rect.width / 2 });
+  }, [anchorRef, hoverPosRef]);
 
   useLayoutEffect(() => {
     const el = tooltipRef.current;
