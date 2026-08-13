@@ -26,7 +26,7 @@ import { remarkCallouts } from "@/lib/markdown/remark-callouts";
 import { remarkVex } from "@/lib/markdown/remark-vex";
 import { addSeeAlsoIcons, detectLanguage, normalizeIconLinks } from "@/lib/markdown/utils";
 import { rehypeCards } from "@/lib/markdown/rehype-cards";
-import { fetchFromR2, fetchIndexEntries } from "@/lib/r2/read";
+import { fetchFromR2, fetchLiteIndexEntries } from "@/lib/r2/read";
 import { cachedContentIsCurrent, contentPathForSlug, slugExistsOnSideFX } from "@/lib/generator";
 import GeneratingPage from "@/components/docs/GeneratingPage";
 import type { SearchIndexEntry } from "@/lib/r2/search-index";
@@ -236,7 +236,7 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
   }
   bodyContent = legacyWarningMarkdown(slugPath) + bodyContent;
   if (/^## See Also\s*$/m.test(bodyContent)) {
-    const entries = await fetchIndexEntries().catch(() => null);
+    const entries = await fetchLiteIndexEntries().catch(() => null);
     const iconByPath = new Map(entries?.flatMap(({ path, icon }) => icon ? [[path, icon] as const] : []) ?? []);
     bodyContent = addSeeAlsoIcons(bodyContent, iconByPath);
   }

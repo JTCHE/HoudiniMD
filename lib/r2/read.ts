@@ -1,5 +1,6 @@
 import { getConfig, getS3Client } from './config';
-import type { SearchIndexEntry } from './search-index';
+import type { SearchIndexEntry, LiteIndexEntry } from './search-index';
+import { LITE_INDEX_PATH, toLiteIndex } from './search-index';
 
 let indexCache: { data: string; expiry: number } | null = null;
 const INDEX_CACHE_TTL = 5 * 60 * 1000;
@@ -23,6 +24,31 @@ export async function fetchIndexEntries(): Promise<SearchIndexEntry[] | null> {
   if (!raw) return null;
   const entries: SearchIndexEntry[] = JSON.parse(raw);
   parsedIndexCache = { entries, expiry: Date.now() + INDEX_CACHE_TTL };
+  return entries;
+}
+
+// Warm-isolate cache of the parsed lite index (~34% the size of the full
+// index — see LiteIndexEntry). Request paths that only need `path`, `title`
+// or `icon` (e.g. the `## See Also` icon lookup on doc pages) should read
+// this instead of `fetchIndexEntries()`: parsing the full ~3MB index on a
+// cold isolate risks the Workers CPU limit (Error 1102), same failure mode
+// as /api/resolve hit before it switched to the lite index.
+let parsedLiteIndexCache: { entries: LiteIndexEntry[]; expiry: number } | null = null;
+
+export async function fetchLiteIndexEntries(): Promise<LiteIndexEntry[] | null> {
+  if (parsedLiteIndexCache && Date.now() < parsedLiteIndexCache.expiry) return parsedLiteIndexCache.entries;
+  const raw = await fetchFromR2(LITE_INDEX_PATH, true); // noValidate: JSON has no frontmatter
+  let entries: LiteIndexEntry[];
+  if (raw) {
+    entries = JSON.parse(raw);
+  } else {
+    // Falls back to deriving the lite shape from the full index if the lite
+    // artifact is missing (e.g. a deploy landing before the next write).
+    const full = await fetchIndexEntries();
+    if (!full) return null;
+    entries = toLiteIndex(full);
+  }
+  parsedLiteIndexCache = { entries, expiry: Date.now() + INDEX_CACHE_TTL };
   return entries;
 }
 

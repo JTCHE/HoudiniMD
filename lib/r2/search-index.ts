@@ -22,6 +22,7 @@ export interface LiteIndexEntry {
   t: string;
   /** last path segment, lowercased */
   s: string;
+  icon?: string;
 }
 
 export function toLiteIndex(entries: SearchIndexEntry[]): LiteIndexEntry[] {
@@ -30,6 +31,7 @@ export function toLiteIndex(entries: SearchIndexEntry[]): LiteIndexEntry[] {
     title: e.title,
     t: e.title.toLowerCase().replace(/\s+/g, ''),
     s: e.path.split('/').pop()?.toLowerCase() ?? '',
+    ...(e.icon ? { icon: e.icon } : {}),
   }));
 }
 
@@ -112,13 +114,22 @@ export async function mutateSearchIndex(
         ContentType: 'application/json; charset=utf-8',
         ...(snapshot.etag ? { IfMatch: snapshot.etag } : { IfNoneMatch: '*' }),
       }));
-      await syncLiteIndex(client, config.bucketName);
-      return entries;
     } catch (error: unknown) {
       const status = error && typeof error === 'object' && '$metadata' in error
         ? (error as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode
         : undefined;
       if (status !== 409 && status !== 412) throw error;
+      continue;
+    }
+    try {
+      await syncLiteIndex(client, config.bucketName);
+      return entries;
+    } catch {
+      // syncLiteIndex() exhausting its own attempts means the full index kept
+      // changing underneath it — the same contention a 409/412 on the write
+      // above signals. Retry the whole read-mutate-write cycle rather than
+      // rethrowing its plain Error and skipping this function's retry budget.
+      continue;
     }
   }
   throw new Error('Search index stayed busy during all conditional update attempts');
