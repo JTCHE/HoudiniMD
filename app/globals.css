@@ -990,9 +990,6 @@ pre code.hljs {
   width: 20%;
   color: var(--muted-foreground);
 }
-.md-table-declarations tr > :first-child {
-  width: 14%;
-}
 .md-table-declarations tr > :nth-child(2):not(:last-child) {
   width: 50%;
 }
