@@ -24,6 +24,8 @@ Project information: @README.md
   inventories, benchmark tables, audit results. Point to the code that holds it.
 - Do not add a file to this repo unless the product needs it. Scratch work goes
   in a temporary directory.
+- Do not commit SQL migration files. Write them in `migrations/`, apply, then delete
+  the file.
 - Look at a UI change before you report it done. A build that compiles is not a
   page that reads.
 - When you change how content is scraped or rendered, regenerate every affected
