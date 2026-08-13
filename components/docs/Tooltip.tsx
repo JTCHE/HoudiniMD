@@ -11,6 +11,10 @@ interface MetaEntry {
 
 // Module-level caches shared across all DocTooltip instances in this session
 const metaCache = new Map<string, MetaEntry>();
+// Derived preview text (raw-markdown fetch + remark parse), keyed by slug+anchor.
+// DocTooltip unmounts on mouseleave, so without this every repeat hover re-fetches
+// and re-parses the same page.
+const previewCache = new Map<string, string>();
 const fetchingMeta = new Set<string>();
 const generatedSlugs = new Set<string>();
 
@@ -89,8 +93,9 @@ export function DocTooltip({
   anchor?: string | null;
   anchorRef: React.RefObject<HTMLElement | null>;
 }) {
+  const previewKey = `${slug}#${anchor ?? ""}`;
   const [meta, setMeta] = useState<MetaEntry | null>(() => metaCache.get(slug) ?? null);
-  const [fallbackSummary, setFallbackSummary] = useState<string | null>(null);
+  const [fallbackSummary, setFallbackSummary] = useState<string | null>(() => previewCache.get(previewKey) ?? null);
   const [error, setError] = useState(false);
   const mountedRef = useRef(true);
   const sseRef = useRef<EventSource | null>(null);
@@ -144,8 +149,13 @@ export function DocTooltip({
         fetchingMeta.delete(slug);
       }
 
-      // Not in R2 — trigger background generation once per slug per session
-      if (generatedSlugs.has(slug)) return;
+      // Not in R2 — trigger background generation once per slug per session.
+      // Anything that ends here without meta must set `error`: the skeleton has
+      // no terminal state, so a silent return leaves it loading forever.
+      if (generatedSlugs.has(slug)) {
+        if (mountedRef.current) setError(true);
+        return;
+      }
       generatedSlugs.add(slug);
 
       const sse = new EventSource(`/api/generate?slug=${encodeURIComponent(slug)}`);
@@ -158,13 +168,17 @@ export function DocTooltip({
           fetch(`/api/meta?slug=${encodeURIComponent(slug)}`)
             .then((r) => r.json())
             .then((d) => {
-              if (d.title) {
-                const entry: MetaEntry = { title: d.title, summary: d.summary ?? "" };
-                metaCache.set(slug, entry);
-                if (mountedRef.current) setMeta(entry);
+              if (!d.title) {
+                if (mountedRef.current) setError(true);
+                return;
               }
+              const entry: MetaEntry = { title: d.title, summary: d.summary ?? "" };
+              metaCache.set(slug, entry);
+              if (mountedRef.current) setMeta(entry);
             })
-            .catch(() => {});
+            .catch(() => {
+              if (mountedRef.current) setError(true);
+            });
         } else if (event.stage === "error") {
           sse.close();
           sseRef.current = null;
@@ -196,19 +210,25 @@ export function DocTooltip({
   useEffect(() => {
     if (!meta) return;
     if (!anchor && metaPreview && metaPreview !== "Subtopics") return;
+    if (previewCache.has(previewKey)) {
+      setFallbackSummary(previewCache.get(previewKey)!);
+      return;
+    }
     let cancelled = false;
     fetch(`/api/raw/${slug}`)
       .then((response) => (response.ok ? response.text() : null))
       .then((markdown) => {
         if (!markdown) return;
         const preview = anchor ? (getSectionPreview(markdown, anchor) ?? getPagePreview(markdown)) : getPagePreview(markdown);
-        if (!cancelled && preview) setFallbackSummary(preview);
+        if (!preview) return;
+        previewCache.set(previewKey, preview);
+        if (!cancelled) setFallbackSummary(preview);
       })
       .catch(() => {});
     return () => {
       cancelled = true;
     };
-  }, [meta, metaPreview, slug, anchor]);
+  }, [meta, metaPreview, slug, anchor, previewKey]);
 
   if (error || !position) return null;
 
