@@ -75,13 +75,12 @@ function normalizeMemberDeclarations(root: HTMLElement): void {
       table.remove();
       continue;
     }
+    const hasTypes = items.some((item) => item.type);
     const hasDescriptions = items.some((item) => item.description);
-    const headers = hasDescriptions
-      ? "<th>Type</th><th>Declaration</th><th>Description</th>"
-      : "<th>Type</th><th>Declaration</th>";
+    const headers = `${hasTypes ? "<th>Type</th>" : ""}<th>Declaration</th>${hasTypes && hasDescriptions ? "<th>Description</th>" : ""}`;
     const body = items.map((item) => (
-      `<tr><td><code>${escapeHtml(item.type)}</code></td><td><code>${escapeHtml(item.declaration)}</code></td>`
-      + `${hasDescriptions ? `<td>${escapeHtml(item.description)}</td>` : ""}</tr>`
+      `<tr>${hasTypes ? `<td><code>${escapeHtml(item.type)}</code></td>` : ""}<td><code>${escapeHtml(item.declaration)}</code></td>`
+      + `${hasTypes && hasDescriptions ? `<td>${escapeHtml(item.description)}</td>` : ""}</tr>`
     )).join("");
     table.replaceWith(
       `<h2>${escapeHtml(heading)}</h2><table><thead><tr>${headers}</tr></thead><tbody>${body}</tbody></table>`,
