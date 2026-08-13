@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { wantsMarkdown } from './lib/wants-markdown';
+import { fetchSourceAlias } from './lib/source-aliases';
 
 // Verified renamed/duplicated slugs — exact matches only, never a fuzzy guess.
 // Each entry was checked with `curl -L`: the old slug 404s, the new one 200s.
@@ -21,7 +22,7 @@ function stripExtensionsAndSlash(p: string): string {
   return p;
 }
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const url = request.nextUrl.clone();
   const pathname = url.pathname;
 
@@ -45,6 +46,13 @@ export function middleware(request: NextRequest) {
     if (bareSlug in VERIFIED_SLUG_REDIRECTS) {
       url.pathname = `/docs/${VERIFIED_SLUG_REDIRECTS[bareSlug]}`;
       return NextResponse.redirect(url, 301);
+    }
+
+    const sourceAlias = await fetchSourceAlias(bareSlug);
+    if (sourceAlias && sourceAlias.canonical !== bareSlug) {
+      const askedForMarkdown = pathname.endsWith('.md');
+      url.pathname = `/docs/${sourceAlias.canonical}${askedForMarkdown ? '.md' : ''}`;
+      return NextResponse.redirect(url, 308);
     }
 
     // .md suffix → rewrite to /api/raw/ (raw markdown for LLMs, per llmstxt.org spec)

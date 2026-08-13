@@ -199,7 +199,11 @@ export async function scrapeSideFXPage(url: string): Promise<ScrapedContent> {
   let mainElement = doc.querySelector("main")
     ?? doc.querySelector('.rst-content div[role="main"].document')
     ?? doc.querySelector("#doc-content .contents")
-    ?? doc.querySelector("#doc-content");
+    ?? doc.querySelector("#doc-content")
+    // SideFX `/docs/` is the catalog for every documentation family. It uses
+    // the marketing-site shell instead of an article renderer, but the content
+    // inside this container is still the source document to mirror.
+    ?? doc.querySelector("#flex-main-content .container.main-container");
   if (!mainElement) {
     const mainStart = html.indexOf("<main");
     const mainEnd = html.lastIndexOf("</main>");

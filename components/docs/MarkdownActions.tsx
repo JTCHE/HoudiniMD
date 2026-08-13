@@ -37,7 +37,7 @@ function ChatGPTIcon({ className }: { className?: string }) {
 }
 
 export function MarkdownActions({ slug, title }: MarkdownActionsProps) {
-  const mdHref = `/docs/${slug}.md`;
+  const mdHref = slug ? `/docs/${slug}.md` : "/docs.md";
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [pressed, setPressed] = useState(false);

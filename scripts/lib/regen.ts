@@ -9,13 +9,11 @@
  */
 
 import { GetObjectCommand, PutObjectCommand, ListObjectsV2Command } from "@aws-sdk/client-s3";
-import { scrapeSideFXPage, PageNotFoundError } from "../../lib/scraping";
+import { scrapeSideFXPage, PageNotFoundError, resolveSideFXUrl } from "../../lib/scraping";
 import { convertToMarkdown, detectLanguage } from "../../lib/markdown";
-import { toSideFXUrl } from "../../lib/url";
-import { SIDEFX_DOCS_ROOT } from "../../lib/houdini";
 import { saveToR2 } from "../../lib/r2";
 import { getConfig, getS3Client } from "../../lib/r2/config";
-import { putLiteIndex, type SearchIndexEntry } from "../../lib/r2/search-index";
+import { mutateSearchIndex, putLiteIndex, type SearchIndexEntry } from "../../lib/r2/search-index";
 
 const INDEX_PATH = "content/index.json";
 
@@ -141,23 +139,12 @@ export async function putSearchIndex(entries: SearchIndexEntry[]): Promise<void>
 async function regenerateOnce(
   slug: string,
 ): Promise<{ entry: SearchIndexEntry } | { status: "404" }> {
-  const sideFXUrl = toSideFXUrl(slug);
-
   let scraped;
   try {
-    scraped = await scrapeSideFXPage(sideFXUrl);
+    scraped = await scrapeSideFXPage(await resolveSideFXUrl(slug));
   } catch (err) {
-    if (err instanceof PageNotFoundError) {
-      // Try the /index.html variant — same fallback the generator uses
-      try {
-        scraped = await scrapeSideFXPage(`${SIDEFX_DOCS_ROOT}/${slug}/index.html`);
-      } catch (err2) {
-        if (err2 instanceof PageNotFoundError) return { status: "404" };
-        throw err2;
-      }
-    } else {
-      throw err;
-    }
+    if (err instanceof PageNotFoundError) return { status: "404" };
+    throw err;
   }
 
   const markdown = await convertToMarkdown(scraped, { codeLanguage: detectLanguage(slug) });
@@ -207,10 +194,8 @@ export async function regenerateBatch(
 ): Promise<RegenResult[]> {
   const opts = { ...DEFAULT_OPTIONS, ...options };
 
-  // Load index once so we can update it in memory and write back once at the end.
-  const indexBefore = opts.dryRun ? [] : await fetchSearchIndex();
-  const indexByPath = new Map(indexBefore.map((e) => [e.path, e]));
-  let indexChanged = false;
+  const updatedEntries = new Map<string, SearchIndexEntry>();
+  const removedPaths = new Set<string>();
 
   let done = 0;
   const results = await runPool<string, RegenResult>(slugs, opts.concurrency, async (slug) => {
@@ -233,12 +218,11 @@ export async function regenerateBatch(
           durationMs: performance.now() - start,
         };
         if (!("status" in res)) {
-          indexByPath.set(res.entry.path, res.entry);
-          indexChanged = true;
-        } else if (indexByPath.delete(slug)) {
+          updatedEntries.set(res.entry.path, res.entry);
+        } else {
           // SideFX confirmed this page is gone: retaining it makes search link
           // to a local 404 until somebody manually repairs the index.
-          indexChanged = true;
+          removedPaths.add(slug);
         }
         done++;
         opts.onProgress?.(done, slugs.length, r);
@@ -262,9 +246,13 @@ export async function regenerateBatch(
     return r;
   });
 
-  // Write the merged index once at the end. Only update if at least one entry changed.
-  if (!opts.dryRun && indexChanged) {
-    await putSearchIndex([...indexByPath.values()]);
+  if (!opts.dryRun && (updatedEntries.size || removedPaths.size)) {
+    await mutateSearchIndex((current) => {
+      const indexByPath = new Map(current.map((entry) => [entry.path, entry]));
+      for (const path of removedPaths) indexByPath.delete(path);
+      for (const entry of updatedEntries.values()) indexByPath.set(entry.path, entry);
+      return [...indexByPath.values()];
+    });
   }
 
   return results;

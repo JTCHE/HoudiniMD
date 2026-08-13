@@ -3,6 +3,7 @@ import { generateMarkdownForSlug, PageNotFoundError } from "@/lib/generator";
 import { insertLegacyWarning } from "@/lib/markdown/legacy-warning";
 import { toSideFXUrl } from "@/lib/url";
 import { SITE_URL } from "@/lib/site";
+import { fetchSourceAlias } from "@/lib/source-aliases";
 
 // Same bar as the HTML 404 page's "Did you mean" — a text-similarity guess
 // below this is more likely to mislead than help, so it's left out entirely.
@@ -30,10 +31,23 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const slugPath = slug.join("/");
   const skipCache = request.nextUrl.searchParams.get("regenerate") === "true";
 
+  const alias = await fetchSourceAlias(slugPath);
+  if (alias && alias.canonical !== slugPath) {
+    const target = request.nextUrl.clone();
+    target.pathname = `/docs/${alias.canonical}.md`;
+    return Response.redirect(target, 308);
+  }
+
   try {
     const result = await generateMarkdownForSlug(slugPath, skipCache, (event) => {
       console.log(`[${slugPath}] ${event.stage}: ${event.message}${event.detail ? ` - ${event.detail}` : ""}`);
     });
+
+    if (result.canonicalSlug !== slugPath) {
+      const target = request.nextUrl.clone();
+      target.pathname = `/docs/${result.canonicalSlug}.md`;
+      return Response.redirect(target, 308);
+    }
 
     return new Response(insertLegacyWarning(result.markdown, slugPath), {
       headers: {
