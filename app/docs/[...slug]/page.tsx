@@ -1,4 +1,3 @@
-import { unstable_noStore } from "next/cache";
 import { notFound, permanentRedirect } from "next/navigation";
 import Script from "next/script";
 import type { Metadata } from "next";
@@ -26,6 +25,7 @@ import { remarkCallouts } from "@/lib/markdown/remark-callouts";
 import { remarkVex } from "@/lib/markdown/remark-vex";
 import { addSeeAlsoIcons, detectLanguage, normalizeIconLinks } from "@/lib/markdown/utils";
 import { rehypeCards } from "@/lib/markdown/rehype-cards";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { fetchFromR2, fetchLiteIndexEntries } from "@/lib/r2/read";
 import { cachedContentIsCurrent, contentPathForSlug, slugExistsOnSideFX } from "@/lib/generator";
 import GeneratingPage from "@/components/docs/GeneratingPage";
@@ -74,9 +74,10 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   try {
     rawMarkdown = await fetchFromR2(contentPathForSlug(metadataSlug));
   } catch {
-    unstable_noStore();
+    // R2 hiccup — degrade to the fallback title below, same as a real miss.
   }
-  if (rawMarkdown && cachedContentIsCurrent(metadataSlug, rawMarkdown)) {
+  const contentReady = Boolean(rawMarkdown && cachedContentIsCurrent(metadataSlug, rawMarkdown));
+  if (contentReady && rawMarkdown) {
     const { content, data } = parseFrontmatter(rawMarkdown);
     const h1Match = content.match(/^#[ \t]+(\S[^\n]*)$/m);
     // Prefer the frontmatter's own name/type split — the H1 is only their
@@ -110,6 +111,10 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   return {
     title: pageTitle,
     description,
+    // The "Generating…" placeholder can sit in the ISR cache for a few seconds
+    // while content is fetched in the background — keep it out of the index for
+    // that window instead of letting a crawler capture and keep the placeholder.
+    ...(contentReady ? {} : { robots: { index: false, follow: true } }),
     alternates: {
       canonical,
       types: { "text/markdown": slugPath ? `${SITE_URL}/docs/${slugPath}.md` : `${SITE_URL}/docs.md` },
@@ -149,7 +154,6 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
     rawMarkdown = await fetchFromR2(contentPathForSlug(slugPath));
     if (rawMarkdown && !cachedContentIsCurrent(slugPath, rawMarkdown)) rawMarkdown = null;
   } catch {
-    unstable_noStore();
     return <GeneratingPage slug={slugPath} />;
   }
   if (!rawMarkdown) {
@@ -160,14 +164,26 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
     try {
       existsOnSideFX = await slugExistsOnSideFX(slugPath);
     } catch {
-      unstable_noStore();
       return <GeneratingPage slug={slugPath} />;
     }
     if (!existsOnSideFX) {
       notFound();
     }
-    // Prevent ISR/CDN from caching the generating state
-    unstable_noStore();
+    // Kick off generation server-side instead of waiting on GeneratingPage's
+    // client-side SSE call — a crawler with no JS would otherwise never trigger
+    // it, leaving this slug stuck on "Generating" until the ISR cache expires.
+    // Calling generateMarkdownForSlug() directly here would throw: it calls
+    // revalidatePath() once content lands, and Next rejects that from any code
+    // path started inside a render, waitUntil included — a plain HTTP call is
+    // the only way out of that render scope. /api/generate is the same route
+    // GeneratingPage's own SSE call already hits, so this doubles up on a
+    // fast page but costs nothing extra on the slow path that needs it.
+    const { ctx } = await getCloudflareContext({ async: true });
+    ctx.waitUntil(
+      fetch(`${SITE_URL}/api/generate?slug=${encodeURIComponent(slugPath)}`).catch((err) =>
+        console.error(`Background generation kickoff failed for "${slugPath}":`, err),
+      ),
+    );
     return <GeneratingPage slug={slugPath} />;
   }
 

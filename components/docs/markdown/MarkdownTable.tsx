@@ -1,5 +1,5 @@
 import type { Components } from "react-markdown";
-import type { Element, Root, RootContent, Text } from "hast";
+import type { Element, Root, RootContent } from "hast";
 
 function tableHeading(node: Element | undefined): string {
   function textContent(child: Element | Root | RootContent): string {
