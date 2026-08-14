@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import {
   generateMarkdownForSlug,
   PageNotFoundError,
@@ -60,8 +61,7 @@ export async function GET(request: NextRequest) {
 
   const { stream, sendEvent, close } = createSSEStream();
 
-  // Process in background while streaming updates
-  (async () => {
+  const runGeneration = async () => {
     try {
       await generateMarkdownForSlug(slug, skipCache, sendEvent);
     } catch (error) {
@@ -84,10 +84,27 @@ export async function GET(request: NextRequest) {
     } finally {
       close();
     }
-  })().catch((err) => {
-    // Final safeguard: catch any errors that escape during Lambda shutdown
-    console.error(`Unhandled error in generation stream for ${slug}:`, err);
-  });
+  };
+
+  // Registered with ctx.waitUntil instead of just fired-and-forgotten: this
+  // handler is also hit as a bare background kickoff from
+  // app/docs/[...slug]/page.tsx (`ctx.waitUntil(fetch(...))`, never reads the
+  // body). Without an explicit waitUntil here, this generation's survival
+  // depended on something downstream keeping the SSE stream open — fine when
+  // GeneratingPage's client-side EventSource is reading it, but the page.tsx
+  // kickoff never reads it at all. Cloudflare is then free to tear down the
+  // execution context the moment the Response is returned, cutting off
+  // generateMarkdownForSlug() (and the updateSearchIndex() inside it) mid-run.
+  // That produced live-but-unindexed pages — see "Content Index Misses Pages
+  // That Are Live In R2". ctx.waitUntil() makes this survive regardless of
+  // whether anyone ever drains the response body.
+  const { ctx } = await getCloudflareContext({ async: true });
+  ctx.waitUntil(
+    runGeneration().catch((err) => {
+      // Final safeguard: catch any errors that escape during Lambda shutdown
+      console.error(`Unhandled error in generation stream for ${slug}:`, err);
+    }),
+  );
 
   return new Response(stream, {
     headers: {
