@@ -84,5 +84,9 @@ __pycache__/
 # screenshot output
 shots/
 
-# local analytics archive
-.analytics.db*
+# analytics
+*analytics*
+
+# database files
+*.db
+*.sql*
