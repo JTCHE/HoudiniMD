@@ -189,11 +189,33 @@ async function runPool<T, R>(
   return results;
 }
 
+// Flush the search index every FLUSH_EVERY successful regenerations instead
+// of only once at the very end. A single end-of-batch write meant an
+// interrupted run (Ctrl-C, OOM, box reboot, SideFX rate-limiting a run to
+// death) lost the index entry for every page it had *already* saved to R2 in
+// that run — the content was live but invisible to search/sitemap/static
+// params until someone noticed and re-ran the index step by hand. This is
+// most of the historical 4,241-page gap documented in "Content Index Misses
+// Pages That Are Live In R2".
+//
+// 25 was picked as a middle ground: mutateSearchIndex() does a GET-sort-PUT
+// round (~3MB body, ~16k entries) with up to 8 conditional-write retries on
+// 409/412, plus its own internal lite-index resync. At concurrency 4 (the
+// default), one entry lands roughly every 1-2s, so a flush every 25 is
+// roughly a 30-60s cadence — frequent enough that an interrupted run only
+// ever loses a couple dozen entries, not thousands, but spaced out enough
+// that flushes rarely overlap and start colliding on the ETag (each 409 is a
+// full extra GET-sort-PUT round-trip against a multi-MB object).
+const FLUSH_EVERY = 25;
+
 /**
  * Regenerate a batch of slugs.
  *
- * Search-index entries from successful regenerations are merged into the existing
- * R2 index and written back in a single PUT at the end (instead of one PUT per slug).
+ * Search-index entries from successful regenerations are flushed to the R2
+ * index incrementally (every FLUSH_EVERY successes) rather than in a single
+ * PUT at the end, so an interrupted run only loses the tail of already-saved
+ * content, not the whole batch. A final flush after the pool drains catches
+ * any remainder smaller than FLUSH_EVERY.
  */
 export async function regenerateBatch(
   slugs: string[],
@@ -201,8 +223,33 @@ export async function regenerateBatch(
 ): Promise<RegenResult[]> {
   const opts = { ...DEFAULT_OPTIONS, ...options };
 
-  const updatedEntries = new Map<string, SearchIndexEntry>();
-  const removedPaths = new Set<string>();
+  // Entries/removals accumulated since the last flush. mutateSearchIndex()
+  // merges against whatever is live in R2 at flush time, so these only need
+  // to hold what hasn't been written yet — not the whole batch.
+  let pendingEntries = new Map<string, SearchIndexEntry>();
+  let pendingRemovals = new Set<string>();
+  // Serializes flushes so concurrent workers hitting FLUSH_EVERY at once
+  // don't fire overlapping mutateSearchIndex() calls (each one is a
+  // GET-sort-PUT round against the same object; overlapping ones just
+  // guarantee each other a 409 and burn a retry).
+  let flushChain: Promise<void> = Promise.resolve();
+
+  const flush = () => {
+    if (opts.dryRun || (!pendingEntries.size && !pendingRemovals.size)) return flushChain;
+    const entries = pendingEntries;
+    const removals = pendingRemovals;
+    pendingEntries = new Map();
+    pendingRemovals = new Set();
+    flushChain = flushChain.then(() =>
+      mutateSearchIndex((current) => {
+        const indexByPath = new Map(current.map((entry) => [entry.path, entry]));
+        for (const path of removals) indexByPath.delete(path);
+        for (const entry of entries.values()) indexByPath.set(entry.path, entry);
+        return [...indexByPath.values()];
+      }).then(() => {}),
+    );
+    return flushChain;
+  };
 
   let done = 0;
   const results = await runPool<string, RegenResult>(slugs, opts.concurrency, async (slug) => {
@@ -225,13 +272,14 @@ export async function regenerateBatch(
           durationMs: performance.now() - start,
         };
         if (!("status" in res)) {
-          updatedEntries.set(res.entry.path, res.entry);
+          pendingEntries.set(res.entry.path, res.entry);
         } else {
           // SideFX confirmed this page is gone: retaining it makes search link
           // to a local 404 until somebody manually repairs the index.
-          removedPaths.add(slug);
+          pendingRemovals.add(slug);
         }
         done++;
+        if (done % FLUSH_EVERY === 0) flush();
         opts.onProgress?.(done, slugs.length, r);
         return r;
       } catch (err) {
@@ -253,14 +301,10 @@ export async function regenerateBatch(
     return r;
   });
 
-  if (!opts.dryRun && (updatedEntries.size || removedPaths.size)) {
-    await mutateSearchIndex((current) => {
-      const indexByPath = new Map(current.map((entry) => [entry.path, entry]));
-      for (const path of removedPaths) indexByPath.delete(path);
-      for (const entry of updatedEntries.values()) indexByPath.set(entry.path, entry);
-      return [...indexByPath.values()];
-    });
-  }
+  // Final flush for whatever remainder didn't line up on a FLUSH_EVERY
+  // boundary (including the entire batch, if it was smaller than that).
+  flush();
+  await flushChain;
 
   return results;
 }
