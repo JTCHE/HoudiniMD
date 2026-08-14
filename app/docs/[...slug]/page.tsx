@@ -180,9 +180,16 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
     // fast page but costs nothing extra on the slow path that needs it.
     const { ctx } = await getCloudflareContext({ async: true });
     ctx.waitUntil(
-      fetch(`${SITE_URL}/api/generate?slug=${encodeURIComponent(slugPath)}`).catch((err) =>
-        console.error(`Background generation kickoff failed for "${slugPath}":`, err),
-      ),
+      fetch(`${SITE_URL}/api/generate?slug=${encodeURIComponent(slugPath)}`)
+        // The route's own generation work now survives via its own ctx.waitUntil
+        // (see app/api/generate/route.ts) whether or not we read this body, so
+        // this drain is just belt-and-suspenders: an unread SSE stream is one
+        // more thing that could make Cloudflare reclaim this fetch's connection
+        // early, and .text() is a one-line way to avoid ever finding out.
+        .then((res) => res.text())
+        .catch((err) =>
+          console.error(`Background generation kickoff failed for "${slugPath}":`, err),
+        ),
     );
     return <GeneratingPage slug={slugPath} />;
   }

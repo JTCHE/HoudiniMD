@@ -9,7 +9,8 @@ import { localIconUrl } from "@/lib/icons";
  * the network like DocImageClient does for figures — a card-grid page can hold
  * 1000+ of them. A cached image becomes visible before paint. A slow image
  * shows a delayed skeleton, then fades over it. Broken or degenerate (near-0px,
- * e.g. SideFX's 1x1 placeholder) images leave their reserved space in place.
+ * e.g. SideFX's 1x1 placeholder, or a 404 — SideFX's icon tree has gaps)
+ * images render nothing at all, once detected — no reserved box.
  */
 export default function DocIconClient({
   src,
@@ -41,6 +42,11 @@ export default function DocIconClient({
     return () => window.clearTimeout(timeout);
   }, [state, src]);
 
+  // A broken/404 icon (SideFX serves plenty of pageicon srcs that don't
+  // resolve) must leave no trace — no reserved box, no margin — rather than
+  // an empty placeholder the size of an icon. Render nothing at all.
+  if (state === "broken") return null;
+
   return (
     <span
       className={`relative inline-grid mr-2 ${className}`}
@@ -54,34 +60,32 @@ export default function DocIconClient({
           aria-hidden="true"
         />
       )}
-      {state !== "broken" && (
-        // eslint-disable-next-line @next/next/no-img-element -- needs a raw <img> to track load/error state directly.
-        <img
-          ref={ref}
-          src={localIconUrl(src)}
-          alt={alt}
-          width={width}
-          height={height}
-          className="col-start-1 row-start-1 size-full object-contain"
-          loading={priority ? "eager" : "lazy"}
-          fetchPriority={priority ? "high" : "auto"}
-          decoding="async"
-          style={{
-            // Visible by default so the native <img> can paint as soon as its
-            // bytes arrive, without waiting on hydration. Only "skeleton" (a
-            // slow load past 150ms, confirmed once JS is running) hides it —
-            // that state's own pulse is the placeholder instead.
-            opacity: state === "skeleton" ? 0 : 1,
-            transition: state === "skeleton" || state === "loaded" ? "opacity 200ms" : undefined,
-          }}
-          onLoad={(event) => {
-            const img = event.currentTarget;
-            if (img.naturalWidth <= 1 || img.naturalHeight <= 1) return setState("broken");
-            setState((current) => (current === "skeleton" ? "loaded" : "instant"));
-          }}
-          onError={() => setState("broken")}
-        />
-      )}
+      {/* eslint-disable-next-line @next/next/no-img-element -- needs a raw <img> to track load/error state directly. */}
+      <img
+        ref={ref}
+        src={localIconUrl(src)}
+        alt={alt}
+        width={width}
+        height={height}
+        className="col-start-1 row-start-1 size-full object-contain"
+        loading={priority ? "eager" : "lazy"}
+        fetchPriority={priority ? "high" : "auto"}
+        decoding="async"
+        style={{
+          // Visible by default so the native <img> can paint as soon as its
+          // bytes arrive, without waiting on hydration. Only "skeleton" (a
+          // slow load past 150ms, confirmed once JS is running) hides it —
+          // that state's own pulse is the placeholder instead.
+          opacity: state === "skeleton" ? 0 : 1,
+          transition: state === "skeleton" || state === "loaded" ? "opacity 200ms" : undefined,
+        }}
+        onLoad={(event) => {
+          const img = event.currentTarget;
+          if (img.naturalWidth <= 1 || img.naturalHeight <= 1) return setState("broken");
+          setState((current) => (current === "skeleton" ? "loaded" : "instant"));
+        }}
+        onError={() => setState("broken")}
+      />
     </span>
   );
 }

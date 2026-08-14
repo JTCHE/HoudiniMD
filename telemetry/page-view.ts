@@ -52,11 +52,16 @@ async function writeView(
   const kind = visitorKind(ua, request.headers);
   if (await seenRecently(`${ev.path}|${country}|${ev.referrer}|${kind}`, ctx)) return;
   const salt = env.VISITOR_SALT!;
-  const visitor = visitorHash(`${ip}|${ua ?? ""}`, salt);
+  // The finer identity: address + browser + device, not address alone. Built
+  // from browserKind()/deviceKind(), not the raw UA — the raw string changes
+  // on every Chrome minor version, which would split a returning reader every
+  // few weeks. `visitor` (hash(IP) alone, below) keeps its meaning so
+  // ownIpHashes() and the hide list keep working on every row, old and new.
+  const client = visitorHash(`${ip}|${browserKind(ua, request.headers)}|${deviceKind(ua, request.headers)}`, salt);
   const cf = (request as Request & { cf?: { city?: string; asn?: number; asOrganization?: string } }).cf;
   await env.DB!.prepare(
-    `INSERT OR IGNORE INTO views (ts, visitor, path, kind, country, city, bot, evidence, status, referrer, markdown, alias, device, browser, fetch_site, lang, asn, as_org)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    `INSERT OR IGNORE INTO views (ts, visitor, path, kind, country, city, bot, evidence, status, referrer, markdown, alias, device, browser, fetch_site, lang, asn, as_org, client)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
   )
     .bind(
       nowStamp(),
@@ -70,7 +75,10 @@ async function writeView(
       String(ev.status),
       ev.referrer,
       ev.markdown ? "1" : "",
-      visitorLabel(visitor),
+      // Named from `client`, not `visitor`: a reader's name must not change
+      // when their browser updates, and their editor's header-less `.md`
+      // fetches on the same address earn their own, separate name.
+      visitorLabel(client),
       deviceKind(ua, request.headers),
       browserKind(ua, request.headers),
       // On a beacon these describe the beacon's own fetch, not the navigation
@@ -81,6 +89,7 @@ async function writeView(
       primaryLanguage(request.headers),
       cf?.asn ?? null,
       cf?.asOrganization ?? "",
+      client,
     )
     .run();
 }
