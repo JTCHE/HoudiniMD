@@ -171,150 +171,163 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
     return <GeneratingPage slug={slugPath} />;
   }
 
-  const { content: rawContent, data: frontmatter } = parseFrontmatter(rawMarkdown);
-  const pageIcon = frontmatter.icon ? localIconUrl(frontmatter.icon) : undefined;
-  const pageBanner = frontmatter.banner;
-  const since = frontmatter.since;
-  // The VEX signature transform is scoped by slug rather than by sniffing the
-  // markdown, so the other ~9,600 pages take the untouched path no matter what
-  // their content looks like. The whole vex/ tree is in scope, not just
-  // vex/functions/: the `_suite` pages (e.g. vex/attrib_suite) document
-  // functions in exactly the same shape. Of the 37 non-function vex pages only
-  // those 2 contain a signature at all; the other 35 pass through unchanged.
-  const isVexPage = /(^|\/)vex\//.test(`/${slugPath}`);
-  // Escape pseudo-tags before rehypeRaw processes the markdown.
-  // Real HTML tag names only contain [a-zA-Z0-9-]. We escape two invalid patterns:
-  //   1. Uppercase-starting: <A>, <A-B>, <Key>
-  //   2. Underscore-containing (with or without markdown backslash-escape before _):
-  //      <unmodified_key>, <unmodified\_key>  — both throw React "Invalid tag"
-  //
-  // Code (fenced blocks + inline spans) is stashed first so its contents are left
-  // untouched: inside code, `foo<UDIM>.exr` is literal text that markdown renders
-  // verbatim, and escaping it would surface "&lt;UDIM&gt;" to the reader.
-  const codeStash: string[] = [];
-  // Sentinel uses a NUL escape — NUL never occurs in markdown source, so the
-  // restore step cannot collide with real prose (e.g. "version 20 index").
-  const stashCode = (m: string) => `\u0000${codeStash.push(m) - 1}\u0000`;
-  const content = rawContent
-    .replace(/```[\s\S]*?```/g, stashCode)
-    .replace(/(`{1,2})[\s\S]*?\1/g, stashCode)
-    .replace(/<([A-Z][^>]*?)>/g, "&lt;$1&gt;")
-    .replace(/<(\/?[a-z][a-z0-9-]*(?:\\?_[a-z0-9_\\-]*)+)>/g, "&lt;$1&gt;")
-    .replace(/\u0000(\d+)\u0000/g, (_, n) => codeStash[Number(n)]);
+  // Nothing below here is guarded: a cache MISS renders synchronously on
+  // the request path (a true miss has no stale entry for the DO queue to
+  // serve while it revalidates in the background), and an uncaught throw
+  // anywhere in frontmatter parsing, the regex passes, image/video probing,
+  // or the remark/rehype pipeline surfaces as a bare 500 with nothing in the
+  // logs to say why. Catch here, log the slug and stack so the next
+  // occurrence is diagnosable, and rethrow — error.tsx still renders the
+  // same 500 a reader would have gotten; this only makes it visible.
+  try {
+    const { content: rawContent, data: frontmatter } = parseFrontmatter(rawMarkdown);
+    const pageIcon = frontmatter.icon ? localIconUrl(frontmatter.icon) : undefined;
+    const pageBanner = frontmatter.banner;
+    const since = frontmatter.since;
+    // The VEX signature transform is scoped by slug rather than by sniffing the
+    // markdown, so the other ~9,600 pages take the untouched path no matter what
+    // their content looks like. The whole vex/ tree is in scope, not just
+    // vex/functions/: the `_suite` pages (e.g. vex/attrib_suite) document
+    // functions in exactly the same shape. Of the 37 non-function vex pages only
+    // those 2 contain a signature at all; the other 35 pass through unchanged.
+    const isVexPage = /(^|\/)vex\//.test(`/${slugPath}`);
+    // Escape pseudo-tags before rehypeRaw processes the markdown.
+    // Real HTML tag names only contain [a-zA-Z0-9-]. We escape two invalid patterns:
+    //   1. Uppercase-starting: <A>, <A-B>, <Key>
+    //   2. Underscore-containing (with or without markdown backslash-escape before _):
+    //      <unmodified_key>, <unmodified\_key>  — both throw React "Invalid tag"
+    //
+    // Code (fenced blocks + inline spans) is stashed first so its contents are left
+    // untouched: inside code, `foo<UDIM>.exr` is literal text that markdown renders
+    // verbatim, and escaping it would surface "&lt;UDIM&gt;" to the reader.
+    const codeStash: string[] = [];
+    // Sentinel uses a NUL escape — NUL never occurs in markdown source, so the
+    // restore step cannot collide with real prose (e.g. "version 20 index").
+    const stashCode = (m: string) => `\u0000${codeStash.push(m) - 1}\u0000`;
+    const content = rawContent
+      .replace(/```[\s\S]*?```/g, stashCode)
+      .replace(/(`{1,2})[\s\S]*?\1/g, stashCode)
+      .replace(/<([A-Z][^>]*?)>/g, "&lt;$1&gt;")
+      .replace(/<(\/?[a-z][a-z0-9-]*(?:\\?_[a-z0-9_\\-]*)+)>/g, "&lt;$1&gt;")
+      .replace(/\u0000(\d+)\u0000/g, (_, n) => codeStash[Number(n)]);
 
-  // Extract title and summary for JSON-LD.
-  // Title is pulled from the RAW (pre-escape) markdown and entity-decoded, so a
-  // generic node like "Add<T>" renders as text instead of literal "Add&lt;T&gt;".
-  const rawH1Match = rawContent.match(/^#[ \t]+(\S[^\n]*)$/m);
-  const mdTitle = decodeEntities(rawH1Match?.[1]?.trim() ?? slug.at(-1)?.replace(/-/g, " ") ?? "SideFX documentation");
-  const h1Match = content.match(/^#[ \t]+(\S[^\n]*)$/m);
+    // Extract title and summary for JSON-LD.
+    // Title is pulled from the RAW (pre-escape) markdown and entity-decoded, so a
+    // generic node like "Add<T>" renders as text instead of literal "Add&lt;T&gt;".
+    const rawH1Match = rawContent.match(/^#[ \t]+(\S[^\n]*)$/m);
+    const mdTitle = decodeEntities(rawH1Match?.[1]?.trim() ?? slug.at(-1)?.replace(/-/g, " ") ?? "SideFX documentation");
+    const h1Match = content.match(/^#[ \t]+(\S[^\n]*)$/m);
 
-  // The header displays the page name and its type as two visually distinct
-  // pieces (name as scraped, type Title Cased) — frontmatter already carries
-  // them split. Pages without frontmatter (should not happen for generated
-  // docs) degrade to the full H1 text as the name, with no type.
-  const headerName = frontmatter.title ? decodeEntities(frontmatter.title) : mdTitle;
-  const headerNodeType = frontmatter.title ? frontmatter.nodeType : undefined;
+    // The header displays the page name and its type as two visually distinct
+    // pieces (name as scraped, type Title Cased) — frontmatter already carries
+    // them split. Pages without frontmatter (should not happen for generated
+    // docs) degrade to the full H1 text as the name, with no type.
+    const headerName = frontmatter.title ? decodeEntities(frontmatter.title) : mdTitle;
+    const headerNodeType = frontmatter.title ? frontmatter.nodeType : undefined;
 
-  // The H1 is rendered in the page header row (alongside the Copy button) so
-  // it can share a row with action controls. Strip it from the markdown body
-  // to avoid a duplicate render.
-  let bodyContent = h1Match ? content.replace(/^#[ \t]+\S[^\n]*\r?\n+/m, "") : content;
+    // The H1 is rendered in the page header row (alongside the Copy button) so
+    // it can share a row with action controls. Strip it from the markdown body
+    // to avoid a duplicate render.
+    let bodyContent = h1Match ? content.replace(/^#[ \t]+\S[^\n]*\r?\n+/m, "") : content;
 
-  // SideFX page summary is emitted as a leading blockquote (converter.ts). Lift
-  // it into the header — above the separator, beneath the title — instead of
-  // rendering it as the first piece of body content. A `[!…]` admonition (e.g. a
-  // deprecation warning) is not a summary, so it stays in the body.
-  let summary: string | undefined;
-  const summaryMatch = bodyContent.match(/^\s*>[ \t]+(?!\[!)([^\n]+)\n+/);
-  if (summaryMatch) {
-    // The summary renders as a plain-text node (not through ReactMarkdown), so
-    // decode the entities the escape step introduced — otherwise a token like
-    // <UDIM> would surface as literal "&lt;UDIM&gt;".
-    summary = decodeEntities(summaryMatch[1].trim());
-    bodyContent = bodyContent.slice(summaryMatch[0].length);
-  }
-  bodyContent = legacyWarningMarkdown(slugPath) + bodyContent;
-  if (/^## See Also\s*$/m.test(bodyContent)) {
-    const entries = await fetchLiteIndexEntries().catch(() => null);
-    const iconByPath = new Map(entries?.flatMap(({ path, icon }) => icon ? [[path, icon] as const] : []) ?? []);
-    bodyContent = addSeeAlsoIcons(bodyContent, iconByPath);
-  }
-  bodyContent = normalizeIconLinks(localizeIconUrls(bodyContent));
-  const mdSummary = summary ?? bodyContent.match(/^(?!#|>)[^\n]{20,}/m)?.[0]?.trim();
-  const canonical = slugPath ? `${SITE_URL}/docs/${slugPath}` : `${SITE_URL}/docs`;
+    // SideFX page summary is emitted as a leading blockquote (converter.ts). Lift
+    // it into the header — above the separator, beneath the title — instead of
+    // rendering it as the first piece of body content. A `[!…]` admonition (e.g. a
+    // deprecation warning) is not a summary, so it stays in the body.
+    let summary: string | undefined;
+    const summaryMatch = bodyContent.match(/^\s*>[ \t]+(?!\[!)([^\n]+)\n+/);
+    if (summaryMatch) {
+      // The summary renders as a plain-text node (not through ReactMarkdown), so
+      // decode the entities the escape step introduced — otherwise a token like
+      // <UDIM> would surface as literal "&lt;UDIM&gt;".
+      summary = decodeEntities(summaryMatch[1].trim());
+      bodyContent = bodyContent.slice(summaryMatch[0].length);
+    }
+    bodyContent = legacyWarningMarkdown(slugPath) + bodyContent;
+    if (/^## See Also\s*$/m.test(bodyContent)) {
+      const entries = await fetchLiteIndexEntries().catch(() => null);
+      const iconByPath = new Map(entries?.flatMap(({ path, icon }) => icon ? [[path, icon] as const] : []) ?? []);
+      bodyContent = addSeeAlsoIcons(bodyContent, iconByPath);
+    }
+    bodyContent = normalizeIconLinks(localizeIconUrls(bodyContent));
+    const mdSummary = summary ?? bodyContent.match(/^(?!#|>)[^\n]{20,}/m)?.[0]?.trim();
+    const canonical = slugPath ? `${SITE_URL}/docs/${slugPath}` : `${SITE_URL}/docs`;
 
-  const articleJsonLd = {
-    "@context": "https://schema.org",
-    "@type": "TechArticle",
-    headline: mdTitle,
-    ...(mdSummary ? { description: mdSummary } : {}),
-    url: canonical,
-    author: { "@type": "Organization", name: "SideFX" },
-    publisher: { "@type": "Organization", name: "HoudiniMD" },
-    about: { "@type": "SoftwareApplication", name: "Houdini" },
-    image: `${SITE_URL}/api/og?${new URLSearchParams({ path: slugPath, title: mdTitle, ...(mdSummary ? { summary: mdSummary } : {}) }).toString()}`,
-    mainEntityOfPage: canonical,
-  };
+    const articleJsonLd = {
+      "@context": "https://schema.org",
+      "@type": "TechArticle",
+      headline: mdTitle,
+      ...(mdSummary ? { description: mdSummary } : {}),
+      url: canonical,
+      author: { "@type": "Organization", name: "SideFX" },
+      publisher: { "@type": "Organization", name: "HoudiniMD" },
+      about: { "@type": "SoftwareApplication", name: "Houdini" },
+      image: `${SITE_URL}/api/og?${new URLSearchParams({ path: slugPath, title: mdTitle, ...(mdSummary ? { summary: mdSummary } : {}) }).toString()}`,
+      mainEntityOfPage: canonical,
+    };
 
-  // Image and SVG dimensions come from their first bytes, so every image box
-  // exists at its final aspect ratio before the file finishes loading.
-  const bodyImageUrls = Array.from(bodyContent.matchAll(/!\[[^\]]*\]\((https?:\/\/[^\s)]+)\)/g)).map((m) => m[1]);
-  const extraImageUrls = [pageIcon, pageBanner].filter((url): url is string => Boolean(url));
-  const imageMeta = await probeImages([...extraImageUrls, ...bodyImageUrls]);
-  const imageComponent = createImageComponent(imageMeta);
+    // Image and SVG dimensions come from their first bytes, so every image box
+    // exists at its final aspect ratio before the file finishes loading.
+    const bodyImageUrls = Array.from(bodyContent.matchAll(/!\[[^\]]*\]\((https?:\/\/[^\s)]+)\)/g)).map((m) => m[1]);
+    const extraImageUrls = [pageIcon, pageBanner].filter((url): url is string => Boolean(url));
+    const imageMeta = await probeImages([...extraImageUrls, ...bodyImageUrls]);
+    const imageComponent = createImageComponent(imageMeta);
 
-  // Video dimensions probed the same way, from the WebM header's leading
-  // bytes, so the player's box locks in at the right aspect ratio up front.
-  const videoUrls = Array.from(bodyContent.matchAll(/<video\b[^>]*\ssrc="([^"]+)"/g)).map((m) => m[1]);
-  const videoMeta = await probeVideos(videoUrls);
-  const videoComponent = createVideoComponent(videoMeta);
+    // Video dimensions probed the same way, from the WebM header's leading
+    // bytes, so the player's box locks in at the right aspect ratio up front.
+    const videoUrls = Array.from(bodyContent.matchAll(/<video\b[^>]*\ssrc="([^"]+)"/g)).map((m) => m[1]);
+    const videoMeta = await probeVideos(videoUrls);
+    const videoComponent = createVideoComponent(videoMeta);
 
-  return (
-    <main className="mx-auto w-full min-w-0 max-w-page px-page-x py-10">
-      {pageIcon && <link rel="preload" as="image" type="image/svg+xml" href={pageIcon} fetchPriority="high" />}
-      <PrintPagination />
-      {/* Reports the read: to analytics, which cannot see a navigation served
-          from the router cache, and to the landing page's "recently visited"
-          row. Both render nothing. */}
-      <ViewRecorder path={slugPath ? `/docs/${slugPath}` : "/docs"} />
-      <VisitRecorder chip={{ path: slugPath, title: headerName, icon: pageIcon ?? "" }} />
-      <Script
-        id="article-jsonld"
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }}
-      />
-      {/* The H1 title lives inside <article>, alongside the markdown body, so
-          the page has one content landmark holding both the heading and the
-          body flow content. Reader-mode heuristics (e.g. Safari Reader) key
-          on this: a title outside the article, with the body as the only
-          content inside it, reads as "no content" to them. */}
-      <article className="prose prose-neutral dark:prose-invert max-w-none">
-        <PageHeader
-          slug={slugPath}
-          name={headerName}
-          nodeType={headerNodeType}
-          icon={pageIcon}
-          iconDimensions={pageIcon ? imageMeta.get(pageIcon) : undefined}
-          since={since}
-          summary={summary}
-          banner={pageBanner}
-          bannerDimensions={pageBanner ? imageMeta.get(pageBanner) : undefined}
+    return (
+      <main className="mx-auto w-full min-w-0 max-w-page px-page-x py-10">
+        {pageIcon && <link rel="preload" as="image" type="image/svg+xml" href={pageIcon} fetchPriority="high" />}
+        <PrintPagination />
+        {/* Reports the read: to analytics, which cannot see a navigation served
+            from the router cache, and to the landing page's "recently visited"
+            row. Both render nothing. */}
+        <ViewRecorder path={slugPath ? `/docs/${slugPath}` : "/docs"} />
+        <VisitRecorder chip={{ path: slugPath, title: headerName, icon: pageIcon ?? "" }} />
+        <Script
+          id="article-jsonld"
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }}
         />
-        <TableOfContents headings={extractHeadings(bodyContent)} />
-        <ReactMarkdown
-          remarkPlugins={[remarkGfm, remarkCallouts, [remarkVex, { enabled: isVexPage }]]}
-          rehypePlugins={[rehypeRaw, rehypeSlug, rehypeCards]}
-          components={{
-            ...markdownComponents,
-            pre: ({ children }) => <CodeBlock language={detectLanguage(slugPath)}>{children}</CodeBlock>,
-            img: imageComponent,
-            video: videoComponent,
-          }}
-        >
-          {bodyContent}
-        </ReactMarkdown>
-      </article>
-    </main>
-  );
+        {/* The H1 title lives inside <article>, alongside the markdown body, so
+            the page has one content landmark holding both the heading and the
+            body flow content. Reader-mode heuristics (e.g. Safari Reader) key
+            on this: a title outside the article, with the body as the only
+            content inside it, reads as "no content" to them. */}
+        <article className="prose prose-neutral dark:prose-invert max-w-none">
+          <PageHeader
+            slug={slugPath}
+            name={headerName}
+            nodeType={headerNodeType}
+            icon={pageIcon}
+            iconDimensions={pageIcon ? imageMeta.get(pageIcon) : undefined}
+            since={since}
+            summary={summary}
+            banner={pageBanner}
+            bannerDimensions={pageBanner ? imageMeta.get(pageBanner) : undefined}
+          />
+          <TableOfContents headings={extractHeadings(bodyContent)} />
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm, remarkCallouts, [remarkVex, { enabled: isVexPage }]]}
+            rehypePlugins={[rehypeRaw, rehypeSlug, rehypeCards]}
+            components={{
+              ...markdownComponents,
+              pre: ({ children }) => <CodeBlock language={detectLanguage(slugPath)}>{children}</CodeBlock>,
+              img: imageComponent,
+              video: videoComponent,
+            }}
+          >
+            {bodyContent}
+          </ReactMarkdown>
+        </article>
+      </main>
+    );
+  } catch (err) {
+    console.error(`docs page render failed for "${slugPath}":`, err);
+    throw err;
+  }
 }
