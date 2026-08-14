@@ -21,7 +21,23 @@ const FETCH_TIMEOUT_MS = 3000;
 
 // Warm-isolate cache: the same image appears across many pages, and its
 // dimensions never change. Mirrors lib/r2/read.ts's index caching.
+//
+// Capped: a single client that walks thousands of distinct pages in one
+// sustained crawl (every page probing its own icons/banners) can keep one
+// isolate warm long enough to grow this unbounded, which is exactly the
+// traffic shape behind a cluster of otherwise-unexplained 500s. FIFO
+// eviction is enough — this is a dimensions cache, not a hot-path index;
+// losing the oldest entry just costs one re-probe.
+const PROBE_CACHE_MAX = 2000;
 const probeCache = new Map<string, ImageProbe | null>();
+
+function cacheProbe(url: string, probe: ImageProbe | null): void {
+  if (probeCache.size >= PROBE_CACHE_MAX) {
+    const oldest = probeCache.keys().next().value;
+    if (oldest !== undefined) probeCache.delete(oldest);
+  }
+  probeCache.set(url, probe);
+}
 
 /**
  * Fetch just the first bytes of a remote image and read its pixel size from
@@ -65,7 +81,7 @@ export async function probeImage(url: string): Promise<ImageProbe | null> {
   }
 
   const probe = dims ? { ...dims, placeholder: null } : null;
-  probeCache.set(url, probe);
+  cacheProbe(url, probe);
   return probe;
 }
 
