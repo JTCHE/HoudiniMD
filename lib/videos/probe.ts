@@ -10,8 +10,19 @@ const PROBE_BYTES = 64 * 1024;
 const FETCH_TIMEOUT_MS = 3000;
 
 // Warm-isolate cache: the same video appears across many pages, and its
-// dimensions never change. Mirrors lib/images/probe.ts.
+// dimensions never change. Mirrors lib/images/probe.ts, including the size
+// cap — see the comment there for why an unbounded Map here is a real risk
+// under a sustained single-client crawl.
+const PROBE_CACHE_MAX = 2000;
 const probeCache = new Map<string, VideoProbe | null>();
+
+function cacheProbe(url: string, probe: VideoProbe | null): void {
+  if (probeCache.size >= PROBE_CACHE_MAX) {
+    const oldest = probeCache.keys().next().value;
+    if (oldest !== undefined) probeCache.delete(oldest);
+  }
+  probeCache.set(url, probe);
+}
 
 /**
  * Fetch just the first bytes of a remote WebM video and read its pixel size
@@ -37,7 +48,7 @@ export async function probeVideo(url: string): Promise<VideoProbe | null> {
     if (res.status !== 206 && res.status !== 200) return null;
 
     const probe = parseWebmDimensions(new Uint8Array(await res.arrayBuffer()));
-    probeCache.set(url, probe);
+    cacheProbe(url, probe);
     return probe;
   } catch {
     return null;
