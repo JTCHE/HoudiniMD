@@ -1,4 +1,4 @@
-import { visitorKind, type VisitorKind } from "../lib/wants-markdown";
+import { browserKind, deviceKind, visitorKind, type VisitorKind } from "../lib/wants-markdown";
 import { visitorHash } from "../lib/visitor-hash";
 import { visitorLabel } from "../lib/visitor-label";
 import { canRecord, nowStamp, type TelemetryEnv, type WaitUntil } from "./types";
@@ -22,11 +22,13 @@ function writeSearchRow(request: Request, env: TelemetryEnv, ev: { q: string; so
   const ip = request.headers.get("cf-connecting-ip") ?? "";
   const salt = env.VISITOR_SALT!;
   const ua = request.headers.get("user-agent");
-  const visitor = visitorHash(`${ip}|${ua ?? ""}`, salt);
+  // See telemetry/page-view.ts: address + browser + device, not the raw UA.
+  // `visitor` (hash(IP) alone, below) keeps its meaning untouched.
+  const client = visitorHash(`${ip}|${browserKind(ua, request.headers)}|${deviceKind(ua, request.headers)}`, salt);
   const cf = (request as Request & { cf?: { asn?: number; asOrganization?: string } }).cf;
   return env.DB!.prepare(
-    `INSERT OR IGNORE INTO searches (ts, visitor, q, country, category, results, source, dest, kind, alias, rank, asn, as_org)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    `INSERT OR IGNORE INTO searches (ts, visitor, q, country, category, results, source, dest, kind, alias, rank, asn, as_org, client)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
   )
     .bind(
       nowStamp(),
@@ -38,10 +40,12 @@ function writeSearchRow(request: Request, env: TelemetryEnv, ev: { q: string; so
       ev.source,
       ev.dest.slice(0, 200),
       ev.kind ?? visitorKind(ua, request.headers),
-      visitorLabel(visitor),
+      // Named from `client`, not `visitor` — see page-view.ts.
+      visitorLabel(client),
       String(ev.rank ?? 0),
       cf?.asn ?? null,
       cf?.asOrganization ?? "",
+      client,
     )
     .run();
 }
