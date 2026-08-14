@@ -53,9 +53,10 @@ async function writeView(
   if (await seenRecently(`${ev.path}|${country}|${ev.referrer}|${kind}`, ctx)) return;
   const salt = env.VISITOR_SALT!;
   const visitor = visitorHash(`${ip}|${ua ?? ""}`, salt);
+  const cf = (request as Request & { cf?: { city?: string; asn?: number; asOrganization?: string } }).cf;
   await env.DB!.prepare(
-    `INSERT OR IGNORE INTO views (ts, visitor, path, kind, country, city, bot, evidence, status, referrer, markdown, alias, device, browser, fetch_site, lang)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    `INSERT OR IGNORE INTO views (ts, visitor, path, kind, country, city, bot, evidence, status, referrer, markdown, alias, device, browser, fetch_site, lang, asn, as_org)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
   )
     .bind(
       nowStamp(),
@@ -63,7 +64,7 @@ async function writeView(
       ev.path,
       kind,
       country,
-      ((request as Request & { cf?: { city?: string } }).cf?.city) ?? "",
+      cf?.city ?? "",
       botFamily(ua) ?? "",
       browserEvidence(request.headers),
       String(ev.status),
@@ -78,6 +79,8 @@ async function writeView(
       // only place the dashboard reads the pair. See fetchSite().
       fetchSite(request.headers),
       primaryLanguage(request.headers),
+      cf?.asn ?? null,
+      cf?.asOrganization ?? "",
     )
     .run();
 }

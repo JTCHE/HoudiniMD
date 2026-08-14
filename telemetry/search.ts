@@ -23,9 +23,10 @@ function writeSearchRow(request: Request, env: TelemetryEnv, ev: { q: string; so
   const salt = env.VISITOR_SALT!;
   const ua = request.headers.get("user-agent");
   const visitor = visitorHash(`${ip}|${ua ?? ""}`, salt);
+  const cf = (request as Request & { cf?: { asn?: number; asOrganization?: string } }).cf;
   return env.DB!.prepare(
-    `INSERT OR IGNORE INTO searches (ts, visitor, q, country, category, results, source, dest, kind, alias, rank)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+    `INSERT OR IGNORE INTO searches (ts, visitor, q, country, category, results, source, dest, kind, alias, rank, asn, as_org)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
   )
     .bind(
       nowStamp(),
@@ -39,6 +40,8 @@ function writeSearchRow(request: Request, env: TelemetryEnv, ev: { q: string; so
       ev.kind ?? visitorKind(ua, request.headers),
       visitorLabel(visitor),
       String(ev.rank ?? 0),
+      cf?.asn ?? null,
+      cf?.asOrganization ?? "",
     )
     .run();
 }
