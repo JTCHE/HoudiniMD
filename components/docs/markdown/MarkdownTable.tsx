@@ -1,10 +1,11 @@
 import type { Components } from "react-markdown";
-import type { Element, Root, Text } from "hast";
+import type { Element, Root, RootContent, Text } from "hast";
 
 function tableHeading(node: Element | undefined): string {
-  function textContent(child: Element | Root | Text): string {
+  function textContent(child: Element | Root | RootContent): string {
     if (child.type === "text") return child.value;
-    return child.children.map((item) => textContent(item as Element | Text)).join("");
+    if (!("children" in child)) return "";
+    return child.children.map((item) => textContent(item)).join("");
   }
 
   return node ? textContent(node).trim() : "";
