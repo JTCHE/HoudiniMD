@@ -61,9 +61,15 @@ export async function GET(request: NextRequest) {
 
   const { stream, sendEvent, close } = createSSEStream();
 
+  // Captured here, at request entry, while the isolate-global context slot
+  // still holds *this* request. Both the generation itself and the search-index
+  // write inside it are anchored to this one ctx; nothing downstream may
+  // re-fetch it mid-run. See the search-index note in lib/generator.ts.
+  const { ctx } = await getCloudflareContext({ async: true });
+
   const runGeneration = async () => {
     try {
-      await generateMarkdownForSlug(slug, skipCache, sendEvent);
+      await generateMarkdownForSlug(slug, skipCache, sendEvent, (p) => ctx.waitUntil(p));
     } catch (error) {
       console.error(`Generation failed for ${slug}:`, error);
 
@@ -98,7 +104,6 @@ export async function GET(request: NextRequest) {
   // That produced live-but-unindexed pages — see "Content Index Misses Pages
   // That Are Live In R2". ctx.waitUntil() makes this survive regardless of
   // whether anyone ever drains the response body.
-  const { ctx } = await getCloudflareContext({ async: true });
   ctx.waitUntil(
     runGeneration().catch((err) => {
       // Final safeguard: catch any errors that escape during Lambda shutdown
