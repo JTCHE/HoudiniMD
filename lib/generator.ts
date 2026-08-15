@@ -1,5 +1,4 @@
 import { revalidatePath } from "next/cache";
-import { getCloudflareContext } from "@opennextjs/cloudflare";
 import {
   scrapeSideFXPage,
   PageNotFoundError,
@@ -28,6 +27,13 @@ export interface ProgressEvent {
 }
 
 export type ProgressCallback = (event: ProgressEvent) => void;
+
+/**
+ * Defers background work past the response, anchored to the *caller's* request.
+ * Must be captured at request entry and passed in — never re-fetched from
+ * inside generation. See the search-index note in generateMarkdownForSlug().
+ */
+export type WaitUntil = (promise: Promise<unknown>) => void;
 
 export interface GenerateResult {
   markdown: string;
@@ -74,11 +80,17 @@ export async function generateMarkdownForSlug(
   slug: string,
   skipCache: boolean = false,
   onProgress?: ProgressCallback,
+  waitUntil?: WaitUntil,
 ): Promise<GenerateResult> {
   slug = normalizeDocSlug(slug);
   const knownAlias = slug ? await fetchSourceAlias(slug) : null;
   if (knownAlias && knownAlias.canonical !== slug) {
-    const canonical = await generateMarkdownForSlug(knownAlias.canonical, skipCache, onProgress);
+    const canonical = await generateMarkdownForSlug(
+      knownAlias.canonical,
+      skipCache,
+      onProgress,
+      waitUntil,
+    );
     return { ...canonical, slug, canonicalSlug: knownAlias.canonical };
   }
   const contentPath = contentPathForSlug(slug);
@@ -143,25 +155,36 @@ export async function generateMarkdownForSlug(
     // `/docs` is a navigation page, not a search result. Keep it in the same
     // generation and storage path without adding an empty path to the index.
     //
-    // Fired through ctx.waitUntil instead of awaited: mutateSearchIndex() does
-    // up to 8 GET-3MB/sort-11k/PUT rounds against the single shared
-    // content/index.json, plus up to 5 more inside syncLiteIndex(). Under
-    // concurrent generation (normal crawler/bot traffic on old pages) that
-    // pushed the SSE stream past the 60s route timeout. The index update no
-    // longer needs to finish before the caller sees "complete" — page content
-    // is already saved to R2 above.
+    // Deferred rather than awaited when the caller supplies a waitUntil:
+    // mutateSearchIndex() does up to 8 GET-3MB/sort-11k/PUT rounds against the
+    // single shared content/index.json, plus up to 5 more inside
+    // syncLiteIndex(). Under concurrent generation (normal crawler/bot traffic
+    // on old pages) that pushed the SSE stream past the 60s route timeout. The
+    // index update does not need to finish before the caller sees "complete" —
+    // page content is already saved to R2 above.
+    //
+    // The waitUntil MUST come from the caller, captured at request entry. Do
+    // not call getCloudflareContext() here. It reads a single slot on the
+    // shared isolate global that every invocation overwrites, and this point is
+    // tens of seconds into a background run — the ctx it hands back belongs to
+    // some other, already-finished request, so the index write is either
+    // attached to a dead context or throws "Cannot perform I/O on behalf of a
+    // different request". That silently froze content/index.json at 11,711
+    // entries for a full day while ~6,700 pages saved to R2 fine.
+    //
+    // Callers that already await the whole generation inside a live request
+    // pass no waitUntil and get the awaited path, which is correct for them.
     if (slug) {
-      const { ctx } = await getCloudflareContext({ async: true });
-      ctx.waitUntil(
-        updateSearchIndex({
-          path: slug,
-          title: scraped.title,
-          summary: scraped.summary,
-          category: scraped.category,
-          version: scraped.version,
-          icon: scraped.icon,
-        }).catch((err) => console.error(`Failed to update search index: ${err}`)),
-      );
+      const indexed = updateSearchIndex({
+        path: slug,
+        title: scraped.title,
+        summary: scraped.summary,
+        category: scraped.category,
+        version: scraped.version,
+        icon: scraped.icon,
+      }).catch((err) => console.error(`Failed to update search index: ${err}`));
+      if (waitUntil) waitUntil(indexed);
+      else await indexed;
     }
     return { content: generatedMarkdown, fromCache: false, canonicalSlug: slug };
   });
