@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { showToast } from "@/components/ui/toast-notification";
 import { useDebouncedSearch } from "@/lib/search/useDebouncedSearch";
 import { recordClick } from "@/lib/search/clicks";
-import { logSearch } from "@/lib/search/log";
+import { logAbandonedSearch, logSearch } from "@/lib/search/log";
 import { extractSlugFromUrl, isValidDocUrl } from "@/lib/url";
 import { SEARCH_LIST_CLASS, SearchResultList, toRows, type ListResult } from "@/components/search/SearchResultList";
 
@@ -59,6 +59,13 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
   useEffect(() => {
     queryRef.current = query;
   }, [query]);
+  // The query the reader gave up on, and how many results it had. Only the
+  // settled pair is kept: a row per keystroke is noise, and every query is
+  // free text a person typed.
+  const abandoned = useRef({ query: "", results: 0 });
+  // Any path the reader took out of the overlay: a pick, and also an Enter
+  // with no pick, which /api/resolve already records server-side.
+  const acted = useRef(false);
   const router = useRouter();
 
   useImperativeHandle(ref, () => ({
@@ -110,7 +117,7 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
   );
 
   // Shared debounced search (same source as the homepage search field)
-  const liveResults = useDebouncedSearch(directSlug ? "" : query);
+  const { query: settledQuery, results: liveResults } = useDebouncedSearch(directSlug ? "" : query);
 
   const results = useMemo<SearchResult[]>(() => {
     if (!trimmedQuery) return [];
@@ -196,13 +203,15 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
         // Opening a result answers the query better than any score could. Only
         // when there IS a query — a click from the recents list teaches nothing.
         recordClick(queryRef.current, result.path);
-        logSearch(queryRef.current, result.path, "overlay", results.findIndex((r) => r.path === result.path) + 1);
+        acted.current = true;
+        logSearch(queryRef.current, result.path, "overlay", results.findIndex((r) => r.path === result.path) + 1, results.length);
         streamAndNavigate(anchor ? `${slug}#${anchor}` : slug);
         return;
       }
       // Use ref to avoid stale closure on query
       const q = queryRef.current.trim();
       if (!q) return;
+      acted.current = true;
       const res = await fetch(`/api/resolve?name=${encodeURIComponent(q)}`);
       if (res.ok) {
         const data = await res.json();
@@ -227,6 +236,33 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
     },
     [results, streamAndNavigate],
   );
+
+  useEffect(() => {
+    abandoned.current = { query: settledQuery, results: liveResults.length };
+  }, [settledQuery, liveResults]);
+
+  /**
+   * A close with no pick is the one give-up path no server sees: Enter with no
+   * result goes to /api/resolve, which the worker records itself.
+   */
+  const reportAbandoned = useCallback(() => {
+    const { query: q, results: n } = abandoned.current;
+    abandoned.current = { query: "", results: 0 };
+    if (q && !acted.current) logAbandonedSearch(q, n);
+  }, []);
+
+  useEffect(() => {
+    if (open) {
+      acted.current = false;
+      abandoned.current = { query: "", results: 0 };
+      // A closed tab is a give-up too, and unmount is too late to beacon.
+      window.addEventListener("pagehide", reportAbandoned);
+      return () => {
+        window.removeEventListener("pagehide", reportAbandoned);
+        reportAbandoned();
+      };
+    }
+  }, [open, reportAbandoned]);
 
   function onKeyDown(e: React.KeyboardEvent) {
     const total = rows.length + (!isQueryEmpty && showSearchForItem ? 1 : 0);

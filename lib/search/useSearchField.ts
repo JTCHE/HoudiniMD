@@ -64,7 +64,7 @@ export function useSearchField(source: "overlay" | "home"): SearchFieldState {
   const isUrlLike = isValidDocUrl(trimmedQuery);
   // A URL is a destination, not a query: predicting against it wastes the index
   // and offers rows the reader did not ask for.
-  const results = useDebouncedSearch(isProcessing || isUrlLike ? "" : query);
+  const { results } = useDebouncedSearch(isProcessing || isUrlLike ? "" : query);
   // The list expands each page into its matching sections, so keyboard
   // navigation counts rows, not results.
   const rows = useMemo(() => toRows(results), [results]);
@@ -91,7 +91,7 @@ export function useSearchField(source: "overlay" | "home"): SearchFieldState {
       const path = slug.split("#")[0];
       // No server sees a dropdown pick, so it is reported from here; the
       // resolve and mirror paths below are recorded by the worker instead.
-      logSearch(query, path, source, results.findIndex((result) => result.path === path) + 1);
+      logSearch(query, path, source, results.findIndex((result) => result.path === path) + 1, results.length);
       router.push(`/docs/${slug}`);
     },
     [query, results, router, source],

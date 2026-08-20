@@ -3,7 +3,12 @@ import { visitorHash } from "../lib/visitor-hash";
 import { visitorLabel } from "../lib/visitor-label";
 import { canRecord, nowStamp, type TelemetryEnv, type WaitUntil } from "./types";
 
-type SearchSource = "api" | "resolve" | "generate" | "overlay" | "home";
+/**
+ * Where the row came from. "abandon" is the overlay closed with no pick, kept
+ * apart from "overlay" so a failed search is readable without guessing from an
+ * empty `dest`.
+ */
+type SearchSource = "api" | "resolve" | "generate" | "overlay" | "home" | "abandon";
 type SearchKind = VisitorKind;
 
 /**
@@ -85,9 +90,10 @@ export function recordApiSearch(request: Request, url: URL, response: Response, 
 export function recordSearchBeacon(request: Request, url: URL, env: TelemetryEnv, ctx: WaitUntil): Response | null {
   if (url.pathname !== "/api/search-log") return null;
   const q = url.searchParams.get("q")?.trim();
+  const src = url.searchParams.get("src");
   if (q) ctx.waitUntil(Promise.resolve(writeSearchRow(request, env, {
     q,
-    source: url.searchParams.get("src") === "home" ? "home" : "overlay",
+    source: src === "home" || src === "abandon" ? src : "overlay",
     dest: url.searchParams.get("dest")?.trim() ?? "",
     results: Number(url.searchParams.get("n")) || 0,
     rank: Number(url.searchParams.get("rank")) || 0,
