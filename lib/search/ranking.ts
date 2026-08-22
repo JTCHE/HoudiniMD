@@ -3,13 +3,15 @@
  * server `/api/search` route so results are identical regardless of where the
  * query runs.
  *
- * Three passes, cheapest first:
+ * Four passes, cheapest first:
  *   1. exact  — the whole query is a title or slug. `pyrosolver` resolves here.
  *   2. prefix — the query starts a title or slug.
- *   3. BM25   — full page content, sharded in R2 (see `./bm25`).
+ *   3. abbrev — the query's letters start the words of a name, `cptp` for Copy
+ *               to Points. Only when nothing above named a page.
+ *   4. BM25   — full page content, sharded in R2 (see `./bm25`).
  *
- * Passes 1 and 2 are a linear scan over the precomputed `t`/`s` fields and
- * touch no network. Pass 3 runs only when they cannot fill the limit.
+ * Passes 1 to 3 are a linear scan over the doc table and touch no network.
+ * Pass 4 runs only when they cannot fill the limit.
  */
 import { searchBm25, tokenize, type DocsTable, type SearchDoc, type DocHeading } from "./bm25";
 import { currentVersionSlug, legacyVersion } from "@/lib/houdini";
@@ -256,6 +258,21 @@ export async function rankResults(
   const positions = new Map<string, number>();
   for (const result of candidates) addUniqueResult(merged, positions, result);
 
+  // Letter-mashing, the way Houdini's TAB menu takes it: `cptp` for Copy to
+  // Points. Runs when nothing NAMED the page — no exact, locates, typo or
+  // prefix hit — but before BM25, because BM25 answers a mashed query with
+  // whatever prose shares its letters. `rbdmf` scored two destruction
+  // tutorials that way, which is not empty, so a pass gated on emptiness alone
+  // never ran and the reader kept the tutorials.
+  //
+  // Ordered above BM25 rather than replacing it: the abbreviation is the
+  // stronger reading of a query with no spaces, and the text hits still follow.
+  if (merged.length === 0 && !/\s/.test(searchQuery) && qLower.length >= MIN_ABBREVIATION) {
+    for (const doc of scanSubsequence(table, qLower, limit, inCategory)) {
+      addUniqueResult(merged, positions, toResult(doc, 0.5));
+    }
+  }
+
   if (merged.length < limit) {
     // Ask for extra: category filtering and dedup below both drop rows.
     const hits = await searchBm25(searchQuery, table, limit * 3);
@@ -297,9 +314,140 @@ export async function rankResults(
 }
 
 /**
- * Last resort when every other pass came back empty: substring, then a
- * shrinking prefix of the query. Trimming "pyrosolvr" to "pyrosolv" finds
- * `pyrosolver`, which covers the common trailing typo without a fuzzy matcher.
+ * A name reduced to its letters and digits, remembering which of them start a
+ * word. "Copy to Points 2.0" folds to `copytopoints20` with `C`, `t`, `P` and
+ * `2` flagged; `createWorkitem` folds to itself with `c` and `W` flagged.
+ *
+ * Word starts are the whole point of the fold. They are what tells an
+ * abbreviation apart from an accident — see `subsequenceMatch`.
+ */
+function foldName(text: string): { chars: string; starts: boolean[] } {
+  let chars = "";
+  const starts: boolean[] = [];
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (!/[a-zA-Z0-9]/.test(ch)) continue;
+    const prev = i > 0 ? text[i - 1] : "";
+    starts.push(chars.length === 0 || !/[a-zA-Z0-9]/.test(prev) || (ch >= "A" && ch <= "Z" && prev === prev.toLowerCase()));
+    chars += ch.toLowerCase();
+  }
+  return { chars, starts };
+}
+
+/**
+ * How well `query` abbreviates `name`, from 0 to 1, or `null` for no match.
+ *
+ * Three rules, and the first is the one that matters. The match must BEGIN at
+ * a word start. People abbreviate from the fronts of words — `adpr` is
+ * **Ad**aptive **Pr**une — so a run that begins mid-word is a coincidence, not
+ * an abbreviation. Without this rule `adpr` returns "Delayed Load Procedural",
+ * because lo**adpr**ocedural holds the letters with no gaps at all and so beats
+ * the page the reader meant on every other measure.
+ *
+ * The rest orders what survives. Density (`query / span`) rewards a tight run;
+ * coverage (`query / name`) rewards the query accounting for most of the name,
+ * which is what separates `copytopoints` from
+ * `geoutils::copytopointstargetattribs` when `cptp` spans 7 characters in
+ * both. The word-start share then lifts a true abbreviation over a tighter
+ * accident.
+ *
+ * Every window is scored, not just the shortest, because the shortest window
+ * and the best-aligned one are often not the same.
+ */
+function subsequenceMatch(query: string, name: string): number | null {
+  const { chars, starts } = foldName(name);
+  if (chars.length < query.length) return null;
+  let best: number | null = null;
+
+  for (let from = 0; from < chars.length; ) {
+    let qi = 0;
+    let end = from;
+    for (; end < chars.length && qi < query.length; end++) {
+      if (chars[end] === query[qi]) qi++;
+    }
+    if (qi < query.length) break; // no complete match remains
+    end--;
+
+    // Pull the start inward to the tightest window with this end.
+    let qk = query.length - 1;
+    let start = end;
+    for (; start >= 0 && qk >= 0; start--) {
+      if (chars[start] === query[qk]) qk--;
+    }
+    start++;
+
+    if (starts[start]) {
+      let onStart = 0;
+      let qj = 0;
+      for (let i = start; i <= end && qj < query.length; i++) {
+        if (chars[i] !== query[qj]) continue;
+        if (starts[i]) onStart++;
+        qj++;
+      }
+      const density = query.length / (end - start + 1);
+      const coverage = query.length / chars.length;
+      const score = density * coverage * (1 + onStart / query.length);
+      if (best === null || score > best) best = score;
+    }
+
+    from = start + 1;
+  }
+
+  return best;
+}
+
+/**
+ * Page families the subsequence pass is allowed to match.
+ *
+ * Someone mashing letters is reaching for a thing with a name — a node, a VEX
+ * function, an HScript command. Over 11,000 pages, four letters in order match
+ * almost anything: `atwr` alone hits `hapi.createWorkItem`, `Script MPlay` and
+ * a destruction tutorial before it reaches Attribute Wrangle. Houdini's own TAB
+ * menu only ever searches nodes, which is why the matcher behaves there; the
+ * families here are that same idea, widened to the scripting references.
+ */
+const SUBSEQUENCE_FAMILY = /^(Nodes|VEX|Expression functions|HScript commands|Python scripting)\b/;
+
+/** Below this, an abbreviation matches so much of the corpus it means nothing. */
+const MIN_ABBREVIATION = 3;
+
+/**
+ * `cptp` should find "Copy to Points" the way it does in Houdini's own TAB
+ * menu — letters in order, gaps allowed.
+ *
+ * Weight multiplies the score rather than breaking ties, matching what the
+ * BM25 pass does. As a tiebreak it would never fire: two float scores are
+ * almost never exactly equal, so a superseded page would outrank the current
+ * one whenever it matched a hair tighter.
+ */
+function scanSubsequence(
+  table: DocsTable,
+  qLower: string,
+  limit: number,
+  inCategory: (d: SearchDoc) => boolean,
+): SearchDoc[] {
+  const scored: Array<{ doc: SearchDoc; score: number }> = [];
+  for (const doc of table.docs) {
+    if (!inCategory(doc) || doc.nav || !SUBSEQUENCE_FAMILY.test(doc.category)) continue;
+    // The raw title and path segment, not the folded `t`/`s`, because word
+    // starts are the signal here and folding is what throws them away. The
+    // trailing version goes: nobody abbreviates the "2.0" in "Copy to Points
+    // 2.0", and counting it as name length lost that SOP to the LOP of the
+    // same name, whose title carries no version at all.
+    const title = subsequenceMatch(qLower, doc.title.replace(/\s+\d+(\.\d+)*$/, ""));
+    const slug = subsequenceMatch(qLower, doc.path.slice(doc.path.lastIndexOf("/") + 1));
+    if (title === null && slug === null) continue;
+    scored.push({ doc, score: Math.max(title ?? 0, slug ?? 0) * weightOf(doc) });
+  }
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, limit).map((s) => s.doc);
+}
+
+/**
+ * Last resort when every other pass came back empty, the abbreviation pass
+ * included: substring, then a shrinking prefix of the query. Trimming
+ * "pyrosolvr" to "pyrosolv" finds `pyrosolver`, which covers the common
+ * trailing typo without a fuzzy matcher.
  *
  * Only ever runs on the already-empty path, so its worst case (a few passes
  * over the table) costs nothing on real queries.
