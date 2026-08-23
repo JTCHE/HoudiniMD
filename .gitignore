@@ -14,6 +14,7 @@
 /coverage
 *test*
 *debug*
+.trash/*
 
 # next.js
 /.next/
