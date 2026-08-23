@@ -22,7 +22,7 @@ function stripExtensionsAndSlash(p: string): string {
   return p;
 }
 
-export async function middleware(request: NextRequest) {
+export default async function proxy(request: NextRequest) {
   const url = request.nextUrl.clone();
   const pathname = url.pathname;
 

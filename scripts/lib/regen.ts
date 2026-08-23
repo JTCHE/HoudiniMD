@@ -142,7 +142,7 @@ async function regenerateOnce(
 ): Promise<{ entry: SearchIndexEntry } | { status: "404" }> {
   let scraped;
   try {
-    scraped = await scrapeSideFXPage(await resolveSideFXUrl(slug));
+    scraped = await scrapeSideFXPage((await resolveSideFXUrl(slug)).url);
   } catch (err) {
     if (err instanceof PageNotFoundError) return { status: "404" };
     throw err;

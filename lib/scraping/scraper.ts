@@ -44,9 +44,10 @@ const USER_AGENT = `HoudiniMD/1.0 (Documentation Converter; ${SITE_URL})`;
 
 /**
  * Check if a SideFX documentation page exists by making a HEAD request.
- * Returns true if the page exists (200), throws PageNotFoundError otherwise.
+ * Returns the URL that serves it — `response.url`, so a server-side redirect
+ * comes back as its destination — and throws PageNotFoundError otherwise.
  */
-export async function checkPageExists(url: string): Promise<boolean> {
+export async function checkPageExists(url: string): Promise<string> {
   try {
     const response = await fetch(url, {
       method: "HEAD",
@@ -54,7 +55,7 @@ export async function checkPageExists(url: string): Promise<boolean> {
     });
 
     if (response.ok) {
-      return true;
+      return response.url || url;
     }
 
     throw new PageNotFoundError(url, response.status);
@@ -70,7 +71,7 @@ export async function checkPageExists(url: string): Promise<boolean> {
     });
 
     if (response.ok) {
-      return true;
+      return response.url || url;
     }
 
     throw new PageNotFoundError(url, response.status);

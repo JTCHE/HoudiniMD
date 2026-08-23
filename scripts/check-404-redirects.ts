@@ -1,4 +1,4 @@
-// Regression check for the verified slug redirects in middleware.ts (VERIFIED_SLUG_REDIRECTS)
+// Regression check for the verified slug redirects in proxy.ts (VERIFIED_SLUG_REDIRECTS)
 // plus a control case that must stay a real 404. Run: bun scripts/check-404-redirects.ts
 const ORIGIN = process.env.URL ?? "https://houdinimd.com";
 

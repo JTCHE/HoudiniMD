@@ -61,13 +61,24 @@ export function cachedContentIsCurrent(slug: string, markdown: string): boolean 
  */
 export { resolveSideFXUrl };
 
-/** Cheap existence check for the HTML route — true if SideFX has this page, false if not. */
-export async function slugExistsOnSideFX(slug: string): Promise<boolean> {
+export type SlugResolution =
+  | { kind: "ok" }
+  | { kind: "redirect"; canonical: string }
+  | { kind: "missing" };
+
+/**
+ * What the HTML route should do with a slug it has no content for: render it,
+ * redirect to the slug SideFX serves instead, or 404.
+ */
+export async function resolveSlugSource(slug: string): Promise<SlugResolution> {
+  const normalized = normalizeDocSlug(slug);
   try {
-    await resolveSideFXUrl(slug);
-    return true;
+    const { canonicalSlug } = await resolveSideFXUrl(normalized);
+    return canonicalSlug === normalized
+      ? { kind: "ok" }
+      : { kind: "redirect", canonical: canonicalSlug };
   } catch (err) {
-    if (err instanceof PageNotFoundError) return false;
+    if (err instanceof PageNotFoundError) return { kind: "missing" };
     throw err;
   }
 }
@@ -81,6 +92,8 @@ export async function generateMarkdownForSlug(
   skipCache: boolean = false,
   onProgress?: ProgressCallback,
   waitUntil?: WaitUntil,
+  /** Internal: set on the one recursion a source redirect is allowed to make. */
+  followedRedirect: boolean = false,
 ): Promise<GenerateResult> {
   slug = normalizeDocSlug(slug);
   const knownAlias = slug ? await fetchSourceAlias(slug) : null;
@@ -120,7 +133,25 @@ export async function generateMarkdownForSlug(
   //   - slug ends with /index (e.g. houdini/chop/index):  try .html extension → index.html
   //   - directory slug (e.g. houdini/nodes/sop):           try /index.html
   progress("verifying", "Verifying page exists", toSideFXUrl(slug));
-  const resolvedUrl = await resolveSideFXUrl(slug);
+  const resolved = await resolveSideFXUrl(slug);
+  const resolvedUrl = resolved.url;
+
+  // SideFX answers an unknown path under a moved section with that section's
+  // index page (every /docs/hqueue/** path redirects to /docs/houdini/hqueue/).
+  // Store the page under the slug SideFX serves, never under the requested one:
+  // a duplicate under the requested slug carries relative links resolved against
+  // that invented path, so each crawl of it invents a deeper one, without end.
+  // canonicalSlug carries no anchor, so compare against the slug without one.
+  if (!followedRedirect && resolved.canonicalSlug !== slug.split("#")[0]) {
+    const canonical = await generateMarkdownForSlug(
+      resolved.canonicalSlug,
+      skipCache,
+      onProgress,
+      waitUntil,
+      true,
+    );
+    return { ...canonical, slug, canonicalSlug: resolved.canonicalSlug };
+  }
 
   // Stage 3-6: Generate with lock to prevent concurrent generation
   const markdown = await withLock(slug, async () => {

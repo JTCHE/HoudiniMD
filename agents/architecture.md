@@ -5,9 +5,9 @@ repo — the pages come from SideFX and stay in R2.
 
 Four layers.
 
-1. **Edge** — `worker.ts` and `middleware.ts`. The worker wraps the OpenNext
+1. **Edge** — `worker.ts` and `proxy.ts`. The worker wraps the OpenNext
    handler: it serves `/icons/`, static archive assets, and the telemetry
-   writes to D1. The middleware normalizes the URL before Next sees it:
+   writes to D1. The proxy normalizes the URL before Next sees it:
    pasted SideFX links, `.html` and `.md` suffixes, verified slug redirects.
 2. **Pages** — `app/`. `app/docs/[...slug]/page.tsx` renders a doc page from
    markdown. `app/api/` holds the route handlers. `app/[...slug]/route.ts`
