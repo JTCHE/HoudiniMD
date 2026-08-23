@@ -56,8 +56,10 @@ export function addSeeAlsoIcons(
 export function cleanMarkdown(markdown: string): string {
   const code: string[] = [];
   const stashCode = (value: string) => `\u0000CODE${code.push(value) - 1}\u0000`;
+  // Fences are variable length (a sample showing markdown needs a longer
+  // fence), so the stash must pair equal-length runs, not assume three.
   const withoutCode = normalizeIconLinks(markdown)
-    .replace(/```[\s\S]*?```/g, stashCode)
+    .replace(/(`{3,})[\s\S]*?\1/g, stashCode)
     .replace(/(`+)([^\n]*?)\1/g, stashCode);
 
   return withoutCode

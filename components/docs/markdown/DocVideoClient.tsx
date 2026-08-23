@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, type SVGProps } from "react";
-import { MediaPlayer, MediaProvider, PlayButton, useMediaState } from "@vidstack/react";
+import { useEffect, useRef, useState, type SVGProps } from "react";
+import { MediaPlayer, MediaProvider, PlayButton, useMediaState, type MediaPlayerInstance } from "@vidstack/react";
 import {
   DefaultVideoLayout,
   defaultLayoutIcons,
@@ -9,6 +9,9 @@ import {
 import "@vidstack/react/player/styles/base.css";
 import "@vidstack/react/player/styles/default/theme.css";
 import "@vidstack/react/player/styles/default/layouts/video.css";
+
+// Every player on the page registers here, so starting one can pause the rest.
+const players = new Set<MediaPlayerInstance>();
 
 function icon(path: string) {
   return function PlayerIcon(props: SVGProps<SVGSVGElement>) {
@@ -66,14 +69,27 @@ export interface DocVideoClientProps {
  * paint. When probing missed (unsupported format, timeout, cap reached),
  * fall back to correcting once the browser reports it — a slight shift is
  * better than a permanently wrong box.
+ *
+ * The surface carries a pointer cursor in both play states, and only one
+ * video plays at a time: starting one pauses every other player on the page.
  */
 export default function DocVideoClient({ src, title, probedRatio }: DocVideoClientProps) {
   const [fallbackRatio, setFallbackRatio] = useState("16 / 9");
+  const playerRef = useRef<MediaPlayerInstance>(null);
   const ratio = probedRatio ?? fallbackRatio;
+
+  useEffect(() => {
+    const player = playerRef.current;
+    if (!player) return;
+    players.add(player);
+    return () => {
+      players.delete(player);
+    };
+  }, []);
 
   return (
     <div
-      className="markdown-media isolate my-4 bg-muted"
+      className="markdown-media isolate my-4 bg-muted cursor-pointer"
       style={{ aspectRatio: ratio }}
       onLoadedMetadataCapture={(e) => {
         if (probedRatio) return;
@@ -84,6 +100,7 @@ export default function DocVideoClient({ src, title, probedRatio }: DocVideoClie
       }}
     >
       <MediaPlayer
+        ref={playerRef}
         className="markdown-video relative"
         style={{ width: "100%", height: "100%" }}
         src={src.includes("vimeo.com") ? { src, type: "video/vimeo" } : src}
@@ -92,6 +109,13 @@ export default function DocVideoClient({ src, title, probedRatio }: DocVideoClie
         streamType="on-demand"
         playsInline
         preload="metadata"
+        onPlay={() => {
+          const current = playerRef.current;
+          if (!current) return;
+          for (const other of players) {
+            if (other !== current) other.pause();
+          }
+        }}
       >
         <MediaProvider />
         <ClickToPlay />

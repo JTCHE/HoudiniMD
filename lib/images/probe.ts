@@ -89,8 +89,13 @@ export async function probeImage(url: string): Promise<ImageProbe | null> {
  * Probe every URL once, in parallel. Capped so an image-heavy page cannot fan
  * out an unbounded number of upstream requests on a cold render; images past
  * the cap render unreserved rather than blocking the page.
+ *
+ * Pages with several image-group comparison rows (see MarkdownDiv in
+ * components/docs/markdown/index.tsx) plus inline node-link icons can carry
+ * 25+ distinct URLs — a group's shared height needs every member probed, or
+ * it falls back to unequal per-image heights ("stairs").
  */
-const MAX_PROBES_PER_PAGE = 12;
+const MAX_PROBES_PER_PAGE = 40;
 
 export async function probeImages(urls: string[]): Promise<Map<string, ImageProbe>> {
   const unique = Array.from(new Set(urls)).slice(0, MAX_PROBES_PER_PAGE);

@@ -4,19 +4,53 @@ import { CodeBlock, CodePanel } from "@/components/docs/CodeBlock";
 import { Table, Th, Td } from "./MarkdownTable";
 import { Blockquote } from "./MarkdownBlockquote";
 import { Code } from "./MarkdownCode";
-import { Image } from "./MarkdownImage";
+import { Image, type ImageMetaMap } from "./MarkdownImage";
 import { Video } from "./MarkdownVideo";
 import { Card } from "./Card";
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const Div: Components["div"] = ({ className, children, node: _node, ...props }) =>
-  className?.split(" ").includes("code-panel") ? (
-    <CodePanel>
+interface HastLikeNode {
+  tagName?: string;
+  properties?: { src?: unknown };
+  children?: HastLikeNode[];
+}
+
+function collectImageSrcs(node: HastLikeNode | undefined): string[] {
+  if (!node?.children) return [];
+  const srcs: string[] = [];
+  for (const child of node.children) {
+    if (child.tagName === "img" && typeof child.properties?.src === "string") srcs.push(child.properties.src);
+    srcs.push(...collectImageSrcs(child));
+  }
+  return srcs;
+}
+
+/**
+ * `.image-group` rows conform to their smallest member (see globals.css) —
+ * the shared height comes from the group's own probed images, read straight
+ * off the hast node before react-markdown turns it into elements.
+ */
+export function createDivComponent(metaMap: ImageMetaMap): Components["div"] {
+  return function MarkdownDiv({ className, children, node, ...props }) {
+    if (className?.split(" ").includes("image-group")) {
+      const heights = collectImageSrcs(node as HastLikeNode)
+        .map((src) => metaMap.get(src)?.height)
+        .filter((h): h is number => typeof h === "number");
+      const style = heights.length
+        ? ({ "--image-group-height": `${Math.min(...heights)}px` } as React.CSSProperties)
+        : undefined;
+      return <div className={className} style={style} {...props}>{children}</div>;
+    }
+    return className?.split(" ").includes("code-panel") ? (
+      <CodePanel>
+        <div className={className} {...props}>{children}</div>
+      </CodePanel>
+    ) : (
       <div className={className} {...props}>{children}</div>
-    </CodePanel>
-  ) : (
-    <div className={className} {...props}>{children}</div>
-  );
+    );
+  };
+}
+
+const Div = createDivComponent(new Map());
 /** Single source of truth for how docs markdown renders. */
 export const markdownComponents: Components = {
   h1: ({ children }) => (

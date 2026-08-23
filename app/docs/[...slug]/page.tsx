@@ -13,6 +13,7 @@ import { ViewRecorder } from "@/components/ViewRecorder";
 import { markdownComponents } from "@/components/docs/markdown";
 import { CodeBlock } from "@/components/docs/CodeBlock";
 import { createImageComponent } from "@/components/docs/markdown/MarkdownImage";
+import { createDivComponent } from "@/components/docs/markdown";
 import { createVideoComponent } from "@/components/docs/markdown/MarkdownVideo";
 import { probeImages } from "@/lib/images/probe";
 import { probeVideos } from "@/lib/videos/probe";
@@ -228,7 +229,11 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
     // restore step cannot collide with real prose (e.g. "version 20 index").
     const stashCode = (m: string) => `\u0000${codeStash.push(m) - 1}\u0000`;
     const content = rawContent
-      .replace(/```[\s\S]*?```/g, stashCode)
+      // Backreferenced to the opening run's own length: a fence wraps in a
+      // longer run of backticks than any it contains (see fencedCodeBlock in
+      // turndown-rules.ts), so a fixed 3-backtick match would stop at the
+      // first nested ``` instead of the real close.
+      .replace(/(`{3,})[\s\S]*?\1/g, stashCode)
       .replace(/(`{1,2})[\s\S]*?\1/g, stashCode)
       .replace(/<([A-Z][^>]*?)>/g, "&lt;$1&gt;")
       .replace(/<(\/?[a-z][a-z0-9-]*(?:\\?_[a-z0-9_\\-]*)+)>/g, "&lt;$1&gt;")
@@ -291,7 +296,13 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
 
     // Image and SVG dimensions come from their first bytes, so every image box
     // exists at its final aspect ratio before the file finishes loading.
-    const bodyImageUrls = Array.from(bodyContent.matchAll(/!\[[^\]]*\]\((https?:\/\/[^\s)]+)\)/g)).map((m) => m[1]);
+    // Two syntaxes carry images in the body: markdown links, and the raw
+    // <img> tags imageGroupMarkup emits for side-by-side comparison rows
+    // (see turndown-rules.ts) — both need probing.
+    const bodyImageUrls = [
+      ...Array.from(bodyContent.matchAll(/!\[[^\]]*\]\((https?:\/\/[^\s)]+)\)/g)).map((m) => m[1]),
+      ...Array.from(bodyContent.matchAll(/<img\b[^>]*\ssrc="(https?:\/\/[^"]+)"/g)).map((m) => m[1]),
+    ];
     const extraImageUrls = [pageIcon, pageBanner].filter((url): url is string => Boolean(url));
     const imageMeta = await probeImages([...extraImageUrls, ...bodyImageUrls]);
     const imageComponent = createImageComponent(imageMeta);
@@ -342,6 +353,7 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
               pre: ({ children }) => <CodeBlock language={detectLanguage(slugPath)}>{children}</CodeBlock>,
               img: imageComponent,
               video: videoComponent,
+              div: createDivComponent(imageMeta),
             }}
           >
             {bodyContent}
