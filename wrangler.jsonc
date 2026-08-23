@@ -8,20 +8,31 @@
     "directory": ".open-next/assets",
     "binding": "ASSETS",
   },
+  // Off entirely. At head_sampling_rate 1 this billed 20.8M observability
+  // events in one period, against 20M included. Re-enable with a sampling
+  // rate below 1 if you need it, never at full rate.
   "observability": {
     "enabled": false,
-    "head_sampling_rate": 1,
-    "logs": {
-      "enabled": true,
-      "head_sampling_rate": 1,
-      "persist": true,
-      "invocation_logs": true,
+  },
+  // Second line of defence for /api/generate, the one route that makes the
+  // Worker scrape sidefx.com. The first line is a zone WAF rate-limiting rule
+  // (http_ratelimit phase) that rejects before the Worker starts and costs no
+  // CPU; the Free plan pins it to 5 requests per 10s per IP. This binding runs
+  // inside the isolate, so it still costs a little CPU per rejection, but it
+  // survives a WAF rule being deleted and it keys on IP alone, not IP+colo.
+  "ratelimits": [
+    {
+      "name": "GENERATE_LIMITER",
+      "namespace_id": "1001",
+      "simple": { "limit": 20, "period": 60 },
     },
-    "traces": {
-      "enabled": true,
-      "persist": true,
-      "head_sampling_rate": 1,
-    },
+  ],
+  // Hard per-invocation CPU ceiling. Measured P50 is ~52ms and P99 ~1.16s, so
+  // 200ms serves a normal page and kills a runaway one. This is the only hard
+  // stop the platform offers: Cloudflare has no account spend cap, and budget
+  // alerts only send mail.
+  "limits": {
+    "cpu_ms": 200,
   },
   "r2_buckets": [
     {
