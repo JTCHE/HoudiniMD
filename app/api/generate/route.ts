@@ -5,6 +5,7 @@ import {
   PageNotFoundError,
   type ProgressEvent,
 } from "@/lib/generator";
+import { isAuthorizedGenerateRequest, KICKOFF_HEADER } from "@/lib/generate-auth";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -49,6 +50,15 @@ function createSSEStream() {
 }
 
 export async function GET(request: NextRequest) {
+  // This route makes the Worker scrape sidefx.com. Reject anything that is not
+  // our own page or our own kickoff — see lib/generate-auth.ts.
+  if (!isAuthorizedGenerateRequest(request.headers)) {
+    return new Response(JSON.stringify({ error: "Forbidden" }), {
+      status: 403,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   const slug = request.nextUrl.searchParams.get("slug");
   const skipCache = request.nextUrl.searchParams.get("regenerate") === "true";
 
@@ -57,6 +67,22 @@ export async function GET(request: NextRequest) {
       status: 400,
       headers: { "Content-Type": "application/json" },
     });
+  }
+
+  // Per-IP ceiling on how often one client may start a scrape. The internal
+  // kickoff is exempt: it is already one call per page render, and throttling it
+  // would leave crawler-visited slugs stuck on "Generating".
+  if (request.headers.get(KICKOFF_HEADER) === null) {
+    const { env } = await getCloudflareContext({ async: true });
+    const limiter = env.GENERATE_LIMITER as RateLimiter;
+    const ip = request.headers.get("cf-connecting-ip") ?? "unknown";
+    const { success } = await limiter.limit({ key: ip });
+    if (!success) {
+      return new Response(JSON.stringify({ error: "Too many requests" }), {
+        status: 429,
+        headers: { "Content-Type": "application/json", "Retry-After": "60" },
+      });
+    }
   }
 
   const { stream, sendEvent, close } = createSSEStream();

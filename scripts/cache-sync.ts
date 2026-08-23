@@ -9,15 +9,20 @@
  * the cache keys are stable across deploys, so here we:
  *   1. List what's already in R2 (bulk, ~22 Class A "list" ops for the whole
  *      bucket — far cheaper than per-object HEADs).
- *   2. Upload ONLY assets whose content differs (R2 etag = md5 of the stored
- *      bytes; we compare it to the local file's md5). A content-stable deploy
- *      uploads nothing.
+ *   2. Upload ONLY assets whose content differs. Fast path: R2 etag = md5 of
+ *      the stored bytes, compared to our local gzip's md5. Entries the worker
+ *      rewrote at runtime gzip differently, so those get one HEAD each and are
+ *      compared on the `srchash` metadata (hash of the uncompressed source)
+ *      instead. A content-stable deploy uploads nothing.
  *   3. Delete orphans — any object under the prefix that no current asset maps
  *      to. This reclaims old random-build-id prefixes and removed pages.
  *
- * The keys are computed identically to OpenNext's runtime R2 cache
- * (`computeCacheKey`: `${prefix}/${buildId}/${sha256(key)}.${cacheType}`), so
- * the worker reads exactly what this writes.
+ * Objects are stored gzipped, and `.cache` entries have the duplicate
+ * `segmentData["/_full"]` removed — see lib/cache/compressed-r2-cache.ts, which
+ * is the runtime half of the same format. Keys are computed identically to
+ * OpenNext's runtime R2 cache (`computeCacheKey`:
+ * `${prefix}/${buildId}/${sha256(key)}.${cacheType}`), so the worker reads
+ * exactly what this writes.
  *
  * Auth: a dedicated R2 token scoped to the cache bucket, via env
  *   R2_CACHE_ACCESS_KEY_ID / R2_CACHE_SECRET_ACCESS_KEY
@@ -32,12 +37,14 @@
  */
 
 import { createHash } from "node:crypto";
+import { gzipSync } from "node:zlib";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import {
   S3Client,
   ListObjectsV2Command,
   PutObjectCommand,
+  HeadObjectCommand,
   DeleteObjectsCommand,
 } from "@aws-sdk/client-s3";
 import { parseArgs, c, fmtPct } from "./lib/cli";
@@ -128,23 +135,47 @@ const VOLATILE_FETCH_HEADERS = new Set([
   "x-request-id",
 ]);
 
-/** Bytes to store for an asset: .fetch entries normalised, everything else raw. */
-function bodyFor(a: CacheAsset): Buffer {
+/** Source bytes for an asset: .fetch entries normalised, .cache de-duplicated. */
+function sourceFor(a: CacheAsset): Buffer {
   const raw = readFileSync(a.fullPath);
-  if (a.kind !== "fetch") return raw;
   try {
     const entry = JSON.parse(raw.toString("utf8"));
-    const headers = entry?.data?.headers;
-    if (!headers || typeof headers !== "object") return raw;
-    entry.data.headers = Object.fromEntries(
-      Object.entries(headers)
-        .filter(([k]) => !VOLATILE_FETCH_HEADERS.has(k.toLowerCase()))
-        .sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0)),
-    );
-    return Buffer.from(JSON.stringify(entry));
+    if (a.kind === "fetch") {
+      const headers = entry?.data?.headers;
+      if (!headers || typeof headers !== "object") return raw;
+      entry.data.headers = Object.fromEntries(
+        Object.entries(headers)
+          .filter(([k]) => !VOLATILE_FETCH_HEADERS.has(k.toLowerCase()))
+          .sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0)),
+      );
+      return Buffer.from(JSON.stringify(entry));
+    }
+    // `segmentData["/_full"]` is a byte-for-byte copy of `rsc`, ~400 KB on a
+    // large doc page. Null it out here; lib/cache/compressed-r2-cache.ts
+    // restores it on read. Must stay identical to `shrink()` there.
+    if (entry?.segmentData?.["/_full"] !== undefined && entry.segmentData["/_full"] === entry.rsc) {
+      return Buffer.from(
+        JSON.stringify({ ...entry, segmentData: { ...entry.segmentData, "/_full": null } }),
+      );
+    }
+    return raw;
   } catch {
     return raw; // not the shape we expect — store it untouched
   }
+}
+
+/**
+ * What actually lands in R2: the source bytes, gzipped, plus the hash of the
+ * *uncompressed* source. The worker writes the same shape (contentEncoding
+ * gzip, `srchash` metadata) but with a different gzip implementation, so the
+ * hash — not the R2 etag — is what tells us an entry is already current.
+ */
+function bodyFor(a: CacheAsset): { body: Buffer; srchash: string } {
+  const source = sourceFor(a);
+  return {
+    body: gzipSync(source, { level: 9 }),
+    srchash: createHash("sha256").update(source).digest("hex"),
+  };
 }
 
 function makeClient(): S3Client {
@@ -271,19 +302,35 @@ async function main() {
   // (A multipart etag contains "-"; our objects are single-part, so any "-"
   // forces a re-upload, which is safe.)
   const valid = new Set<string>();
-  const toUpload: CacheAsset[] = [];
+  const candidates: CacheAsset[] = [];
   for (const a of assets) {
     valid.add(a.key);
     const remoteEtag = remote.get(a.key);
-    const localEtag = md5(bodyFor(a));
-    if (remoteEtag !== localEtag) toUpload.push(a);
+    if (remoteEtag !== md5(bodyFor(a).body)) candidates.push(a);
   }
+  // An etag mismatch is not proof of a content change: entries the worker
+  // rewrote at runtime hold the same JSON compressed by a different gzip, so
+  // their etag never matches ours. HEAD those (Class B, 12x cheaper than the
+  // PUT it saves) and compare the source hash before deciding to upload.
+  const toUpload: CacheAsset[] = [];
+  let skippedByHash = 0;
+  await pool(candidates, CONCURRENCY, async (a) => {
+    if (!remote.has(a.key)) return void toUpload.push(a);
+    try {
+      const head = await client.send(new HeadObjectCommand({ Bucket: BUCKET, Key: a.key }));
+      if (head.Metadata?.srchash === bodyFor(a).srchash) return void skippedByHash++;
+    } catch {
+      // fall through and upload
+    }
+    toUpload.push(a);
+  });
   const toDelete = prune
     ? [...remote.keys()].filter((k) => !valid.has(k))
     : [];
 
   console.log("");
   console.log(`  ${c.green("upload")}  ${toUpload.length} / ${assets.length} (${fmtPct(toUpload.length, assets.length)} changed)`);
+  if (skippedByHash) console.log(c.dim(`          ${skippedByHash} unchanged despite a new etag (worker-written, matched on srchash)`));
   console.log(`  ${c.red("delete")}  ${toDelete.length} orphan(s)`);
 
   if (!apply) {
@@ -307,10 +354,19 @@ async function main() {
   let uploaded = 0;
   let failed = 0;
   await pool(toUpload, CONCURRENCY, async (a) => {
-    const body = bodyFor(a); // must match the diff above, or every deploy re-uploads
+    const { body, srchash } = bodyFor(a); // must match the diff above, or every deploy re-uploads
     for (let attempt = 1; attempt <= UPLOAD_RETRIES; attempt++) {
       try {
-        await client.send(new PutObjectCommand({ Bucket: BUCKET, Key: a.key, Body: body }));
+        await client.send(
+          new PutObjectCommand({
+            Bucket: BUCKET,
+            Key: a.key,
+            Body: body,
+            ContentEncoding: "gzip",
+            ContentType: "application/json",
+            Metadata: { srchash },
+          }),
+        );
         if (++uploaded % 1000 === 0) console.log(c.dim(`    uploaded ${uploaded}/${toUpload.length}`));
         return;
       } catch (e) {

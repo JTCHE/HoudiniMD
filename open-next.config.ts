@@ -1,6 +1,6 @@
 import { defineCloudflareConfig } from "@opennextjs/cloudflare";
-import r2IncrementalCache from "@opennextjs/cloudflare/overrides/incremental-cache/r2-incremental-cache";
 import doQueue from "@opennextjs/cloudflare/overrides/queue/do-queue";
+import compressedR2IncrementalCache from "./lib/cache/compressed-r2-cache";
 
 // `queue: doQueue` moves ISR revalidation OFF the request path. Without it,
 // OpenNext revalidates stale pages inline (in waitUntil), and that render is
@@ -10,6 +10,6 @@ import doQueue from "@opennextjs/cloudflare/overrides/queue/do-queue";
 // the DO, which renders asynchronously and writes the fresh entry back to R2.
 // The visitor always gets cached content; revalidation never costs them a 503.
 export default defineCloudflareConfig({
-	incrementalCache: r2IncrementalCache,
+	incrementalCache: compressedR2IncrementalCache,
 	queue: doQueue,
 });
