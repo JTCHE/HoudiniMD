@@ -394,8 +394,6 @@ html {
 }
 
 .markdown-video {
-  --video-border: 1px solid var(--border);
-  --video-border-radius: var(--radius);
   --video-font-family: inherit;
   --video-focus-ring-color: var(--ring);
   --media-button-color: var(--muted-foreground);
@@ -405,6 +403,36 @@ html {
   --media-button-touch-hover-bg: transparent;
   --media-time-color: var(--muted-foreground);
   --media-time-divider-color: var(--muted-foreground);
+}
+
+/* vidstack's own video.css layout gives [data-media-player] a second border,
+   radius, and black background (`--video-bg`, a one-off token this codebase
+   doesn't otherwise use) — a box nested inside .markdown-media, which already
+   owns the border, radius, and overflow:hidden that frame every markdown
+   figure. Two boxes with independently-rounded corners show as a thin black
+   line at the edge. Zero the inner one out so .markdown-media is the only
+   frame, and reuse --muted (DocImageClient's own figure background) instead
+   of introducing another token. */
+.markdown-video[data-media-player][data-layout="video"] {
+  background-color: var(--muted);
+}
+.markdown-video[data-media-player][data-layout="video"]:not([data-fullscreen]) {
+  border: none;
+  border-radius: 0;
+}
+
+/* vidstack's own base.css inherits a 16/9 aspect-ratio down onto the <video>
+   tag itself (height: auto + aspect-ratio: inherit), so it sizes independent
+   of the correctly-ratioed wrapper div above it — a portrait clip renders as
+   a tiny 16:9 rectangle inside a tall, mostly-black box. Filling the already
+   correct box instead of re-deriving a ratio fixes it for every ratio. */
+.markdown-video [data-media-provider] video {
+  height: 100%;
+}
+/* Same neutral surface as DocImageClient's figure — matches even the sliver
+   of provider background a probe miss can still expose around the frame. */
+.markdown-video [data-media-provider] {
+  background-color: var(--muted);
 }
 
 .markdown-video .vds-button {
@@ -429,23 +457,39 @@ html {
 
 /* Small comparison thumbnails SideFX groups side by side in the source
    (a shared <p>, or a .row of .col_* divs) — see imageGroupInline /
-   imageGroupColumns in turndown-rules.ts. Flex row instead of the default
-   one-full-width-image-per-line stack; items shrink together on narrow
-   viewports rather than overflowing. */
+   imageGroupColumns in turndown-rules.ts. Every figure conforms to the
+   shortest image in the group (--image-group-height, set from probed
+   dimensions in createDivComponent) instead of stacking at its own
+   height, which used to give the row a "stairs" edge. */
 .image-group {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
+  justify-content: space-evenly;
   gap: 0.75rem;
   margin-block: 1.5rem;
+  /* min() so the row shrinks on narrow screens instead of forcing
+     desktop-width images that overflow and wrap into an overlapping mess. */
+  height: min(var(--image-group-height, 260px), 26vw);
+}
+/* Exactly 2 images: space-evenly stretches the gap too wide — pin it instead. */
+.image-group:has(> figure:nth-child(2):last-child) {
+  justify-content: center;
+  gap: var(--spacing-xl);
 }
 .image-group figure {
-  flex: 1 1 200px;
-  min-width: 0;
+  flex: 0 0 auto;
+  height: 100%;
   margin: 0;
 }
 .image-group .markdown-media {
+  height: 100%;
+  width: auto;
+  max-width: none;
   margin: 0;
+}
+.image-group .markdown-media img {
+  height: 100%;
+  width: auto;
 }
 .image-group .markdown-media + figcaption {
   margin-inline: 0;
@@ -873,6 +917,12 @@ pre code.hljs {
 .callout p {
   margin: 0.4rem 0;
 }
+/* The code block's own page-axis overhang (-mx-5.25) belongs outside callouts:
+   here the callout's rim is already the frame, so the panel sits flush inside
+   it instead of poking through. */
+.callout > .not-prose {
+  margin-inline: 0;
+}
 .callout a {
   color: var(--callout-color);
 }
@@ -1001,6 +1051,10 @@ pre code.hljs {
 }
 .md-table tr:last-child td {
   border-bottom: 0;
+}
+/* Headerless source table: the blank header cells markdown requires are hidden. */
+.md-table-noheader thead {
+  display: none;
 }
 .md-table td code {
   white-space: nowrap;

@@ -271,11 +271,11 @@ const NOTICE_TYPE_MAP: Record<string, string> = {
  * attribute and inner `.content` HTML. Shared by the standalone-notice rule and
  * the `.def` rule (Inputs), so callouts survive in both contexts.
  */
-function noticeToCalloutMarkdown(classAttr: string, contentHtml: string, sourceUrl: string, title?: string): string {
+function noticeToCalloutMarkdown(classAttr: string, contentHtml: string, sourceUrl: string, title?: string, codeLanguage?: CodeLanguage): string {
   const classes = classAttr.split(/\s+/);
   const cls = classes.find((c) => c in NOTICE_TYPE_MAP) ?? 'note';
   const type = NOTICE_TYPE_MAP[cls];
-  const body = contentHtmlToMarkdown(contentHtml, sourceUrl);
+  const body = contentHtmlToMarkdown(contentHtml, sourceUrl, codeLanguage);
   const quoted = body
     .split('\n')
     .map((line) => (line ? `> ${line}` : '>'))
@@ -285,13 +285,44 @@ function noticeToCalloutMarkdown(classAttr: string, contentHtml: string, sourceU
 }
 
 /**
+ * A code sample that itself shows markdown (recipe_format documents the
+ * recipe format, so its samples contain literal ``` lines) needs a longer
+ * fence than its longest backtick run, or the block breaks apart.
+ */
+function fencedCodeBlock(code: string, language?: CodeLanguage): string {
+  let longest = 0;
+  for (const match of code.matchAll(/`+/g)) {
+    longest = Math.max(longest, match[0].length);
+  }
+  const fence = '`'.repeat(Math.max(3, longest + 1));
+  return `\n\n${fence}${language || ''}\n${code}\n${fence}\n\n`;
+}
+
+/**
  * Lightweight HTML → markdown for callout/notice bodies.
  * Preserves links and inline code, turns paragraphs into blank-line-separated
- * blocks, and strips everything else to plain text.
+ * blocks, keeps `<pre>` blocks as fenced code, and strips everything else to
+ * plain text.
  */
-function contentHtmlToMarkdown(html: string, sourceUrl: string): string {
+function contentHtmlToMarkdown(html: string, sourceUrl: string, codeLanguage?: CodeLanguage): string {
   const prepared = preserveMedia(html, sourceUrl);
   let text = prepared.html;
+
+  // Fenced code blocks. Without this the generic tag-stripping below flattens
+  // a callout's code sample into one run of plain text (recipe_format's tip).
+  const preBlocks: string[] = [];
+  text = text.replace(/<pre\b[^>]*>([\s\S]*?)<\/pre>/gi, (_, inner) => {
+    const code = inner
+      .replace(/<[^>]+>/g, '')
+      .replace(/&lt;/g, '<')
+      .replace(/>/g, '>')
+      .replace(/&amp;/g, '&')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/^\n+|\n+$/g, '');
+    preBlocks.push(fencedCodeBlock(code, codeLanguage));
+    return `\nPREBLOCK${preBlocks.length - 1}\n`;
+  });
 
   // Preserve <a href> as markdown links
   text = text.replace(/<a\b[^>]*\bhref="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, (_, href, inner) => {
@@ -321,6 +352,22 @@ function contentHtmlToMarkdown(html: string, sourceUrl: string): string {
     return `**${inner.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()}**`;
   });
 
+  // Bullet/numbered lists → real markdown lists. Without this the generic
+  // tag-stripping below flattens each SideFX `ul.bullets` entry (sesinetd's
+  // "Interval values:") into one loose paragraph per item.
+  text = text.replace(/<(ul|ol)\b[^>]*>([\s\S]*?)<\/\1>/gi, (_, tag, listContent) => {
+    const items: string[] = [];
+    const liRe = /<li\b[^>]*>([\s\S]*?)<\/li>/gi;
+    let m: RegExpExecArray | null;
+    while ((m = liRe.exec(listContent)) !== null) {
+      const itemText = m[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      if (itemText) items.push(itemText);
+    }
+    if (items.length === 0) return '';
+    const marker = tag === 'ol' ? '1.' : '-';
+    return `\n${items.map((item) => `${marker} ${item}`).join('\n')}\n`;
+  });
+
   // Paragraph boundaries → double newline
   text = text.replace(/<\/p>/gi, '\n\n').replace(/<p\b[^>]*>/gi, '');
   text = text.replace(/<br\s*\/?>/gi, '\n');
@@ -342,7 +389,10 @@ function contentHtmlToMarkdown(html: string, sourceUrl: string): string {
     .join('\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
-  return restoreMedia(markdown, prepared.media);
+  return restoreMedia(
+    markdown.replace(/PREBLOCK(\d+)/g, (_, n) => preBlocks[Number(n)] ?? ''),
+    prepared.media,
+  );
 }
 
 /**
@@ -364,6 +414,12 @@ export function addCustomRules(
       const markdownRows: string[] = [];
       let headerProcessed = false;
 
+      // A first row of <td> cells is a headerless table (SideFX's lidarimport
+      // "Available position storage types"). Emit an empty header row so the
+      // real data row isn't styled as a header; MarkdownTable hides the empty
+      // thead at render time.
+      const hasHeader = Boolean(table.querySelector('th'));
+
       for (const row of rows) {
         const cells = Array.from(row.querySelectorAll('th, td'));
         if (cells.length === 0) continue;
@@ -374,14 +430,25 @@ export function addCustomRules(
         }
 
         const rowText = '| ' + cellContents.join(' | ') + ' |';
-        markdownRows.push(rowText);
 
         // Add separator after header row (first row)
         if (!headerProcessed) {
-          const separator = '| ' + cellContents.map(() => '---').join(' | ') + ' |';
-          markdownRows.push(separator);
           headerProcessed = true;
+          if (!hasHeader) {
+            // Headerless table: emit blank header cells above the separator so
+            // no data row is styled as a header; MarkdownTable hides the empty
+            // thead. The first row stays a data row.
+            markdownRows.push('| ' + cellContents.map(() => '  ').join(' | ') + ' |');
+            markdownRows.push('| ' + cellContents.map(() => '---').join(' | ') + ' |');
+            markdownRows.push(rowText);
+            continue;
+          }
+          markdownRows.push(rowText);
+          markdownRows.push('| ' + cellContents.map(() => '---').join(' | ') + ' |');
+          continue;
         }
+
+        markdownRows.push(rowText);
       }
 
       if (markdownRows.length === 0) return '';
@@ -454,12 +521,17 @@ export function addCustomRules(
     },
   });
 
-  // Code blocks
+  // Code blocks. `.code-container` sometimes wraps a `<code>` directly and
+  // sometimes wraps a `<pre>` (e.g. the plain examples on expression-function
+  // pages) — when it wraps a `<pre>`, that child already matches this same
+  // filter and turndown visits it first, so matching the wrapping div too
+  // fed its already-fenced output back through fencedCodeBlock a second
+  // time, doubling the fence for no reason.
   turndown.addRule('codeBlocks', {
     filter: (node) => {
       return (
         node.nodeName === 'PRE' ||
-        (node.nodeName === 'DIV' && node.classList.contains('code-container'))
+        (node.nodeName === 'DIV' && node.classList.contains('code-container') && !node.querySelector('pre'))
       );
     },
     replacement: (content, node) => {
@@ -477,7 +549,7 @@ export function addCustomRules(
         .replace(/&#39;/g, "'")
         .trim();
 
-      return `\n\n\`\`\`${codeLanguage}\n${codeContent}\n\`\`\`\n\n`;
+      return fencedCodeBlock(codeContent, codeLanguage);
     },
   });
 
@@ -554,7 +626,7 @@ export function addCustomRules(
       const contentEl = el.querySelector('.content') as Element | null;
       const contentHtml = contentEl ? (contentEl as unknown as { innerHTML: string }).innerHTML : '';
       const title = el.getAttribute('data-callout-title') || undefined;
-      return noticeToCalloutMarkdown(el.getAttribute('class') || '', contentHtml, sourceUrl, title) + '\n';
+      return noticeToCalloutMarkdown(el.getAttribute('class') || '', contentHtml, sourceUrl, title, codeLanguage) + '\n';
     },
   });
 
@@ -584,7 +656,7 @@ export function addCustomRules(
         for (const n of notices) {
           const nContent = n.querySelector('.content') as Element | null;
           const nHtml = nContent ? (nContent as unknown as { innerHTML: string }).innerHTML : '';
-          callouts += noticeToCalloutMarkdown(n.getAttribute('class') || '', nHtml, sourceUrl);
+          callouts += noticeToCalloutMarkdown(n.getAttribute('class') || '', nHtml, sourceUrl, undefined, codeLanguage);
           (n as unknown as { remove: () => void }).remove();
         }
 

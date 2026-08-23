@@ -141,12 +141,15 @@ export async function scrapeSideFXPage(url: string): Promise<ScrapedContent> {
   // (to `/docs/licensing/…` instead of `/docs/houdini/licensing/…`).
   // response.url already reflects the redirect destination, so it's always
   // the correct base — no separate probe needed.
-  // For section pages url already ends with '/' (we set it to slashUrl above),
-  // so use it directly — do not let response.url strip the trailing slash if
-  // SideFX happens to serve the directory without a redirect. For leaf pages
-  // (no trailing slash on url) prefer response.url to catch server-side
-  // redirects to a more specific URL (e.g. /foo/bar → /foo/bar.html).
-  const effectiveUrl = url.endsWith('/') ? url : (response.url || url);
+  // response.url is always the correct base for relative-link resolution:
+  //   - Leaf pages: it catches server-side redirects to a more specific URL
+  //     (e.g. /foo/bar → /foo/bar.html).
+  //   - Section pages: when the trailing-slash fetch followed a redirect
+  //     (e.g. /docs/hqueue/ → /docs/houdini/hqueue/), the pre-redirect path
+  //     resolves relative links one tree too high — the redirected URL is the
+  //     one the page's own relative links are written against. When no redirect
+  //     happened, response.url equals the requested slashUrl, so nothing changes.
+  const effectiveUrl = response.url || url;
 
   // Escape bare << sequences that aren't valid HTML but appear in some SideFX pages
   // (e.g. <<clip = false>> in href attributes), which break node-html-parser
