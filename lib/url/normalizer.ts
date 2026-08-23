@@ -106,6 +106,24 @@ export function convertToHoudiniMDUrl(relativeUrl: string, sourceUrl: string): s
 }
 
 /**
+ * The docs slug a SideFX URL points at, or null when the URL is not a docs page.
+ * Inverse of toSideFXUrl(), tolerant of the spellings SideFX serves the same
+ * page under: trailing slash and `.html`.
+ */
+export function slugFromSideFXUrl(url: string): string | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  if (parsed.hostname.replace(/^www\./, "") !== "sidefx.com") return null;
+  const docsMatch = parsed.pathname.match(/^\/docs\/?(.*)$/);
+  if (!docsMatch) return null;
+  return docsMatch[1].replace(/\.html$/i, "").replace(/\/+$/, "");
+}
+
+/**
  * Convert a houdinimd path to a canonical SideFX display URL (no trailing slash).
  * slug is the full path after /docs/, e.g., "houdini/vex/functions/foreach"
  * Any URL fragments (hash) are stripped since they're page anchors, not part of the path.

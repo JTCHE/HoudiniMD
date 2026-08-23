@@ -207,10 +207,10 @@ async function deleteAliasIsr(aliases: string[]): Promise<void> {
 async function audit(alias: string): Promise<AuditResult> {
   const canonical = alias.slice(0, -"/index".length);
   try {
-    const aliasSource = await scrapeSideFXPage(await resolveSideFXUrl(alias));
+    const aliasSource = await scrapeSideFXPage((await resolveSideFXUrl(alias)).url);
     const aliasFingerprint = await sourceFingerprint(aliasSource);
     try {
-      const canonicalSource = await scrapeSideFXPage(await resolveSideFXUrl(canonical));
+      const canonicalSource = await scrapeSideFXPage((await resolveSideFXUrl(canonical)).url);
       const canonicalFingerprint = await sourceFingerprint(canonicalSource);
       if (aliasFingerprint !== canonicalFingerprint) {
         return { alias, canonical, aliasFingerprint, canonicalFingerprint, reason: "source-mismatch" };

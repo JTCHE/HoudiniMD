@@ -15,6 +15,7 @@ import { CodeBlock } from "@/components/docs/CodeBlock";
 import { createImageComponent } from "@/components/docs/markdown/MarkdownImage";
 import { createDivComponent } from "@/components/docs/markdown";
 import { createVideoComponent } from "@/components/docs/markdown/MarkdownVideo";
+import { KICKOFF_HEADER, kickoffSecret } from "@/lib/generate-auth";
 import { probeImages } from "@/lib/images/probe";
 import { probeVideos } from "@/lib/videos/probe";
 import { extractHeadings } from "@/lib/markdown/headings";
@@ -28,7 +29,7 @@ import { addSeeAlsoIcons, detectLanguage, normalizeIconLinks } from "@/lib/markd
 import { rehypeCards } from "@/lib/markdown/rehype-cards";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { fetchFromR2, fetchLiteIndexEntries } from "@/lib/r2/read";
-import { cachedContentIsCurrent, contentPathForSlug, slugExistsOnSideFX } from "@/lib/generator";
+import { cachedContentIsCurrent, contentPathForSlug, resolveSlugSource, type SlugResolution } from "@/lib/generator";
 import GeneratingPage from "@/components/docs/GeneratingPage";
 import type { SearchIndexEntry } from "@/lib/r2/search-index";
 import { SITE_URL } from "@/lib/site";
@@ -161,14 +162,20 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
     // Distinguish "not generated yet" (200, show progress) from "SideFX has no
     // such page" (real 404) — without this, every dead link served a 200 page
     // that only failed client-side once the generation SSE stream ran.
-    let existsOnSideFX: boolean;
+    let resolution: SlugResolution;
     try {
-      existsOnSideFX = await slugExistsOnSideFX(slugPath);
+      resolution = await resolveSlugSource(slugPath);
     } catch {
       return <GeneratingPage slug={slugPath} />;
     }
-    if (!existsOnSideFX) {
+    if (resolution.kind === "missing") {
       notFound();
+    }
+    // SideFX redirects this spelling elsewhere. Send the reader (and the
+    // crawler) to the page it serves instead of mirroring a duplicate under an
+    // invented path — see the redirect note in generateMarkdownForSlug().
+    if (resolution.kind === "redirect") {
+      permanentRedirect(`/docs/${resolution.canonical}`);
     }
     // Kick off generation server-side instead of waiting on GeneratingPage's
     // client-side SSE call — a crawler with no JS would otherwise never trigger
@@ -181,7 +188,11 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
     // fast page but costs nothing extra on the slow path that needs it.
     const { ctx } = await getCloudflareContext({ async: true });
     ctx.waitUntil(
-      fetch(`${SITE_URL}/api/generate?slug=${encodeURIComponent(slugPath)}`)
+      fetch(`${SITE_URL}/api/generate?slug=${encodeURIComponent(slugPath)}`, {
+        // A bare server-side fetch sends no same-origin fetch metadata, so it
+        // authenticates with the shared secret instead. See lib/generate-auth.ts.
+        headers: { [KICKOFF_HEADER]: kickoffSecret() },
+      })
         // The route's own generation work now survives via its own ctx.waitUntil
         // (see app/api/generate/route.ts) whether or not we read this body, so
         // this drain is just belt-and-suspenders: an unread SSE stream is one
