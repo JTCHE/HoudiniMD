@@ -34,6 +34,7 @@
  *   bun scripts/cache-sync.ts            # dry-run: report uploads/deletes
  *   bun scripts/cache-sync.ts --apply    # perform uploads + deletes
  *   bun scripts/cache-sync.ts --apply --no-prune   # upload only, keep orphans
+ *   bun scripts/cache-sync.ts --apply --no-upload  # prune only, write nothing
  */
 
 import { createHash } from "node:crypto";
@@ -285,12 +286,17 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   const apply = args.flags.has("apply");
   const prune = !args.flags.has("no-prune");
+  // Pruning needs no knowledge of the upload diff — an orphan is any remote key
+  // no local asset maps to. Skipping the diff skips gzipping every asset twice
+  // and every HEAD, so a prune-only pass costs the list calls and nothing else.
+  const upload = !args.flags.has("no-upload");
 
   console.log(c.bold("HoudiniMD cache sync"));
   console.log(`  bucket      ${BUCKET}`);
   console.log(`  prefix      ${PREFIX}/`);
   console.log(`  mode        ${apply ? c.red("--apply (writes to R2)") : c.dim("dry-run (pass --apply to commit)")}`);
   console.log(`  prune       ${prune ? "on" : c.yellow("off (--no-prune)")}`);
+  console.log(`  upload      ${upload ? "on" : c.yellow("off (--no-upload)")}`);
   console.log("");
 
   const client = makeClient();
@@ -301,13 +307,10 @@ async function main() {
   // Diff. An asset needs upload if remote is missing it or the etag differs.
   // (A multipart etag contains "-"; our objects are single-part, so any "-"
   // forces a re-upload, which is safe.)
-  const valid = new Set<string>();
-  const candidates: CacheAsset[] = [];
-  for (const a of assets) {
-    valid.add(a.key);
-    const remoteEtag = remote.get(a.key);
-    if (remoteEtag !== md5(bodyFor(a).body)) candidates.push(a);
-  }
+  const valid = new Set<string>(assets.map((a) => a.key));
+  const candidates: CacheAsset[] = upload
+    ? assets.filter((a) => remote.get(a.key) !== md5(bodyFor(a).body))
+    : [];
   // An etag mismatch is not proof of a content change: entries the worker
   // rewrote at runtime hold the same JSON compressed by a different gzip, so
   // their etag never matches ours. HEAD those (Class B, 12x cheaper than the
@@ -347,7 +350,7 @@ async function main() {
   // live cache in place (pinned BUILD_ID), so the still-live previous deploy
   // starts serving the new pages ~10 minutes before `wrangler deploy` publishes
   // the chunks they reference. Until then only this archive can serve them.
-  await syncStaticArchive(client);
+  if (upload) await syncStaticArchive(client);
 
   // Uploads
   const UPLOAD_RETRIES = 3;
@@ -383,10 +386,14 @@ async function main() {
   });
   console.log(`  uploaded ${uploaded}/${toUpload.length}${failed ? c.red(` (${failed} failed)`) : ""}`);
 
-  // Deletes (DeleteObjects handles up to 1000 keys per request)
+  // Deletes (DeleteObjects handles up to 1000 keys per request). Batched in
+  // parallel like the uploads: a single round trip costs ~20s regardless of how
+  // many keys it carries, so a sequential loop spent over an hour on a prune
+  // the pool does in minutes.
+  const batches: string[][] = [];
+  for (let i = 0; i < toDelete.length; i += 1000) batches.push(toDelete.slice(i, i + 1000));
   let deleted = 0;
-  for (let i = 0; i < toDelete.length; i += 1000) {
-    const batch = toDelete.slice(i, i + 1000);
+  await pool(batches, CONCURRENCY, async (batch) => {
     await client.send(
       new DeleteObjectsCommand({
         Bucket: BUCKET,
@@ -395,7 +402,7 @@ async function main() {
     );
     deleted += batch.length;
     console.log(c.dim(`    deleted ${deleted}/${toDelete.length}`));
-  }
+  });
 
   console.log("");
   console.log(c.bold(`Done. ${uploaded} uploaded, ${deleted} deleted.`));

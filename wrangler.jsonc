@@ -14,12 +14,11 @@
   "observability": {
     "enabled": false,
   },
-  // Second line of defence for /api/generate, the one route that makes the
-  // Worker scrape sidefx.com. The first line is a zone WAF rate-limiting rule
-  // (http_ratelimit phase) that rejects before the Worker starts and costs no
-  // CPU; the Free plan pins it to 5 requests per 10s per IP. This binding runs
-  // inside the isolate, so it still costs a little CPU per rejection, but it
-  // survives a WAF rule being deleted and it keys on IP alone, not IP+colo.
+  // Rate limit for /api/generate, the one route that makes the Worker scrape
+  // sidefx.com. This binding is the only limit on that route now: the Free
+  // plan allows a single rule in the zone's http_ratelimit phase, and that one
+  // guards /docs, where the request volume is. The route also refuses anything
+  // that is not our own page or our own kickoff — see lib/generate-auth.ts.
   "ratelimits": [
     {
       "name": "GENERATE_LIMITER",
