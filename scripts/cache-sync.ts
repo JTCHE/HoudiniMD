@@ -387,22 +387,42 @@ async function main() {
   console.log(`  uploaded ${uploaded}/${toUpload.length}${failed ? c.red(` (${failed} failed)`) : ""}`);
 
   // Deletes (DeleteObjects handles up to 1000 keys per request). Batched in
-  // parallel like the uploads: a single round trip costs ~20s regardless of how
-  // many keys it carries, so a sequential loop spent over an hour on a prune
-  // the pool does in minutes.
+  // parallel, because one round trip costs the same whatever it carries, and a
+  // sequential loop spent over an hour on a full prune. Concurrency is lower
+  // than the uploads' and every batch retries: R2 answers a burst of deletes
+  // with "Reduce your concurrent request rate", and an unretried throw here
+  // kills the deploy before wrangler runs.
+  const DELETE_CONCURRENCY = 6;
+  const DELETE_RETRIES = 6;
   const batches: string[][] = [];
   for (let i = 0; i < toDelete.length; i += 1000) batches.push(toDelete.slice(i, i + 1000));
   let deleted = 0;
-  await pool(batches, CONCURRENCY, async (batch) => {
-    await client.send(
-      new DeleteObjectsCommand({
-        Bucket: BUCKET,
-        Delete: { Objects: batch.map((Key) => ({ Key })), Quiet: true },
-      }),
-    );
-    deleted += batch.length;
-    console.log(c.dim(`    deleted ${deleted}/${toDelete.length}`));
+  let deleteFailed = 0;
+  await pool(batches, DELETE_CONCURRENCY, async (batch) => {
+    for (let attempt = 1; attempt <= DELETE_RETRIES; attempt++) {
+      try {
+        await client.send(
+          new DeleteObjectsCommand({
+            Bucket: BUCKET,
+            Delete: { Objects: batch.map((Key) => ({ Key })), Quiet: true },
+          }),
+        );
+        deleted += batch.length;
+        console.log(c.dim(`    deleted ${deleted}/${toDelete.length}`));
+        return;
+      } catch (e) {
+        if (attempt === DELETE_RETRIES) {
+          deleteFailed += batch.length;
+          console.error(c.red(`    delete failed for ${batch.length} key(s): ${e instanceof Error ? e.message : e}`));
+        } else {
+          await new Promise((r) => setTimeout(r, 400 * 2 ** (attempt - 1)));
+        }
+      }
+    }
   });
+  // An orphan left behind costs storage, not correctness. Never fail the deploy
+  // for it: wrangler has not run yet at this point.
+  if (deleteFailed) console.log(c.yellow(`  ${deleteFailed} orphan(s) left for the next run`));
 
   console.log("");
   console.log(c.bold(`Done. ${uploaded} uploaded, ${deleted} deleted.`));
