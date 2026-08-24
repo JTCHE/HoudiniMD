@@ -17,3 +17,12 @@ re-uploads them back.
 
 A local `opennextjs-cloudflare build` for `bun run preview` is safe. It never
 writes to R2.
+
+## Reading a build
+
+A finished build reports status `stopped`, not `success`. Read the log to tell a
+deploy from a failure. Look for `Success: Deploy command completed`.
+
+`bun run deploy` runs `cache-sync` before `wrangler deploy`. A non-zero exit from
+`cache-sync` stops the deploy, and the build log looks almost finished when that
+happens. Check that `wrangler` printed a Version ID before you call a deploy done.
