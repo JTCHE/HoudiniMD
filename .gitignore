@@ -13,6 +13,9 @@
 # testing & debugging
 /coverage
 *test*
+*tmp*
+*temp*
+
 *debug*
 .trash/*
 
@@ -53,7 +56,6 @@ next-env.d.ts
 # playwright
 playwright-report/
 .playwright/
-tests/
 playwright.config.ts
 
 # OpenNext
