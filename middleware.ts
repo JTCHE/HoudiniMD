@@ -39,7 +39,7 @@ function notMirrored(slug: string): NextResponse {
       `a{color:var(--fg);text-decoration:underline;text-underline-offset:.2em;text-decoration-color:var(--muted)}a:hover{text-decoration-color:currentColor}</style>` +
       `<main><h1>HoudiniMD does not mirror <code>${escapeHtml(tree)}</code></h1>` +
       `<p>This mirror carries the current Houdini, HDK, Houdini Engine and API documentation.</p>` +
-      `<nav><a href="/docs/houdini">Browse the documentation</a><span>&middot;</span><a href="/">Search</a></nav></main>`,
+      `<nav><a href="/docs">Browse the documentation</a><span>&middot;</span><a href="/">Search</a></nav></main>`,
     { status: 404, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } },
   );
 }
