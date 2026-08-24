@@ -1,6 +1,7 @@
 import { SITE_URL as BASE_URL } from "@/lib/site";
 import type { MetadataRoute } from "next";
 import { fetchIndexEntries } from "@/lib/r2/read";
+import { checkDocNamespace } from "@/lib/url/namespaces";
 
 export const revalidate = 3600;
 
@@ -20,12 +21,17 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     if (!entries) return base;
     return [
       ...base,
-      ...entries.map((e) => ({
-        url: `${BASE_URL}/docs/${e.path}`,
-        lastModified: e.lastModified ? new Date(e.lastModified) : new Date("2026-01-01"),
-        changeFrequency: "monthly" as const,
-        priority: 0.7,
-      })),
+      // Old versions of the index still hold version-suffixed paths
+      // (houdini20.5/...). Those now redirect, so advertising them only sends
+      // crawlers on a hop. See lib/url/namespaces.ts.
+      ...entries
+        .filter((e) => checkDocNamespace(e.path).kind === "allowed")
+        .map((e) => ({
+          url: `${BASE_URL}/docs/${e.path}`,
+          lastModified: e.lastModified ? new Date(e.lastModified) : new Date("2026-01-01"),
+          changeFrequency: "monthly" as const,
+          priority: 0.7,
+        })),
     ];
   } catch (error) {
     console.error("sitemap: failed to build entries, falling back to homepage only", error);

@@ -8,6 +8,7 @@ import { convertToMarkdown, detectLanguage } from "@/lib/markdown";
 import { fetchFromR2, saveToR2, updateSearchIndex } from "@/lib/r2";
 import { withLock } from "@/lib/lock-manager";
 import { normalizeDocSlug, toSideFXUrl } from "@/lib/url";
+import { checkDocNamespace } from "@/lib/url/namespaces";
 import { fetchSourceAlias } from "@/lib/source-aliases";
 
 export type ProgressStage =
@@ -72,6 +73,9 @@ export type SlugResolution =
  */
 export async function resolveSlugSource(slug: string): Promise<SlugResolution> {
   const normalized = normalizeDocSlug(slug);
+  const namespace = checkDocNamespace(normalized);
+  if (namespace.kind === "unknown") return { kind: "missing" };
+  if (namespace.kind === "versioned") return { kind: "redirect", canonical: namespace.slug };
   try {
     const { canonicalSlug } = await resolveSideFXUrl(normalized);
     return canonicalSlug === normalized
@@ -96,6 +100,19 @@ export async function generateMarkdownForSlug(
   followedRedirect: boolean = false,
 ): Promise<GenerateResult> {
   slug = normalizeDocSlug(slug);
+  // The namespace gate, repeated here because this is the function that scrapes
+  // SideFX and writes to R2. Middleware stops the browser paths, but /api/raw
+  // and /api/generate are reachable on their own, and neither may be a way to
+  // grow the mirror into a tree we do not carry. See lib/url/namespaces.ts.
+  const namespace = checkDocNamespace(slug);
+  if (namespace.kind === "unknown") {
+    throw new PageNotFoundError(toSideFXUrl(slug));
+  }
+  if (namespace.kind === "versioned") {
+    // One level only: the target namespace is allowed, so this cannot recur.
+    const current = await generateMarkdownForSlug(namespace.slug, skipCache, onProgress, waitUntil);
+    return { ...current, slug, canonicalSlug: namespace.slug };
+  }
   const knownAlias = slug ? await fetchSourceAlias(slug) : null;
   if (knownAlias && knownAlias.canonical !== slug) {
     const canonical = await generateMarkdownForSlug(

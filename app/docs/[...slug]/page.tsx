@@ -33,6 +33,7 @@ import { cachedContentIsCurrent, contentPathForSlug, resolveSlugSource, type Slu
 import GeneratingPage from "@/components/docs/GeneratingPage";
 import type { SearchIndexEntry } from "@/lib/r2/search-index";
 import { SITE_URL } from "@/lib/site";
+import { checkDocNamespace } from "@/lib/url/namespaces";
 import { localIconUrl, localizeIconUrls } from "@/lib/icons";
 import { fetchSourceAlias } from "@/lib/source-aliases";
 
@@ -50,7 +51,12 @@ export async function generateStaticParams() {
     const raw = await fetchFromR2("content/index.json", true);
     if (!raw) return [];
     const entries: SearchIndexEntry[] = JSON.parse(raw);
-    return entries.map((e) => ({ slug: e.path.split("/") }));
+    // The index still holds version-suffixed paths mirrored before the
+    // namespace gate (houdini20.5/...). Middleware redirects those now, so
+    // prerendering them would build ~590 pages nobody can reach.
+    return entries
+      .filter((e) => checkDocNamespace(e.path).kind === "allowed")
+      .map((e) => ({ slug: e.path.split("/") }));
   } catch {
     return [];
   }
