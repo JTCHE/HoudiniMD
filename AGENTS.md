@@ -14,6 +14,10 @@ Project information: @README.md
 
 ## Rules
 
+- Read the documentation before you write code against a service, quote a rate,
+  or state a limit. Do not answer from memory. Prefer the site's own `llms.txt`
+  or `index.md`; otherwise prefix the link with `markdown.new/` for clean raw
+  text. Cloudflare publishes every page as `<url>/index.md`.
 - Use ASD-STE100 Simplified Technical English in all writing: replies, comments,
   commits, pull requests.
 - Do not keep backward compatibility. Delete the old path. Do not add fallbacks,
