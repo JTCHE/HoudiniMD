@@ -32,25 +32,29 @@ const isTracked = (path: string) => path === "/" || path.startsWith("/docs/");
  * colo or a genuinely distinct visitor sharing the key is undercounted by
  * one row, which is a smaller error than the double-count this replaces.
  */
-async function seenRecently(key: string, ctx: WaitUntil): Promise<boolean> {
+async function seenRecently(key: string): Promise<boolean> {
   const cache = (caches as unknown as { default: Cache }).default;
   const cacheKey = new Request(`https://dedupe.internal/view/${encodeURIComponent(key)}`);
   if (await cache.match(cacheKey)) return true;
-  ctx.waitUntil(cache.put(cacheKey, new Response(null, { headers: { "cache-control": "max-age=5" } })));
+  // Awaited, not `waitUntil`ed. Fired and forgotten, the window opens after
+  // the insert it is meant to guard, so the two requests it exists to
+  // separate both read a miss and both write a row — measured 1,888 duplicate
+  // rows in 24h, a 25% over-count. Awaiting costs nothing: every caller is
+  // already inside the response's own `waitUntil`.
+  await cache.put(cacheKey, new Response(null, { headers: { "cache-control": "max-age=5" } }));
   return false;
 }
 
 async function writeView(
   request: Request,
   env: TelemetryEnv,
-  ctx: WaitUntil,
   ev: { path: string; referrer: string; status: number; markdown: boolean },
 ) {
   const ua = request.headers.get("user-agent");
   const ip = request.headers.get("cf-connecting-ip") ?? "";
   const country = request.headers.get("cf-ipcountry") ?? "";
   const kind = visitorKind(ua, request.headers);
-  if (await seenRecently(`${ev.path}|${country}|${ev.referrer}|${kind}`, ctx)) return;
+  if (await seenRecently(`${ev.path}|${country}|${ev.referrer}|${kind}`)) return;
   const salt = env.VISITOR_SALT!;
   // The finer identity: address + browser + device, not address alone. Built
   // from browserKind()/deviceKind(), not the raw UA — the raw string changes
@@ -111,7 +115,7 @@ export function recordPageView(request: Request, url: URL, response: Response, e
   if (request.headers.get("rsc")) return;
   const path = url.pathname;
   if (!isTracked(path)) return;
-  ctx.waitUntil(writeView(request, env, ctx, {
+  ctx.waitUntil(writeView(request, env, {
     path: path.endsWith(".md") ? path.slice(0, -3) : path,
     referrer: referrerHost(request, url),
     status: response.status,
@@ -130,7 +134,7 @@ export function recordViewBeacon(request: Request, url: URL, env: TelemetryEnv, 
   const path = url.searchParams.get("path") ?? "";
   const from = url.searchParams.get("from") ?? "";
   if (canRecord(env) && isTracked(path))
-    ctx.waitUntil(writeView(request, env, ctx, {
+    ctx.waitUntil(writeView(request, env, {
       path,
       referrer: from.startsWith("/") ? `self:${from}` : "",
       status: 200,
