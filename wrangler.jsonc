@@ -80,6 +80,15 @@
   // with the code and cannot silently drift.
   "vars": {
     "URL": "https://houdinimd.com",
+    // A doc page renders in ~31s of wall time at P99, and the revalidation
+    // queue aborts its own fetch after 10s. The render still finishes and
+    // still writes the entry to R2 — only the durable object's view of it
+    // fails. It then retried 6 more times by default, and every attempt paid
+    // for another render and another R2 Class A put: measured 5 writes per
+    // page, 75k puts a day, against a 1M/month allowance. One retry is
+    // enough. A page nobody asks for again does not need revalidating, and a
+    // page somebody does ask for enqueues itself on the next stale read.
+    "NEXT_CACHE_DO_QUEUE_MAX_RETRIES": "1",
   },
   "routes": [
     {
