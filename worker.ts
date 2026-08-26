@@ -1,10 +1,12 @@
-import handler, { DOQueueHandler, DOShardedTagCache, BucketCachePurge } from "./.open-next/worker.js";
+import handler, { DOShardedTagCache, BucketCachePurge } from "./.open-next/worker.js";
 import { recordApiSearch, recordPageView, recordSearchBeacon, recordViewBeacon } from "./telemetry";
 import { pruneAnalytics } from "./telemetry/prune";
 import type { D1Database } from "./telemetry/types";
 import { iconNeedsRefresh, iconResponse, refreshIcon, validIconPath, type IconBucket } from "./lib/icon-cache";
 
-export { DOQueueHandler, DOShardedTagCache, BucketCachePurge };
+// DOQueueHandler is not exported: its class is deleted while the routes are
+// frozen, and a deleted class must not stay exported. See wrangler.jsonc.
+export { DOShardedTagCache, BucketCachePurge };
 
 interface Env {
   NEXT_INC_CACHE_R2_BUCKET: { get(key: string): Promise<{ body: ReadableStream } | null> };
