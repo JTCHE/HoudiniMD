@@ -16,7 +16,7 @@
 import { config } from "dotenv";
 config({ path: ".env.local" });
 
-const ACCOUNT = process.env.R2_ACCOUNT_ID;
+const ACCOUNT = process.env.CF_ACCOUNT_ID;
 const TOKEN = process.env.CF_ANALYTICS_TOKEN;
 const ZONE_NAME = "houdinimd.com";
 const HOURS = Number(process.argv[2] ?? 24);
@@ -24,7 +24,7 @@ const HOURS = Number(process.argv[2] ?? 24);
 const CYCLE_DAY = 11;
 
 if (!ACCOUNT || !TOKEN) {
-  console.error("Set R2_ACCOUNT_ID and CF_ANALYTICS_TOKEN in .env.local");
+  console.error("Set CF_ACCOUNT_ID and CF_ANALYTICS_TOKEN in .env.local");
   process.exit(2);
 }
 
