@@ -3,7 +3,8 @@ import type { MetadataRoute } from "next";
 import { fetchIndexEntries } from "@/lib/r2/read";
 import { checkDocNamespace } from "@/lib/url/namespaces";
 
-export const revalidate = 3600;
+// Frozen with the doc route — see app/docs/[...slug]/page.tsx.
+export const revalidate = false;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base: MetadataRoute.Sitemap = [
