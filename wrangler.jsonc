@@ -58,21 +58,27 @@
   "triggers": {
     "crons": ["0 4 * * *"],
   },
-  // Durable Object that runs ISR revalidation in the background (off the request
-  // path). Configured via `queue: doQueue` in open-next.config.ts. SQLite-backed
-  // (see the migration below), which is available on the Workers free plan.
-  "durable_objects": {
-    "bindings": [
-      {
-        "name": "NEXT_CACHE_DO_QUEUE",
-        "class_name": "DOQueueHandler",
-      },
-    ],
-  },
+  // The ISR revalidation Durable Object is deleted while the routes are frozen.
+  //
+  // Its SQLite held a backlog of failed revalidations. The queue records a
+  // success only after its own HEAD request returns, and that request timed out
+  // before a doc page could render, so every entry stayed failed and kept being
+  // retried. Each retry re-rendered a page and wrote it to R2. Freezing the
+  // routes stopped new work reaching the queue but not the backlog already in
+  // it, which kept writing at ~1,500 R2 puts an hour with no visitor behind it.
+  // Deleting the class is the only way to drop that stored state.
+  //
+  // Nothing enqueues while `export const revalidate = false` holds, so the
+  // binding is unused until the routes are unfrozen. Restore both blocks below
+  // (as tag v3, `new_sqlite_classes`) at the same time as the interval.
   "migrations": [
     {
       "tag": "v1",
       "new_sqlite_classes": ["DOQueueHandler"],
+    },
+    {
+      "tag": "v2",
+      "deleted_classes": ["DOQueueHandler"],
     },
   ],
   // Public origin for the Worker runtime. lib/site.ts throws without it, so
