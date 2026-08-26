@@ -27,7 +27,7 @@
  * Auth: a dedicated R2 token scoped to the cache bucket, via env
  *   R2_CACHE_ACCESS_KEY_ID / R2_CACHE_SECRET_ACCESS_KEY
  * (the existing R2_ACCESS_KEY_ID is scoped to the docs bucket only). The
- * account id / endpoint is shared (R2_ACCOUNT_ID). These are only needed
+ * account id / endpoint is shared (CF_ACCOUNT_ID). These are only needed
  * locally at deploy time — the deployed worker uses the R2 binding, not S3.
  *
  * Usage:
@@ -180,12 +180,12 @@ function bodyFor(a: CacheAsset): { body: Buffer; srchash: string } {
 }
 
 function makeClient(): S3Client {
-  const accountId = process.env.R2_ACCOUNT_ID;
+  const accountId = process.env.CF_ACCOUNT_ID;
   const accessKeyId = process.env.R2_CACHE_ACCESS_KEY_ID;
   const secretAccessKey = process.env.R2_CACHE_SECRET_ACCESS_KEY;
   if (!accountId || !accessKeyId || !secretAccessKey) {
     throw new Error(
-      "Missing R2 cache credentials. Set R2_ACCOUNT_ID, R2_CACHE_ACCESS_KEY_ID, " +
+      "Missing R2 cache credentials. Set CF_ACCOUNT_ID, R2_CACHE_ACCESS_KEY_ID, " +
         "R2_CACHE_SECRET_ACCESS_KEY (cache-bucket-scoped token) in .env.local.",
     );
   }
