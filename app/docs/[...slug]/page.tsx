@@ -37,7 +37,19 @@ import { checkDocNamespace } from "@/lib/url/namespaces";
 import { localIconUrl, localizeIconUrls } from "@/lib/icons";
 import { fetchSourceAlias } from "@/lib/source-aliases";
 
-export const revalidate = 2592000;
+// FROZEN until 2026-09-11. The revalidation queue aborts its own HEAD request
+// after 10s (NEXT_CACHE_DO_QUEUE_REVALIDATION_TIMEOUT_MS), but a doc page needs
+// ~31s at P99. The render finishes and writes its R2 entry anyway, so the page
+// is fresh — but the queue only records success in its sync table on the path
+// the abort skips. That table is the sole dedupe guard, so it stays empty and
+// every stale read re-queues a page that was already rebuilt, forever. Measured
+// one R2 write every 2s with no visitor behind it, which put R2 Class A and
+// Durable Object duration over their included tiers.
+//
+// `false` removes the trigger rather than the symptom: nothing expires, so
+// nothing is ever enqueued. Content changes on deploy only. To restore an
+// interval, first raise the queue timeout above the real render time.
+export const revalidate = false;
 export const maxDuration = 60;
 
 // Pre-render every known route at build time. A static route gets a full RSC

@@ -15,7 +15,8 @@ import { ViewRecorder } from "@/components/ViewRecorder";
  * carousel shows. Rebuilding hourly rotates it without making every visit pay
  * for the index parse.
  */
-export const revalidate = 3600;
+// Frozen with the doc route — see app/docs/[...slug]/page.tsx.
+export const revalidate = false;
 
 /**
  * Mirrors Carousel's real markup (label row + one row of chip-shaped
