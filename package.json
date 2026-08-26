@@ -24,6 +24,7 @@
     "check:404-redirects": "bun scripts/check-404-redirects.ts",
     "og:shot": "node scripts/shot-og.ts",
     "deploy": "bun scripts/check-env.ts && bun scripts/build-search-index.ts && opennextjs-cloudflare build && bun scripts/cache-sync.ts --apply && OPEN_NEXT_DEPLOY=true wrangler deploy",
+    "deploy:preview": "bun scripts/check-env.ts && opennextjs-cloudflare build && OPEN_NEXT_DEPLOY=true wrangler versions upload",
     "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
     "usage": "bun scripts/usage.ts"
   },
