@@ -89,6 +89,15 @@
     // enough. A page nobody asks for again does not need revalidating, and a
     // page somebody does ask for enqueues itself on the next stale read.
     "NEXT_CACHE_DO_QUEUE_MAX_RETRIES": "1",
+    // The queue aborts its revalidation HEAD after this long. The default is
+    // 10s, and a doc page needs ~31s at P99, so the abort always won. That
+    // matters more than the wasted render: the queue writes its sync table
+    // only after the fetch returns, and that table is the sole dedupe guard.
+    // It stayed empty, so no revalidation was ever deduplicated and every
+    // stale read re-queued a page that had already been rebuilt. 45s clears
+    // P99 and stays under the route's 60s maxDuration. Inert while
+    // `export const revalidate = false` holds the routes frozen.
+    "NEXT_CACHE_DO_QUEUE_REVALIDATION_TIMEOUT_MS": "45000",
   },
   "routes": [
     {
