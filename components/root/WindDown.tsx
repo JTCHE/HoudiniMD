@@ -189,14 +189,19 @@ export function WindDown({ variant = "banner" }: { variant?: "banner" | "bar" })
                 caused it, so the notice copy above never moves. */}
             {/* Not cn(): tailwind-merge does not know the custom `text-caption` size,
                 reads it as a colour, and lets `text-muted-foreground` evict it. */}
-            <p className={`text-caption ${state === "error" ? "text-destructive" : "text-muted-foreground"}`}>
+            <p
+              role="status"
+              className={`text-caption ${state === "error" ? "text-destructive" : "text-muted-foreground"}`}
+            >
               {state === "error" ? message : "One email at release. Nothing else, ever."}
             </p>
           </form>
         )}
 
         {(state === "done" || signedEarlier) && (
-          <p className="text-label shrink-0 text-foreground">You are on the list. One email at release.</p>
+          <p role="status" className="text-label shrink-0 text-foreground">
+            You are on the list. One email at release.
+          </p>
         )}
 
         {/* Absolute below md, where it floats over the copy and the copy makes

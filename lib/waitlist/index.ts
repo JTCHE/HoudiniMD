@@ -1,7 +1,5 @@
 import { nowStamp, type TelemetryEnv } from "@/telemetry/types";
 
-export const WAITLIST_PATH = "/api/waitlist";
-
 /**
  * Deliberately loose. A stricter pattern rejects real addresses (plus tags,
  * new TLDs, quoted locals) and the cost of a bad row is one bounced mail.
@@ -12,22 +10,15 @@ interface Limiter {
   limit(options: { key: string }): Promise<{ success: boolean }>;
 }
 
-interface WaitlistEnv extends TelemetryEnv {
+export interface WaitlistEnv extends TelemetryEnv {
   WAITLIST_LIMITER?: Limiter;
 }
 
 const json = (body: unknown, status: number) =>
   Response.json(body, { status, headers: { "cache-control": "no-store" } });
 
-/**
- * Handled in the Worker, before the Next handler, for the same reason the
- * telemetry beacons are: it is one INSERT and it has no business paying for a
- * route render. Returns undefined when the request is not for this path, so
- * the caller falls through.
- */
-export async function handleWaitlist(request: Request, url: URL, env: WaitlistEnv): Promise<Response | undefined> {
-  if (url.pathname !== WAITLIST_PATH) return undefined;
-  if (request.method !== "POST") return json({ error: "Use POST" }, 405);
+/** One INSERT, and every way the request can fail before it. */
+export async function handleWaitlist(request: Request, env: WaitlistEnv): Promise<Response> {
   if (!env.DB) return json({ error: "Unavailable" }, 503);
 
   let body: { email?: unknown; page?: unknown; website?: unknown };
