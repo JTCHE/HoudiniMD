@@ -10,6 +10,9 @@ import { cn } from "@/lib/utils";
 /** 1 Jan 2027. Agreed with SideFX — see the Site Wind Down spec. */
 const CLOSURE_DATE = "Jan 1st, 2027";
 const DISMISS_KEY = "houdinimd:wind-down-dismissed";
+/** Set once an address is accepted. A reader who signed up is done with the
+    notice on every page, not only the one they typed on. */
+const SIGNED_KEY = "houdinimd:wind-down-signed";
 
 type State = "idle" | "sending" | "done" | "error";
 
@@ -18,11 +21,15 @@ const subscribeToStorage = (onChange: () => void) => {
   return () => window.removeEventListener("storage", onChange);
 };
 
-const readDismissed = () => {
+/** One string, not an object: useSyncExternalStore compares snapshots by
+    identity and a fresh object every read loops forever. */
+const readFlag = (): "none" | "dismissed" | "signed" => {
   try {
-    return localStorage.getItem(DISMISS_KEY) === "1";
+    if (localStorage.getItem(SIGNED_KEY) === "1") return "signed";
+    if (localStorage.getItem(DISMISS_KEY) === "1") return "dismissed";
+    return "none";
   } catch {
-    return false;
+    return "none";
   }
 };
 
@@ -39,23 +46,30 @@ const readDismissed = () => {
  */
 export function WindDown({ variant = "banner" }: { variant?: "banner" | "bar" }) {
   const pathname = usePathname();
-  // The stored answer is read through useSyncExternalStore, not an effect: the
-  // server has no localStorage, so the server snapshot says "dismissed" and the
-  // bar never flashes at a reader who already closed it. `closed` covers this
-  // tab's own click, which fires no storage event.
-  const stored = useSyncExternalStore(subscribeToStorage, readDismissed, () => true);
+  // Read through useSyncExternalStore, not an effect: the server has no
+  // localStorage, so the server snapshot says "dismissed" and the bar never
+  // flashes at a reader who already closed it. `closed` covers this tab's own
+  // click and its own signup, neither of which fires a storage event.
+  const stored = useSyncExternalStore(subscribeToStorage, readFlag, () => "dismissed" as const);
   const [closed, setClosed] = useState(false);
+  // Separate from `closed`: the bar hides itself after a signup, but only
+  // once the confirmation has had time to be read.
+  const [hidden, setHidden] = useState(false);
   const [email, setEmail] = useState("");
   const [state, setState] = useState<State>("idle");
   const [message, setMessage] = useState("");
 
+  function remember(key: string) {
+    try {
+      localStorage.setItem(key, "1");
+    } catch {
+      // Private mode. The notice comes back next visit, which is acceptable.
+    }
+  }
+
   function dismiss() {
     setClosed(true);
-    try {
-      localStorage.setItem(DISMISS_KEY, "1");
-    } catch {
-      // Private mode. The bar comes back next visit, which is acceptable.
-    }
+    remember(DISMISS_KEY);
   }
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
@@ -78,13 +92,25 @@ export function WindDown({ variant = "banner" }: { variant?: "banner" | "bar" })
         return;
       }
       setState("done");
+      remember(SIGNED_KEY);
+      // The confirmation is worth reading, so the bar stays a moment before it
+      // goes. It does not come back: SIGNED_KEY is already written.
+      if (variant === "bar") setTimeout(() => setHidden(true), 4000);
     } catch {
       setState("error");
       setMessage("No connection. Try again.");
     }
   }
 
-  if (variant === "bar" && (stored || closed)) return null;
+  // `stored` is re-read on every render, so it turns "signed" the moment the
+  // address lands. Hiding on it alone would swallow the confirmation, hence
+  // the `state === "idle"` guard: a stored answer only hides a bar that has
+  // nothing to say right now.
+  if (variant === "bar" && (hidden || closed || (stored !== "none" && state === "idle")))
+    return null;
+  // Someone who already signed up still needs the closure date on the landing
+  // page, but not the field again.
+  const signedEarlier = stored === "signed" && state === "idle";
 
   const card = (
     <aside
@@ -105,7 +131,7 @@ export function WindDown({ variant = "banner" }: { variant?: "banner" | "bar" })
           </p>
         </div>
 
-        {state !== "done" && (
+        {state !== "done" && !signedEarlier && (
           <form
             onSubmit={submit}
             className="flex w-full shrink-0 flex-col gap-2xs md:w-auto"
@@ -160,7 +186,7 @@ export function WindDown({ variant = "banner" }: { variant?: "banner" | "bar" })
           </form>
         )}
 
-        {state === "done" && (
+        {(state === "done" || signedEarlier) && (
           <p className="text-label shrink-0 text-foreground">You are on the list. One email at release.</p>
         )}
 
