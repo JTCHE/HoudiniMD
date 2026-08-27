@@ -9,6 +9,7 @@ import { Carousel } from "@/components/root/carousel/Carousel";
 import { FeatureCards } from "@/components/root/feature-cards/FeatureCards";
 import { QUICK_LINKS, resolveCollection } from "@/lib/landing/collections";
 import { ViewRecorder } from "@/components/ViewRecorder";
+import { WindDown } from "@/components/root/WindDown";
 
 /**
  * The landing page is static except for one thing: which curated collection the
@@ -101,6 +102,10 @@ export default function Home() {
 
       <div className="relative flex flex-1 flex-col justify-center py-xl lg:py-lg">
         <div className="mx-auto flex w-full max-w-page flex-col gap-md px-page-x md:gap-lg">
+          {/* Above the title, not under it. The site closes, and that outranks
+              the description of what the site is. */}
+          <WindDown />
+
           <header className="flex flex-col gap-2xs">
             <h1 className="flex items-center gap-sm text-display font-semibold text-foreground">
               HoudiniMD

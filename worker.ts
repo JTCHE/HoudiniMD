@@ -3,6 +3,7 @@ import { recordApiSearch, recordPageView, recordSearchBeacon, recordViewBeacon }
 import { pruneAnalytics } from "./telemetry/prune";
 import type { D1Database } from "./telemetry/types";
 import { iconNeedsRefresh, iconResponse, refreshIcon, validIconPath, type IconBucket } from "./lib/icon-cache";
+import { handleWaitlist } from "./lib/waitlist";
 
 // DOQueueHandler is not exported: its class is deleted while the routes are
 // frozen, and a deleted class must not stay exported. See wrangler.jsonc.
@@ -65,6 +66,9 @@ const worker = {
     }
     const beacon = recordSearchBeacon(request, url, env, ctx) ?? recordViewBeacon(request, url, env, ctx);
     if (beacon) return beacon;
+
+    const waitlist = await handleWaitlist(request, url, env);
+    if (waitlist) return waitlist;
 
     if (url.pathname.startsWith("/_next/static/") && request.method === "GET") {
       const archived = await env.NEXT_INC_CACHE_R2_BUCKET.get(`static-archive${url.pathname}`).catch(() => null);

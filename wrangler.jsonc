@@ -25,6 +25,13 @@
       "namespace_id": "1001",
       "simple": { "limit": 20, "period": 60 },
     },
+    // Waitlist signups per address. A person signs up once; three tries covers
+    // a typo and a retry. See lib/waitlist/index.ts.
+    {
+      "name": "WAITLIST_LIMITER",
+      "namespace_id": "1002",
+      "simple": { "limit": 3, "period": 60 },
+    },
   ],
   // Hard per-invocation CPU ceiling. Measured P50 is ~52ms and P99 ~1.16s, so
   // 200ms serves a normal page and kills a runaway one. This is the only hard
