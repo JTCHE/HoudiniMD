@@ -88,7 +88,14 @@ export function WindDown({ variant = "banner" }: { variant?: "banner" | "bar" })
       const body = (await response.json().catch(() => ({}))) as { error?: string };
       if (!response.ok) {
         setState("error");
-        setMessage(body.error ?? "That did not work. Try again.");
+        // The status is the reliable part. A 429 from the edge, rather than
+        // from the worker, carries an HTML body and no `error` to read.
+        setMessage(
+          body.error ??
+            (response.status === 429
+              ? "Too many tries. Wait a minute."
+              : "That did not work. Try again."),
+        );
         return;
       }
       setState("done");
@@ -180,7 +187,9 @@ export function WindDown({ variant = "banner" }: { variant?: "banner" | "bar" })
                 skip, and the promise is the part that earns the address. A
                 failure speaks in the same place, beside the control that
                 caused it, so the notice copy above never moves. */}
-            <p className={cn("text-caption", state === "error" ? "text-destructive" : "text-muted-foreground")}>
+            {/* Not cn(): tailwind-merge does not know the custom `text-caption` size,
+                reads it as a colour, and lets `text-muted-foreground` evict it. */}
+            <p className={`text-caption ${state === "error" ? "text-destructive" : "text-muted-foreground"}`}>
               {state === "error" ? message : "One email at release. Nothing else, ever."}
             </p>
           </form>
