@@ -26,6 +26,10 @@ Project information: @README.md
   comment in the code instead.
 - Do not record a fact that goes stale: page counts, version numbers, file
   inventories, benchmark tables, audit results. Point to the code that holds it.
+- Do not publish, commit, or push SideFX content or any other copyrighted
+  material. This includes doc pages, test fixtures made from doc pages, images
+  from the Houdini install, and examples quoted at length. Make test fixtures on
+  the machine that runs the test and keep them out of version control.
 - Do not add a file to this repo unless the product needs it. Scratch work goes
   in a temporary directory.
 - Do not commit SQL migration files. Write them in `migrations/`, apply, then delete

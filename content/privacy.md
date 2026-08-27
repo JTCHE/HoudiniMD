@@ -22,6 +22,17 @@ If you use search, we also record the text you typed, where you searched from, t
 
 This data helps us fix broken pages, see which docs need work, and understand real usage. It is the same kind of basic traffic log most web servers keep. Under the GDPR, our lawful basis is legitimate interest: we need basic traffic figures to keep the site working and useful.
 
+## The app release list
+
+HoudiniMD closes on 1 January 2027. If you give us your email address to hear about the desktop app that replaces it, we store:
+
+- The address you typed, in readable form. We need it readable to send you the mail.
+- The date you gave it.
+- The page you were on when you gave it, so we know which parts of the docs matter to the people waiting.
+- Your country, from your connection.
+
+We send one email, when the app is released. We do not send anything else, we do not sell the list, and we do not pass it to anyone. Under the GDPR, our lawful basis is your consent, given when you submit the form. Ask us to remove your address at any time and we will.
+
 ## What we do not collect
 
 - No cookies.
@@ -37,11 +48,15 @@ HoudiniMD stores two small things in your browser, on your device only. Neither 
 - **Search history for ranking.** When you open a search result, your browser remembers the search term and the page you picked, using `localStorage`. This makes your next search better. It never leaves your browser.
 - **An offline page cache.** Your browser caches recently viewed doc pages using a service worker, so repeat visits load faster. This is a copy of the page content, not personal data.
 
-You can clear both at any time by clearing your browser's site data for HoudiniMD.
+- **Whether you closed the closing notice.** If you dismiss the banner about the site closing, your browser remembers that so it stays closed. It never leaves your browser.
+
+You can clear all three at any time by clearing your browser's site data for HoudiniMD.
 
 ## How long we keep it
 
 We keep server logs for 90 days. After that, they are deleted automatically.
+
+We keep the app release list until the release mail is sent, and then we delete it.
 
 ## Who we share it with
 
