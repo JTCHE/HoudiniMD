@@ -69,7 +69,9 @@ export function WindDown({ variant = "banner" }: { variant?: "banner" | "bar" })
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ email, page: pathname, website: form.get("website") ?? "" }),
       });
-      const body = (await response.json()) as { error?: string };
+      // Not every answer is JSON. An edge error or a stale service worker
+      // replies with an HTML page, and response.json() throws on it.
+      const body = (await response.json().catch(() => ({}))) as { error?: string };
       if (!response.ok) {
         setState("error");
         setMessage(body.error ?? "That did not work. Try again.");
@@ -99,11 +101,7 @@ export function WindDown({ variant = "banner" }: { variant?: "banner" | "bar" })
             </strong>
           </p>
           <p className="text-meta text-muted-foreground whitespace-pre-line">
-            {state === "done"
-              ? "..."
-              : state === "error"
-                ? message
-                : "SideFX owns the documentation and did not give permission to host it.\nThis new app will read the docs already installed with Houdini."}
+            {"SideFX owns the documentation and did not give permission to host it.\nThis new app will read the docs already installed with Houdini."}
           </p>
         </div>
 
@@ -153,9 +151,17 @@ export function WindDown({ variant = "banner" }: { variant?: "banner" | "bar" })
             </div>
             {/* Under the field, where the reader looks last before they type.
                 Beside the rest of the copy it read as one more sentence to
-                skip, and the promise is the part that earns the address. */}
-            <p className="text-caption text-muted-foreground">One email at release. Nothing else, ever.</p>
+                skip, and the promise is the part that earns the address. A
+                failure speaks in the same place, beside the control that
+                caused it, so the notice copy above never moves. */}
+            <p className={cn("text-caption", state === "error" ? "text-destructive" : "text-muted-foreground")}>
+              {state === "error" ? message : "One email at release. Nothing else, ever."}
+            </p>
           </form>
+        )}
+
+        {state === "done" && (
+          <p className="text-label shrink-0 text-foreground">You are on the list. One email at release.</p>
         )}
 
         {/* Absolute below md, where it floats over the copy and the copy makes
