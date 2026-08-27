@@ -1,0 +1,28 @@
+[package]
+name = "houdinimd"
+version = "0.1.0"
+description = "Version-exact Houdini documentation, offline and local."
+authors = ["JTCHE"]
+edition = "2024"
+rust-version = "1.85"
+
+[lib]
+# The desktop binary and any future test harness both link this.
+name = "houdinimd_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true
