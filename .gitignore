@@ -93,3 +93,9 @@ shots/
 # database files
 *.db
 *.sql*
+# vite
+/dist
+
+# rust / tauri
+/src-tauri/target
+/src-tauri/gen

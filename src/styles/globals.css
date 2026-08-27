@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+/* Colour and font tokens move here from the site, one copy, no import back.
+   See specs: Local — Repository Split, step 3. */
+html {
+  color-scheme: light dark;
+  background: var(--background);
+}
+
+:root {
+  --background: #ffffff;
+  --foreground: #101010;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0b0b0b;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
