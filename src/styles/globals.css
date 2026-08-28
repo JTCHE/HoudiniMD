@@ -1,26 +1,1306 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@plugin "@tailwindcss/typography";
 
-/* Colour and font tokens move here from the site, one copy, no import back.
-   See specs: Local — Repository Split, step 3. */
+/* Hover only where a pointer can actually hover, so a tap on a phone does not
+   leave a chip or card stuck in its hover state until the next tap elsewhere. */
+@custom-variant pointer-hover {
+  @media (hover: hover) {
+    &:hover {
+      @slot;
+    }
+  }
+}
+
 html {
-  color-scheme: light dark;
+  scrollbar-gutter: stable;
   background: var(--background);
+  color-scheme: light dark;
+}
+
+@theme inline {
+  /* ── Spacing ladder ────────────────────────────────────────────────────
+     One ladder, consumed by name. Responsiveness lives in the media query on
+     the raw values below, not in per-component breakpoint classes. The small
+     steps are absolute because they are component-internal (a chip's padding
+     is the same physical size on any screen); only the large steps, which set
+     page rhythm, grow on wide viewports. */
+  --spacing-thin: var(--thin);
+  --spacing-light: var(--light);
+  --spacing-2xs: var(--2xs);
+  --spacing-xs: var(--xs);
+  --spacing-sm: var(--sm);
+  --spacing-ms: var(--ms);
+  --spacing-md: var(--md);
+  --spacing-lg: var(--lg);
+  --spacing-xl: var(--xl);
+  --spacing-2xl: var(--2xl);
+  --spacing-3xl: var(--3xl);
+  --spacing-4xl: var(--4xl);
+
+  /* ── Content widths ───────────────────────────────────────────────────
+     Named, because the spacing ladder above shares its names with Tailwind's
+     built-in container scale (`sm`, `md`, `4xl`, …) and shadows it — a
+     `max-w-4xl` would silently resolve to the 128px spacing step, not 56rem.
+     Ask for the thing you mean instead: `max-w-page` is the content column
+     every page and the footer share. */
+  --container-page: 56rem;
+  --container-overlay: 32rem;
+
+  /* ── Type ladder ───────────────────────────────────────────────────────
+     Six roles, each carrying its own leading and tracking. Deliberately does
+     NOT redefine Tailwind's text-xs…text-xl scale, which the docs pages use. */
+  --text-display: var(--type-display);
+  --text-display--line-height: 0.92;
+  --text-display--letter-spacing: -0.045em;
+  --text-lede: var(--type-lede);
+  --text-lede--line-height: 1.45;
+  --text-lede--letter-spacing: -0.011em;
+  --text-title: var(--type-title);
+  --text-title--line-height: 1.2;
+  --text-title--letter-spacing: -0.01em;
+  --text-label: var(--type-label);
+  --text-label--line-height: 1.3;
+  --text-label--letter-spacing: -0.01em;
+  --text-meta: var(--type-meta);
+  --text-meta--line-height: 1.35;
+  --text-caption: var(--type-caption);
+  --text-caption--line-height: 1.35;
+
+  /* ── Neutral ramp ─────────────────────────────────────────────────────
+     The single palette. 0 is the page, 950 is the ink; the whole ramp flips
+     in dark mode so a component written against it needs no dark: variant.
+     The semantic shadcn tokens below are expressed on top of this ramp, so
+     there is one palette rather than two. */
+  --color-neutral-0: var(--neutral-0);
+  --color-neutral-50: var(--neutral-50);
+  --color-neutral-100: var(--neutral-100);
+  --color-neutral-200: var(--neutral-200);
+  --color-neutral-300: var(--neutral-300);
+  --color-neutral-400: var(--neutral-400);
+  --color-neutral-500: var(--neutral-500);
+  --color-neutral-600: var(--neutral-600);
+  --color-neutral-700: var(--neutral-700);
+  --color-neutral-800: var(--neutral-800);
+  --color-neutral-900: var(--neutral-900);
+  --color-neutral-950: var(--neutral-950);
+
+  /* Brand. Fixed in both themes — it is the one colour that identifies the
+     product, so it must not shift when the ramp flips. */
+  --color-brand: var(--brand);
+  --color-brand-bright: var(--brand-bright);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-plate: var(--brand-plate);
+
+  /* Surfaces and controls, named by elevation rather than by colour. */
+  --color-surface: var(--surface);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-elevated-top: var(--elevated-top);
+  --color-elevated-bottom: var(--elevated-bottom);
+  --color-elevated-edge: var(--elevated-edge);
+  --color-control-top: var(--control-top);
+  --color-control-bottom: var(--control-bottom);
+  --color-control-edge: var(--control-edge);
+  --color-control-foreground: var(--control-foreground);
+  --color-hairline: var(--hairline);
+  --color-control-sheen: var(--control-sheen);
+
+  --shadow-field: var(--elevation-field);
+  --shadow-keycap: var(--elevation-keycap);
+  --shadow-control: var(--elevation-control);
+  --shadow-pane: var(--elevation-pane);
+
+  --ease-out-quint: var(--easing-quint);
+  --default-transition-duration: var(--duration-base);
+  --default-transition-timing-function: var(--ease-out-quint);
+
+  /* Page gutter — SSoT for horizontal padding on page-width containers.
+     Same `px-page-x` class everywhere; only --page-x below shifts per media query. */
+  --spacing-page-x: var(--page-x);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
 }
 
 :root {
-  --background: #ffffff;
-  --foreground: #101010;
+  --page-x: 1.5rem;
+  --radius: 8px;
+
+  /* ── Base ladder values (small screens) ──────────────────────────────── */
+  --thin: 0.25px;
+  --light: 0.5px;
+  --2xs: 2px;
+  --xs: 4px;
+  --sm: 8px;
+  --ms: 12px;
+  --md: 16px;
+  --lg: 24px;
+  --xl: 32px;
+  --2xl: 40px;
+  --3xl: 56px;
+  --4xl: 72px;
+
+  --type-display: 34px;
+  --type-lede: 15px;
+  --type-title: 14px;
+  --type-label: 13px;
+  --type-meta: 12px;
+  --type-caption: 11px;
+
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --duration-slow: 420ms;
+  --easing-quint: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* ── Neutral ramp — light ─────────────────────────────────────────────── */
+  --neutral-0: oklch(1 0 0);
+  --neutral-50: oklch(0.985 0 0);
+  --neutral-100: oklch(0.97 0 0);
+  --neutral-200: oklch(0.922 0 0);
+  --neutral-300: oklch(0.87 0 0);
+  --neutral-400: oklch(0.708 0 0);
+  --neutral-500: oklch(0.556 0 0);
+  --neutral-600: oklch(0.44 0 0);
+  --neutral-700: oklch(0.35 0 0);
+  --neutral-800: oklch(0.269 0 0);
+  --neutral-900: oklch(0.205 0 0);
+  --neutral-950: oklch(0.145 0 0);
+
+  /* Brand — #f05f04 converted to OKLCH. Identical in both themes. */
+  --brand: oklch(0.664 0.195 43.1);
+  --brand-bright: oklch(0.71 0.19 43.1);
+  --brand-foreground: oklch(0.985 0 0);
+
+  /* Surfaces.
+
+     Everything below names a step of the ramp rather than a fresh colour, so
+     the palette stays one ladder. Elevation is the one thing that cannot be
+     derived: a light theme raises a surface toward white and a dark theme
+     raises it away from black, so the two themes pick DIFFERENT steps for the
+     same role. That is why each of these appears again in the dark block —
+     the value flips role, not just lightness. */
+  --surface: var(--neutral-0);
+  --surface-sunken: var(--neutral-100);
+  --hairline: oklch(0 0 0 / 9%);
+
+  /* A keycap and any other physically-raised chip: lit from the top, with a
+     hard bottom edge that reads as thickness rather than as a blur. */
+  --elevated-top: var(--neutral-0);
+  --elevated-bottom: var(--neutral-100);
+  --elevated-edge: var(--neutral-300);
+
+  /* The primary control (Paste & Search). Dark in light mode, light in dark
+     mode, so it always carries the strongest contrast on the page. Its label
+     is `--neutral-50` in both themes — the ramp flip alone gets that right. */
+  --control-top: var(--neutral-800);
+  --control-bottom: var(--neutral-900);
+  --control-edge: var(--neutral-800);
+  --control-foreground: var(--neutral-50);
+
+  --control-sheen: oklch(1 0 0 / 12%);
+
+  /* The plate the app mark is drawn on. Deliberately off the ramp and unique:
+     it is one step of contrast below the page in either theme, which is the
+     only thing that keeps a rounded-square icon visible against a page of its
+     own colour. #F8F8F8 in light, its mirror at HSV value 3% in dark. */
+  --brand-plate: oklch(0.979 0 0);
+
+  --elevation-field: 0 18px 50px 0 oklch(0 0 0 / 10%);
+  --elevation-keycap: 0 2px 0 0 var(--elevated-edge), 0 1px 1.5px 0 oklch(0 0 0 / 10%);
+  --elevation-control: 0 1px 0.75px 0 oklch(0 0 0 / 28%), 0 1px 2px 0 oklch(0 0 0 / 16%);
+  --elevation-pane: 0 4px 12px 0 oklch(0 0 0 / 8%);
+
+  /* ── Semantic tokens, expressed on the ramp above ─────────────────────── */
+  --background: var(--neutral-0);
+  --foreground: var(--neutral-950);
+  --card: var(--neutral-0);
+  --card-foreground: var(--neutral-950);
+  --popover: var(--neutral-0);
+  --popover-foreground: var(--neutral-950);
+  --primary: var(--neutral-900);
+  --primary-foreground: var(--neutral-50);
+  --secondary: var(--neutral-100);
+  --secondary-foreground: var(--neutral-900);
+  --muted: var(--neutral-100);
+  --muted-foreground: var(--neutral-500);
+  --accent: var(--neutral-100);
+  --accent-foreground: var(--neutral-900);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0 0 0 / 10%);
+  --input: var(--neutral-200);
+  --ring: var(--neutral-400);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+/* Wide screens — only the layout-rhythm steps and the display type grow. The
+   component-internal steps stay put, so a chip is the same size on a phone and
+   on a 27" display. */
+@media (width >= 64rem) {
+  :root {
+    --xl: 40px;
+    --2xl: 56px;
+    --3xl: 80px;
+    --4xl: 128px;
+
+    --type-display: 66px;
+    --type-lede: 19px;
+    --type-label: 13.5px;
+    --type-meta: 12.5px;
+    --type-caption: 11.5px;
+  }
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0b0b0b;
-    --foreground: #ededed;
+    /* The ramp reverses. Everything expressed against it follows for free. */
+    --neutral-0: oklch(0.145 0 0);
+    --neutral-50: oklch(0.175 0 0);
+    --neutral-100: oklch(0.205 0 0);
+    --neutral-200: oklch(0.269 0 0);
+    --neutral-300: oklch(0.35 0 0);
+    --neutral-400: oklch(0.44 0 0);
+    --neutral-500: oklch(0.556 0 0);
+    --neutral-600: oklch(0.708 0 0);
+    --neutral-700: oklch(0.87 0 0);
+    --neutral-800: oklch(0.922 0 0);
+    --neutral-900: oklch(0.97 0 0);
+    --neutral-950: oklch(0.985 0 0);
+
+    /* Elevation is the one thing that does not mirror: a light theme raises a
+       surface by making it whiter than the page, a dark theme by making it
+       lighter than the page. Both are "one step up", but not the same ramp
+       index — so these pick their own steps rather than being derived. */
+    --surface: var(--neutral-100);
+    /* Sunken means below the page, in both themes: the light theme puts the
+       field one step under white, so the dark theme puts it one step under the
+       page rather than one step over it. The ramp has no step below
+       `--neutral-0`, which IS the dark page, so this one is stated. */
+    --surface-sunken: var(--neutral-0);
+    --hairline: oklch(1 0 0 / 10%);
+
+    --elevated-top: var(--neutral-200);
+    --elevated-bottom: var(--neutral-100);
+    --elevated-edge: var(--neutral-0);
+
+    --control-top: var(--neutral-900);
+    --control-bottom: var(--neutral-700);
+    --control-edge: oklch(1 0 0 / 18%);
+
+    --control-sheen: oklch(0 0 0 / 10%);
+
+    /* A wide black shadow on a near-black page is invisible; what reads as
+       depth here is the field's own edge pair. */
+    --elevation-field: 0 12px 28px 0 oklch(0 0 0 / 45%);
+    --elevation-pane: 0 4px 12px 0 oklch(0 0 0 / 45%);
+
+    --brand-plate: oklch(0.134 0 0);
+
+    --card: var(--neutral-100);
+    --popover: var(--neutral-100);
+    --primary: var(--neutral-800);
+    --primary-foreground: var(--neutral-100);
+    --secondary: var(--neutral-200);
+    --muted: var(--neutral-200);
+    --accent: var(--neutral-200);
+    --destructive: oklch(0.704 0.191 22.216);
+    --border: oklch(1 0 0 / 15%);
+    --input: oklch(1 0 0 / 15%);
+    --ring: var(--neutral-500);
+    --chart-1: oklch(0.488 0.243 264.376);
+    --chart-2: oklch(0.696 0.17 162.48);
+    --chart-3: oklch(0.769 0.188 70.08);
+    --chart-4: oklch(0.627 0.265 303.9);
+    --chart-5: oklch(0.645 0.246 16.439);
+    --sidebar: oklch(0.205 0 0);
+    --sidebar-foreground: oklch(0.985 0 0);
+    --sidebar-primary: oklch(0.488 0.243 264.376);
+    --sidebar-primary-foreground: oklch(0.985 0 0);
+    --sidebar-accent: oklch(0.269 0 0);
+    --sidebar-accent-foreground: oklch(0.985 0 0);
+    --sidebar-border: oklch(1 0 0 / 10%);
+    --sidebar-ring: oklch(0.556 0 0);
   }
 }
 
-body {
-  background: var(--background);
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+    scrollbar-width: thin;
+    scrollbar-color: gray transparent;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Text selection — inverted color scheme, dark mode handled via CSS vars */
+::selection {
+  background: var(--foreground);
+  color: var(--background);
+}
+
+.markdown-media {
+  margin-inline: -1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.markdown-video {
+  --video-font-family: inherit;
+  --video-focus-ring-color: var(--ring);
+  --media-button-color: var(--muted-foreground);
+  --media-button-icon-size: 50%;
+  --media-button-hover-bg: transparent;
+  --media-button-hover-transform: none;
+  --media-button-touch-hover-bg: transparent;
+  --media-time-color: var(--muted-foreground);
+  --media-time-divider-color: var(--muted-foreground);
+}
+
+/* vidstack's own video.css layout gives [data-media-player] a second border,
+   radius, and black background (`--video-bg`, a one-off token this codebase
+   doesn't otherwise use) — a box nested inside .markdown-media, which already
+   owns the border, radius, and overflow:hidden that frame every markdown
+   figure. Two boxes with independently-rounded corners show as a thin black
+   line at the edge. Zero the inner one out so .markdown-media is the only
+   frame, and reuse --muted (DocImageClient's own figure background) instead
+   of introducing another token. */
+.markdown-video[data-media-player][data-layout="video"] {
+  background-color: var(--muted);
+}
+.markdown-video[data-media-player][data-layout="video"]:not([data-fullscreen]) {
+  border: none;
+  border-radius: 0;
+}
+
+/* vidstack's own base.css inherits a 16/9 aspect-ratio down onto the <video>
+   tag itself (height: auto + aspect-ratio: inherit), so it sizes independent
+   of the correctly-ratioed wrapper div above it — a portrait clip renders as
+   a tiny 16:9 rectangle inside a tall, mostly-black box. Filling the already
+   correct box instead of re-deriving a ratio fixes it for every ratio. */
+.markdown-video [data-media-provider] video {
+  height: 100%;
+}
+/* Same neutral surface as DocImageClient's figure — matches even the sliver
+   of provider background a probe miss can still expose around the frame. */
+.markdown-video [data-media-provider] {
+  background-color: var(--muted);
+}
+
+.markdown-video .vds-button {
+  transition: color 180ms ease;
+}
+
+.markdown-video .vds-button:hover {
   color: var(--foreground);
-  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+
+.markdown-video .vds-play-button:is([data-paused], [data-ended]) svg {
+  transform: translateX(1px);
+}
+
+.markdown-video .vds-video-layout:not([data-sm]) .vds-controls-group:last-child {
+  padding-left: 8px;
+}
+
+.markdown-media + figcaption {
+  margin-inline: -1rem;
+}
+
+/* Small comparison thumbnails SideFX groups side by side in the source
+   (a shared <p>, or a .row of .col_* divs) — see imageGroupInline /
+   imageGroupColumns in turndown-rules.ts. Every figure conforms to the
+   shortest image in the group (--image-group-height, set from probed
+   dimensions in createDivComponent) instead of stacking at its own
+   height, which used to give the row a "stairs" edge. */
+.image-group {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-evenly;
+  gap: 0.75rem;
+  margin-block: 1.5rem;
+  /* min() so the row shrinks on narrow screens instead of forcing
+     desktop-width images that overflow and wrap into an overlapping mess. */
+  height: min(var(--image-group-height, 260px), 26vw);
+}
+/* Exactly 2 images: space-evenly stretches the gap too wide — pin it instead. */
+.image-group:has(> figure:nth-child(2):last-child) {
+  justify-content: center;
+  gap: var(--spacing-xl);
+}
+.image-group figure {
+  flex: 0 0 auto;
+  height: 100%;
+  margin: 0;
+}
+.image-group .markdown-media {
+  height: 100%;
+  width: auto;
+  max-width: none;
+  margin: 0;
+}
+.image-group .markdown-media img {
+  height: 100%;
+  width: auto;
+}
+.image-group .markdown-media + figcaption {
+  margin-inline: 0;
+  padding-inline: 0;
+  text-align: center;
+}
+
+/* ── Syntax highlighting (hljs / rehype-highlight) ─────────────────────── */
+/* Shared by fenced examples and VEX signature cards. */
+.code-panel {
+  --code-copy-clearance: 3rem;
+  background: oklch(0.13 0 0);
+  border: 1px solid oklch(1 0 0 / 10%);
+  border-radius: var(--radius-lg);
+  overflow-x: auto;
+}
+
+/* Reset: scoped to code elements our renderer outputs (always have a class attr, even if empty) */
+pre code[class] * {
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+pre code[class] {
+  display: block;
+  background: transparent !important;
+  border: none;
+  padding: 1rem 1.25rem;
+  color: oklch(0.88 0 0);
+  font-size: 0.84em;
+  line-height: 1.7;
+}
+
+.hljs-keyword,
+.vex-tk-out {
+  color: oklch(0.72 0.14 245);
+  font-weight: 600;
+}
+.hljs-type,
+.hljs-built_in,
+.vex-tk-type {
+  color: oklch(0.66 0.08 242.84);
+}
+.hljs-number,
+.hljs-literal {
+  color: oklch(0.8 0.13 55);
+}
+.hljs-string {
+  color: oklch(0.74 0.12 148);
+}
+.hljs-comment {
+  color: oklch(0.62 0 0);
+  font-style: italic;
+}
+.hljs-function .hljs-title,
+.hljs-title.function_,
+.vex-tk-fn {
+  color: oklch(0.71 0.13 308.92);
+}
+.hljs-params,
+.hljs-variable,
+.vex-tk-arg {
+  color: var(--foreground);
+}
+.hljs-operator,
+.hljs-punctuation,
+.vex-tk-punct {
+  color: oklch(0.75 0 0);
+}
+.hljs-attr,
+.hljs-attribute {
+  color: oklch(0.74 0.12 148);
+}
+
+/* ── kbd / key icon badges ──────────────────────────────────────────────── */
+kbd {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1em 0.45em;
+  background: var(--muted);
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 3px;
+  font-family: inherit;
+  font-size: 0.82em;
+  font-weight: 600;
+  color: var(--foreground);
+  white-space: nowrap;
+  line-height: 1.5;
+}
+
+/* ── UI kbd variants (SearchButton hint) ─────────────────────────────────── */
+kbd.kbd-button {
+  transition:
+    transform 150ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 150ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+button:active kbd.kbd-button {
+  transform: translateY(1px);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.15);
+}
+
+/* Hide ⌘K hint on touch/coarse pointer devices — CSS-only, no JS state, no layout shift */
+@media (pointer: coarse) {
+  .search-kbd-hint {
+    display: none;
+  }
+}
+
+/* ── Skeleton shimmer ────────────────────────────────────────────────────── */
+@keyframes sk-shimmer {
+  to {
+    transform: translateX(150%);
+  }
+}
+
+.sk {
+  position: relative;
+  overflow: hidden;
+}
+
+/* currentColor-relative, not a fixed white: at 22% white over the near-white
+   light-mode --muted (L 0.97), the old sweep was nearly invisible. Mixing
+   against --foreground instead keeps it visible in both themes. --sk-delay
+   lets callers offset the loop per-element (see DocsSkeleton) so a row of
+   bars shimmers as a loose ripple instead of one mechanical wipe. Linear,
+   not the site's --easing-quint: that ease-out curve front-loads all the
+   visible motion into the first instant, then crawls off-screen for the
+   rest of the loop — reads as a burst followed by dead air. A constant-speed
+   sweep reads as one continuous pass. */
+.sk::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-150%);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in oklch, var(--foreground) 14%, transparent) 50%,
+    transparent 100%
+  );
+  animation: sk-shimmer 2.6s linear infinite;
+  animation-delay: var(--sk-delay, 0s);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sk::after {
+    animation: none;
+  }
+}
+
+/* ── Print — A4 page box, tighter listicles/headings, no dangling breaks ── */
+@page {
+  size: A4;
+  /* margin stays 0 on both axes — verified empirically (headless Chrome
+     print-to-pdf) that @page's vertical margin does NOT repeat on interior
+     pages here, only the first; and the horizontal axis is the one some
+     print-dialog margin overrides can zero out entirely regardless. Real
+     margin on every page — both axes — comes from PrintPagination.tsx
+     instead, which inserts actual spacer elements at every break it forces. */
+  margin: 0;
+}
+
+:root {
+  /* Single source for the print page-margin value, read by the
+     [data-print-measure] rule below. */
+  --print-page-x: 1.3cm;
+}
+
+/* Print-time spacing/break rules. Gated by [data-print-measure] rather than
+   `@media print` — PrintPagination.tsx sets that attribute on beforeprint and
+   only clears it on afterprint, so it's already a reliable "printing is
+   active" flag, and using it here (instead of a separate @media print block)
+   means the styles measurement reads are byte-for-byte what real print uses.
+   A second, @media-print-only copy of these rules previously existed for the
+   actual print render — but since measurement only saw the un-tightened
+   screen margins, computed heights ran larger than the real printed ones,
+   forcing page breaks earlier than necessary and leaving avoidable gaps. */
+:root[data-print-measure] {
+  /* @page margin is unreliable across browsers (Chrome's print-dialog
+     margin dropdown can override it entirely; Safari ignores it and
+     hardcodes its own) — so @page stays at 0 and this content padding
+     is the single, physical-unit source of the print margin instead. */
+  --page-x: var(--print-page-x);
+}
+
+/* main/footer are capped at max-w-page (56rem ≈ 896px) — wider than A4's
+   printable width even after margins. Without this, PrintPagination.tsx
+   measures text wrapped at that wider on-screen width (fewer, longer
+   lines) while the real print pass wraps it at A4's ~695px (more, shorter
+   lines) — every paragraph/cell/row height it computes runs short of the
+   real printed one, so its break/margin decisions drift off actual
+   content. Capping the width here makes measurement-time wrapping match
+   print-time wrapping exactly. */
+:root[data-print-measure] .max-w-page {
+  max-width: calc(210mm - 2 * var(--print-page-x)) !important;
+}
+
+/* DocsPageContent's shell (header/content/footer) is a flex column so the
+   footer sticks to the viewport bottom on an empty page on SCREEN. Browsers'
+   support for fragmenting flex containers across print pages is inconsistent
+   (Chromium in particular can ignore explicit heights on a flex sibling), so
+   the manually-measured spacer PrintPagination.tsx inserts to push the
+   footer down doesn't reliably take effect inside it. Print doesn't need the
+   sticky-footer behavior anyway — falling back to plain block flow sidesteps
+   the fragmentation quirk entirely. */
+:root[data-print-measure] .docs-shell {
+  display: block;
+}
+
+:root[data-print-measure] .prose :where(li) {
+  margin-top: 0.15em !important;
+  margin-bottom: 0.15em !important;
+  break-inside: avoid;
+}
+
+:root[data-print-measure] .prose :where(li > p) {
+  margin-bottom: 0.1em !important;
+}
+
+:root[data-print-measure] .prose :where(li > p + p) {
+  margin-top: 0.1em !important;
+}
+
+:root[data-print-measure] .prose :where(h1, h2, h3, h4, h5, h6) {
+  margin-top: 0.9em !important;
+  margin-bottom: 0.4em !important;
+  /* A heading stranded alone at the bottom of a page reads as a mistake —
+     force the browser to carry it (and whatever follows) to the next page
+     instead of breaking right after it. */
+  break-after: avoid-page;
+  break-inside: avoid;
+}
+
+:root[data-print-measure] .prose :where(ul, ol) {
+  margin-top: 0.4em !important;
+  margin-bottom: 0.4em !important;
+}
+
+:root[data-print-measure] .prose :where(p) {
+  margin-top: 0.4em !important;
+  margin-bottom: 0.4em !important;
+}
+
+/* Tables: let the table itself span pages (forcing the whole thing to fit
+   on one page would leave huge blank gaps for the long parameter tables),
+   but never split a single row across the page break. */
+:root[data-print-measure] .not-prose table {
+  break-inside: auto;
+}
+:root[data-print-measure] .not-prose table tr {
+  break-inside: avoid;
+}
+/* <thead> auto-repeats at the top of every page a table spans — the browser
+   does this natively, no JS needed. Padding it gives every repeat a real
+   top margin for free, including the ones mid-document that PrintPagination
+   never sees coming (it can't predict exactly where the browser will
+   fragment a long table). Costs a bit of extra gap under the FIRST heading
+   too, since CSS can't tell "first" from "repeat" — worth it to kill the
+   stray blank spacer row this used to need. */
+:root[data-print-measure] .not-prose table thead th {
+  padding-top: calc(var(--print-page-x) + 0.5rem);
+}
+
+/* ── Anchor scroll offset — compensate for sticky header ────────────────── */
+/* --header-h is measured and published by DocsHeader: the header grows a row
+   when the breadcrumbs wrap, and the wrap point depends on the text, so the
+   offset has to follow the real element rather than a guessed constant. */
+/* Covers direct hash URLs. In-page TOC clicks scroll themselves (see
+   scrollToHeading): Safari honours scroll-margin only inside a scroll-snap
+   container, so on iOS this rule alone drops the heading under the header. */
+:is(h1, h2, h3, h4, h5, h6)[id] {
+  scroll-margin-top: calc(var(--header-h, 3.5rem) + 1.5rem);
+  /* Pre-15.4 iOS spelling of the same thing. */
+  scroll-snap-margin-top: calc(var(--header-h, 3.5rem) + 1.5rem);
+}
+
+@keyframes dropdown-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ── Floating TOC — each section title rises into the pill as you pass it ── */
+@keyframes toc-label-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.55rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.toc-label {
+  animation: toc-label-in 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toc-label {
+    animation: none;
+  }
+}
+
+/* ── Prose overrides ────────────────────────────────────────────────────── */
+.prose :where(pre):not(:where([class~="not-prose"] *)) {
+  background: oklch(0.13 0 0) !important;
+  padding: 0;
+}
+
+.prose :where(code):not(:where([class~="not-prose"] *))::before,
+.prose :where(code):not(:where([class~="not-prose"] *))::after {
+  content: none;
+}
+
+/* Monospace font everywhere code appears */
+.prose code,
+.prose pre code,
+pre code.hljs {
+  font-family: ui-monospace, "Geist Mono", "Fira Code", Menlo, Consolas, monospace !important;
+}
+
+/* Tight paragraph spacing inside list items — keep the link/description pair
+   close together so the gap between li siblings reads as the real hierarchy */
+.prose :where(li > p) {
+  margin-bottom: 0.2em !important;
+}
+
+.prose :where(li > p + p) {
+  margin-top: 0.2em !important;
+}
+
+/* Line-break spacing in table cells — give second+ lines a small top margin */
+.not-prose table td br,
+.not-prose table th br {
+  display: block;
+  margin-top: 1em;
+}
+
+/* Lists inside not-prose table cells — restore bullet/number styling stripped by not-prose */
+.not-prose table td ul,
+.not-prose table th ul {
+  list-style-type: disc;
+  padding-left: 1.25em;
+  margin: 0.25em 0;
+}
+
+.not-prose table td ol,
+.not-prose table th ol {
+  list-style-type: decimal;
+  padding-left: 1.25em;
+  margin: 0.25em 0;
+}
+
+.not-prose table td li + li,
+.not-prose table th li + li {
+  margin-top: 0.5em;
+}
+
+/* Callouts: single source of truth. ONE element-agnostic component. A block
+   callout is a blockquote.callout; an in-cell callout is a span.callout emitted
+   by the converter (markdown table cells cannot hold a blockquote). Both are the
+   same component: same surface, rim, icon, title, accents. Type modifiers
+   (callout-note/-tip/-warning/-important/-caution) only set the callout-color
+   and callout-icon tokens; everything else is shared. */
+.callout {
+  /* default = note */
+  --callout-color: oklch(0.62 0.13 250);
+  --callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 16v-4'/%3E%3Cpath d='M12 8h.01'/%3E%3C/svg%3E");
+  --callout-surface: color-mix(in oklab, var(--callout-color) 4%, var(--card));
+  display: block;
+  /* Negative inline margin against the equal inline padding, so callout text
+     sits on the page's text axis and only the surface overhangs — matching
+     the code block and the VEX signature panel. */
+  margin: 1.25rem -1rem;
+  padding: 0.85rem 1rem;
+  border: none;
+  border-radius: var(--radius-xl);
+  background: var(--callout-surface);
+  font-size: 0.9rem;
+  color: var(--card-foreground);
+  /* Even rim: faint hairline all around + a whisper of top-left light. */
+  box-shadow:
+    inset 0 0 0 1px color-mix(in oklab, white 5%, transparent),
+    inset 1px 1px 0 0 color-mix(in oklab, white 3%, transparent),
+    inset -1px -1px 0 0 color-mix(in oklab, black 3%, transparent),
+    0 1px 2px 0 color-mix(in oklab, black 4%, transparent);
+}
+
+.callout .callout-title {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0 0 0.4rem;
+  font-weight: 600;
+  font-size: 0.82rem;
+  letter-spacing: 0.01em;
+  color: var(--callout-color);
+}
+
+.callout .callout-title::before {
+  content: "";
+  flex: none;
+  width: 1.05rem;
+  height: 1.05rem;
+  background-color: var(--callout-color);
+  -webkit-mask: var(--callout-icon) center / contain no-repeat;
+  mask: var(--callout-icon) center / contain no-repeat;
+}
+
+.callout > :not(.callout-title):first-of-type {
+  margin-top: 0;
+}
+.callout > :last-child {
+  margin-bottom: 0;
+}
+.callout p {
+  margin: 0.4rem 0;
+}
+/* The code block's own page-axis overhang (-mx-5.25) belongs outside callouts:
+   here the callout's rim is already the frame, so the panel sits flush inside
+   it instead of poking through. */
+.callout > .not-prose {
+  margin-inline: 0;
+}
+.callout a {
+  color: var(--callout-color);
+}
+.callout code {
+  background: color-mix(in oklab, var(--callout-color) 12%, var(--background));
+}
+
+/* Type modifiers — tokens only, element-agnostic. */
+.callout-tip {
+  --callout-color: oklch(0.6 0.14 150);
+  --callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5'/%3E%3Cpath d='M9 18h6'/%3E%3Cpath d='M10 22h4'/%3E%3C/svg%3E");
+}
+.callout-warning {
+  --callout-color: oklch(0.7 0.15 75);
+  --callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z'/%3E%3Cpath d='M12 9v4'/%3E%3Cpath d='M12 17h.01'/%3E%3C/svg%3E");
+}
+.callout-important {
+  --callout-color: oklch(0.6 0.18 300);
+  --callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7.9 20A9 9 0 1 0 4 16.1L2 22Z'/%3E%3Cpath d='M12 8v4'/%3E%3Cpath d='M12 16h.01'/%3E%3C/svg%3E");
+}
+.callout-caution {
+  --callout-color: oklch(0.62 0.2 25);
+  --callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15.3 2a2 2 0 0 1 1.4.6l4.7 4.7a2 2 0 0 1 .6 1.4v6.6a2 2 0 0 1-.6 1.4l-4.7 4.7a2 2 0 0 1-1.4.6H8.7a2 2 0 0 1-1.4-.6l-4.7-4.7a2 2 0 0 1-.6-1.4V8.7a2 2 0 0 1 .6-1.4l4.7-4.7A2 2 0 0 1 8.7 2z'/%3E%3Cpath d='M12 8v4'/%3E%3Cpath d='M12 16h.01'/%3E%3C/svg%3E");
+}
+
+/* In-cell variant: identical component, just tighter to fit a table cell. */
+.not-prose table .callout {
+  margin: 0.5rem 0 0;
+  padding: 0.5rem 0.65rem;
+  font-size: 0.92em;
+}
+.not-prose table .callout:first-child {
+  margin-top: 0;
+}
+
+/* ── VEX function signatures ─────────────────────────────────────────────
+   Built by lib/markdown/remark-vex.ts, which only runs on pages under
+   vex/functions/. Signature structure and fenced examples use the shared
+   code-panel surface and semantic colour rules above;
+   VALUES live in prose and keep the ordinary pink inline-code chip. A token
+   never changes meaning by moving between them. */
+
+/* Signature panel. The negative inline margin (plus 1px for its own border)
+   against the equal inline padding puts the code glyphs on the same vertical
+   axis as the body text, with the frame sitting proud of it. The callout
+   component gets the same treatment below so both line up. */
+.vex-sig {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0 calc(-1rem - 1px) 1.5rem;
+}
+
+.vex-sig-row {
+  padding: 0.4rem 1rem;
+  font-family: ui-monospace, "Geist Mono", "Fira Code", Menlo, Consolas, monospace;
+  font-size: 0.82rem;
+  line-height: 1.7;
+  white-space: pre;
+  color: oklch(0.88 0 0);
+}
+.vex-sig-row:first-child {
+  padding-top: 0.7rem;
+}
+.vex-sig-row:last-child {
+  padding-bottom: 0.7rem;
+}
+
+@media (max-width: 640px), (pointer: coarse) {
+  pre code[class] {
+    width: max-content;
+    padding-right: calc(1.25rem + var(--code-copy-clearance));
+  }
+  .vex-sig-row {
+    width: max-content;
+    padding-right: calc(1rem + var(--code-copy-clearance));
+  }
+}
+
+/* A caption binds to the overloads directly above it. Without this grouping,
+   a page like xyzdist shows six signatures and three descriptions in one
+   undifferentiated stack. */
+.vex-sig-caption {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  font-size: 0.86rem;
+  line-height: 1.55;
+  color: oklch(0.72 0 0);
+  background: oklch(1 0 0 / 3%);
+  border-top: 1px solid oklch(1 0 0 / 7%);
+}
+.vex-sig-caption strong {
+  color: oklch(0.92 0 0);
+  font-weight: 600;
+}
+.vex-sig-caption a {
+  color: inherit;
+}
+
+/* GFM tables and the VEX arguments table below are the same component in two
+   shapes: row lines only (no outer frame, no column rules), no rule after the
+   last row, edge-to-edge via a negative margin against the cells' own inset.
+   One definition of that inset — --md — is what stops them drifting apart. */
+.md-table-wrap {
+  overflow-x: auto;
+  margin: 2rem calc(var(--md) * -1);
+}
+.md-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+.md-table th {
+  padding: 0.75rem var(--md);
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+.md-table td {
+  padding: 0.75rem var(--md);
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+  color: var(--foreground);
+}
+.md-table tr:last-child td {
+  border-bottom: 0;
+}
+/* Headerless source table: the blank header cells markdown requires are hidden. */
+.md-table-noheader thead {
+  display: none;
+}
+.md-table td code {
+  white-space: nowrap;
+}
+.md-table-declarations {
+  table-layout: fixed;
+}
+.md-table-declarations td code {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.md-table tr > :first-child {
+  width: 20%;
+  color: var(--muted-foreground);
+}
+.md-table-declarations tr > :nth-child(2):not(:last-child) {
+  width: 50%;
+}
+
+/* Section labels. One rule, so the gap above Arguments and above Returns is
+   identical by construction. */
+.prose p.vex-section-label {
+  margin: 2rem 0 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+/* Returns is a single line rather than a ruled table: more air above it to
+   separate it from the arguments, less below because there is no table edge. */
+.prose p.vex-section-label-returns {
+  margin-top: 2.5rem;
+  margin-bottom: 0.25rem;
+}
+
+/* Arguments. Two nested grids: a fixed type column and a fixed name column,
+   so every type is left-aligned on one axis and every name on another —
+   the same rhythm the signature has. 6.5rem fits every VEX type up to 14
+   characters; the rare three-way union wraps inside its own cell instead of
+   pushing the name column out of alignment. */
+.vex-args {
+  display: grid;
+  grid-template-columns: 16.5rem 1fr;
+  border-top: 1px solid var(--border);
+  margin: 0 calc(var(--md) * -1);
+}
+.vex-arg-sig,
+.vex-arg-desc {
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.vex-arg-sig:nth-last-child(-n + 2),
+.vex-arg-desc:nth-last-child(-n + 2) {
+  border-bottom: 0;
+}
+.vex-arg-sig {
+  display: grid;
+  grid-template-columns: 6.5rem 1fr;
+  align-items: start;
+  gap: 0 0.5rem;
+  padding-left: var(--md);
+  padding-right: 1.25rem;
+  font-family: ui-monospace, "Geist Mono", "Fira Code", Menlo, Consolas, monospace;
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+.vex-arg-type {
+  color: oklch(0.66 0.08 242.84);
+  overflow-wrap: anywhere;
+}
+.vex-arg-name {
+  color: var(--foreground);
+  /* font-weight: 600; */
+  overflow-wrap: anywhere;
+}
+.vex-arg-amp {
+  color: oklch(0.72 0.14 245);
+}
+.vex-arg-desc {
+  padding-right: var(--md);
+  font-size: 0.9rem;
+  color: var(--muted-foreground);
+}
+.vex-arg-desc > :first-child {
+  margin-top: 0;
+}
+.vex-arg-desc > :last-child {
+  margin-bottom: 0;
+}
+.prose .vex-arg-desc p {
+  margin: 0 0 0.5rem;
+}
+.prose .vex-arg-desc p:last-child {
+  margin-bottom: 0;
+}
+
+/* Deprecated stubs publish no signature, so there are no types to show.
+   Drop the column rather than pad it with placeholders. */
+.vex-args-untyped {
+  grid-template-columns: 10rem 1fr;
+}
+.vex-args-untyped .vex-arg-sig {
+  grid-template-columns: 1fr;
+}
+
+/* Returns. One statement, not a row in a table — losing the rules and the
+   columns is what tells it apart from Arguments at a glance. The arrow marks
+   it as the result; the type token matches the signature panel's return type
+   so the eye connects the two. */
+.vex-returns {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.vex-ret-sig {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex: none;
+  font-family: ui-monospace, "Geist Mono", "Fira Code", Menlo, Consolas, monospace;
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+.vex-ret-arrow {
+  color: oklch(0.66 0.08 242.84);
+  opacity: 0.7;
+}
+.vex-ret-type {
+  color: oklch(0.66 0.08 242.84);
+  overflow-wrap: anywhere;
+}
+.vex-ret-desc {
+  flex: 1 1 18rem;
+  font-size: 0.9rem;
+  color: var(--foreground);
+}
+.prose .vex-ret-desc p {
+  margin: 0;
+}
+
+@media (max-width: 640px) {
+  .vex-args,
+  .vex-args-untyped {
+    grid-template-columns: 1fr;
+  }
+  .vex-arg-sig {
+    padding-right: 0;
+    padding-bottom: 0.25rem;
+    border-bottom: 0;
+  }
+  .vex-arg-desc {
+    padding-top: 0;
+    padding-left: var(--md);
+  }
+}
+
+/* ── Code blocks inside table cells (raw <pre> from the scraper) ─────────── */
+.not-prose table td pre,
+.not-prose table th pre {
+  margin: 0.25rem 0;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  overflow-x: auto;
+  white-space: pre;
+}
+
+/* Inline icon images — override prose display:block and max-width:100% */
+span.doc-icon {
+  display: inline-grid !important;
+  width: 1em !important;
+  height: 1em !important;
+  max-width: none !important;
+  vertical-align: -0.15em;
+}
+
+span.doc-icon > img {
+  margin: 0;
+}
+
+/* ── Card-grid list items ───────────────────────────────────────────────
+   Two SideFX source components render through this same markup: `.shelftab`
+   groups of `.shelftool` cards (shelf/index) and `.item_group` icon lists
+   (most node-category index pages, e.g. nodes/sop) — converted by the
+   `shelfCards` / `itemGroupCards` turndown rules into a plain markdown list
+   wrapped in one raw div, so a missing icon or summary just leaves out that
+   line — no empty box, no dangling separator. */
+.shelf-grid ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.75rem;
+  margin: 1.5rem -0.75rem;
+  padding: 0;
+  list-style: none;
+}
+.shelf-grid li {
+  position: relative; /* anchor for the whole-card click overlay below */
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--card);
+}
+.shelf-grid li > p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.shelf-grid li > p:first-child {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  font-weight: 600;
+  color: var(--card-foreground);
+}
+.shelf-grid li > p:first-child > span {
+  min-width: 0;
+}
+.shelf-grid li > p:last-child:not(:first-child) {
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+}
+.shelf-grid img.doc-icon {
+  width: 1.75rem !important;
+  height: 1.75rem !important;
+  margin: 0 !important;
+}
+/* Stretch the title link over the whole card (a "stretched link"), so the
+   icon and summary text are clickable too, not just the title. DocLink wraps
+   every <a> in a positioned <span>; turn that positioning
+   off so the card <li> above (position: relative) becomes the ::after
+   overlay's containing block instead of that small inline span. */
+.shelf-grid li > p:first-child > span {
+  position: static;
+}
+.shelf-grid li > p:first-child a::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+.shelf-grid li:has(a):hover {
+  border-color: var(--muted-foreground);
+}
+.shelf-grid li:has(a):focus-within {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
 }

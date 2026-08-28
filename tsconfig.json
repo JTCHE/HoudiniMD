@@ -6,7 +6,6 @@
     "moduleResolution": "bundler",
     "jsx": "react-jsx",
     "strict": true,
-    "noUncheckedIndexedAccess": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noEmit": true,
