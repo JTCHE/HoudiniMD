@@ -32,6 +32,7 @@
     "@tailwindcss/typography": "^0.5.20",
     "@tailwindcss/vite": "4.1.18",
     "@tauri-apps/cli": "^2.9.0",
+    "@types/node": "^26.4.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^5.0.0",

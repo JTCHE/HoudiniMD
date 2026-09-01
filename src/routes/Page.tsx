@@ -40,7 +40,8 @@ interface PageView {
 /** The reading view. Rust reads and parses the page; this draws it with the
     same component map the site uses. */
 export default function Page() {
-  const path = useLocation().pathname.replace(/^\/+/, "");
+  const location = useLocation();
+  const path = location.pathname.replace(/^\/+/, "");
   const navigate = useNavigate();
   const [page, setPage] = useState<PageView | null>(null);
   const [error, setError] = useState<PageError | null>(null);
@@ -52,6 +53,18 @@ export default function Page() {
       .then(setPage)
       .catch(setError);
   }, [path]);
+
+  // A search hit names a section, so the reader arrives at `#parameters` and
+  // has to land on it. The anchor is waited for rather than read at once: the
+  // heading does not exist until the markdown above has rendered.
+  useEffect(() => {
+    const id = decodeURIComponent(location.hash.slice(1));
+    if (!id || !page) return;
+    const frame = requestAnimationFrame(() => {
+      document.getElementById(id)?.scrollIntoView({ block: "start" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [location.hash, page]);
 
   const isVexPage = /(^|\/)vex\//.test(`/${path}`);
 
