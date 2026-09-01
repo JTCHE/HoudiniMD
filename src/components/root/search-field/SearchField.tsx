@@ -1,21 +1,42 @@
-import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { useNavigate } from "react-router";
 import { cn } from "@/lib/utils";
+import { bodies, match, pastedPath, resolve, titles, type Hit } from "@/lib/search";
+import {
+  SEARCH_DROPDOWN_CLASS,
+  SearchResultList,
+  rowPath,
+  toRows,
+} from "@/components/search/SearchResultList";
 import { AnimatedPlaceholder } from "./AnimatedPlaceholder";
 import { PasteSearchButton } from "./PasteSearchButton";
 
+/** The body search waits this long after the last key. The title pick does not
+ *  wait at all — it reads a list that is already in memory. */
+const BODY_SEARCH_DELAY = 120;
+
 /**
- * The search field: one input and one key.
+ * The search field: one input, one key, and the list it opens.
  *
- * Until the index lands it opens a help path outright — `nodes/sop/box`.
- * See spec: Local — SQLite FTS5 Index.
+ * Two paths, as the spec says. The titles come back from Rust once and are
+ * picked from in memory, so the list answers every keystroke. The body text is
+ * searched in SQLite with FTS5, a moment behind, and its hits are added under
+ * the title hits. See spec: Local — SQLite FTS5 Index.
  */
 export function SearchField({ className, autoFocus = true }: { className?: string; autoFocus?: boolean }) {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
+  const [hits, setHits] = useState<Hit[]>([]);
+  const [selected, setSelected] = useState(0);
+  const [open, setOpen] = useState(false);
+  const [error, setError] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const errorId = useId();
+
+  // The list expands each page into its matching sections, so the arrow keys
+  // count rows and not results.
+  const rows = toRows(hits);
 
   useEffect(() => {
     if (autoFocus) inputRef.current?.focus();
@@ -23,27 +44,120 @@ export function SearchField({ className, autoFocus = true }: { className?: strin
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoFocus]);
 
-  function open(text: string) {
-    const path = text.trim().replace(/^https?:\/\/[^/]+\/docs\/houdini\//, "").replace(/^\/+/, "");
-    if (path) navigate(`/${path}`);
+  useEffect(() => {
+    function closeOnOutsidePress(event: PointerEvent) {
+      if (!containerRef.current?.contains(event.target as Node)) setOpen(false);
+    }
+    document.addEventListener("pointerdown", closeOnOutsidePress);
+    return () => document.removeEventListener("pointerdown", closeOnOutsidePress);
+  }, []);
+
+  // The list is filled twice for one query: the titles at once, then the body
+  // hits under them. `live` drops the answer to a query the reader has already
+  // typed past.
+  useEffect(() => {
+    const wanted = query.trim();
+    if (!wanted) {
+      setHits([]);
+      setOpen(false);
+      return;
+    }
+    let live = true;
+    setSelected(0);
+
+    const show = (found: Hit[]) => {
+      setHits(found);
+      setOpen(found.length > 0);
+    };
+
+    titles().then((all) => {
+      if (live) show(match(all, wanted));
+    });
+
+    const timer = window.setTimeout(async () => {
+      const [all, found] = await Promise.all([titles(), bodies(wanted)]);
+      if (!live) return;
+      const picked = match(all, wanted);
+      const seen = new Set(picked.map((hit) => hit.path));
+      show([...picked, ...found.filter((hit) => !seen.has(hit.path))]);
+    }, BODY_SEARCH_DELAY);
+
+    return () => {
+      live = false;
+      window.clearTimeout(timer);
+    };
+  }, [query]);
+
+  function go(path: string) {
+    setOpen(false);
+    navigate(`/${path}`);
+  }
+
+  /**
+   * Everything typed goes through here, so nothing can navigate on a guess.
+   * A path or a pasted link names a page; anything else has to be a row of the
+   * list. Text that is neither says so and stays put — opening `/cptp` and
+   * letting the page report itself missing tells the reader their query is
+   * wrong when the search is what fell short.
+   */
+  async function submit(text: string) {
+    const wanted = text.trim();
+    if (!wanted) return;
+    const all = await titles();
+    const hit = resolve(all, wanted, rows[selected]?.hit);
+    if (!hit) {
+      setError(`Nothing in this Houdini build matches “${wanted}”.`);
+      return;
+    }
+    // A row of the list may name a heading of the page, not only the page.
+    go(open && rows[selected]?.hit === hit ? rowPath(rows[selected]) : hit.path);
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    open(query);
+    void submit(query);
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "Escape") {
+      setOpen(false);
+      return;
+    }
+    if (!open || rows.length === 0) return;
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      const step = event.key === "ArrowDown" ? 1 : -1;
+      setSelected((current) => (current + step + rows.length) % rows.length);
+    }
+  }
+
+  function changeQuery(value: string) {
+    setQuery(value);
+    setError("");
+  }
+
+  async function pasteAndSearch() {
+    const text = await navigator.clipboard.readText().catch(() => "");
+    if (!text.trim()) return;
+    changeQuery(text);
+    // A pasted link is a destination, so it opens without waiting for the list.
+    if (pastedPath(text) !== text.trim()) void submit(text);
   }
 
   const mode = query.trim() ? "search" : "paste";
-  const buttonLabel = mode === "search" ? "Open" : "Paste & Open";
+  const buttonLabel = mode === "search" ? "Search" : "Paste & Search";
 
   return (
     // The field overhangs its column by exactly its own padding, so the input
     // text sits on the same left axis as the text above it and only the
     // surface reaches past.
-    <div
-      ref={containerRef}
-      className={cn("relative -mr-xs -ml-ms lg:-ml-md", className)}
-    >
+    <div ref={containerRef} className={cn("relative -mr-xs -ml-ms lg:-ml-md", className)}>
+      {error && (
+        <p id={errorId} className="mb-sm ml-ms text-meta text-destructive lg:ml-md">
+          {error}
+        </p>
+      )}
+
       <form
         onSubmit={handleSubmit}
         role="search"
@@ -104,9 +218,11 @@ export function SearchField({ className, autoFocus = true }: { className?: strin
             ref={inputRef}
             type="text"
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            aria-label="Open a page of the Houdini documentation"
-            aria-describedby={errorId}
+            onChange={(event) => changeQuery(event.target.value)}
+            onKeyDown={handleKeyDown}
+            aria-label="Search the Houdini documentation"
+            aria-invalid={!!error}
+            aria-describedby={error ? errorId : undefined}
             autoComplete="off"
             autoCorrect="on"
             autoCapitalize="off"
@@ -119,13 +235,19 @@ export function SearchField({ className, autoFocus = true }: { className?: strin
           {!query && <AnimatedPlaceholder />}
         </div>
 
-        <PasteSearchButton
-          mode={mode}
-          label={buttonLabel}
-          onPaste={() => navigator.clipboard.readText().then(open)}
-        />
+        <PasteSearchButton mode={mode} label={buttonLabel} onPaste={() => void pasteAndSearch()} />
       </form>
 
+      {open && (
+        <SearchResultList
+          hits={hits}
+          query={query}
+          selected={selected}
+          onSelect={setSelected}
+          onActivate={(row) => go(rowPath(row))}
+          className={cn("absolute top-full right-0 left-0 z-10", SEARCH_DROPDOWN_CLASS)}
+        />
+      )}
     </div>
   );
 }

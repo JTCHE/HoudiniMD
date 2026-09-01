@@ -20,8 +20,8 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' data: http://hicon.localhost http://himage.localhost; media-src 'self' http://himage.localhost; style-src 'self' 'unsafe-inline'",
-      "devCsp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' ws://localhost:1420; img-src 'self' data: http://hicon.localhost http://himage.localhost; media-src 'self' http://himage.localhost; style-src 'self' 'unsafe-inline'"
+      "csp": "default-src 'self'; img-src 'self' data: http://hicon.localhost http://himage.localhost hicon: himage:; media-src 'self' http://himage.localhost himage:; style-src 'self' 'unsafe-inline'",
+      "devCsp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' ws://localhost:1420; img-src 'self' data: http://hicon.localhost http://himage.localhost hicon: himage:; media-src 'self' http://himage.localhost himage:; style-src 'self' 'unsafe-inline'"
     }
   },
   "bundle": {
