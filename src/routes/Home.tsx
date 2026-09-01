@@ -6,6 +6,7 @@ import { AsciiBackground } from "@/components/root/AsciiBackground";
 import { NoiseOverlay } from "@/components/root/NoiseOverlay";
 import { QuickLinks } from "@/components/root/QuickLinks";
 import { SearchField } from "@/components/root/search-field/SearchField";
+import { IndexProgress } from "@/components/root/IndexProgress";
 import { FeatureCards } from "@/components/root/feature-cards/FeatureCards";
 
 interface Install {
@@ -45,6 +46,7 @@ export default function Home() {
                   ? `Houdini ${version}`
                   : "No Houdini install found on this machine."}
             </p>
+            <IndexProgress />
           </header>
 
           {/* Order is a real design decision, not a discrepancy: a phone reader

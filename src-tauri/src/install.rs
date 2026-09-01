@@ -30,7 +30,7 @@ pub fn find() -> Vec<Install> {
             continue;
         };
         for entry in entries.flatten() {
-            if let Some(install) = read(entry.path()) {
+            if let Some(install) = read(hfs(entry.path())) {
                 if !found.iter().any(|i| i.version == install.version) {
                     found.push(install);
                 }
@@ -55,16 +55,30 @@ fn read(root: PathBuf) -> Option<Install> {
     })
 }
 
-/// `Houdini 22.0.368` names build 22.0.368.
+/// The build number the path carries, read from the end backwards. Every
+/// platform writes it into one folder along the way, and no two write it the
+/// same: `Houdini 22.0.368` on Windows, `Houdini22.0.368` on macOS, `hfs22.0`
+/// on Linux. The last folder of a macOS install is `Resources`, so the name of
+/// the folder itself is not enough.
 fn version(root: &Path) -> Option<String> {
-    let name = root.file_name()?.to_str()?;
-    let build = name.rsplit(' ').next()?;
-    build
-        .starts_with(|c: char| c.is_ascii_digit())
-        .then(|| build.to_string())
+    root.components()
+        .rev()
+        .filter_map(|part| part.as_os_str().to_str())
+        .find_map(build)
+}
+
+fn build(name: &str) -> Option<String> {
+    let rest = name
+        .strip_prefix("Houdini")
+        .or_else(|| name.strip_prefix("hfs"))
+        .unwrap_or(name)
+        .trim_start();
+    rest.starts_with(|c: char| c.is_ascii_digit())
+        .then(|| rest.to_string())
 }
 
 /// Where the installer puts builds. One entry per drive letter it offers.
+#[cfg(windows)]
 fn roots() -> Vec<PathBuf> {
     let mut roots = Vec::new();
     for var in ["ProgramFiles", "ProgramFiles(x86)"] {
@@ -73,6 +87,23 @@ fn roots() -> Vec<PathBuf> {
         }
     }
     roots
+}
+
+#[cfg(not(windows))]
+fn roots() -> Vec<PathBuf> {
+    vec![PathBuf::from("/Applications/Houdini")]
+}
+
+/// `$HFS` is the install folder on Windows and a framework inside it on macOS,
+/// so what the scan finds is not what the reader gets.
+#[cfg(windows)]
+fn hfs(entry: PathBuf) -> PathBuf {
+    entry
+}
+
+#[cfg(not(windows))]
+fn hfs(entry: PathBuf) -> PathBuf {
+    entry.join("Frameworks/Houdini.framework/Versions/Current/Resources")
 }
 
 /// Sorts `22.0.368` above `20.5.487`, which a string compare gets wrong.
