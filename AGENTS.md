@@ -5,8 +5,8 @@ Project information: @README.md
 ## Guides
 
 - [Architecture](agents/architecture.md) — the four layers, and which file owns what.
-- [Deployment](agents/deployment.md) — Cloudflare CI deploys. You do not.
-- [Page Content](agents/page-content.md) — regenerate the pages your change affects.
+- [Deployment](agents/deployment.md) — the app does not deploy. The site still does.
+- [Content](agents/content.md) — the docs come from the Houdini install, not from here.
 - [Code](agents/code.md) — one source of truth, small modules, no legacy paths.
 - [Front-end](agents/frontend.md) — the design language, and how to look at a change.
 - [Testing](agents/testing.md) — test the change, do not commit the test.
@@ -36,6 +36,6 @@ Project information: @README.md
   the file.
 - Look at a UI change before you report it done. A build that compiles is not a
   page that reads.
-- When you change how content is scraped or rendered, regenerate every affected
-  page with `bun run regen`. It does not change the live site — see
+- When you change the parser or the renderer, check the shape on a family of
+  pages, not on the one page that showed the bug — see
   [Content](agents/content.md).
