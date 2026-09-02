@@ -1,6 +1,11 @@
-@import "tailwindcss";
+/* Scan only the app's own files. Automatic detection walks the repository
+   root, where the site-era build folders still sit; that crawl blocked every
+   dev-server request until it finished, so the app window opened empty. */
+@import "tailwindcss" source(none);
 @import "tw-animate-css";
 @plugin "@tailwindcss/typography";
+@source "../../src";
+@source "../../index.html";
 
 /* Hover only where a pointer can actually hover, so a tap on a phone does not
    leave a chip or card stuck in its hover state until the next tap elsewhere. */
