@@ -7,10 +7,16 @@ import { Code } from "./MarkdownCode";
 import { Image } from "./MarkdownImage";
 import { Video } from "./MarkdownVideo";
 import { Card } from "./Card";
+import { ImageGroup } from "./ImageGroup";
 
-/** A `.code-panel` div carries the copy button and the highlighting. */
+/** The parser writes two kinds of div: a `.code-panel` that carries the copy
+    button and the highlighting, and an `.image-group` row of pictures. */
 const Div: Components["div"] = function MarkdownDiv({ className, children, ...props }) {
-  return className?.split(" ").includes("code-panel") ? (
+  const kinds = className?.split(" ") ?? [];
+  if (kinds.includes("image-group")) {
+    return <ImageGroup className={className!}>{children}</ImageGroup>;
+  }
+  return kinds.includes("code-panel") ? (
     <CodePanel>
       <div className={className} {...props}>{children}</div>
     </CodePanel>

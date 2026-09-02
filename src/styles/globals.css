@@ -461,29 +461,31 @@ html {
 }
 
 /* Small comparison thumbnails SideFX groups side by side in the source
-   (a shared <p>, or a .row of .col_* divs) — see imageGroupInline /
-   imageGroupColumns in turndown-rules.ts. Every figure conforms to the
-   shortest image in the group (--image-group-height, set from probed
-   dimensions in createDivComponent) instead of stacking at its own
-   height, which used to give the row a "stairs" edge. */
+   (consecutive lines of one paragraph) — see image_group in the parser's
+   markdown.rs. Every figure conforms to the
+   shortest image in the group (--image-group-height, measured in
+   ImageGroup.tsx) instead of stacking at its own height, which used to
+   give the row a "stairs" edge. */
 .image-group {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-evenly;
   gap: 0.75rem;
   margin-block: 1.5rem;
-  /* min() so the row shrinks on narrow screens instead of forcing
-     desktop-width images that overflow and wrap into an overlapping mess. */
-  height: min(var(--image-group-height, 260px), 26vw);
 }
 /* Exactly 2 images: space-evenly stretches the gap too wide — pin it instead. */
 .image-group:has(> figure:nth-child(2):last-child) {
   justify-content: center;
   gap: var(--spacing-xl);
 }
+/* The shared height sits on the figure, not on the row: a row of four on a
+   narrow window wraps to two lines, and a row with a fixed height would draw
+   the second line straight over the paragraph below it.
+   min() so the pictures shrink on a narrow window instead of holding their
+   desktop width. */
 .image-group figure {
   flex: 0 0 auto;
-  height: 100%;
+  height: min(var(--image-group-height, 260px), 26vw);
   margin: 0;
 }
 .image-group .markdown-media {
@@ -491,10 +493,6 @@ html {
   width: auto;
   max-width: none;
   margin: 0;
-}
-.image-group .markdown-media img {
-  height: 100%;
-  width: auto;
 }
 .image-group .markdown-media + figcaption {
   margin-inline: 0;

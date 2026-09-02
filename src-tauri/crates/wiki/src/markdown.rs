@@ -67,7 +67,10 @@ fn one(block: &Block, depth: u8) -> String {
             };
             format!("## {heading}\n\n{}", blocks(children, depth))
         }
-        Block::Paragraph { text } => format!("{}\n\n", inlines(text)),
+        Block::Paragraph { text } => match image_group(text) {
+            Some(row) => row,
+            None => format!("{}\n\n", inlines(text)),
+        },
         Block::Summary { text } => format!("{}\n\n", inlines(text)),
         Block::Bullets { items } => {
             let mut out = String::new();
@@ -139,6 +142,37 @@ fn one(block: &Block, depth: u8) -> String {
     }
 }
 
+/// Pictures SideFX wrote on consecutive lines of one paragraph. That shared
+/// paragraph is the "these belong side by side" signal: a comparison row, such
+/// as one fracture shown as concrete, glass and wood. Markdown has no row, so
+/// the row is raw HTML and `rehype-raw` renders it. The figures match heights
+/// in the front-end; see `.image-group` in `globals.css`.
+fn image_group(text: &[Inline]) -> Option<String> {
+    let mut sources = Vec::new();
+    for inline in text {
+        match inline {
+            Inline::Image { src } => sources.push(src),
+            Inline::Text { text } if text.trim().is_empty() => {}
+            _ => return None,
+        }
+    }
+    if sources.len() < 2 {
+        return None;
+    }
+    let figures: String = sources
+        .iter()
+        .map(|src| format!("<figure><img src=\"{}\" alt=\"\" /></figure>", attribute(src)))
+        .collect();
+    Some(format!(
+        "<div class=\"not-prose image-group\">{figures}</div>\n\n"
+    ))
+}
+
+/// A value going into a double-quoted HTML attribute.
+fn attribute(value: &str) -> String {
+    value.replace('&', "&amp;").replace('"', "&quot;")
+}
+
 fn item(name: &str, label: &str, props: &Props, children: &[Block], depth: u8) -> String {
     let body = blocks(children, depth + 1);
     match name {
@@ -146,7 +180,7 @@ fn item(name: &str, label: &str, props: &Props, children: &[Block], depth: u8) -
         // component that draws a picture. `loop` and `autoplay` are the page's
         // own, so a demonstration that repeats keeps repeating here.
         "video" => {
-            let src = prop(props, "src").unwrap_or_default();
+            let src = attribute(prop(props, "src").unwrap_or_default());
             let flag = |name: &str| match prop(props, name) == Some("true") {
                 true => format!(" {name}"),
                 false => String::new(),
