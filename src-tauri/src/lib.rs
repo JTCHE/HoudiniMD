@@ -1,3 +1,4 @@
+mod assets;
 pub mod db;
 mod help;
 pub mod index;
@@ -64,7 +65,8 @@ fn page(path: String) -> Result<PageView, PageError> {
         },
         help::PageError::Unreadable(message) => PageError { missing: false, message },
     })?;
-    let parsed = wiki::parse(&source);
+    let mut parsed = wiki::parse(&source);
+    assets::rewrite(&path, &mut parsed.blocks);
     let prop = |name: &str| wiki::model::prop(&parsed.props, name).map(str::to_string);
     Ok(PageView {
         path,
@@ -276,21 +278,53 @@ fn current() -> Result<install::Install, String> {
         .ok_or_else(|| "no Houdini install found on this machine".to_string())
 }
 
-/// Serves the figures a help page shows, straight out of `images.zip`.
-/// The front-end asks for `himage://localhost/shelf/copy.jpg`.
-fn image_response(request: Request<Vec<u8>>) -> Response<Vec<u8>> {
+/// Serves the pictures and videos a help page shows, out of the install.
+/// The front-end asks for `himage://localhost/images/shelf/copy.jpg` or
+/// `himage://localhost/videos/tween.webm`; `assets::resolve` wrote that path.
+fn asset_response(request: Request<Vec<u8>>) -> Response<Vec<u8>> {
     let name = percent_decode(request.uri().path());
-    match current().and_then(|install| help::image(&install.help, &name)) {
-        Ok(bytes) => Response::builder()
-            .header("Content-Type", media_type(&name))
-            .header("Cache-Control", "max-age=31536000")
-            .body(bytes)
+    let bytes = match current().and_then(|install| help::asset(&install.help, &name)) {
+        Ok(bytes) => bytes,
+        Err(reason) => {
+            return Response::builder()
+                .status(404)
+                .body(reason.into_bytes())
+                .unwrap()
+        }
+    };
+    let head = Response::builder()
+        .header("Content-Type", media_type(&name))
+        .header("Cache-Control", "max-age=31536000")
+        .header("Accept-Ranges", "bytes");
+
+    // A player asks for a range as soon as the reader drags the scrub bar, and
+    // it takes the whole file as an answer that it cannot seek in.
+    let asked = request.headers().get("Range").and_then(|v| v.to_str().ok());
+    match range(asked, bytes.len()) {
+        Some((first, last)) => head
+            .status(206)
+            .header(
+                "Content-Range",
+                format!("bytes {first}-{last}/{}", bytes.len()),
+            )
+            .body(bytes[first..=last].to_vec())
             .unwrap(),
-        Err(reason) => Response::builder()
-            .status(404)
-            .body(reason.into_bytes())
-            .unwrap(),
+        None => head.body(bytes).unwrap(),
     }
+}
+
+/// The bytes a `Range: bytes=first-last` header asks for, clamped to the file.
+/// `None` for no header, for a form this app does not serve, and for a range
+/// that starts past the end — the last of which is a 416 the player recovers
+/// from by asking again, so answering with the whole file is the kinder reply.
+fn range(header: Option<&str>, len: usize) -> Option<(usize, usize)> {
+    let (first, last) = header?.trim().strip_prefix("bytes=")?.split_once('-')?;
+    let first: usize = first.trim().parse().ok()?;
+    let last = match last.trim() {
+        "" => len.checked_sub(1)?,
+        last => last.parse::<usize>().ok()?.min(len.checked_sub(1)?),
+    };
+    (first <= last).then_some((first, last))
 }
 
 fn media_type(name: &str) -> &'static str {
@@ -352,7 +386,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .register_uri_scheme_protocol("hicon", |_app, request| icon_response(request))
-        .register_uri_scheme_protocol("himage", |_app, request| image_response(request))
+        .register_uri_scheme_protocol("himage", |_app, request| asset_response(request))
         .setup(|app| {
             let data = app.path().app_data_dir()?;
             app.manage(Db(Mutex::new(db::open(&data)?)));
@@ -372,3 +406,34 @@ pub fn run() {
         .expect("error while running the application");
 }
 
+#[cfg(test)]
+mod tests {
+    use super::range;
+
+    #[test]
+    fn a_range_names_the_bytes_it_wants() {
+        assert_eq!(range(Some("bytes=0-99"), 500), Some((0, 99)));
+        assert_eq!(range(Some(" bytes=100-199 "), 500), Some((100, 199)));
+    }
+
+    #[test]
+    fn an_open_range_runs_to_the_end() {
+        assert_eq!(range(Some("bytes=100-"), 500), Some((100, 499)));
+    }
+
+    #[test]
+    fn a_range_past_the_end_stops_at_the_end() {
+        assert_eq!(range(Some("bytes=0-9999"), 500), Some((0, 499)));
+    }
+
+    #[test]
+    fn what_this_cannot_serve_becomes_the_whole_file() {
+        assert_eq!(range(None, 500), None);
+        // A suffix range, `the last 100 bytes`, which no player asks a local
+        // source for.
+        assert_eq!(range(Some("bytes=-100"), 500), None);
+        assert_eq!(range(Some("bytes=600-700"), 500), None);
+        assert_eq!(range(Some("items=0-9"), 500), None);
+        assert_eq!(range(Some("bytes=0-0"), 0), None);
+    }
+}

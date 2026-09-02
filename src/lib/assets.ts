@@ -12,7 +12,9 @@ export function iconUrl(name: string): string {
   return convertFileSrc(name.replace(/^\/+/, ""), "hicon");
 }
 
-/** `/images/shelf/copy.jpg` in `images.zip`. */
-export function imageUrl(path: string): string {
-  return convertFileSrc(path.replace(/^\/?(images\/)?/, ""), "himage");
+/** An asset path from the Rust side: `images/shelf/copy.jpg` in `images.zip`,
+    or `videos/tween.webm` beside it. `assets.rs` resolved it against the page,
+    so nothing here has to know how the help serves its pictures. */
+export function assetUrl(path: string): string {
+  return convertFileSrc(path.replace(/^\/+/, ""), "himage");
 }

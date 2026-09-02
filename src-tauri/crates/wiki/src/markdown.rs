@@ -1,6 +1,6 @@
 //! Markdown for the copy button and for agents.
 
-use crate::model::{Block, Inline, LinkTarget, Page, Title};
+use crate::model::{prop, Block, Inline, LinkTarget, Page, Props, Title};
 
 pub fn page(page: &Page) -> String {
     let mut out = String::new();
@@ -96,9 +96,10 @@ fn one(block: &Block, depth: u8) -> String {
         Block::Item {
             name,
             label,
+            props,
             children,
             ..
-        } => item(name, &inlines(label), children, depth),
+        } => item(name, &inlines(label), props, children, depth),
         Block::Usage {
             signature,
             children,
@@ -138,9 +139,31 @@ fn one(block: &Block, depth: u8) -> String {
     }
 }
 
-fn item(name: &str, label: &str, children: &[Block], depth: u8) -> String {
+fn item(name: &str, label: &str, props: &Props, children: &[Block], depth: u8) -> String {
     let body = blocks(children, depth + 1);
     match name {
+        // Markdown has no video, and the app renders the raw tag with the same
+        // component that draws a picture. `loop` and `autoplay` are the page's
+        // own, so a demonstration that repeats keeps repeating here.
+        "video" => {
+            let src = prop(props, "src").unwrap_or_default();
+            let flag = |name: &str| match prop(props, name) == Some("true") {
+                true => format!(" {name}"),
+                false => String::new(),
+            };
+            let muted = if prop(props, "autoplay") == Some("true") {
+                " muted"
+            } else {
+                ""
+            };
+            format!(
+                "<video src=\"{src}\" controls{}{}{muted}></video>
+
+",
+                flag("loop"),
+                flag("autoplay")
+            )
+        }
         "tip" | "note" | "warning" | "new" | "improved" | "changed" | "dev" | "fixed" | "bug" => {
             let head = capitalise(name);
             let head = if label.is_empty() {

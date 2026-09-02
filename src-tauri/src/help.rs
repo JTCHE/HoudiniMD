@@ -42,10 +42,29 @@ pub fn icon(install_root: &Path, name: &str) -> Result<Vec<u8>, String> {
     found(read(&zip, name.trim_matches('/')), &format!("no icon {name}"))
 }
 
-/// `/images/shelf/copy.jpg` lives in `images.zip` as `shelf/copy.jpg`.
-pub fn image(help: &Path, name: &str) -> Result<Vec<u8>, String> {
-    let read = read(&help.join("images.zip"), name.trim_matches('/'));
-    found(read, &format!("no image {name}"))
+/// Reads one asset, named the way `assets::resolve` writes it.
+///
+/// `images/shelf/copy.jpg` is an entry in `images.zip`. `videos/tween.webm` is
+/// a loose file: the install ships 958 of them beside the zips, not inside one.
+pub fn asset(help: &Path, path: &str) -> Result<Vec<u8>, String> {
+    let absent = format!("no asset {path}");
+    let Some((store, name)) = path.trim_matches('/').split_once('/') else {
+        return Err(absent);
+    };
+    match store {
+        "images" => found(read(&help.join("images.zip"), name), &absent),
+        "videos" => video(help, name).ok_or(absent),
+        _ => Err(absent),
+    }
+}
+
+/// A video is read whole. The `himage` handler serves the range the player
+/// asked for out of these bytes; the largest file in the install is 6.3 MB.
+fn video(help: &Path, name: &str) -> Option<Vec<u8>> {
+    if name.contains("..") {
+        return None;
+    }
+    std::fs::read(help.join("videos").join(name)).ok()
 }
 
 fn found(read: Result<Option<Vec<u8>>, String>, absent: &str) -> Result<Vec<u8>, String> {

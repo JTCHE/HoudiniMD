@@ -1,19 +1,16 @@
 import type { Components } from "react-markdown";
-import { imageUrl } from "@/lib/assets";
-import DocIconClient from "./DocIconClient";
+import { assetUrl } from "@/lib/assets";
 
-/**
- * Inline SideFX icons render at text size (.doc-icon); everything else is a
- * block figure. Both come out of the zips in the Houdini install.
- */
+/** A figure on a help page. The Rust side resolved the path against the page,
+    so this only has to build the URL. An icon does not arrive here — the
+    parser keeps icons out of the Markdown and `DocIconClient` draws them. */
 export const Image: Components["img"] = function MarkdownImage({ src, alt }) {
   if (!src || typeof src !== "string") return null;
-  if (/icons\//.test(src)) return <DocIconClient src={src} alt={alt ?? ""} />;
   return (
     <img
-      src={imageUrl(src)}
+      src={assetUrl(src)}
       alt={alt ?? ""}
-      className="markdown-media my-4 block h-auto w-full"
+      className="markdown-media my-4 block h-auto max-w-full"
       loading="lazy"
       decoding="async"
     />
