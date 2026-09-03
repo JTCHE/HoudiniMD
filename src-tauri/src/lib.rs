@@ -143,6 +143,69 @@ fn titles(state: State<Db>) -> Result<Vec<Hit>, String> {
     rows.collect::<Result<_, _>>().map_err(|e| e.to_string())
 }
 
+/// What a link hover shows: the page name, and the line under it.
+#[derive(Serialize)]
+struct Meta {
+    path: String,
+    title: String,
+    summary: Option<String>,
+    /// An icon path inside `icons.zip`. A page without one gets a generic
+    /// document mark in the front-end.
+    icon: Option<String>,
+}
+
+/// The tooltip text for a set of pages, asked for in one call.
+///
+/// The index answers most of it. A page the background pass has not reached is
+/// read and parsed here instead, so a tooltip on a fresh install says the same
+/// thing it will say later — the front-end batches, so this is a handful of
+/// pages at a time, not the whole viewport one at a time.
+#[tauri::command]
+fn meta(state: State<Db>, paths: Vec<String>) -> Result<Vec<Meta>, String> {
+    let install = current()?;
+    let mut found: Vec<Meta> = Vec::new();
+    let mut missing: Vec<String> = Vec::new();
+    {
+        let db = state.0.lock().map_err(|e| e.to_string())?;
+        let mut statement = db
+            .prepare("SELECT title, summary, icon FROM pages WHERE build = ?1 AND path = ?2")
+            .map_err(|e| e.to_string())?;
+        for path in paths {
+            let row = statement
+                .query_row(rusqlite::params![&install.version, &path], |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, Option<String>>(1)?,
+                        row.get::<_, Option<String>>(2)?,
+                    ))
+                })
+                .ok();
+            match row {
+                Some((title, summary, icon)) => found.push(Meta {
+                    path,
+                    title,
+                    summary,
+                    icon,
+                }),
+                None => missing.push(path),
+            }
+        }
+    }
+    for path in missing {
+        let Ok(source) = help::page(&install.help, &path) else {
+            continue;
+        };
+        let parsed = wiki::parse(&source);
+        found.push(Meta {
+            path,
+            title: display_name(&parsed),
+            summary: parsed.summary.as_ref().map(|s| wiki::inline::plain(s)),
+            icon: wiki::model::prop(&parsed.props, "icon").map(|icon| format!("{icon}.svg")),
+        });
+    }
+    Ok(found)
+}
+
 /// At most this many matching sections are listed under one page. Past three
 /// the list is a page of one result, and the reader has stopped comparing.
 const SECTIONS_PER_PAGE: usize = 3;
@@ -398,6 +461,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             installs,
             page,
+            meta,
             titles,
             search,
             index_status

@@ -198,14 +198,18 @@ fn item(name: &str, label: &str, props: &Props, children: &[Block], depth: u8) -
                 flag("autoplay")
             )
         }
-        "tip" | "note" | "warning" | "new" | "improved" | "changed" | "dev" | "fixed" | "bug" => {
-            let head = capitalise(name);
-            let head = if label.is_empty() {
-                head
-            } else {
-                format!("{head}: {label}")
+        name if admonition(name).is_some() => {
+            let (kind, head) = admonition(name).expect("the name is an admonition");
+            // A blockquote that opens with `[!KIND]` is a callout to the
+            // front-end. What follows the marker is its title, so a release
+            // note keeps the kind of change it announces.
+            let title = match (head, label.is_empty()) {
+                (None, true) => String::new(),
+                (None, false) => format!(" {label}"),
+                (Some(head), true) => format!(" {head}"),
+                (Some(head), false) => format!(" {head}: {label}"),
             };
-            quote(&format!("**{head}**\n\n{body}"))
+            quote(&format!("[!{kind}]{title}\n\n{body}"))
         }
         "platform" => quote(&format!("**{label}**\n\n{body}")),
         "usage" => body,
@@ -293,6 +297,27 @@ fn indent(body: &str) -> String {
     }
     out.push('\n');
     out
+}
+
+/// The GitHub-style admonition a `:name:` block becomes, and the title written
+/// after the marker.
+///
+/// `remark-callouts` on the front-end reads the marker and draws the coloured
+/// surface. It knows five kinds, so a release note is one of those five with a
+/// title that says which kind of change it announces.
+fn admonition(name: &str) -> Option<(&'static str, Option<&'static str>)> {
+    match name {
+        "note" => Some(("NOTE", None)),
+        "tip" => Some(("TIP", None)),
+        "warning" => Some(("WARNING", None)),
+        "new" => Some(("NOTE", Some("New"))),
+        "improved" => Some(("NOTE", Some("Improved"))),
+        "changed" => Some(("IMPORTANT", Some("Changed"))),
+        "dev" => Some(("NOTE", Some("For developers"))),
+        "fixed" => Some(("TIP", Some("Fixed"))),
+        "bug" => Some(("CAUTION", Some("Bug"))),
+        _ => None,
+    }
 }
 
 fn quote(body: &str) -> String {

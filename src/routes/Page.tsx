@@ -1,12 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { useLocation, useNavigate } from "react-router";
+import { useLocation } from "react-router";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import rehypeSlug from "rehype-slug";
 import { Breadcrumbs } from "@/components/docs/Breadcrumbs";
 import { DocsHeader } from "@/components/docs/DocsHeader";
+import SearchOverlay, { type SearchOverlayRef } from "@/components/docs/SearchOverlay";
 import { PageHeader } from "@/components/docs/PageHeader";
 import { TableOfContents } from "@/components/docs/TableOfContents";
 import { CodeBlock } from "@/components/docs/CodeBlock";
@@ -20,6 +21,7 @@ import { rehypeCards } from "@/lib/markdown/rehype-cards";
 import { detectLanguage } from "@/lib/markdown/utils";
 import { sideFxUrl } from "@/lib/sidefx";
 import { iconUrl } from "@/lib/assets";
+import { showToast } from "@/components/ui/toast-notification";
 
 interface PageError {
   missing: boolean;
@@ -42,7 +44,6 @@ interface PageView {
 export default function Page() {
   const location = useLocation();
   const path = location.pathname.replace(/^\/+/, "");
-  const navigate = useNavigate();
   const [page, setPage] = useState<PageView | null>(null);
   const [error, setError] = useState<PageError | null>(null);
 
@@ -61,16 +62,24 @@ export default function Page() {
     const id = decodeURIComponent(location.hash.slice(1));
     if (!id || !page) return;
     const frame = requestAnimationFrame(() => {
-      document.getElementById(id)?.scrollIntoView({ block: "start" });
+      const target = document.getElementById(id);
+      // A doc page can name a section that this page does not have. Saying so
+      // beats a click that looks like it did nothing.
+      if (target) target.scrollIntoView({ block: "start" });
+      else showToast(`This page has no section named "${id}"`, "error");
     });
     return () => cancelAnimationFrame(frame);
   }, [location.hash, page]);
+
+  // The overlay owns ⌘K itself; the header button opens the same overlay.
+  const search = useRef<SearchOverlayRef>(null);
 
   const isVexPage = /(^|\/)vex\//.test(`/${path}`);
 
   return (
     <div className="docs-shell min-h-screen flex flex-col bg-background text-foreground">
-      <DocsHeader sourceUrl={sideFxUrl(path)} onOpenSearch={() => navigate("/")} />
+      <DocsHeader sourceUrl={sideFxUrl(path)} onOpenSearch={() => search.current?.openSearch()} />
+      <SearchOverlay ref={search} />
       <div className="@container mx-auto w-full max-w-page px-page-x pt-5">
         {page && <Breadcrumbs path={page.path} version={page.version} title={page.name} />}
       </div>

@@ -1,7 +1,9 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { useNavigate } from "react-router";
 import { cn } from "@/lib/utils";
-import { bodies, match, pastedPath, resolve, titles, type Hit } from "@/lib/search";
+import { pastedPath, resolve, titles } from "@/lib/search";
+import { useSearch } from "@/lib/use-search";
+import { isCommand, useHotkey } from "@/lib/hotkeys";
 import {
   SEARCH_DROPDOWN_CLASS,
   SearchResultList,
@@ -11,32 +13,38 @@ import {
 import { AnimatedPlaceholder } from "./AnimatedPlaceholder";
 import { PasteSearchButton } from "./PasteSearchButton";
 
-/** The body search waits this long after the last key. The title pick does not
- *  wait at all — it reads a list that is already in memory. */
-const BODY_SEARCH_DELAY = 120;
-
 /**
  * The search field: one input, one key, and the list it opens.
  *
- * Two paths, as the spec says. The titles come back from Rust once and are
- * picked from in memory, so the list answers every keystroke. The body text is
- * searched in SQLite with FTS5, a moment behind, and its hits are added under
- * the title hits. See spec: Local — SQLite FTS5 Index.
+ * The search itself is `useSearch`, shared with the overlay a page opens.
  */
 export function SearchField({ className, autoFocus = true }: { className?: string; autoFocus?: boolean }) {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
-  const [hits, setHits] = useState<Hit[]>([]);
   const [selected, setSelected] = useState(0);
-  const [open, setOpen] = useState(false);
+  const [closed, setClosed] = useState(false);
   const [error, setError] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const errorId = useId();
 
+  const { hits } = useSearch(query);
+  // The list opens on its own when there is something to show, and stays shut
+  // until the next answer once the reader dismisses it.
+  const open = !closed && hits.length > 0;
+
   // The list expands each page into its matching sections, so the arrow keys
   // count rows and not results.
   const rows = toRows(hits);
+
+  // A new answer re-opens the list and puts the selection back on its first
+  // row, during render rather than in an effect.
+  const [shown, setShown] = useState(hits);
+  if (hits !== shown) {
+    setShown(hits);
+    setSelected(0);
+    setClosed(false);
+  }
 
   useEffect(() => {
     if (autoFocus) inputRef.current?.focus();
@@ -44,52 +52,25 @@ export function SearchField({ className, autoFocus = true }: { className?: strin
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoFocus]);
 
+  // ⌘K anywhere on this page puts the caret back in the field and selects what
+  // is already typed, so the next word replaces it.
+  useHotkey((event) => {
+    if (!isCommand(event) || event.key !== "k") return;
+    event.preventDefault();
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  });
+
   useEffect(() => {
     function closeOnOutsidePress(event: PointerEvent) {
-      if (!containerRef.current?.contains(event.target as Node)) setOpen(false);
+      if (!containerRef.current?.contains(event.target as Node)) setClosed(true);
     }
     document.addEventListener("pointerdown", closeOnOutsidePress);
     return () => document.removeEventListener("pointerdown", closeOnOutsidePress);
   }, []);
 
-  // The list is filled twice for one query: the titles at once, then the body
-  // hits under them. `live` drops the answer to a query the reader has already
-  // typed past.
-  useEffect(() => {
-    const wanted = query.trim();
-    if (!wanted) {
-      setHits([]);
-      setOpen(false);
-      return;
-    }
-    let live = true;
-    setSelected(0);
-
-    const show = (found: Hit[]) => {
-      setHits(found);
-      setOpen(found.length > 0);
-    };
-
-    titles().then((all) => {
-      if (live) show(match(all, wanted));
-    });
-
-    const timer = window.setTimeout(async () => {
-      const [all, found] = await Promise.all([titles(), bodies(wanted)]);
-      if (!live) return;
-      const picked = match(all, wanted);
-      const seen = new Set(picked.map((hit) => hit.path));
-      show([...picked, ...found.filter((hit) => !seen.has(hit.path))]);
-    }, BODY_SEARCH_DELAY);
-
-    return () => {
-      live = false;
-      window.clearTimeout(timer);
-    };
-  }, [query]);
-
   function go(path: string) {
-    setOpen(false);
+    setClosed(true);
     navigate(`/${path}`);
   }
 
@@ -120,7 +101,7 @@ export function SearchField({ className, autoFocus = true }: { className?: strin
 
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key === "Escape") {
-      setOpen(false);
+      setClosed(true);
       return;
     }
     if (!open || rows.length === 0) return;
