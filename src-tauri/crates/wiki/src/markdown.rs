@@ -211,7 +211,6 @@ fn item(name: &str, label: &str, props: &Props, children: &[Block], depth: u8) -
             };
             quote(&format!("[!{kind}]{title}\n\n{body}"))
         }
-        "platform" => quote(&format!("**{label}**\n\n{body}")),
         "usage" => body,
         "col" | "box" | "tab" | "task" | "disclosure" | "bubble" | "fig" | "caption" => {
             if label.is_empty() {
@@ -308,6 +307,9 @@ fn indent(body: &str) -> String {
 fn admonition(name: &str) -> Option<(&'static str, Option<&'static str>)> {
     match name {
         "note" => Some(("NOTE", None)),
+        // A per-platform note is a note. The platform is its title, which the
+        // site drops and this keeps.
+        "platform" => Some(("NOTE", None)),
         "tip" => Some(("TIP", None)),
         "warning" => Some(("WARNING", None)),
         "new" => Some(("NOTE", Some("New"))),

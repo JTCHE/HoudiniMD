@@ -4,11 +4,9 @@ import { cn } from "@/lib/utils";
 import { showToast } from "@/components/ui/toast-notification";
 import { DocTooltip, registerSlug } from "./Tooltip";
 
-// The same state hierarchy the table of contents uses: quiet at rest, full
-// contrast on hover and on keyboard focus, transition-colors at the project
-// default. See TocList.
-export const DOC_LINK_CLASS_NAME =
-  "underline underline-offset-2 decoration-current/40 text-muted-foreground hover:text-foreground focus-visible:text-foreground transition-colors";
+// Same state hierarchy as the table of contents — quiet at rest, full contrast
+// on hover and on focus. The values live in globals.css beside the ramp.
+export const DOC_LINK_CLASS_NAME = "doc-link";
 
 // Shared across all DocLink instances so a link-dense page (1000+ links) uses
 // one observer instead of one per link. A link's slug is warmed only once it is

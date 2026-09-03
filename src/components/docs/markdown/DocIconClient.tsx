@@ -16,7 +16,7 @@ import { localIconUrl } from "@/lib/icons";
 export default function DocIconClient({
   src,
   alt,
-  className = "doc-icon",
+  className = "doc-icon mr-2",
   priority = false,
   width = 1,
   height = 1,
@@ -49,7 +49,7 @@ export default function DocIconClient({
 
   return (
     <span
-      className={`relative inline-grid mr-2 ${className}`}
+      className={`relative inline-grid ${className}`}
       data-doc-icon=""
       data-image-state={state}
       style={{ aspectRatio: `${width} / ${height}` }}

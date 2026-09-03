@@ -5,6 +5,8 @@ import { invoke } from "@tauri-apps/api/core";
 interface MetaEntry {
   title: string;
   summary: string;
+  /** A path inside `icons.zip`. Absent on a page that names no icon. */
+  icon: string | null;
 }
 
 // Module-level caches shared across all DocTooltip instances in this session.
@@ -38,10 +40,10 @@ function flush() {
   if (urgent.size + pending.size > 0) scheduled = setTimeout(flush, BATCH_MS);
   if (paths.length === 0) return;
 
-  invoke<{ path: string; title: string; summary?: string | null }[]>("meta", { paths })
+  invoke<{ path: string; title: string; summary?: string | null; icon?: string | null }[]>("meta", { paths })
     .then((rows) => {
       for (const row of rows) {
-        metaCache.set(row.path, { title: row.title, summary: row.summary ?? "" });
+        metaCache.set(row.path, { title: row.title, summary: row.summary ?? "", icon: row.icon ?? null });
       }
     })
     .catch(() => {})
@@ -78,6 +80,23 @@ function request(slug: string, onSettled?: (entry: MetaEntry | null) => void) {
  *  already written by the time the reader points at it. */
 export function registerSlug(slug: string) {
   request(slug);
+}
+
+/** The page behind a link, for a caller that draws it rather than describes it
+ *  — the pill needs the icon before the reader points at anything. */
+export function usePageMeta(slug: string | null) {
+  const [meta, setMeta] = useState<MetaEntry | null>(() => (slug ? (metaCache.get(slug) ?? null) : null));
+  useEffect(() => {
+    if (!slug) return;
+    let live = true;
+    request(slug, (entry) => {
+      if (live) setMeta(entry);
+    });
+    return () => {
+      live = false;
+    };
+  }, [slug]);
+  return meta;
 }
 
 export function DocTooltip({

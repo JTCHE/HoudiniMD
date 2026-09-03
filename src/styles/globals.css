@@ -222,6 +222,13 @@ html {
   --brand-bright: oklch(0.71 0.19 43.1);
   --brand-foreground: oklch(0.985 0 0);
 
+  /* Doc links follow the table of contents: quiet at rest, full contrast on
+     hover and on keyboard focus. One ramp step less quiet than the TOC,
+     because these sit inside body text rather than beside it —
+     --muted-foreground (0.556) is not readable in a paragraph. */
+  --doc-link: var(--neutral-700);
+  --doc-link-hover: var(--neutral-950);
+
   /* Surfaces.
 
      Everything below names a step of the ramp rather than a fresh colour, so
@@ -449,6 +456,97 @@ html {
    of provider background a probe miss can still expose around the frame. */
 .markdown-video [data-media-provider] {
   background-color: var(--muted);
+}
+
+/* Doc links. The rule under the text is the text at 40%, so it rises with it
+   on hover instead of fighting it; weight and offset never change, because a
+   thicker rule shifts the line box. */
+.doc-link {
+  color: var(--doc-link);
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  text-decoration-color: color-mix(in oklab, currentColor 40%, transparent);
+  border-radius: 2px;
+  transition-property: color, text-decoration-color;
+  transition-duration: var(--duration-base);
+  transition-timing-function: var(--ease-out-quint);
+}
+
+@media (hover: hover) {
+  .doc-link:hover {
+    color: var(--doc-link-hover);
+  }
+}
+
+/* The keyboard gets the colour the mouse gets, plus the ring. */
+.doc-link:focus-visible {
+  color: var(--doc-link-hover);
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.doc-link:active {
+  color: var(--doc-link-hover);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .doc-link {
+    transition: none;
+  }
+}
+
+/* A standalone link, drawn as a pill. Same surface as the floating table of
+   contents: page background, a border for structure, the accent on hover.
+   Nothing here changes size on hover, so a row of pills never reflows. */
+.doc-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  max-width: 100%;
+  padding: 0.25rem 0.625rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background-color: var(--background);
+  color: var(--foreground);
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.35;
+  text-decoration: none;
+  transition-property: background-color, border-color, color;
+  transition-duration: var(--duration-base);
+  transition-timing-function: var(--ease-out-quint);
+}
+
+@media (hover: hover) {
+  .doc-pill:hover {
+    background-color: var(--accent);
+  }
+}
+
+.doc-pill:active {
+  transform: scale(0.98);
+}
+
+.doc-pill:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .doc-pill {
+    transition: none;
+  }
+}
+
+/* The row a list of standalone links becomes. */
+.doc-pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .markdown-video .vds-button {
