@@ -4,6 +4,11 @@
 @import "tailwindcss" source(none);
 @import "tw-animate-css";
 @plugin "@tailwindcss/typography";
+
+/* Bundled with the app: a desktop window has no promise of a network, so
+   the fonts ship as woff2 in the binary instead of from a CDN. */
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
 @source "../../src";
 @source "../../index.html";
 
@@ -24,6 +29,12 @@ html {
 }
 
 @theme inline {
+  /* ── Type families ─────────────────────────────────────
+     Geist and Geist Mono, bundled above. The generic names stay behind them
+     for the first paint and for a glyph the file does not have. */
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, Menlo, Consolas, monospace;
+
   /* ── Spacing ladder ────────────────────────────────────────────────────
      One ladder, consumed by name. Responsiveness lives in the media query on
      the raw values below, not in per-component breakpoint classes. The small
@@ -381,7 +392,7 @@ html {
     scrollbar-color: gray transparent;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans;
   }
 }
 
@@ -820,7 +831,7 @@ button:active kbd.kbd-button {
 .prose code,
 .prose pre code,
 pre code.hljs {
-  font-family: ui-monospace, "Geist Mono", "Fira Code", Menlo, Consolas, monospace !important;
+  font-family: var(--font-mono) !important;
 }
 
 /* Tight paragraph spacing inside list items — keep the link/description pair
@@ -981,7 +992,7 @@ pre code.hljs {
 
 .vex-sig-row {
   padding: 0.4rem 1rem;
-  font-family: ui-monospace, "Geist Mono", "Fira Code", Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 0.82rem;
   line-height: 1.7;
   white-space: pre;
@@ -1119,7 +1130,7 @@ pre code.hljs {
   gap: 0 0.5rem;
   padding-left: var(--md);
   padding-right: 1.25rem;
-  font-family: ui-monospace, "Geist Mono", "Fira Code", Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 0.82rem;
   line-height: 1.6;
 }
@@ -1177,7 +1188,7 @@ pre code.hljs {
   align-items: baseline;
   gap: 0.5rem;
   flex: none;
-  font-family: ui-monospace, "Geist Mono", "Fira Code", Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 0.95rem;
   line-height: 1.6;
 }
