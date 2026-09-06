@@ -6,6 +6,9 @@ export function isTyping(target: EventTarget | null): boolean {
   return !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
 }
 
+/** How to write that key: `Ctrl` on Windows and Linux, `⌘` on macOS. */
+export const COMMAND_KEY = navigator.platform.toLowerCase().includes("mac") ? "⌘" : "Ctrl";
+
 /** Ctrl on Windows and Linux, Command on macOS. One of the two, never both. */
 export function isCommand(event: KeyboardEvent): boolean {
   return (event.ctrlKey || event.metaKey) && !event.altKey;

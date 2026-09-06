@@ -60,7 +60,7 @@ export function CodePanel({ children, language }: CodePanelProps) {
     >
       <button
         type="button"
-        onClick={handleCopy}
+        onClick={(handleCopy)}
         aria-label="Copy code"
         className="absolute cursor-pointer right-2 top-2 select-none rounded-md border border-white/15 bg-white/10 px-2.5 py-1 text-xs font-medium text-white/70 backdrop-blur-sm transition-all duration-150 hover:bg-white/20 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 active:scale-95"
       >
@@ -73,7 +73,10 @@ export function CodePanel({ children, language }: CodePanelProps) {
 
 export function CodeBlock({ children, language }: CodePanelProps) {
   return (
-    <div className="not-prose my-4 -mx-5.25">
+    // Negative margin cancels the panel's own inset (1rem padding + the
+    // .code-panel 1px border) so the glyphs land on the shared text axis —
+    // same 1rem step the VEX signature panel already uses, see globals.css.
+    <div className="not-prose my-4 -mx-[calc(1rem_+_1px)]">
       <CodePanel language={language}>
         <pre className="code-panel">{children}</pre>
       </CodePanel>

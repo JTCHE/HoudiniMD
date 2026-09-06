@@ -12,11 +12,13 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "HoudiniMD",
         "width": 1100,
         "height": 760,
         "minWidth": 480,
-        "minHeight": 400
+        "minHeight": 400,
+        "decorations": false
       }
     ],
     "security": {

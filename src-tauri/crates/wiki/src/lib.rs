@@ -3,6 +3,7 @@
 
 pub mod blocks;
 pub mod html;
+pub mod include;
 pub mod inline;
 pub mod markdown;
 pub mod model;
@@ -147,7 +148,8 @@ fn walk(blocks: &[Block], place: Option<(&str, &str)>, found: &mut Found) {
                 }
             }
             Block::Html { children, .. } => walk(children, place, found),
-            Block::Code { .. } | Block::Divider { .. } | Block::RawHtml { .. } => {}
+            Block::Divider { children, .. } => walk(children, place, found),
+            Block::Code { .. } | Block::RawHtml { .. } => {}
         }
     }
 }

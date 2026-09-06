@@ -126,7 +126,11 @@ export function SearchField({ className, autoFocus = true }: { className?: strin
   }
 
   const mode = query.trim() ? "search" : "paste";
-  const buttonLabel = mode === "search" ? "Search" : "Paste & Search";
+  // One word in both modes. The button changes what it DOES on an empty field
+  // — it reads the clipboard first — but saying so on the cap made the widest
+  // label the resting one, and the placeholder beside it already offers the
+  // paste ("…or paste a SideFX URL").
+  const buttonLabel = "Search";
 
   return (
     // The field overhangs its column by exactly its own padding, so the input

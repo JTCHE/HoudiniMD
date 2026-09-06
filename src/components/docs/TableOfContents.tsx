@@ -1,17 +1,22 @@
 "use client";
 
 import { ChevronDown } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { Heading } from "@/lib/markdown/headings";
 import { FloatingPill } from "./toc/FloatingPill";
-import { headerHeight, useActiveIndex } from "./toc/measure";
+import { scroller, useActiveIndex } from "./toc/measure";
 import { TocList } from "./toc/TocList";
 
-// The content column is max-w-page (56rem) and centred, so the sidebar only
-// appears once the right gutter is wide enough to hold it — below 1400px the
-// page falls back to the inline list plus the floating pill. Every breakpoint
-// class below is written out in full: Tailwind scans source text, so a class
-// assembled from a variable at runtime is never generated.
+// The content column is max-w-page (56rem) and centred, so the list in the
+// gutter only appears once that gutter is wide enough to hold it; below that
+// the page falls back to the inline list plus the floating pill.
+//
+// The measure is the READING COLUMN's own width, not the window's. The window
+// carries a panel down its left side that the reader can drag or hide, so a
+// window-width breakpoint puts the gutter list on a page that has no room for
+// it and the article scrolls sideways. Every breakpoint class below is written
+// out in full: Tailwind scans source text, so a class assembled from a
+// variable at runtime is never generated.
 
 /** Rows the inline list shows before it clips itself behind a "Show all". */
 const LONG = 5;
@@ -24,20 +29,33 @@ const LONG = 5;
  *    scrolls away.
  */
 export function TableOfContents({ headings }: { headings: Heading[] }) {
-  const inline = useRef<HTMLElement>(null);
   const [floating, setFloating] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const active = useActiveIndex(headings);
 
-  // The inline list leaving the top of the viewport is what promotes the pill.
-  useEffect(() => {
-    const el = inline.current;
-    if (!el) return;
-    const io = new IntersectionObserver(([entry]) => setFloating(!entry.isIntersecting), {
-      rootMargin: `-${headerHeight()}px 0px`,
+  /* The inline list leaving the top of the scroller is what promotes the pill.
+     The watch is set by a ref callback, not by an effect: the list is not on
+     every page — a page with one heading has none — so the node it watches
+     comes and goes, and an effect that ran once at mount would end up watching
+     a node that has left the document. That is a pill stuck on a page it was
+     never asked for, and a pill that never comes on the next page.
+
+     The root has to be the scroller, not the default (the window): the window
+     never scrolls, so against the window the inline list would read as
+     permanently visible and the pill would never show. */
+  const watch = useRef<IntersectionObserver | null>(null);
+  const inline = useCallback((el: HTMLElement | null) => {
+    watch.current?.disconnect();
+    watch.current = null;
+    const root = scroller();
+    if (!el || !root) {
+      setFloating(false);
+      return;
+    }
+    watch.current = new IntersectionObserver(([entry]) => setFloating(!entry.isIntersecting), {
+      root,
     });
-    io.observe(el);
-    return () => io.disconnect();
+    watch.current.observe(el);
   }, []);
 
   if (headings.length < 2) return null;
@@ -53,19 +71,27 @@ export function TableOfContents({ headings }: { headings: Heading[] }) {
 
   return (
     <>
-      {/* Wide screens: the list rides along in the right gutter. Fixed rather
-          than a real column, so the article keeps its own centred measure. */}
-      <nav
-        aria-label="On this page"
-        className="not-prose print:hidden hidden min-[1400px]:block fixed top-24 left-[calc(50%+28rem+1.5rem)] w-52 max-h-[calc(100dvh-8rem)] overflow-y-auto"
-      >
-        {title}
-        <TocList headings={headings} top={top} active={active} density="tight" />
-      </nav>
+      {/* Wide screens: the list rides along in the gutter beside the article.
+          It hangs off the RIGHT EDGE OF THE COLUMN, not off the middle of the
+          window: the window has a panel down its left side, so a list placed
+          against the window centres itself over the reading column and lands
+          on the page's own header. */}
+      <div className="not-prose print:hidden hidden @min-[1150px]:block absolute top-0 left-full ml-lg h-full w-52">
+        <nav
+          aria-label="On this page"
+          className="thin-scroll sticky top-24 max-h-[calc(100dvh-8rem)] overflow-y-auto"
+        >
+          {title}
+          <TocList headings={headings} top={top} active={active} density="tight" />
+        </nav>
+      </div>
 
       {/* Narrow screens: the inline list, with rows a thumb can hit. The clip
-          starts high on a long list so the fold costs less of the screen. */}
-      <nav ref={inline} aria-label="On this page" className="not-prose print:hidden min-[1400px]:hidden mb-8 -mt-2">
+          starts high on a long list so the fold costs less of the screen.
+          It carries no bottom margin: the first heading under it already has
+          the space every heading has, and a margin here would add a second
+          gap on top of it. */}
+      <nav ref={inline} aria-label="On this page" className="not-prose print:hidden @min-[1150px]:hidden -mt-2">
         {title}
         <div className={collapsed ? "relative max-h-56 overflow-hidden" : undefined}>
           <TocList headings={headings} top={top} active={active} />
@@ -76,7 +102,7 @@ export function TableOfContents({ headings }: { headings: Heading[] }) {
         {headings.length > LONG && (
           <button
             type="button"
-            onClick={() => setExpanded((v) => !v)}
+            onClick={(() => setExpanded((v) => !v))}
             className="mt-1 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
           >
             {expanded ? "Show less" : "Show all"}

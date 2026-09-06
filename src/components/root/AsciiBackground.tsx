@@ -46,7 +46,13 @@ function computeGrid(containerNode: HTMLElement, fieldNode: HTMLElement) {
   };
 }
 
-export function AsciiBackground({ className }: { className?: string }) {
+/**
+ * `glow` is the soft centre the field is read through on a full-bleed page.
+ * A field confined to one corner of the window does not need it — nothing is
+ * read on top of it — and the glow would show as a bright patch in that
+ * corner, so the corner variant turns it off.
+ */
+export function AsciiBackground({ className, glow = true }: { className?: string; glow?: boolean }) {
   const fieldRef = useRef<HTMLPreElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -114,7 +120,9 @@ export function AsciiBackground({ className }: { className?: string }) {
       {/* The soft centre glow. It sits over the field and under the content, so
           the hero column stays readable against the pattern. */}
           {/* To do: fix strong banding. Look at obsidian spec for image */}
-      <div className="absolute top-1/2 left-1/2 h-2/5 max-w-page w-full scale-110 -translate-x-1/2 -translate-y-1/2 bg-background/90 blur-3xl" />
+      {glow && (
+        <div className="absolute top-1/2 left-1/2 h-2/5 max-w-page w-full scale-110 -translate-x-1/2 -translate-y-1/2 bg-background/90 blur-3xl" />
+      )}
     </div>
   );
 }

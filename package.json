@@ -8,9 +8,11 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "app": "tauri dev",
+    "app": "tauri dev -- --",
     "app:build": "tauri build",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "harness": "node harness/run.mts",
+    "design": "node harness/design.mts"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.3.0",

@@ -1,0 +1,6 @@
+{
+  "section invented: related": "The app builds its own Related list from the index. The doc build has no such section, so both references disagree with it on every page. On purpose.",
+  "params drawn two-column, both references draw it stacked": "The app puts each menu value in its own labelled block inside the description cell. The references run them together as one paragraph. The app keeps more, not less.",
+  "params drawn stacked, both references draw it prose": "APEX node inputs are one labelled block each in the app, where both references run them together as a paragraph. The app keeps more, not less.",
+  "fence.count: the app draws more than both references — fence: how many the page draws": "A VEX or HAPI signature is code, and the app draws it as code. Both references draw it as a line of text."
+}

@@ -154,6 +154,8 @@ export function SearchResultRow({
   const [loaded, setLoaded] = useState(false);
   const [errored, setErrored] = useState(false);
 
+  const press = { onClick, onMouseMove };
+
   if (sub) {
     return (
       <button
@@ -163,8 +165,7 @@ export function SearchResultRow({
         className={`flex w-full items-stretch gap-2.5 pr-4 text-left transition-colors ${rounded ? "rounded-lg" : ""} ${
           active ? "bg-muted" : "hover:bg-muted/50"
         }`}
-        onClick={onClick}
-        onMouseMove={onMouseMove}
+        {...press}
       >
         {/*
           One unbroken rule down the left of the whole group, so a run of hits
@@ -200,8 +201,7 @@ export function SearchResultRow({
       className={`flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors ${rounded ? "rounded-lg" : ""} ${
         active ? "bg-muted" : "hover:bg-muted/50"
       }`}
-      onClick={onClick}
-      onMouseMove={onMouseMove}
+      {...press}
     >
       {/* The placeholder is what sits in the slot until the icon arrives, and
           what stays there if it never does. The site pulsed a grey box instead,

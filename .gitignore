@@ -31,10 +31,7 @@
 *.pem
 
 # debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
+*log*
 
 # env files (can opt-in for committing if needed)
 .env*
@@ -74,9 +71,6 @@ playwright.config.ts
 
 .claude/
 
-# log files
-*.log
-
 # python cache
 __pycache__/
 *.py[cod]
@@ -86,6 +80,10 @@ __pycache__/
 
 # screenshot output
 shots/
+
+# harness measurements
+harness/out/
+harness/tmp/
 
 # analytics
 *analytics*

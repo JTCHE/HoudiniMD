@@ -70,8 +70,11 @@ export function FloatingPill({
   return (
     <div
       ref={floater}
-      style={{ top: "calc(var(--header-h, 3.5rem) + 0.75rem)" }}
-      className={`print:hidden min-[1400px]:hidden fixed inset-x-0 z-20 transition-opacity duration-300 ease-out motion-reduce:transition-none ${
+      // Sticky in the reading column, not fixed to the window: the window has
+      // a panel down its left side, and a pill fixed to the window centres
+      // itself over that panel instead of over the page. The wrapper carries
+      // no height, so it lies over the text rather than pushing it down.
+      className={`print:hidden @min-[1150px]:hidden sticky top-3 z-20 h-0 transition-opacity duration-300 ease-out motion-reduce:transition-none ${
         floating ? "opacity-100" : "pointer-events-none opacity-0"
       }`}
     >
@@ -79,7 +82,7 @@ export function FloatingPill({
         <div className="relative">
           <button
             type="button"
-            onClick={() => setOpen((v) => !v)}
+            onClick={(() => setOpen((v) => !v))}
             aria-expanded={expanded}
             aria-label="Table of contents"
             className={`relative inline-flex max-w-[min(20rem,calc(100vw-3rem))] items-center gap-2 h-10 ${pillAlign} text-sm font-medium text-foreground bg-background border border-border rounded-full shadow-lg shadow-black/10 transition-colors hover:bg-accent active:scale-[0.98] outline-none focus-visible:ring-2 focus-visible:ring-ring/40 cursor-pointer`}
@@ -103,7 +106,7 @@ export function FloatingPill({
             // bottom of the screen under Safari's bottom bar. svh is the
             // smallest state — the panel fits with every bar on screen.
             style={{ maxHeight: "calc(100svh - var(--header-h, 3.5rem) - 6rem)" }}
-            className={`absolute left-0 top-full mt-2 w-[min(20rem,calc(100vw-3rem))] overflow-y-auto overscroll-contain border border-border bg-background rounded-2xl shadow-xl shadow-black/20 p-1.5 origin-top-left transition-[opacity,transform] duration-200 ease-out motion-reduce:transition-none ${expanded ? "opacity-100 scale-100" : "pointer-events-none opacity-0 scale-[0.98]"}`}
+            className={`-ml-3.5 absolute left-0 top-full mt-2 w-[min(20rem,calc(100vw-3rem))] overflow-y-auto overscroll-contain border border-border bg-background rounded-2xl shadow-xl shadow-black/20 p-1.5 origin-top-left transition-[opacity,transform] duration-200 ease-out motion-reduce:transition-none ${expanded ? "opacity-100 scale-100" : "pointer-events-none opacity-0 scale-[0.98]"}`}
           >
             <TocList headings={headings} top={top} active={active} padded onNavigate={() => setOpen(false)} />
           </div>

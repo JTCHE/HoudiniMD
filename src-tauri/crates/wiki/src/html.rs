@@ -120,21 +120,22 @@ fn one(block: &Block) -> String {
             format!("<pre><code{language}>{}</code></pre>", escape(text))
         }
         Block::Divider {
-            label, invisible, ..
+            label,
+            invisible,
+            children,
+            ..
         } => {
+            let body = blocks(children);
             if *invisible {
-                String::new()
-            } else {
-                match label {
-                    Some(label) => {
-                        format!(
-                            "<div class=\"divider\"><span>{}</span></div>",
-                            inlines(label)
-                        )
-                    }
-                    None => "<hr>".to_string(),
-                }
+                return body;
             }
+            let rule = match label {
+                Some(label) => {
+                    format!("<div class=\"divider\"><span>{}</span></div>", inlines(label))
+                }
+                None => "<hr>".to_string(),
+            };
+            rule + &body
         }
         Block::Table { rows } => table(rows),
         Block::Include {

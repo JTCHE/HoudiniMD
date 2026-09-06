@@ -1,11 +1,11 @@
 import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../../lib/backend";
 
 interface MetaEntry {
   title: string;
   summary: string;
-  /** A path inside `icons.zip`. Absent on a page that names no icon. */
+  /** The page's own icon inside `icons.zip`, or null where it has none. */
   icon: string | null;
 }
 
@@ -40,10 +40,16 @@ function flush() {
   if (urgent.size + pending.size > 0) scheduled = setTimeout(flush, BATCH_MS);
   if (paths.length === 0) return;
 
-  invoke<{ path: string; title: string; summary?: string | null; icon?: string | null }[]>("meta", { paths })
+  invoke<{ path: string; title: string; summary?: string | null; icon?: string | null }[]>("meta", {
+    paths,
+  })
     .then((rows) => {
       for (const row of rows) {
-        metaCache.set(row.path, { title: row.title, summary: row.summary ?? "", icon: row.icon ?? null });
+        metaCache.set(row.path, {
+          title: row.title,
+          summary: row.summary ?? "",
+          icon: row.icon ?? null,
+        });
       }
     })
     .catch(() => {})
@@ -60,7 +66,15 @@ function flush() {
     });
 }
 
-function request(slug: string, onSettled?: (entry: MetaEntry | null) => void) {
+/** `eager` is a reader pointing at the link right now. Everything else — a
+    link merely on screen, waiting to draw its icon — goes behind that, or a
+    shelf page of a thousand links puts a thousand slugs in front of the one
+    hover that matters. */
+function request(
+  slug: string,
+  onSettled?: (entry: MetaEntry | null) => void,
+  eager = true,
+) {
   if (metaCache.has(slug)) {
     onSettled?.(metaCache.get(slug) ?? null);
     return;
@@ -69,10 +83,9 @@ function request(slug: string, onSettled?: (entry: MetaEntry | null) => void) {
     let set = waiting.get(slug);
     if (!set) waiting.set(slug, (set = new Set()));
     set.add(onSettled);
-    urgent.add(slug);
-  } else {
-    pending.add(slug);
   }
+  if (eager && onSettled) urgent.add(slug);
+  else pending.add(slug);
   scheduled ??= setTimeout(flush, BATCH_MS);
 }
 
@@ -82,21 +95,26 @@ export function registerSlug(slug: string) {
   request(slug);
 }
 
-/** The page behind a link, for a caller that draws it rather than describes it
- *  — the pill needs the icon before the reader points at anything. */
-export function usePageMeta(slug: string | null) {
-  const [meta, setMeta] = useState<MetaEntry | null>(() => (slug ? (metaCache.get(slug) ?? null) : null));
+/** What a page is called and what it looks like, once the batch has answered.
+    Null until then, so a link shows what the help wrote and swaps to the page's
+    own name when the answer arrives. */
+export function usePageMark(slug: string | null): MetaEntry | null {
+  const [mark, setMark] = useState<MetaEntry | null>(() => (slug ? (metaCache.get(slug) ?? null) : null));
   useEffect(() => {
     if (!slug) return;
     let live = true;
-    request(slug, (entry) => {
-      if (live) setMeta(entry);
-    });
+    request(
+      slug,
+      (entry) => {
+        if (live) setMark(entry);
+      },
+      false,
+    );
     return () => {
       live = false;
     };
   }, [slug]);
-  return meta;
+  return mark;
 }
 
 export function DocTooltip({

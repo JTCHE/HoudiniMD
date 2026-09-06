@@ -22,10 +22,50 @@
   }
 }
 
+/* The theme is an attribute, not a media query. Tailwind own dark: variant
+   reads prefers-color-scheme, so every dark: utility fired from the machine
+   setting while the app painted the theme the reader chose: a light window
+   wearing the dark theme black borders and inverted prose. The variant is
+   pointed at the same attribute theme.ts writes. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+
 html {
-  scrollbar-gutter: stable;
   background: var(--background);
   color-scheme: light dark;
+}
+
+/* A list that scrolls says so. The gutter is reserved in both states, so the
+   thumb appearing under the pointer never re-flows the rows beside it; the
+   track stays empty because the fade at the bottom already says there is
+   more, and a painted track would draw a second line down the panel. */
+.thin-scroll {
+  /* A visible bar, always. The webview draws it over the content rather than
+     beside it, so a bar that waits for the pointer is a list with no sign it
+     scrolls at all. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--neutral-300) transparent;
+  /* The bar's place is held from the start. Without this a list that grows
+     past its box takes the width for the bar out of its rows at that moment,
+     and every name and count in it steps left. */
+  scrollbar-gutter: stable;
+}
+
+.thin-scroll:hover,
+.thin-scroll:focus-within {
+  scrollbar-color: var(--neutral-400) transparent;
+}
+
+/* The theme is chosen, not sensed. `theme.ts` writes `data-theme` on the
+   root before the first paint — the reader's choice, or the system's when
+   they have not made one — so the switch in the panel is one attribute.
+   Nothing in the app reads `prefers-color-scheme` any more. */
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
 }
 
 @theme inline {
@@ -54,6 +94,35 @@ html {
   --spacing-3xl: var(--3xl);
   --spacing-4xl: var(--4xl);
 
+  /* ── Shell metrics ─────────────────────────────────────────────────────
+     The window chrome is furniture, not rhythm: a title bar is the height a
+     title bar is on this platform, and it does not grow on a wide display the
+     way page rhythm does. So these are their own names rather than steps of
+     the ladder above, and they stay fixed across the media query below.
+     Naming them `--spacing-*` is what puts them on `h-`, `w-`, `p-` and `gap-`
+     alike, so one name serves the bar's height and the gap that clears it. */
+  --spacing-titlebar: 41px;
+  --spacing-statusbar: 44px;
+  --spacing-sidebar: 289px;
+  /* A caption button is a fixed Windows hit target, wider than it is tall. */
+  --spacing-caption-w: 44px;
+  --spacing-caption-h: 40px;
+  /* ONE row height for the panel. A group header, a context, a page and the
+     recents row are the same object at different depths, so they are the same
+     height; two heights is what made the panel look assembled rather than
+     drawn. The chip is the raised tile in the bookmark strip. */
+  --spacing-row: 30px;
+  /* What a row draws outside its own box: the bookmark flag hangs 9px to
+     the left of the mark, and the chip's shadow spreads a little past every
+     edge. A list that scrolls has to hold this much slack inside its clip,
+     and give it back as a negative margin, or it cuts them. */
+  --spacing-slack: 13px;
+  --spacing-chip: 38px;
+  /* The box the landing keeps for the list under the search field. It does
+     not grow with the list: the greeting and the field would move every time
+     the reader crossed between Recents and Bookmarks. */
+  --spacing-list: 268px;
+
   /* ── Content widths ───────────────────────────────────────────────────
      Named, because the spacing ladder above shares its names with Tailwind's
      built-in container scale (`sm`, `md`, `4xl`, …) and shadows it — a
@@ -62,6 +131,9 @@ html {
      every page and the footer share. */
   --container-page: 56rem;
   --container-overlay: 32rem;
+  /* The landing column: the heading, the field and the list below it share one
+     axis, narrower than a page of prose because none of the three is prose. */
+  --container-hero: 41.25rem;
 
   /* ── Type ladder ───────────────────────────────────────────────────────
      Six roles, each carrying its own leading and tracking. Deliberately does
@@ -89,6 +161,7 @@ html {
      The semantic shadcn tokens below are expressed on top of this ramp, so
      there is one palette rather than two. */
   --color-neutral-0: var(--neutral-0);
+  --color-raised: var(--raised);
   --color-neutral-50: var(--neutral-50);
   --color-neutral-100: var(--neutral-100);
   --color-neutral-200: var(--neutral-200);
@@ -125,6 +198,7 @@ html {
   --shadow-keycap: var(--elevation-keycap);
   --shadow-control: var(--elevation-control);
   --shadow-pane: var(--elevation-pane);
+  --shadow-chip: var(--elevation-chip);
 
   --ease-out-quint: var(--easing-quint);
   --default-transition-duration: var(--duration-base);
@@ -155,6 +229,7 @@ html {
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
+  --color-window-close: var(--window-close);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -222,12 +297,6 @@ html {
   --brand-bright: oklch(0.71 0.19 43.1);
   --brand-foreground: oklch(0.985 0 0);
 
-  /* Doc links follow the table of contents: quiet at rest, full contrast on
-     hover and on keyboard focus. One ramp step less quiet than the TOC,
-     because these sit inside body text rather than beside it —
-     --muted-foreground (0.556) is not readable in a paragraph. */
-  --doc-link: var(--neutral-700);
-  --doc-link-hover: var(--neutral-950);
 
   /* Surfaces.
 
@@ -238,6 +307,10 @@ html {
      same role. That is why each of these appears again in the dark block —
      the value flips role, not just lightness. */
   --surface: var(--neutral-0);
+  /* A chip on the panel: one step LIGHTER than whatever it sits on. White on
+     a light theme; a step up the ramp on a dark one, where white would be a
+     hole and the page colour would be a step DOWN. */
+  --raised: var(--neutral-0);
   --surface-sunken: var(--neutral-100);
   --hairline: oklch(0 0 0 / 9%);
 
@@ -267,6 +340,11 @@ html {
   --elevation-keycap: 0 2px 0 0 var(--elevated-edge), 0 1px 1.5px 0 oklch(0 0 0 / 10%);
   --elevation-control: 0 1px 0.75px 0 oklch(0 0 0 / 28%), 0 1px 2px 0 oklch(0 0 0 / 16%);
   --elevation-pane: 0 4px 12px 0 oklch(0 0 0 / 8%);
+  /* A chip lifted barely off the sidebar — the selected page row, a bookmark
+     tile, the version card. One hairline of light under the bottom edge and
+     no blur worth the name, so a column of them does not read as a stack of
+     floating cards. */
+  --elevation-chip: 0 1px 0.75px 0 oklch(0 0 0 / 8%);
 
   /* ── Semantic tokens, expressed on the ramp above ─────────────────────── */
   --background: var(--neutral-0);
@@ -284,6 +362,9 @@ html {
   --accent: var(--neutral-100);
   --accent-foreground: var(--neutral-900);
   --destructive: oklch(0.577 0.245 27.325);
+  /* The close button's hover fill, Windows' own: #c42b1c on a light bar,
+     #e81123 on a dark one, where the darker red reads as brown. */
+  --window-close: oklch(0.505 0.181 29);
   --border: oklch(0 0 0 / 10%);
   --input: var(--neutral-200);
   --ring: var(--neutral-400);
@@ -320,76 +401,80 @@ html {
   }
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    /* The ramp reverses. Everything expressed against it follows for free. */
-    --neutral-0: oklch(0.145 0 0);
-    --neutral-50: oklch(0.175 0 0);
-    --neutral-100: oklch(0.205 0 0);
-    --neutral-200: oklch(0.269 0 0);
-    --neutral-300: oklch(0.35 0 0);
-    --neutral-400: oklch(0.44 0 0);
-    --neutral-500: oklch(0.556 0 0);
-    --neutral-600: oklch(0.708 0 0);
-    --neutral-700: oklch(0.87 0 0);
-    --neutral-800: oklch(0.922 0 0);
-    --neutral-900: oklch(0.97 0 0);
-    --neutral-950: oklch(0.985 0 0);
+:root[data-theme="dark"] {
+  /* The ramp reverses. Everything expressed against it follows for free. */
+  --neutral-0: oklch(0.145 0 0);
+  --neutral-50: oklch(0.175 0 0);
+  --neutral-100: oklch(0.205 0 0);
+  --neutral-200: oklch(0.269 0 0);
+  --neutral-300: oklch(0.35 0 0);
+  --neutral-400: oklch(0.44 0 0);
+  --neutral-500: oklch(0.556 0 0);
+  --neutral-600: oklch(0.708 0 0);
+  --neutral-700: oklch(0.87 0 0);
+  --neutral-800: oklch(0.922 0 0);
+  --neutral-900: oklch(0.97 0 0);
+  --neutral-950: oklch(0.985 0 0);
 
-    /* Elevation is the one thing that does not mirror: a light theme raises a
-       surface by making it whiter than the page, a dark theme by making it
-       lighter than the page. Both are "one step up", but not the same ramp
-       index — so these pick their own steps rather than being derived. */
-    --surface: var(--neutral-100);
-    /* Sunken means below the page, in both themes: the light theme puts the
-       field one step under white, so the dark theme puts it one step under the
-       page rather than one step over it. The ramp has no step below
-       `--neutral-0`, which IS the dark page, so this one is stated. */
-    --surface-sunken: var(--neutral-0);
-    --hairline: oklch(1 0 0 / 10%);
+  /* Elevation is the one thing that does not mirror: a light theme raises a
+     surface by making it whiter than the page, a dark theme by making it
+     lighter than the page. Both are "one step up", but not the same ramp
+     index — so these pick their own steps rather than being derived. */
+  --surface: var(--neutral-100);
+  --raised: var(--neutral-200);
+  /* Sunken means below the page, in both themes: the light theme puts the
+     field one step under white, so the dark theme puts it one step under the
+     page rather than one step over it. The ramp has no step below
+     `--neutral-0`, which IS the dark page, so this one is stated. */
+  --surface-sunken: var(--neutral-0);
+  --hairline: oklch(1 0 0 / 10%);
 
-    --elevated-top: var(--neutral-200);
-    --elevated-bottom: var(--neutral-100);
-    --elevated-edge: var(--neutral-0);
+  --elevated-top: var(--neutral-200);
+  --elevated-bottom: var(--neutral-100);
+  --elevated-edge: var(--neutral-0);
 
-    --control-top: var(--neutral-900);
-    --control-bottom: var(--neutral-700);
-    --control-edge: oklch(1 0 0 / 18%);
+  --control-top: var(--neutral-900);
+  --control-bottom: var(--neutral-700);
+  --control-edge: oklch(1 0 0 / 18%);
 
-    --control-sheen: oklch(0 0 0 / 10%);
+  --control-sheen: oklch(0 0 0 / 10%);
 
-    /* A wide black shadow on a near-black page is invisible; what reads as
-       depth here is the field's own edge pair. */
-    --elevation-field: 0 12px 28px 0 oklch(0 0 0 / 45%);
-    --elevation-pane: 0 4px 12px 0 oklch(0 0 0 / 45%);
+  /* A wide black shadow on a near-black page is invisible; what reads as
+     depth here is the field's own edge pair. */
+  --elevation-field: 0 12px 28px 0 oklch(0 0 0 / 45%);
+  --elevation-pane: 0 4px 12px 0 oklch(0 0 0 / 45%);
+  /* The chip lift is a shadow in the light theme and a lit top edge in the
+     dark one: a drop shadow under a near-black chip on a near-black sidebar
+     shows nothing, so the same 1px reads from above instead. */
+  --elevation-chip: inset 0 1px 0 0 oklch(1 0 0 / 6%);
 
-    --brand-plate: oklch(0.134 0 0);
+  --brand-plate: oklch(0.134 0 0);
 
-    --card: var(--neutral-100);
-    --popover: var(--neutral-100);
-    --primary: var(--neutral-800);
-    --primary-foreground: var(--neutral-100);
-    --secondary: var(--neutral-200);
-    --muted: var(--neutral-200);
-    --accent: var(--neutral-200);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 15%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: var(--neutral-500);
-    --chart-1: oklch(0.488 0.243 264.376);
-    --chart-2: oklch(0.696 0.17 162.48);
-    --chart-3: oklch(0.769 0.188 70.08);
-    --chart-4: oklch(0.627 0.265 303.9);
-    --chart-5: oklch(0.645 0.246 16.439);
-    --sidebar: oklch(0.205 0 0);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.488 0.243 264.376);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.269 0 0);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.556 0 0);
-  }
+  --card: var(--neutral-100);
+  --popover: var(--neutral-100);
+  --primary: var(--neutral-800);
+  --primary-foreground: var(--neutral-100);
+  --secondary: var(--neutral-200);
+  --muted: var(--neutral-200);
+  --accent: var(--neutral-200);
+  --destructive: oklch(0.704 0.191 22.216);
+  --window-close: oklch(0.577 0.235 29.2);
+  --border: oklch(1 0 0 / 15%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: var(--neutral-500);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
 }
 
 @layer base {
@@ -456,97 +541,6 @@ html {
    of provider background a probe miss can still expose around the frame. */
 .markdown-video [data-media-provider] {
   background-color: var(--muted);
-}
-
-/* Doc links. The rule under the text is the text at 40%, so it rises with it
-   on hover instead of fighting it; weight and offset never change, because a
-   thicker rule shifts the line box. */
-.doc-link {
-  color: var(--doc-link);
-  text-decoration-line: underline;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 2px;
-  text-decoration-color: color-mix(in oklab, currentColor 40%, transparent);
-  border-radius: 2px;
-  transition-property: color, text-decoration-color;
-  transition-duration: var(--duration-base);
-  transition-timing-function: var(--ease-out-quint);
-}
-
-@media (hover: hover) {
-  .doc-link:hover {
-    color: var(--doc-link-hover);
-  }
-}
-
-/* The keyboard gets the colour the mouse gets, plus the ring. */
-.doc-link:focus-visible {
-  color: var(--doc-link-hover);
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
-}
-
-.doc-link:active {
-  color: var(--doc-link-hover);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .doc-link {
-    transition: none;
-  }
-}
-
-/* A standalone link, drawn as a pill. Same surface as the floating table of
-   contents: page background, a border for structure, the accent on hover.
-   Nothing here changes size on hover, so a row of pills never reflows. */
-.doc-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  max-width: 100%;
-  padding: 0.25rem 0.625rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background-color: var(--background);
-  color: var(--foreground);
-  font-size: 0.875rem;
-  font-weight: 500;
-  line-height: 1.35;
-  text-decoration: none;
-  transition-property: background-color, border-color, color;
-  transition-duration: var(--duration-base);
-  transition-timing-function: var(--ease-out-quint);
-}
-
-@media (hover: hover) {
-  .doc-pill:hover {
-    background-color: var(--accent);
-  }
-}
-
-.doc-pill:active {
-  transform: scale(0.98);
-}
-
-.doc-pill:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .doc-pill {
-    transition: none;
-  }
-}
-
-/* The row a list of standalone links becomes. */
-.doc-pill-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
 }
 
 .markdown-video .vds-button {
@@ -630,7 +624,10 @@ pre code[class] {
   display: block;
   background: transparent !important;
   border: none;
-  padding: 1rem 1.25rem;
+  /* 1rem on all sides: the same step .vex-sig-row and .callout use, so the
+     panel's negative margin (see CodeBlock.tsx) stays a plain 1rem + border,
+     not an arbitrary decimal. */
+  padding: 1rem;
   color: oklch(0.88 0 0);
   font-size: 0.84em;
   line-height: 1.7;
@@ -868,10 +865,12 @@ button:active kbd.kbd-button {
   padding-top: calc(var(--print-page-x) + 0.5rem);
 }
 
-/* ── Anchor scroll offset — compensate for sticky header ────────────────── */
-/* --header-h is measured and published by DocsHeader: the header grows a row
-   when the breadcrumbs wrap, and the wrap point depends on the text, so the
-   offset has to follow the real element rather than a guessed constant. */
+/* ── Anchor scroll offset — compensate for the title bar ────────────────── */
+/* The window's own bar is a fixed height, so --header-h is that height. It
+   stays a variable because a floating pill and a toast measure from it too. */
+:root {
+  --header-h: var(--spacing-titlebar);
+}
 /* Covers direct hash URLs. In-page TOC clicks scroll themselves (see
    scrollToHeading): Safari honours scroll-margin only inside a scroll-snap
    container, so on iOS this rule alone drops the heading under the header. */
@@ -1029,7 +1028,7 @@ pre code.hljs {
 .callout p {
   margin: 0.4rem 0;
 }
-/* The code block's own page-axis overhang (-mx-5.25) belongs outside callouts:
+/* The code block's own page-axis overhang belongs outside callouts:
    here the callout's rim is already the frame, so the panel sits flush inside
    it instead of poking through. */
 .callout > .not-prose {
@@ -1106,7 +1105,7 @@ pre code.hljs {
 @media (max-width: 640px), (pointer: coarse) {
   pre code[class] {
     width: max-content;
-    padding-right: calc(1.25rem + var(--code-copy-clearance));
+    padding-right: calc(1rem + var(--code-copy-clearance));
   }
   .vex-sig-row {
     width: max-content;

@@ -1,8 +1,21 @@
 //! Reads help pages and icons out of the zips in a Houdini install.
 //! Nothing is extracted to disk. See spec: Local — Image and Asset Serving.
 
-use std::io::Read;
-use std::path::Path;
+use std::collections::HashMap;
+use std::fs::File;
+use std::io::{BufReader, Read};
+use std::path::{Path, PathBuf};
+use std::sync::{LazyLock, Mutex};
+
+/// The archives this process has opened, kept open.
+///
+/// `icons.zip` holds about ten thousand entries. Opening it means reading and
+/// parsing that whole central directory, and the sidebar asks for a dozen
+/// icons in the time it takes to draw one list — so the first row of a list
+/// used to cost as much as all the rest of it together. The archive is parsed
+/// once and every later read seeks inside it.
+static ARCHIVES: LazyLock<Mutex<HashMap<PathBuf, zip::ZipArchive<BufReader<File>>>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// Why a page could not be read. `Missing` is the reader's problem — this build
 /// holds no such page — and the front-end draws the not-found page for it.
@@ -15,19 +28,33 @@ pub enum PageError {
 /// `nodes/sop/box` lives in `nodes.zip` as `sop/box.txt`. A path that names a
 /// directory, such as `vex/contexts`, reads that directory's `index.txt` — the
 /// help links to both forms.
+///
+/// Not every section is a zip. `examples`, `licenses`, `heightfields` and six
+/// more ship as plain folders beside the zips, about 1,220 pages the reader
+/// could not reach at all while this only opened archives.
+/// See spec: Local — Pages missing from the app index.
 pub fn page(help: &Path, path: &str) -> Result<String, PageError> {
     let path = path.trim_matches('/');
     let (section, rest) = path.split_once('/').ok_or(PageError::Missing)?;
-    let zip = help.join(format!("{section}.zip"));
-    if !zip.is_file() {
+    if rest.contains("..") {
         return Err(PageError::Missing);
     }
-    let found = read(&zip, &format!("{rest}.txt"))
-        .and_then(|bytes| match bytes {
-            Some(bytes) => Ok(Some(bytes)),
-            None => read(&zip, &format!("{rest}/index.txt")),
-        })
-        .map_err(PageError::Unreadable)?;
+    let names = [format!("{rest}.txt"), format!("{rest}/index.txt")];
+
+    let zip = help.join(format!("{section}.zip"));
+    let mut found = None;
+    if zip.is_file() {
+        for name in &names {
+            found = read(&zip, name).map_err(PageError::Unreadable)?;
+            if found.is_some() {
+                break;
+            }
+        }
+    }
+    let folder = help.join(section);
+    if found.is_none() && folder.is_dir() {
+        found = names.iter().find_map(|name| std::fs::read(folder.join(name)).ok());
+    }
     let bytes = found.ok_or(PageError::Missing)?;
     String::from_utf8(bytes).map_err(|e| PageError::Unreadable(e.to_string()))
 }
@@ -78,9 +105,13 @@ fn read(zip: &Path, name: &str) -> Result<Option<Vec<u8>>, String> {
     if name.contains("..") {
         return Err("a path cannot leave its archive".into());
     }
-    let file = std::fs::File::open(zip).map_err(|e| format!("{}: {e}", zip.display()))?;
-    let mut archive =
-        zip::ZipArchive::new(std::io::BufReader::new(file)).map_err(|e| e.to_string())?;
+    let mut open = ARCHIVES.lock().map_err(|e| e.to_string())?;
+    if !open.contains_key(zip) {
+        let file = File::open(zip).map_err(|e| format!("{}: {e}", zip.display()))?;
+        let archive = zip::ZipArchive::new(BufReader::new(file)).map_err(|e| e.to_string())?;
+        open.insert(zip.to_path_buf(), archive);
+    }
+    let archive = open.get_mut(zip).expect("just inserted");
     let Ok(mut entry) = archive.by_name(name) else {
         return Ok(None);
     };

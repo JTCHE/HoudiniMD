@@ -1,5 +1,5 @@
 import DocLink from "@/components/docs/DocLink";
-import { DocPill } from "@/components/docs/DocPill";
+import { usePageMark } from "@/components/docs/Tooltip";
 import DocIconClient from "./DocIconClient";
 
 type HastNode = {
@@ -14,33 +14,46 @@ function text(node: HastNode): string {
   return node.type === "text" ? (node.value ?? "") : (node.children?.map(text).join("") ?? "");
 }
 
-/** A "Related" row: the item holds links and nothing else but the dashes the
-    help source puts between them. */
-function standaloneLinks(node: HastNode): HastNode[] | null {
-  const body = node.children?.length === 1 && node.children[0].tagName === "p" ? node.children[0] : node;
-  const parts = body.children ?? [];
-  const links = parts.filter((child) => child.tagName === "a" && typeof child.properties?.href === "string");
-  if (!links.length) return null;
-  const rest = parts.filter((child) => !links.includes(child));
-  // Anything that is not a link has to be a separator, or this is prose.
-  if (rest.some((child) => child.type !== "text" || /[^\s\-–•,]/.test(child.value ?? ""))) return null;
-  return links;
+/** The one link a list item holds, when the item holds nothing else — the
+    shape of every `@related` list on a node page. A bullet like that names a
+    page, so it gets the page's own name and not the help's internal one. */
+function onlyLink(node?: HastNode): HastNode | null {
+  const content = (node?.children ?? []).filter(
+    (child) => child.tagName || (child.type === "text" && (child.value ?? "").trim()),
+  );
+  const [one] = content.length === 1 && content[0].tagName === "p" ? [content[0]] : [node];
+  const inner = (one?.children ?? []).filter(
+    (child) => child.tagName || (child.type === "text" && (child.value ?? "").trim()),
+  );
+  return inner.length === 1 && inner[0].tagName === "a" ? inner[0] : null;
+}
+
+/** A bullet that is one link to one page.
+ *
+ *  The help writes a `@related` list as bare internal names — `attribcreate`,
+ *  `kinefx--agentfromrig` — which is what the file system calls the page, not
+ *  what the page calls itself. The reader gets the page's own title instead,
+ *  and the internal name is kept only where the help wrote something else. */
+function PageBullet({ href, label }: { href: string; label: string }) {
+  const slug = href.replace(/^#?\/+/, "").split("#")[0] || null;
+  const mark = usePageMark(slug);
+  const named = /^[a-z0-9][a-z0-9_-]*$/.test(label);
+  const name = named && mark?.title ? mark.title : label;
+  return (
+    <DocLink href={href}>{name}</DocLink>
+  );
 }
 
 export function Card({ node, children, ...props }: React.ComponentProps<"li"> & { node?: HastNode }) {
   if (!node?.properties?.dataCard) {
-    const links = node ? standaloneLinks(node) : null;
-    if (links) {
+    const link = onlyLink(node);
+    const href = typeof link?.properties?.href === "string" ? link.properties.href : null;
+    // Only a link to a page in the help. An address off the machine has no
+    // page here to name.
+    if (href && !/^[a-z]+:/i.test(href)) {
       return (
-        <li {...props} className="doc-pill-row">
-          {links.map((link, i) => (
-            <DocPill
-              key={`${String(link.properties!.href)}-${i}`}
-              href={String(link.properties!.href)}
-            >
-              {text(link)}
-            </DocPill>
-          ))}
+        <li {...props}>
+          <PageBullet href={href} label={text(link!)} />
         </li>
       );
     }
@@ -66,6 +79,7 @@ export function Card({ node, children, ...props }: React.ComponentProps<"li"> & 
           <DocLink
             href={href}
             underline={false}
+            mark={false}
           >
             {typeof icon?.properties?.src === "string" && (
               <DocIconClient

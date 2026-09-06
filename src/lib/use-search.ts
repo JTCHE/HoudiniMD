@@ -5,6 +5,17 @@ import { bodies, match, titles, type Hit } from "@/lib/search";
  *  wait at all — it reads a list that is already in memory. */
 export const BODY_SEARCH_DELAY = 120;
 
+/**
+ * Shorter than this, the body search does not run at all.
+ *
+ * One letter matches most of the corpus, and FTS5 has to rank all of it: the
+ * measured cost is 202ms on this machine and 635ms on the reference laptop
+ * while Houdini works, against 28ms for a real word. It buys nothing either —
+ * the title list already answers a letter instantly, and BM25 over a one-letter
+ * prefix ranks noise. See spec: Local — Performance Harness and Budgets.
+ */
+const MIN_BODY_QUERY = 3;
+
 /** A result set, with the query it answers. */
 export interface Found {
   query: string;
@@ -39,6 +50,8 @@ export function useSearch(query: string): Found {
     titles().then((all) => {
       if (live) setFound({ query: wanted, hits: match(all, wanted) });
     });
+
+    if (wanted.length < MIN_BODY_QUERY) return () => { live = false; };
 
     const timer = window.setTimeout(async () => {
       const [all, found] = await Promise.all([titles(), bodies(wanted)]);

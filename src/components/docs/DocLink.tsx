@@ -1,12 +1,10 @@
-import { startTransition, useEffect, useRef, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router";
+import { useEffect, useRef, useState } from "react";
+import { Link, useLocation } from "react-router";
 import { cn } from "@/lib/utils";
 import { showToast } from "@/components/ui/toast-notification";
-import { DocTooltip, registerSlug } from "./Tooltip";
-
-// Same state hierarchy as the table of contents — quiet at rest, full contrast
-// on hover and on focus. The values live in globals.css beside the ramp.
-export const DOC_LINK_CLASS_NAME = "doc-link";
+import { DocTooltip, registerSlug, usePageMark } from "./Tooltip";
+import { Icons } from "@/lib/ui/icons";
+import DocIconClient from "./markdown/DocIconClient";
 
 // Shared across all DocLink instances so a link-dense page (1000+ links) uses
 // one observer instead of one per link. A link's slug is warmed only once it is
@@ -31,6 +29,16 @@ function getLinkObserver() {
   return linkObserver;
 }
 
+// Links pop by weight and contrast, not by colour: 500 against the prose's 400,
+// at the top of the ramp where the prose sits at neutral-700. The hover dims
+// the whole link, text and rule together, because opacity interpolates in both
+// themes and a colour that suits the light theme goes wrong in the dark one.
+// Weight and offset never change, so a paragraph never reflows under the pointer.
+const LINK =
+  "text-brand font-medium no-underline decoration-[0.5px] " +
+  "hover:opacity-75 hover:underline transition-opacity transition-colors motion-reduce:transition-none " +
+  "rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/40";
+
 /**
  * Every link in the reading view. An app path opens in the window; an external
  * address opens in the reader's browser. Pointing at an app link says what is
@@ -42,31 +50,63 @@ export default function DocLink({
   className,
   underline = true,
   fullWidth = false,
+  mark = true,
 }: {
   href: string;
   children: React.ReactNode;
   className?: string;
   underline?: boolean;
   fullWidth?: boolean;
+  /** Draw the page's own icon in front of the name. Off for a link whose
+      markup already carries an icon — the card grids, where the help writes
+      the image itself. */
+  mark?: boolean;
 }) {
-  const classes = cn(underline && DOC_LINK_CLASS_NAME, fullWidth && "w-full", className);
+  const classes = cn(underline && LINK, fullWidth && "w-full", className);
   const [visible, setVisible] = useState(false);
   const linkRef = useRef<HTMLAnchorElement>(null);
-  const preventNextClick = useRef(false);
-  const navigate = useNavigate();
   const location = useLocation();
   // Which visual line the pointer entered on, for wrapped multi-line links —
   // null on keyboard focus, where there is no cursor position to anchor to.
   const hoverPosRef = useRef<{ x: number; y: number } | null>(null);
 
   const external = /^[a-z]+:/i.test(href);
-  const hashAt = href.indexOf("#");
-  const anchor = hashAt >= 0 ? href.slice(hashAt + 1) : null;
+  // The help's own links to other pages are written `#/nodes/sop/box`: the
+  // markdown has to work in a plain viewer, where the app's route is a hash.
+  // Read as written, that `#` says "a place on this page", and the link goes
+  // nowhere, says "Already on this page", and has no page to name in a
+  // tooltip. The leading hash belongs to the route, so it comes off here.
+  const to = href.startsWith("#/") ? href.slice(1) : href;
+  const hashAt = to.indexOf("#");
+  const anchor = hashAt >= 0 ? to.slice(hashAt + 1) : null;
   // The tooltip names a page, so it needs the page and not the heading in it.
   // A link that is only an anchor has no page of its own: it means this page.
-  const path = hashAt >= 0 ? href.slice(0, hashAt) : href;
+  const path = hashAt >= 0 ? to.slice(0, hashAt) : to;
   const slug = external ? null : path.replace(/^\/+/, "") || null;
   const samePage = !external && (!slug || location.pathname === `/${slug}`);
+
+  /* Every link to a page in the help wears that page's icon. A name with its
+     glyph in front of it is recognised before it is read, and the icon is the
+     same one the panel and the search draw for that page. The answer arrives
+     with the batch the tooltips already ask for, so a link costs no call of
+     its own. */
+  const marked = mark && !external && !!slug && !samePage;
+  const meta = usePageMark(marked ? slug : null);
+  const glyph = marked ? (
+    meta?.icon ? (
+      <DocIconClient
+        src={meta.icon}
+        alt=""
+        className="doc-icon mr-0.75 ml-0.5"
+        // The install ships a few pages with no icon file. A page with no
+        // glyph beside a page with one reads as a fault, so it gets the plain
+        // page mark.
+        fallback={<Icons.page className="mr-0.75 ml-0.5 inline size-[1em] align-[-0.15em]" />}
+      />
+    ) : (
+      <Icons.page className="mr-0.75 ml-0.5 inline size-[1em] align-[-0.15em]" />
+    )
+  ) : null;
 
   useEffect(() => {
     if (!slug || !linkRef.current) return;
@@ -82,7 +122,12 @@ export default function DocLink({
 
   if (external) {
     return (
-      <a href={href} target="_blank" rel="noopener noreferrer" className={classes}>
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={classes}
+      >
         {children}
       </a>
     );
@@ -92,30 +137,20 @@ export default function DocLink({
     <span className={cn("relative", fullWidth ? "block w-full" : "inline")}>
       <Link
         ref={linkRef}
-        to={href}
+        to={to}
         className={classes}
-        onMouseDown={(e) => {
-          // Navigate on mousedown, which saves the ~100ms between mousedown
-          // and click.
-          if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
-          if (samePage) {
-            preventNextClick.current = true;
-            if (!anchor) {
-              showToast("Already on this page");
-              return;
-            }
-            const target = document.getElementById(decodeURIComponent(anchor));
-            if (target) target.scrollIntoView({ behavior: "smooth" });
-            else showToast(`This page has no section named "${anchor}"`, "error");
+        onClick={(e) => {
+          // A link to the page already open is not a navigation. The anchor
+          // cases settle here, and the click never reaches the router.
+          if (!samePage) return;
+          e.preventDefault();
+          if (!anchor) {
+            showToast("Already on this page");
             return;
           }
-          startTransition(() => navigate(href));
-        }}
-        onClick={(e) => {
-          if (preventNextClick.current) {
-            e.preventDefault();
-            preventNextClick.current = false;
-          }
+          const target = document.getElementById(decodeURIComponent(anchor));
+          if (target) target.scrollIntoView({ behavior: "smooth" });
+          else showToast(`This page has no section named "${anchor}"`, "error");
         }}
         onMouseEnter={(e) => {
           hoverPosRef.current = { x: e.clientX, y: e.clientY };
@@ -128,9 +163,16 @@ export default function DocLink({
         }}
         onBlur={() => setVisible(false)}
       >
+        {glyph}
         {children}
       </Link>
-      {visible && slug && <DocTooltip slug={slug} anchorRef={linkRef} hoverPosRef={hoverPosRef} />}
+      {visible && slug && (
+        <DocTooltip
+          slug={slug}
+          anchorRef={linkRef}
+          hoverPosRef={hoverPosRef}
+        />
+      )}
     </span>
   );
 }

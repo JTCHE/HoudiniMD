@@ -76,19 +76,21 @@ pub fn pass(
     // need a per-zip cursor, and a whole pass takes seconds.
     clear(db, &build)?;
 
-    let zips = sections(&install.help);
-    let total: u32 = zips.iter().map(|(_, count)| count).sum();
+    let sections = sections(&install.help);
+    let total: u32 = sections.iter().map(|(_, count)| count).sum();
     let mut pages = 0u32;
     let report = |pages: u32, done: bool| {
         report(Status { build: build.clone(), pages, total, done });
     };
     report(0, false);
 
+    let help = install.help.clone();
+    let load = |path: &str| crate::help::page(&help, path).ok();
     let pool = pool()?;
-    for (zip, _) in &zips {
-        let section = zip.file_stem().and_then(|s| s.to_str()).unwrap_or_default().to_string();
-        let sources = read_zip(zip, &section);
-        let parsed: Vec<Row> = pool.install(|| sources.par_iter().map(row).collect());
+    for (section, _) in &sections {
+        let sources = read_section(&install.help, section);
+        let parsed: Vec<Row> =
+            pool.install(|| sources.par_iter().filter_map(|page| row(page, &load)).collect());
         pages += write(db, &build, &parsed)? as u32;
         report(pages, false);
     }
@@ -114,17 +116,37 @@ struct Row {
     sections: Vec<crate::sections::Section>,
 }
 
-fn row((path, source): &(String, String)) -> Row {
-    let parsed = wiki::parse(source);
+fn row((path, source): &(String, String), load: &wiki::include::Load) -> Option<Row> {
+    let mut parsed = wiki::parse(source);
+    if is_include_target(path, &parsed.props) {
+        return None;
+    }
+    wiki::include::resolve(&mut parsed.blocks, path, load);
     let markdown = wiki::markdown::blocks(&parsed.blocks, 1);
-    Row {
+    Some(Row {
         path: path.clone(),
         title: crate::display_name(&parsed),
         node_type: crate::node_type(&parsed.props),
         icon: wiki::model::prop(&parsed.props, "icon").map(|icon| format!("{icon}.svg")),
         summary: parsed.summary.as_ref().map(|s| wiki::inline::plain(s)),
         sections: crate::sections::split(&markdown),
+    })
+}
+
+/// A page written to be included by other pages, not to be read on its own.
+///
+/// SideFX marks most of them `#type: include`; the rest are named with a
+/// leading underscore, such as `nodes/vop/_materialx`, whose `@`-sections are
+/// the names other pages include and read as invented headings on their own.
+/// Both stay readable by path — only the title list and search leave them out.
+/// See spec: Local — Include targets become headings.
+fn is_include_target(path: &str, props: &wiki::Props) -> bool {
+    if wiki::model::prop(props, "type") == Some("include") {
+        return true;
     }
+    // `apex/__null__` is a real node whose name starts that way.
+    let name = path.rsplit('/').next().unwrap_or_default();
+    name.starts_with('_') && !name.starts_with("__")
 }
 
 fn write(db: &mut Connection, build: &str, rows: &[Row]) -> Result<usize, String> {
@@ -186,59 +208,101 @@ fn clear(db: &Connection, build: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// The doc zips and how many pages each one holds. `images.zip` is assets, not
-/// pages; see spec: Local — Image and Asset Serving.
-fn sections(help: &Path) -> Vec<(PathBuf, u32)> {
+/// The sections of the help and how many pages each one holds.
+///
+/// A section is `nodes.zip` or a plain folder such as `examples`. About 1,220
+/// pages ship loose beside the zips; reading only archives left every one of
+/// them out. `images.zip` and `videos` are assets, not pages — see spec:
+/// Local — Image and Asset Serving.
+fn sections(help: &Path) -> Vec<(String, u32)> {
     let Ok(entries) = std::fs::read_dir(help) else {
         return Vec::new();
     };
-    let mut zips: Vec<PathBuf> = entries
+    let mut sections: Vec<String> = entries
         .flatten()
-        .map(|entry| entry.path())
-        .filter(|path| path.extension().is_some_and(|e| e == "zip"))
-        .filter(|path| path.file_name().is_some_and(|name| name != "images.zip"))
+        .filter_map(|entry| {
+            let path = entry.path();
+            let name = path.file_stem()?.to_str()?.to_string();
+            let zip = path.extension().is_some_and(|e| e == "zip");
+            if !zip && !path.is_dir() {
+                return None;
+            }
+            (name != "images" && name != "videos").then_some(name)
+        })
         .collect();
-    zips.sort();
-    zips.into_iter()
-        .map(|zip| {
-            let pages = count(&zip);
-            (zip, pages)
+    sections.sort();
+    sections.dedup();
+    sections
+        .into_iter()
+        .map(|section| {
+            let pages = count(help, &section);
+            (section, pages)
         })
         .collect()
 }
 
-/// Counts the pages in a zip from its directory alone, without reading a byte
-/// of any entry.
-fn count(zip: &Path) -> u32 {
-    let Ok(archive) = open_zip(zip) else {
-        return 0;
-    };
-    archive.file_names().filter(|name| name.ends_with(".txt")).count() as u32
+/// Counts the pages of a section. A zip is counted from its directory alone,
+/// without reading a byte of any entry.
+fn count(help: &Path, section: &str) -> u32 {
+    let zip = open_zip(&help.join(format!("{section}.zip")))
+        .map(|archive| archive.file_names().filter(|name| name.ends_with(".txt")).count() as u32)
+        .unwrap_or(0);
+    zip + loose(&help.join(section)).len() as u32
 }
 
 /// `sop/box.txt` in `nodes.zip` is the page `nodes/sop/box`, which is the path
-/// `help::page` takes back.
-fn read_zip(zip: &Path, section: &str) -> Vec<(String, String)> {
-    let Ok(mut archive) = open_zip(zip) else {
-        return Vec::new();
-    };
-    let names: Vec<String> = archive
-        .file_names()
-        .filter(|name| name.ends_with(".txt"))
-        .map(str::to_string)
-        .collect();
-    let mut pages = Vec::with_capacity(names.len());
-    for name in names {
-        let Ok(mut entry) = archive.by_name(&name) else {
+/// `help::page` takes back. A loose folder answers to the same paths.
+fn read_section(help: &Path, section: &str) -> Vec<(String, String)> {
+    let mut pages = Vec::new();
+    if let Ok(mut archive) = open_zip(&help.join(format!("{section}.zip"))) {
+        let names: Vec<String> = archive
+            .file_names()
+            .filter(|name| name.ends_with(".txt"))
+            .map(str::to_string)
+            .collect();
+        for name in names {
+            let Ok(mut entry) = archive.by_name(&name) else {
+                continue;
+            };
+            let mut source = String::new();
+            if entry.read_to_string(&mut source).is_err() {
+                continue;
+            }
+            pages.push((format!("{section}/{}", name.trim_end_matches(".txt")), source));
+        }
+    }
+    let folder = help.join(section);
+    for file in loose(&folder) {
+        let Ok(name) = file.strip_prefix(&folder) else {
             continue;
         };
-        let mut source = String::new();
-        if entry.read_to_string(&mut source).is_err() {
+        let Some(name) = name.to_str() else {
             continue;
-        }
+        };
+        let Ok(source) = std::fs::read_to_string(&file) else {
+            continue;
+        };
+        let name = name.replace('\\', "/");
         pages.push((format!("{section}/{}", name.trim_end_matches(".txt")), source));
     }
     pages
+}
+
+/// Every `.txt` under a loose section folder, at any depth.
+fn loose(folder: &Path) -> Vec<PathBuf> {
+    let Ok(entries) = std::fs::read_dir(folder) else {
+        return Vec::new();
+    };
+    let mut found = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            found.extend(loose(&path));
+        } else if path.extension().is_some_and(|e| e == "txt") {
+            found.push(path);
+        }
+    }
+    found
 }
 
 fn open_zip(zip: &Path) -> Result<zip::ZipArchive<std::io::BufReader<std::fs::File>>, String> {
@@ -260,7 +324,7 @@ fn pool() -> Result<rayon::ThreadPool, String> {
 /// priority, which matters more here: the pass reads zips off the same disk
 /// Houdini reads.
 #[cfg(windows)]
-fn background_priority() {
+pub(crate) fn background_priority() {
     use windows_sys::Win32::System::Threading::{
         GetCurrentThread, SetThreadPriority, THREAD_MODE_BACKGROUND_BEGIN,
     };
@@ -268,5 +332,5 @@ fn background_priority() {
 }
 
 #[cfg(not(windows))]
-fn background_priority() {}
+pub(crate) fn background_priority() {}
 

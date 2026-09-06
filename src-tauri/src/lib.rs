@@ -1,9 +1,11 @@
 mod assets;
 pub mod db;
-mod help;
+pub mod help;
+pub mod hook;
 pub mod index;
 pub mod install;
 pub mod sections;
+pub mod server;
 
 use std::sync::Mutex;
 
@@ -20,7 +22,7 @@ struct Db(Mutex<rusqlite::Connection>);
 /// with the same component map the site uses.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct PageView {
+pub struct PageView {
     path: String,
     /// The page name, as written in the help source.
     name: String,
@@ -42,13 +44,27 @@ fn installs() -> Vec<install::Install> {
     install::find()
 }
 
+/// Who is signed in, for the greeting on the landing page. Empty where the
+/// platform does not say, which the front-end greets without a name.
+#[tauri::command]
+fn user_name() -> String {
+    user_name_of_this_machine()
+}
+
+/// The same name, without the app around it, for the localhost server.
+pub fn user_name_of_this_machine() -> String {
+    std::env::var("USERNAME")
+        .or_else(|_| std::env::var("USER"))
+        .unwrap_or_default()
+}
+
 /// What the reader gets instead of a page. `missing` separates "this build has
 /// no such page", which the front-end answers with the not-found page, from a
 /// failure it can only report.
 #[derive(Serialize)]
-struct PageError {
-    missing: bool,
-    message: String,
+pub struct PageError {
+    pub missing: bool,
+    pub message: String,
 }
 
 /// Reads and parses one page, such as `nodes/sop/copytopoints`.
@@ -58,6 +74,13 @@ struct PageError {
 #[tauri::command]
 fn page(path: String) -> Result<PageView, PageError> {
     let install = current().map_err(|message| PageError { missing: false, message })?;
+    read_page(&install, &path)
+}
+
+/// The same read the `page` command does, without the app around it. The
+/// harness times this call; the command is the one line that finds the install.
+pub fn read_page(install: &install::Install, path: &str) -> Result<PageView, PageError> {
+    let path = path.to_string();
     let source = help::page(&install.help, &path).map_err(|reason| match reason {
         help::PageError::Missing => PageError {
             missing: true,
@@ -66,6 +89,9 @@ fn page(path: String) -> Result<PageView, PageError> {
         help::PageError::Unreadable(message) => PageError { missing: false, message },
     })?;
     let mut parsed = wiki::parse(&source);
+    wiki::include::resolve(&mut parsed.blocks, &path, &|target| {
+        help::page(&install.help, target).ok()
+    });
     assets::rewrite(&path, &mut parsed.blocks);
     let prop = |name: &str| wiki::model::prop(&parsed.props, name).map(str::to_string);
     Ok(PageView {
@@ -76,7 +102,7 @@ fn page(path: String) -> Result<PageView, PageError> {
         since: prop("since"),
         summary: parsed.summary.as_ref().map(|s| wiki::inline::plain(s)),
         markdown: wiki::markdown::blocks(&parsed.blocks, 1),
-        version: install.version,
+        version: install.version.clone(),
     })
 }
 
@@ -84,33 +110,33 @@ fn page(path: String) -> Result<PageView, PageError> {
 /// same way, so they are one shape.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct Hit {
-    path: String,
-    title: String,
-    node_type: Option<String>,
-    icon: Option<String>,
+pub struct Hit {
+    pub path: String,
+    pub title: String,
+    pub node_type: Option<String>,
+    pub icon: Option<String>,
     /// What the page says it does, shown when nothing under a heading matched.
-    summary: Option<String>,
+    pub summary: Option<String>,
     /// The sections of this page that matched, best first. Empty for a
     /// title-list entry, which matched no text at all.
-    headings: Vec<Section>,
+    pub headings: Vec<Section>,
     /// How well the words match, larger being better. The front-end weights
     /// this by what KIND of page it is, which is a question about the reader
     /// and not about the text — see `weight` in `search.ts`. Zero for a
     /// title-list entry.
-    score: f64,
+    pub score: f64,
 }
 
 /// One matching section of a page: the row the list nests under it.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct Section {
+pub struct Section {
     /// Empty when the words were above the first heading.
-    heading: String,
+    pub heading: String,
     /// The anchor to open the page at. Empty with an empty heading.
-    slug: String,
+    pub slug: String,
     /// The words themselves, as they read on the page.
-    excerpt: String,
+    pub excerpt: String,
 }
 
 /// Every page title in the current build.
@@ -121,6 +147,12 @@ struct Section {
 fn titles(state: State<Db>) -> Result<Vec<Hit>, String> {
     let build = current()?.version;
     let db = state.0.lock().map_err(|e| e.to_string())?;
+    all_titles(&db, &build)
+}
+
+/// The title list, off an open connection. One source of truth for the command
+/// above and for the harness, which times this without an app around it.
+pub fn all_titles(db: &rusqlite::Connection, build: &str) -> Result<Vec<Hit>, String> {
     let mut statement = db
         .prepare(
             "SELECT path, title, node_type, icon, summary FROM pages
@@ -128,7 +160,7 @@ fn titles(state: State<Db>) -> Result<Vec<Hit>, String> {
         )
         .map_err(|e| e.to_string())?;
     let rows = statement
-        .query_map([&build], |row| {
+        .query_map([build], |row| {
             Ok(Hit {
                 path: row.get(0)?,
                 title: row.get(1)?,
@@ -145,13 +177,13 @@ fn titles(state: State<Db>) -> Result<Vec<Hit>, String> {
 
 /// What a link hover shows: the page name, and the line under it.
 #[derive(Serialize)]
-struct Meta {
-    path: String,
-    title: String,
-    summary: Option<String>,
-    /// An icon path inside `icons.zip`. A page without one gets a generic
-    /// document mark in the front-end.
-    icon: Option<String>,
+pub struct Meta {
+    pub path: String,
+    pub title: String,
+    pub summary: Option<String>,
+    /// The page's own icon, so a link to it can carry the same mark the panel
+    /// and the search draw for it.
+    pub icon: Option<String>,
 }
 
 /// The tooltip text for a set of pages, asked for in one call.
@@ -162,17 +194,27 @@ struct Meta {
 /// pages at a time, not the whole viewport one at a time.
 #[tauri::command]
 fn meta(state: State<Db>, paths: Vec<String>) -> Result<Vec<Meta>, String> {
-    let install = current()?;
+    let build = current()?.version;
+    let db = state.0.lock().map_err(|e| e.to_string())?;
+    read_meta(&db, &build, &paths)
+}
+
+/// The tooltip text, off an open connection. One source of truth for the
+/// command above and for the localhost server.
+pub fn read_meta(
+    db: &rusqlite::Connection,
+    build: &str,
+    paths: &[String],
+) -> Result<Vec<Meta>, String> {
     let mut found: Vec<Meta> = Vec::new();
     let mut missing: Vec<String> = Vec::new();
     {
-        let db = state.0.lock().map_err(|e| e.to_string())?;
         let mut statement = db
             .prepare("SELECT title, summary, icon FROM pages WHERE build = ?1 AND path = ?2")
             .map_err(|e| e.to_string())?;
         for path in paths {
             let row = statement
-                .query_row(rusqlite::params![&install.version, &path], |row| {
+                .query_row(rusqlite::params![build, path], |row| {
                     Ok((
                         row.get::<_, String>(0)?,
                         row.get::<_, Option<String>>(1)?,
@@ -182,15 +224,19 @@ fn meta(state: State<Db>, paths: Vec<String>) -> Result<Vec<Meta>, String> {
                 .ok();
             match row {
                 Some((title, summary, icon)) => found.push(Meta {
-                    path,
+                    path: path.clone(),
                     title,
                     summary,
                     icon,
                 }),
-                None => missing.push(path),
+                None => missing.push(path.clone()),
             }
         }
     }
+    if missing.is_empty() {
+        return Ok(found);
+    }
+    let install = current()?;
     for path in missing {
         let Ok(source) = help::page(&install.help, &path) else {
             continue;
@@ -222,11 +268,23 @@ const SECTIONS_PER_PAGE: usize = 3;
 /// for the words beats a page that only mentions them.
 #[tauri::command]
 fn search(state: State<Db>, query: String, limit: u32) -> Result<Vec<Hit>, String> {
-    let Some(match_query) = db::match_query(&query) else {
-        return Ok(Vec::new());
-    };
     let build = current()?.version;
     let db = state.0.lock().map_err(|e| e.to_string())?;
+    find(&db, &build, &query, limit)
+}
+
+/// The ranked search, off an open connection. One source of truth for the
+/// command above and for the harness, which times this without an app around
+/// it.
+pub fn find(
+    db: &rusqlite::Connection,
+    build: &str,
+    query: &str,
+    limit: u32,
+) -> Result<Vec<Hit>, String> {
+    let Some(match_query) = db::match_query(query) else {
+        return Ok(Vec::new());
+    };
     let mut statement = db
         .prepare(
             "SELECT pages_fts.path, p.title, p.node_type, p.icon, p.summary,
@@ -390,8 +448,18 @@ fn range(header: Option<&str>, len: usize) -> Option<(usize, usize)> {
     (first <= last).then_some((first, last))
 }
 
-fn media_type(name: &str) -> &'static str {
+/// The one media-type table. The `himage` handler serves pictures alone, where
+/// anything unnamed is a JPEG; the localhost server also serves the built app,
+/// and a browser refuses a module script that arrives as a picture.
+pub(crate) fn media_type(name: &str) -> &'static str {
     match name.rsplit('.').next().unwrap_or_default() {
+        "html" => "text/html; charset=utf-8",
+        "js" => "text/javascript; charset=utf-8",
+        "css" => "text/css; charset=utf-8",
+        "json" => "application/json",
+        "map" => "application/json",
+        "woff2" => "font/woff2",
+        "ico" => "image/x-icon",
         "png" => "image/png",
         "gif" => "image/gif",
         "svg" => "image/svg+xml",
@@ -420,7 +488,7 @@ fn icon_response(request: Request<Vec<u8>>) -> Response<Vec<u8>> {
 }
 
 /// A help icon name can carry a space, so the webview sends it percent-encoded.
-fn percent_decode(text: &str) -> String {
+pub(crate) fn percent_decode(text: &str) -> String {
     let bytes = text.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());
     let mut i = 0;
@@ -445,14 +513,86 @@ fn percent_decode(text: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
+/// Whether the app was started with `--clean`: no index, no bookmarks, no
+/// recents — what the first run looks like. The front end asks for this too,
+/// because what the reader kept lives in the webview and not on disk here.
+#[tauri::command]
+fn clean_start() -> bool {
+    std::env::args().any(|argument| argument == "--clean")
+}
+
+/// Every Houdini release series on this machine, and whether F1 already points
+/// here. The onboarding step draws this list.
+#[tauri::command]
+fn houdini_releases(state: State<Port>) -> Vec<hook::Release> {
+    hook::releases(state.0)
+}
+
+/// Turns F1 towards this app for the named releases. Idempotent, so onboarding
+/// can call it again without asking whether it ran before.
+#[tauri::command]
+fn hook_houdini(
+    app: tauri::AppHandle,
+    state: State<Port>,
+    releases: Vec<String>,
+) -> Result<Vec<String>, String> {
+    let data = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    hook::apply(&data, state.0, &releases)
+}
+
+/// Puts back what F1 pointed at before this app touched it.
+#[tauri::command]
+fn unhook_houdini(app: tauri::AppHandle) -> Result<Vec<String>, String> {
+    let data = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    hook::revert(&data)
+}
+
+/// Runs the hook off the command line, the way an installer would: `--hook`
+/// turns F1 towards this app for every release series on the machine, and
+/// `--unhook` puts back what was there. Both take the port the server just
+/// took, so the app is already serving when the preference names it.
+fn hook_from_the_command_line(data: &std::path::Path, port: u16) {
+    let asked = |flag: &str| std::env::args().any(|argument| argument == flag);
+    let done = if asked("--unhook") {
+        hook::revert(data)
+    } else if asked("--hook") {
+        let all: Vec<String> = hook::releases(port).into_iter().map(|r| r.release).collect();
+        hook::apply(data, port, &all)
+    } else {
+        return;
+    };
+    match done {
+        Ok(releases) => println!("houdini {}", releases.join(", ")),
+        Err(reason) => eprintln!("{reason}"),
+    }
+}
+
+/// The port the localhost server took, so the front-end can show it and the
+/// hook commands can write it. Zero where the server did not start.
+struct Port(u16);
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .register_uri_scheme_protocol("hicon", |_app, request| icon_response(request))
         .register_uri_scheme_protocol("himage", |_app, request| asset_response(request))
         .setup(|app| {
-            let data = app.path().app_data_dir()?;
+            // `--clean` runs the app as a machine that has never run it: its
+            // own data directory beside the real one, which is left untouched.
+            let data = if clean_start() {
+                let fresh = std::env::temp_dir().join(format!("houdinimd-clean-{}", std::process::id()));
+                std::fs::create_dir_all(&fresh)?;
+                fresh
+            } else {
+                app.path().app_data_dir()?
+            };
             app.manage(Db(Mutex::new(db::open(&data)?)));
+            // The server is what makes F1 work, so it starts whether or not
+            // any Houdini is hooked yet. A reader who never hooks one pays a
+            // thread and a socket for it.
+            let port = server::start(data.clone()).unwrap_or(0);
+            app.manage(Port(port));
+            hook_from_the_command_line(&data, port);
             if let Ok(install) = current() {
                 index::start(app.handle().clone(), data, install);
             }
@@ -460,11 +600,16 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             installs,
+            user_name,
+            clean_start,
             page,
             meta,
             titles,
             search,
-            index_status
+            index_status,
+            houdini_releases,
+            hook_houdini,
+            unhook_houdini
         ])
         .run(tauri::generate_context!())
         .expect("error while running the application");

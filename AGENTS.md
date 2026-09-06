@@ -36,6 +36,8 @@ Project information: @README.md
   the file.
 - Look at a UI change before you report it done. A build that compiles is not a
   page that reads.
+- This machine has an interactive desktop. To look at the app, serve the built `dist` with a
+  stub for those internals — see [Testing](agents/testing.md).
 - When you change the parser or the renderer, check the shape on a family of
   pages, not on the one page that showed the bug — see
   [Content](agents/content.md).

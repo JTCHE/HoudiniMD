@@ -1,4 +1,6 @@
 import { MarkdownActions } from "@/components/docs/MarkdownActions";
+import { BookmarkButton } from "@/components/docs/BookmarkButton";
+import type { LibraryEntry } from "@/lib/store/library";
 import { PageTitle } from "@/components/docs/PageTitle";
 
 interface PageHeaderProps {
@@ -12,11 +14,13 @@ interface PageHeaderProps {
   summary?: string;
   /** The page as Markdown, for the copy button. */
   markdown: string;
+  /** The page itself, for the bookmark control. */
+  entry: Omit<LibraryEntry, "at">;
 }
 
 /** Single source of truth for a docs page's header row: icon, name + type,
  *  the "Since" badge, the copy-as-markdown action, and the summary caption. */
-export function PageHeader({ name, nodeType, icon, since, summary, markdown }: PageHeaderProps) {
+export function PageHeader({ name, nodeType, icon, since, summary, markdown, entry }: PageHeaderProps) {
   return (
     <header className="not-prose border-b border-border pb-3 mb-6">
       <div className="flex flex-wrap items-start justify-between gap-x-8 gap-y-3">
@@ -28,7 +32,8 @@ export function PageHeader({ name, nodeType, icon, since, summary, markdown }: P
             </span>
           )}
         </div>
-        <div className="shrink-0 pt-0.5">
+        <div className="flex shrink-0 items-center gap-2 pt-0.5">
+          <BookmarkButton entry={entry} />
           <MarkdownActions markdown={markdown} />
         </div>
         {summary && <p className="w-full basis-full m-0 text-sm italic text-muted-foreground">{summary}</p>}

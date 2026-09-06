@@ -20,11 +20,16 @@ export default function DocIconClient({
   priority = false,
   width = 1,
   height = 1,
+  fallback = null,
 }: {
   src: string;
   alt: string;
   className?: string;
   priority?: boolean;
+  /** Drawn in place of an icon the install does not ship. A list gives the
+      page glyph here, so a row whose icon is missing keeps its column; prose
+      gives nothing, where a box the size of an icon would be a hole. */
+  fallback?: React.ReactNode;
 } & { width?: number; height?: number }) {
   const [state, setState] = useState<"loading" | "skeleton" | "instant" | "loaded" | "broken">("loading");
   const ref = useRef<HTMLImageElement>(null);
@@ -43,9 +48,9 @@ export default function DocIconClient({
     return () => window.clearTimeout(timeout);
   }, [state, src]);
 
-  // A missing icon must leave no trace — no reserved box, no margin — rather
-  // than an empty placeholder the size of an icon. Render nothing at all.
-  if (state === "broken") return null;
+  // A missing icon draws what the caller says stands in for it, and nothing
+  // when the caller says nothing.
+  if (state === "broken") return <>{fallback}</>;
 
   return (
     <span

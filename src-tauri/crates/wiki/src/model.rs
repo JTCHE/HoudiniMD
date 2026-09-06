@@ -189,10 +189,14 @@ pub enum Block {
         text: String,
     },
     /// `~~~ Or ~~~`, or `~~` which only breaks a run of blocks apart.
+    ///
+    /// A divider carries whatever is indented under it. On a node page that is
+    /// a parameter group: 227 pages put most of their parameters under one.
     Divider {
         label: Option<Vec<Inline>>,
         invisible: bool,
         props: Props,
+        children: Vec<Block>,
     },
     Table {
         rows: Vec<Vec<Cell>>,

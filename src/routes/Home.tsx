@@ -1,71 +1,78 @@
-import { useEffect, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { Footer } from "@/components/Footer";
-import { BrandLogo } from "@/components/brand/BrandLogo";
 import { AsciiBackground } from "@/components/root/AsciiBackground";
-import { NoiseOverlay } from "@/components/root/NoiseOverlay";
-import { QuickLinks } from "@/components/root/QuickLinks";
 import { SearchField } from "@/components/root/search-field/SearchField";
-import { IndexProgress } from "@/components/root/IndexProgress";
-import { FeatureCards } from "@/components/root/feature-cards/FeatureCards";
+import { LibraryPanel } from "@/components/root/LibraryPanel";
+import { useBuild, useUserName } from "@/lib/install";
+import { useLibrary } from "@/lib/store/library";
 
-interface Install {
-  version: string;
-  root: string;
-  help: string;
+/**
+ * What the window opens on.
+ *
+ * The app is a tool on a machine where the reader already chose it, so the
+ * page does not sell anything: it greets, it names the build it reads, it puts
+ * the caret in the search field, and it lists the pages the reader was last
+ * in. Four things, on one axis, in the middle of the window.
+ *
+ * The name of the app is NOT here. The title bar says it, on every route.
+ */
+function greeting(at = new Date()): string {
+  const hour = at.getHours();
+  if (hour < 5) return "Still up";
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
 }
 
-/** The landing page. It names the build it reads, because the whole point of
-    the app is that the docs match the Houdini that is installed. */
 export default function Home() {
-  const [installs, setInstalls] = useState<Install[] | null>(null);
-
-  useEffect(() => {
-    invoke<Install[]>("installs").then(setInstalls).catch(() => setInstalls([]));
-  }, []);
-
-  const version = installs?.[0]?.version;
+  const { version, pageCount } = useBuild();
+  const name = useUserName();
+  const library = useLibrary();
+  // A cold window has no history greeting could refer back to — "Good
+  // morning" reads as if the app remembers a reader it has never seen.
+  const cold = library.recents.length === 0 && library.bookmarks.length === 0;
 
   return (
-    <main className="relative flex min-h-dvh flex-col overflow-hidden">
-      <AsciiBackground />
+    <main className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+      {/* The field is a watermark in the top corner rather than a full-bleed
+          backdrop: the window already carries a panel and two bars, and a
+          pattern behind all of it would be one texture too many. */}
+      <AsciiBackground
+        glow={false}
+        className="absolute top-[-30px] right-[-60px] left-auto h-[374px] w-[660px] [mask-image:radial-gradient(ellipse_at_center,black_10%,transparent_70%)]"
+      />
 
-      <NoiseOverlay />
+      <div className="relative flex min-h-0 flex-1 flex-col justify-center px-lg py-lg">
+        <div className="mx-auto flex min-h-0 w-full max-w-hero flex-col gap-xl">
+          <div className="flex shrink-0 flex-col gap-lg">
+            <header className="flex flex-col gap-xs">
+              <h1 className="text-[34px] leading-[36px] font-semibold tracking-[-0.032em] text-neutral-950">
+                {cold ? "Welcome to HoudiniMD." : name ? `${greeting()}, ${name}` : greeting()}
+              </h1>
+              <p className="flex items-center gap-sm text-[16px] leading-[24px] tracking-[-0.012em] text-neutral-500">
+                {version === null ? (
+                  "Reading the Houdini install…"
+                ) : version ? (
+                  <>
+                    <span>Houdini {version}</span>
+                    <span aria-hidden="true">·</span>
+                    <span>
+                      {pageCount === null ? "counting pages…" : `${pageCount.toLocaleString()} pages`}
+                    </span>
+                  </>
+                ) : (
+                  "No Houdini install found on this machine."
+                )}
+              </p>
+            </header>
 
-      <div className="relative flex flex-1 flex-col justify-center py-xl lg:py-lg">
-        <div className="mx-auto flex w-full max-w-page flex-col gap-md px-page-x md:gap-lg">
-          <header className="flex flex-col gap-2xs">
-            <h1 className="flex items-center gap-sm text-display font-semibold text-foreground">
-              HoudiniMD
-              <BrandLogo className="h-[0.92em] w-auto" />
-            </h1>
-            <p className="text-lede text-muted-foreground">
-              {installs === null
-                ? "Reading the Houdini install…"
-                : version
-                  ? `Houdini ${version}`
-                  : "No Houdini install found on this machine."}
-            </p>
-            <IndexProgress />
-          </header>
-
-          {/* Order is a real design decision, not a discrepancy: a phone reader
-              wants the field under their thumb before the categories; a desktop
-              reader scans the categories first and drops to the field. */}
-          <div className="order-2 lg:order-1">
-            <QuickLinks />
-          </div>
-          <div className="order-1 lg:order-2">
             <SearchField />
           </div>
 
-          <div className="order-4">
-            <FeatureCards />
-          </div>
+          {/* The list keeps a box of its own size, so the greeting and the
+              field sit on the same axis whatever is in the list and whichever
+              tab is open. */}
+          <LibraryPanel />
         </div>
       </div>
-
-      <Footer className="relative" />
     </main>
   );
 }

@@ -203,12 +203,16 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
   const showList = rows.length > 0 || searchFor;
 
   return (
-    <div
-      className="fixed inset-0 z-[60] flex items-start justify-center pt-4 sm:pt-[20vh] bg-black/40 backdrop-blur-sm"
-      onClick={() => setOpen(false)}
-    >
+    <div className="fixed inset-0 z-[60]" onClick={() => setOpen(false)}>
+      {/* A plain scrim, not a blurred one. A backdrop-filter over the whole
+          window is drawn again on every keystroke: it made a keystroke here
+          cost 71ms against 31ms in the landing field. */}
+      <div className="absolute inset-0 bg-black/50" />
+      <div className="relative h-full flex items-start justify-center pt-4 sm:pt-[20vh] pointer-events-none">
       <div
-        className="w-full max-w-overlay mx-4 bg-background border rounded-xl shadow-2xl overflow-hidden"
+        // transform-gpu keeps the panel on a layer of its own, so a keystroke
+        // does not draw the page under it again.
+        className="w-full max-w-overlay mx-4 bg-background border rounded-xl shadow-2xl overflow-hidden pointer-events-auto transform-gpu"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="relative border-b">
@@ -232,10 +236,10 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
             <button
               type="button"
               aria-label="Clear search"
-              onClick={() => {
+              onClick={(() => {
                 setQuery("");
                 inputRef.current?.focus();
-              }}
+              })}
               className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center size-6 rounded text-muted-foreground hover:text-foreground transition-colors"
             >
               <svg
@@ -281,7 +285,7 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
                     className={`w-full text-left px-4 py-2.5 flex items-center gap-2 transition-colors text-muted-foreground ${
                       selected === rows.length ? "bg-muted" : "hover:bg-muted/50"
                     }`}
-                    onClick={() => void submit()}
+                    onClick={(() => void submit())}
                     onMouseMove={() => setSelected(rows.length)}
                   >
                     <span className="text-xs shrink-0">Search for</span>
@@ -307,6 +311,7 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
             <span>close</span>
           </span>
         </div>
+      </div>
       </div>
     </div>
   );

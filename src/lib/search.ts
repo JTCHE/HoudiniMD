@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "./backend";
 
 /** One matching section of a page — a row nested under it in the list. */
 export interface Section {
@@ -117,32 +117,84 @@ function weight(hit: Hit): number {
   return 0.9;
 }
 
+/**
+ * One page, with everything the matcher needs already worked out.
+ *
+ * This exists for one reason: the matcher runs over every page in the build on
+ * every keystroke. Lower-casing the path and the title there cost 29ms for a
+ * single letter — a keystroke that misses two frames before the letter itself
+ * appears. None of it depends on what was typed, so none of it belongs in the
+ * loop. See spec: Local — Performance Harness and Budgets.
+ */
+interface Ready {
+  hit: Hit;
+  path: string;
+  title: string;
+  /** The last part of the path, which is the page's own name. */
+  leaf: string;
+  /** The title with its spaces taken out, to compare against a slug. */
+  packed: string;
+  /** `title path`, for the words-in-any-order tier. */
+  text: string;
+  weight: number;
+  rank: number;
+  /** The folded title and leaf, for the abbreviation pass. Worked out on
+   *  first use and only for the families that pass can match. */
+  fold: { title: Folded; leaf: Folded } | null;
+  folded: boolean;
+}
+
+/**
+ * The prepared list for a title list, kept for as long as the list itself is.
+ *
+ * Weak, so dropping the titles drops this with them: `forgetTitles` is what
+ * runs when the background pass adds pages, and a prepared list that outlived
+ * its pages would answer with pages that no longer exist.
+ */
+const prepared = new WeakMap<Hit[], Ready[]>();
+
+function ready(hits: Hit[]): Ready[] {
+  let rows = prepared.get(hits);
+  if (rows) return rows;
+  rows = hits.map((hit) => {
+    const path = hit.path.toLowerCase();
+    const title = hit.title.toLowerCase();
+    return {
+      hit,
+      path,
+      title,
+      leaf: path.slice(path.lastIndexOf("/") + 1),
+      packed: title.replace(/\s+/g, ""),
+      text: `${title} ${path}`,
+      weight: weight(hit),
+      rank: rank(hit),
+      fold: null,
+      folded: false,
+    };
+  });
+  prepared.set(hits, rows);
+  return rows;
+}
+
 /** How well a title or path answers what was typed. 0 means it does not.
  *
  *  The ladder is the order a reader means things: the path they typed, the
- *  name they typed, then the same as a beginning, then the same anywhere. */
-function score(hit: Hit, query: string): number {
-  const path = hit.path.toLowerCase();
-  const title = hit.title.toLowerCase();
-  const leaf = path.slice(path.lastIndexOf("/") + 1);
-  // Names are compared without their spaces, because a slug has none: someone
-  // typing "copy to points" is naming `copytopoints` exactly, and comparing as
-  // written left that page at the substring tier under the LOP of the same
-  // title.
-  const tight = query.replace(/\s+/g, "");
-  const packed = title.replace(/\s+/g, "");
-
-  if (path === query) return 1000;
-  if (leaf === tight || packed === tight) return 900;
-  if (leaf.startsWith(tight) || packed.startsWith(tight)) return 700;
-  if (path.startsWith(query)) return 600;
-  if (title.includes(query)) return 400;
-  if (path.includes(query)) return 300;
+ *  name they typed, then the same as a beginning, then the same anywhere.
+ *
+ *  `tight` is the query with its spaces taken out, worked out once by the
+ *  caller: someone typing "copy to points" is naming `copytopoints` exactly,
+ *  and comparing as written left that page at the substring tier under the LOP
+ *  of the same title. */
+function score(row: Ready, query: string, tight: string, words: string[]): number {
+  if (row.path === query) return 1000;
+  if (row.leaf === tight || row.packed === tight) return 900;
+  if (row.leaf.startsWith(tight) || row.packed.startsWith(tight)) return 700;
+  if (row.path.startsWith(query)) return 600;
+  if (row.title.includes(query)) return 400;
+  if (row.path.includes(query)) return 300;
 
   // Words in any order: "points copy" still finds Copy to Points.
-  const words = query.split(/\s+/).filter(Boolean);
-  const text = `${title} ${path}`;
-  return words.length > 1 && words.every((word) => text.includes(word)) ? 200 : 0;
+  return words.length > 1 && words.every((word) => row.text.includes(word)) ? 200 : 0;
 }
 
 /** The reader is looking for a node far more often than a shelf tool, and for
@@ -168,20 +220,32 @@ const NAMED = 600;
 export function match(hits: Hit[], query: string, limit = 8): Hit[] {
   const wanted = query.trim().toLowerCase();
   if (!wanted) return [];
-  const scored = hits
-    .map((hit) => ({ hit, score: score(hit, wanted) }))
-    .filter((row) => row.score > 0)
+  const rows = ready(hits);
+  const tight = wanted.replace(/\s+/g, "");
+  const words = wanted.split(/\s+/).filter(Boolean);
+
+  // Scored once and the score KEPT. The abbreviation gate below asks which
+  // hits named the page, and asking that by scoring the list a second time
+  // doubled the cost of every keystroke.
+  const hit: Array<{ row: Ready; score: number }> = [];
+  let named = 0;
+  for (const row of rows) {
+    const value = score(row, wanted, tight, words);
+    if (value === 0) continue;
+    if (value >= NAMED) named++;
+    hit.push({ row, score: value });
+  }
+  hit.sort(
     // Weight breaks a tie the text cannot: "Copy to Points" is the exact title
     // of a SOP and of a LOP, and both are the same length, so without this the
     // answer is whichever the corpus happened to list first.
-    .sort(
-      (a, b) =>
-        b.score - a.score ||
-        weight(b.hit) - weight(a.hit) ||
-        rank(a.hit) - rank(b.hit) ||
-        a.hit.path.length - b.hit.path.length,
-    )
-    .map((row) => row.hit);
+    (a, b) =>
+      b.score - a.score ||
+      b.row.weight - a.row.weight ||
+      a.row.rank - b.row.rank ||
+      a.row.path.length - b.row.path.length,
+  );
+  const scored = hit.map((row) => row.row.hit);
 
   // Letter-mashing, the way Houdini's TAB menu takes it: `cptp` for Copy to
   // Points. It runs when nothing NAMED the page, and ahead of the body search,
@@ -191,9 +255,8 @@ export function match(hits: Hit[], query: string, limit = 8): Hit[] {
   // of `hom/hou/loadPreferences` — lo**adpr**eferences — so a pass gated on an
   // empty list never runs, and the reader keeps a Python method instead of
   // Adaptive Prune. The weak hits still follow, under the abbreviations.
-  const named = scored.filter((hit) => score(hit, wanted) >= NAMED);
-  if (named.length === 0 && !/\s/.test(wanted) && wanted.length >= MIN_ABBREVIATION) {
-    const guessed = abbreviated(hits, wanted, limit);
+  if (named === 0 && !/\s/.test(wanted) && wanted.length >= MIN_ABBREVIATION) {
+    const guessed = abbreviated(rows, wanted, limit);
     const seen = new Set(guessed.map((hit) => hit.path));
     return [...guessed, ...scored.filter((hit) => !seen.has(hit.path))].slice(0, limit);
   }
@@ -220,17 +283,27 @@ const ABBREVIATION_FAMILY = /^(nodes|vex|expressions|hscript|hom)\//;
  * never fire: two float scores are almost never exactly equal, so a superseded
  * page would outrank the current one whenever it matched a hair tighter.
  */
-function abbreviated(hits: Hit[], query: string, limit: number): Hit[] {
+function abbreviated(rows: Ready[], query: string, limit: number): Hit[] {
   const scored: Array<{ hit: Hit; score: number }> = [];
-  for (const hit of hits) {
-    if (!ABBREVIATION_FAMILY.test(hit.path) || hit.path.endsWith("/index")) continue;
-    // The trailing version goes: nobody abbreviates the "2.0" in "Copy to
-    // Points 2.0", and counting it as name length lost that SOP to the LOP of
-    // the same name, whose title carries no version at all.
-    const title = subsequence(query, hit.title.replace(/\s+\d+(\.\d+)*$/, ""));
-    const leaf = subsequence(query, hit.path.slice(hit.path.lastIndexOf("/") + 1));
+  for (const row of rows) {
+    if (!row.folded) {
+      row.folded = true;
+      // The trailing version goes: nobody abbreviates the "2.0" in "Copy to
+      // Points 2.0", and counting it as name length lost that SOP to the LOP
+      // of the same name, whose title carries no version at all.
+      row.fold =
+        ABBREVIATION_FAMILY.test(row.hit.path) && !row.hit.path.endsWith("/index")
+          ? {
+              title: fold(row.hit.title.replace(/\s+\d+(\.\d+)*$/, "")),
+              leaf: fold(row.hit.path.slice(row.hit.path.lastIndexOf("/") + 1)),
+            }
+          : null;
+    }
+    if (!row.fold) continue;
+    const title = subsequence(query, row.fold.title);
+    const leaf = subsequence(query, row.fold.leaf);
     if (title === null && leaf === null) continue;
-    scored.push({ hit, score: Math.max(title ?? 0, leaf ?? 0) * weight(hit) });
+    scored.push({ hit: row.hit, score: Math.max(title ?? 0, leaf ?? 0) * row.weight });
   }
   return scored
     .sort((a, b) => b.score - a.score)
@@ -246,7 +319,13 @@ function abbreviated(hits: Hit[], query: string, limit: number): Hit[] {
  * Word starts are the whole point of the fold. They are what tells an
  * abbreviation apart from an accident — see `subsequence`.
  */
-function fold(text: string): { chars: string; starts: boolean[] } {
+/** A name reduced to its letters, and which of them start a word. */
+interface Folded {
+  chars: string;
+  starts: boolean[];
+}
+
+function fold(text: string): Folded {
   let chars = "";
   const starts: boolean[] = [];
   for (let i = 0; i < text.length; i++) {
@@ -282,8 +361,8 @@ function fold(text: string): { chars: string; starts: boolean[] } {
  * Every window is scored, not just the shortest, because the shortest window
  * and the best-aligned one are often not the same.
  */
-function subsequence(query: string, name: string): number | null {
-  const { chars, starts } = fold(name);
+function subsequence(query: string, name: Folded): number | null {
+  const { chars, starts } = name;
   if (chars.length < query.length) return null;
   let best: number | null = null;
 

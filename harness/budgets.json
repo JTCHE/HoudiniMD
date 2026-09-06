@@ -1,0 +1,374 @@
+{
+  "machines": {
+    "fast": {
+      "measuredOn": "AMD Ryzen 9 5900X 12-Core Processor            , 24 threads, 96GB, win32",
+      "budgets": {
+        "quiet.index.cold": {
+          "value": 3343.41,
+          "worst": 4457.88
+        },
+        "quiet.index.warm": {
+          "value": 2815.25,
+          "worst": 3767.02
+        },
+        "quiet.index.skip": {
+          "value": 5041.8,
+          "worst": 5058.5
+        },
+        "quiet.titles.read": {
+          "value": 10184.5,
+          "worst": 13984.8
+        },
+        "quiet.search.query": {
+          "value": 33668.25,
+          "worst": 315444.8
+        },
+        "quiet.search.one_letter": {
+          "value": 194313.75,
+          "worst": 315444.8
+        },
+        "quiet.page.open": {
+          "value": 11697.05,
+          "worst": 69285
+        },
+        "quiet.asset.image": {
+          "value": 45808.8,
+          "worst": 70124.2
+        },
+        "quiet.memory.after_pages": {
+          "value": 71.05,
+          "worst": 94.74
+        },
+        "quiet.db.size": {
+          "value": 79.86,
+          "worst": 106.48
+        },
+        "quiet.app.first_field": {
+          "value": 289650,
+          "worst": 386200
+        },
+        "quiet.key.echo": {
+          "value": 42375,
+          "worst": 73600
+        },
+        "quiet.key.redrawn": {
+          "value": 43500,
+          "worst": 230000
+        },
+        "quiet.key.first_letter": {
+          "value": 40650,
+          "worst": 68800
+        },
+        "quiet.search.settled": {
+          "value": 72600,
+          "worst": 145600
+        },
+        "quiet.key.blocked": {
+          "value": 5100,
+          "worst": 7100
+        },
+        "quiet.key.event": {
+          "value": 48000,
+          "worst": 96000
+        },
+        "quiet.page.draw": {
+          "value": 55725,
+          "worst": 323800
+        },
+        "quiet.page.hammered": {
+          "value": 48075,
+          "worst": 66200
+        },
+        "quiet.page.blank": {
+          "value": 5000,
+          "worst": 5000
+        },
+        "quiet.page.reload": {
+          "value": 299700,
+          "worst": 456400
+        },
+        "quiet.memory.heap_50_pages": {
+          "value": 50.21,
+          "worst": 66.94
+        },
+        "load.index.cold": {
+          "value": 4452.83,
+          "worst": 5937.1
+        },
+        "load.index.warm": {
+          "value": 2804.25,
+          "worst": 3774.54
+        },
+        "load.index.skip": {
+          "value": 5040.6,
+          "worst": 5061.7
+        },
+        "load.titles.read": {
+          "value": 10413.3,
+          "worst": 14819
+        },
+        "load.search.query": {
+          "value": 34084.5,
+          "worst": 320388.6
+        },
+        "load.search.one_letter": {
+          "value": 200475.3,
+          "worst": 320388.6
+        },
+        "load.page.open": {
+          "value": 10502.65,
+          "worst": 52463.6
+        },
+        "load.asset.image": {
+          "value": 36723.6,
+          "worst": 61967.6
+        },
+        "load.memory.after_pages": {
+          "value": 66.84,
+          "worst": 89.12
+        },
+        "load.db.size": {
+          "value": 79.86,
+          "worst": 106.48
+        },
+        "load.app.first_field": {
+          "value": 250500,
+          "worst": 334000
+        },
+        "load.key.echo": {
+          "value": 43050,
+          "worst": 75200
+        },
+        "load.key.redrawn": {
+          "value": 44625,
+          "worst": 226200
+        },
+        "load.key.first_letter": {
+          "value": 39450,
+          "worst": 69000
+        },
+        "load.search.settled": {
+          "value": 71850,
+          "worst": 397600
+        },
+        "load.key.blocked": {
+          "value": 5100,
+          "worst": 5900
+        },
+        "load.key.event": {
+          "value": 48000,
+          "worst": 96000
+        },
+        "load.page.draw": {
+          "value": 56025,
+          "worst": 116600
+        },
+        "load.page.hammered": {
+          "value": 47100,
+          "worst": 66200
+        },
+        "load.page.blank": {
+          "value": 5000,
+          "worst": 5000
+        },
+        "load.page.reload": {
+          "value": 297000,
+          "worst": 398400
+        },
+        "load.memory.heap_50_pages": {
+          "value": 50.21,
+          "worst": 66.94
+        },
+        "idle app.cpu.idle": {
+          "value": 0.11,
+          "worst": 0.14
+        },
+        "idle app.memory.idle": {
+          "value": 39.08,
+          "worst": 52.1
+        }
+      }
+    },
+    "slow": {
+      "measuredOn": "Intel(R) Core(TM) i7-6700HQ CPU @ 2.60GHz, 8 threads, 20GB, win32",
+      "budgets": {
+        "quiet.index.cold": {
+          "value": 6505.86,
+          "worst": 8674.48
+        },
+        "quiet.index.warm": {
+          "value": 6378.44,
+          "worst": 8554.06
+        },
+        "quiet.index.skip": {
+          "value": 5100,
+          "worst": 5113.4
+        },
+        "quiet.titles.read": {
+          "value": 18120.75,
+          "worst": 29840.6
+        },
+        "quiet.search.query": {
+          "value": 62838.9,
+          "worst": 587769.6
+        },
+        "quiet.search.one_letter": {
+          "value": 368761.88,
+          "worst": 587769.6
+        },
+        "quiet.page.open": {
+          "value": 12717.25,
+          "worst": 66392.8
+        },
+        "quiet.asset.image": {
+          "value": 41976.9,
+          "worst": 69952.4
+        },
+        "quiet.memory.after_pages": {
+          "value": 87,
+          "worst": 116
+        },
+        "quiet.db.size": {
+          "value": 79.86,
+          "worst": 106.48
+        },
+        "quiet.app.first_field": {
+          "value": 573000,
+          "worst": 764000
+        },
+        "quiet.key.echo": {
+          "value": 59100,
+          "worst": 157400
+        },
+        "quiet.key.redrawn": {
+          "value": 74775,
+          "worst": 254400
+        },
+        "quiet.key.first_letter": {
+          "value": 66450,
+          "worst": 108200
+        },
+        "quiet.search.settled": {
+          "value": 114900,
+          "worst": 185600
+        },
+        "quiet.key.blocked": {
+          "value": 5200,
+          "worst": 8100
+        },
+        "quiet.key.event": {
+          "value": 96000,
+          "worst": 208000
+        },
+        "quiet.page.draw": {
+          "value": 97800,
+          "worst": 307800
+        },
+        "quiet.page.hammered": {
+          "value": 43500,
+          "worst": 118800
+        },
+        "quiet.page.blank": {
+          "value": 5000,
+          "worst": 5000
+        },
+        "quiet.page.reload": {
+          "value": 460200,
+          "worst": 796800
+        },
+        "quiet.memory.heap_50_pages": {
+          "value": 60.22,
+          "worst": 80.3
+        },
+        "load.index.cold": {
+          "value": 10825.04,
+          "worst": 14433.38
+        },
+        "load.index.warm": {
+          "value": 10905.92,
+          "worst": 14584.52
+        },
+        "load.index.skip": {
+          "value": 5087.5,
+          "worst": 5131.3
+        },
+        "load.titles.read": {
+          "value": 40810.95,
+          "worst": 59088.2
+        },
+        "load.search.query": {
+          "value": 121452.15,
+          "worst": 1051393.4
+        },
+        "load.search.one_letter": {
+          "value": 664605.98,
+          "worst": 1051393.4
+        },
+        "load.page.open": {
+          "value": 18543.68,
+          "worst": 142137.2
+        },
+        "load.asset.image": {
+          "value": 73929.6,
+          "worst": 154216.8
+        },
+        "load.memory.after_pages": {
+          "value": 37.65,
+          "worst": 50.2
+        },
+        "load.db.size": {
+          "value": 79.86,
+          "worst": 106.48
+        },
+        "load.app.first_field": {
+          "value": 882900,
+          "worst": 1177200
+        },
+        "load.key.echo": {
+          "value": 99975,
+          "worst": 236000
+        },
+        "load.key.redrawn": {
+          "value": 101025,
+          "worst": 407400
+        },
+        "load.key.first_letter": {
+          "value": 70800,
+          "worst": 145400
+        },
+        "load.search.settled": {
+          "value": 197250,
+          "worst": 766000
+        },
+        "load.key.blocked": {
+          "value": 5200,
+          "worst": 14200
+        },
+        "load.key.event": {
+          "value": 168000,
+          "worst": 400000
+        },
+        "load.page.draw": {
+          "value": 118500,
+          "worst": 436600
+        },
+        "load.page.hammered": {
+          "value": 60000,
+          "worst": 105000
+        },
+        "load.page.blank": {
+          "value": 5000,
+          "worst": 5000
+        },
+        "load.page.reload": {
+          "value": 766950,
+          "worst": 1189000
+        },
+        "load.memory.heap_50_pages": {
+          "value": 50.21,
+          "worst": 66.94
+        }
+      }
+    }
+  }
+}

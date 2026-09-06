@@ -9,7 +9,14 @@ struct Line {
     text: String,
 }
 
-const TAB: usize = 4;
+/// The tab stop the help is written against.
+///
+/// Most pages indent with four spaces, but a writer's editor put real tabs in
+/// some of them, and a tab there stands for eight columns. Reading it as four
+/// put the line at a shallower indent than the lines around it, which ended
+/// the paragraph — sentences on the Box SOP and in the environment reference
+/// stopped mid-clause because of it.
+const TAB: usize = 8;
 
 /// Split the source into lines, expand tabs and drop the comments.
 fn lines_of(source: &str) -> Vec<Line> {
@@ -338,19 +345,59 @@ fn starts_block(text: &str) -> Option<Kind> {
     if text.starts_with("* ") || text == "*" {
         return Some(Kind::Bullet);
     }
+    // A dash bullet. The help writes most lists with `*`, but a `-` list is
+    // legal and used — `@related` on many node pages is one. Without this the
+    // dash lines are not the start of anything, so the line above them eats
+    // them as the text it wraps on to, and a whole related list ends up
+    // inside a section heading.
+    if text.starts_with("- ") || text == "-" {
+        return Some(Kind::Bullet);
+    }
     if text.starts_with("# ") {
         return Some(Kind::Number);
     }
     if text.ends_with('|') {
         return Some(Kind::Cell);
     }
-    if text.ends_with(">>") {
+    if html_parts(text).is_some() {
         return Some(Kind::Html);
     }
     if text.ends_with(':') {
         return Some(Kind::Definition);
     }
     None
+}
+
+/// A pseudo-HTML line, as `(tag, attributes, the content on the tag's own
+/// line)`.
+///
+/// `format.txt`, "Pseudo HTML", allows the element's content to sit after the
+/// `>>` as well as indented under it, and the help uses both — a table row
+/// writes `td>> Charlie`. Matching only on a trailing `>>` left that content
+/// as prose, so a parameter body with a small table in it reached the reader
+/// as the words `td>>` repeated down the page.
+fn html_parts(text: &str) -> Option<(&str, &str, &str)> {
+    let (head, rest) = text.split_once(">>")?;
+    let head = head.trim();
+    let (tag, attributes) = match head.split_once(char::is_whitespace) {
+        Some((tag, attributes)) => (tag, attributes.trim()),
+        None => (head, ""),
+    };
+    // An element tag, and nothing else. A sentence can hold `>>` too — the
+    // format page itself writes ``Parameter: <<id>>`` — so everything before
+    // the marker has to look like a tag before this claims the line.
+    let named = !tag.is_empty()
+        && tag.len() <= 12
+        && tag.starts_with(|c: char| c.is_ascii_lowercase())
+        && tag.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit());
+    let attributed = attributes.is_empty()
+        || attributes
+            .split_whitespace()
+            .all(|part| part.contains('=') && !part.contains('`'));
+    if !named || !attributed {
+        return None;
+    }
+    Some((tag, attributes, rest.trim()))
 }
 
 enum Kind {
@@ -410,11 +457,12 @@ fn single_line_block(text: &str, children: &[Line], has_children: bool) -> Optio
         Kind::Divider => {
             let invisible = text.starts_with("~~") && !text.starts_with("~~~");
             let label = text.trim_matches('~').trim();
-            let (props, _) = child(children);
+            let (props, children) = child(children);
             Block::Divider {
                 label: (!label.is_empty()).then(|| inline::parse(label)),
                 invisible,
                 props,
+                children,
             }
         }
         Kind::Subtopic => {
@@ -498,12 +546,18 @@ fn single_line_block(text: &str, children: &[Line], has_children: bool) -> Optio
             }
         }
         Kind::Html => {
-            let head = text[..text.len() - 2].trim();
-            let (tag, attributes) = match head.split_once(char::is_whitespace) {
-                Some((tag, attributes)) => (tag, attributes.trim()),
-                None => (head, ""),
-            };
-            let (_, children) = child(children);
+            let (tag, attributes, inline_text) = html_parts(text)?;
+            let (_, mut children) = child(children);
+            // Content on the tag's own line comes before anything indented
+            // under it, which is the order it is written in.
+            if !inline_text.is_empty() {
+                children.insert(
+                    0,
+                    Block::Paragraph {
+                        text: inline::parse(inline_text),
+                    },
+                );
+            }
             Block::Html {
                 tag: tag.to_string(),
                 attributes: attributes.to_string(),
@@ -537,7 +591,9 @@ fn definition(term: &str, props: Props, children: Vec<Block>) -> Block {
 }
 
 fn include_block(label: &str) -> Block {
-    let mut target = label.trim();
+    // The Karma settings pages quote the target, because their IDs hold
+    // colons: `:include "/nodes/lop/rendersettings#karma:global:samples":`.
+    let mut target = label.trim().trim_matches('"');
     let mut contents_only = false;
     if let Some(rest) = target.strip_suffix('/') {
         contents_only = true;
@@ -729,4 +785,18 @@ pub fn take_title(blocks: &mut Vec<Block>) -> Option<(Title, Vec<Block>)> {
 
 pub fn text_of(inlines: &[Inline]) -> String {
     inline::plain(inlines)
+}
+
+
+#[cfg(test)]
+mod tests {
+    /// A `~~~ Group ~~~` divider owns what is indented under it. The Bullet
+    /// constraint pages put 36 of their 37 parameters there.
+    #[test]
+    fn a_divider_keeps_what_is_under_it() {
+        let source = "~~~ Rotation Limits ~~~\n\n    Max Twist:\n        #id: max_twist\n        The maximum twist.\n";
+        let out = crate::markdown::blocks(&crate::parse(source).blocks, 1);
+        assert!(out.contains("Rotation Limits"), "{out}");
+        assert!(out.contains("The maximum twist."), "{out}");
+    }
 }
