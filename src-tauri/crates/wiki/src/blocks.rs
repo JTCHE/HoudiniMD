@@ -156,9 +156,19 @@ fn parse_container(lines: &[Line]) -> (Props, Vec<Block>) {
 
         // Everything else owns its line, the lines it wraps on to, and the
         // lines indented under it.
+        // A heading, an `@section` and a divider each own their line and
+        // nothing more. The help does not always leave a blank line under
+        // one, and without this the paragraph below is read as the rest of
+        // the heading — which takes the section, its title and its body out
+        // of the page together.
+        let one_line = matches!(
+            starts_block(&text),
+            Some(Kind::Heading | Kind::Section | Kind::Divider)
+        );
         let mut head = text.clone();
         let mut wrapped = start + 1;
-        while wrapped < lines.len()
+        while !one_line
+            && wrapped < lines.len()
             && lines[wrapped].indent == indent
             && !lines[wrapped].text.is_empty()
             && starts_block_at(lines, wrapped).is_none()
@@ -220,6 +230,64 @@ fn run_end(lines: &[Line], start: usize, indent: usize) -> usize {
         last_content = end;
     }
     last_content.max(start)
+}
+
+/// One row of the simple pipe-table markup: `text` is one cell's own line,
+/// ending in `|` or `||`; `children` is what is indented under it.
+///
+/// format.txt, "Simple tables": "Indented cells appear next to the parent."
+/// The first line indented under a cell (skipping this cell's own `#prop:`
+/// lines) always starts the NEXT cell of the row, whether or not that line
+/// itself ends in a pipe — confirmed against the real doc build: the Camera
+/// LOP page chains a bare shortcut cell into a third, description cell with
+/// no pipe of its own. A pipe on that next line means the chain keeps going
+/// one indent level deeper; no pipe means it is the LAST cell of the row, and
+/// format.txt allows only that one "to have multiple paragraphs" — every
+/// sibling line left after it folds into its body, not into a further cell.
+fn cell_row(text: &str, children: &[Line]) -> Vec<Cell> {
+    let heading = text.ends_with("||");
+    let body = text.trim_end_matches('|').trim();
+
+    let next = children
+        .iter()
+        .position(|l| !l.text.is_empty() && property_name(&l.text).is_none());
+    let Some(next) = next else {
+        return vec![fold_cell(heading, body, children)];
+    };
+
+    let mut row = vec![fold_cell(heading, body, &children[..next])];
+    if children[next].text.ends_with('|') {
+        let indent = children[next].indent;
+        let end = run_end(children, next + 1, indent);
+        row.extend(cell_row(&children[next].text, &children[next + 1..end]));
+    } else {
+        row.push(fold_cell(false, &children[next].text, &children[next + 1..]));
+    }
+    row
+}
+
+/// One cell's own line, plus whatever is folded into it: this cell's
+/// `#prop:` lines, or — for the last cell of a row, per `cell_row` — every
+/// paragraph left under it.
+fn fold_cell(heading: bool, body: &str, extra: &[Line]) -> Cell {
+    let mut lines: Vec<Line> = Vec::new();
+    if !body.is_empty() {
+        lines.push(Line {
+            indent: 0,
+            text: body.to_string(),
+        });
+    }
+    let extra_indent = if lines.is_empty() { 0 } else { TAB };
+    lines.extend(extra.iter().map(|l| Line {
+        indent: l.indent + extra_indent,
+        text: l.text.clone(),
+    }));
+    let (props, blocks) = parse_container(&lines);
+    Cell {
+        heading,
+        blocks,
+        props,
+    }
 }
 
 fn code_block(lines: &[Line], start: usize) -> (Block, usize) {
@@ -546,9 +614,19 @@ fn single_line_block(text: &str, children: &[Line], has_children: bool) -> Optio
                     text: body.to_string(),
                 });
             }
-            let extra_indent = if lines.is_empty() { 0 } else { TAB };
+            // The help wraps a long item under its own text, one column past
+            // the marker. Those lines are the rest of the sentence, not a
+            // block below it, so they have to reach `parse_container` at the
+            // same indent as the body — pushing them a tab deeper made every
+            // wrapped step two paragraphs, and the second fell out of the list.
+            let base = children
+                .iter()
+                .filter(|l| !l.text.is_empty())
+                .map(|l| l.indent)
+                .min()
+                .unwrap_or(0);
             lines.extend(children.iter().map(|l| Line {
-                indent: l.indent + extra_indent,
+                indent: l.indent.saturating_sub(base),
                 text: l.text.clone(),
             }));
             let (props, blocks) = parse_container(&lines);
@@ -559,30 +637,9 @@ fn single_line_block(text: &str, children: &[Line], has_children: bool) -> Optio
                 Block::Numbers { items: vec![item] }
             }
         }
-        Kind::Cell => {
-            let heading = text.ends_with("||");
-            let body = text.trim_end_matches('|').trim();
-            let mut lines: Vec<Line> = Vec::new();
-            if !body.is_empty() {
-                lines.push(Line {
-                    indent: 0,
-                    text: body.to_string(),
-                });
-            }
-            let extra_indent = if lines.is_empty() { 0 } else { TAB };
-            lines.extend(children.iter().map(|l| Line {
-                indent: l.indent + extra_indent,
-                text: l.text.clone(),
-            }));
-            let (props, blocks) = parse_container(&lines);
-            Block::Table {
-                rows: vec![vec![Cell {
-                    heading,
-                    blocks,
-                    props,
-                }]],
-            }
-        }
+        Kind::Cell => Block::Table {
+            rows: vec![cell_row(text, children)],
+        },
         Kind::Html => {
             let (tag, attributes, inline_text) = html_parts(text)?;
             let (_, mut children) = child(children);
@@ -853,5 +910,36 @@ mod tests {
         let out = crate::markdown::blocks(&crate::parse(source).blocks, 1);
         assert!(out.contains("Rotation Limits"), "{out}");
         assert!(out.contains("The maximum twist."), "{out}");
+    }
+
+    /// format.txt, "Simple tables": a cell line chains into the next cell
+    /// through indentation, pipe or no pipe on the child. Checked against the
+    /// real doc build: the SideFX page for this exact example renders two
+    /// cells, the second holding both paragraphs.
+    #[test]
+    fn a_cell_chains_into_the_next_even_without_a_pipe() {
+        let source = "First cell |\n    Second cell\n\n    Second paragraph in second cell.\n";
+        let out = crate::markdown::blocks(&crate::parse(source).blocks, 1);
+        // No `||` line, so no real header: this table has no column names to
+        // lose, and renders as HTML instead of a pipe table with a blank band.
+        assert!(
+            out.contains("<td>First cell</td><td>Second cell<br><br>Second paragraph in second cell.</td>"),
+            "{out}"
+        );
+    }
+
+    /// A cell chain can run three deep — checked against the Camera LOP page,
+    /// which SideFX renders as three real columns (name, shortcut,
+    /// description), not one column of nested markup.
+    #[test]
+    fn a_cell_chain_runs_three_deep() {
+        let source = "Look at |\n    #width: 15%\n\n    ((Shift + T)) |\n        * Press it.\n";
+        let out = crate::markdown::blocks(&crate::parse(source).blocks, 1);
+        assert!(
+            out.contains(
+                "<td>Look at</td><td><code>Shift + T</code></td><td><ul><li>Press it.</li></ul></td>"
+            ),
+            "{out}"
+        );
     }
 }

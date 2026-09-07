@@ -318,7 +318,7 @@ fn parameters(children: &[Block], depth: u8) -> String {
                 continue;
             };
             out.push_str(&format!(
-                "| **{}** | {} |\n",
+                "| {} | {} |\n",
                 cell_text(&inlines(term)),
                 cell_text(&cell_html(children, false))
             ));
@@ -522,18 +522,17 @@ fn table(rows: &[Vec<crate::model::Cell>], depth: u8) -> String {
         };
         cell_text(&text)
     };
-    let mut out = String::new();
     let heading = rows.first().is_some_and(|r| r.iter().all(|c| c.heading));
+    if !heading {
+        // format.txt's pipe syntax has no way to write a table without a
+        // header: the first row is always read back as one. A table with no
+        // named columns has to skip that syntax, or it prints a blank band
+        // GFM requires but SideFX never draws. HTML has no such requirement.
+        return table_html(rows, width);
+    }
+    let mut out = String::new();
     let mut rows = rows.iter();
-    let header: Vec<String> = match heading {
-        true => rows
-            .next()
-            .expect("the table has a row")
-            .iter()
-            .map(cell)
-            .collect(),
-        false => vec![String::new(); width],
-    };
+    let header: Vec<String> = rows.next().expect("the table has a row").iter().map(cell).collect();
     out.push_str(&format!("| {} |\n", pad(&header, width).join(" | ")));
     out.push_str(&format!("|{}\n", " --- |".repeat(width)));
     for row in rows {
@@ -541,6 +540,27 @@ fn table(rows: &[Vec<crate::model::Cell>], depth: u8) -> String {
         out.push_str(&format!("| {} |\n", pad(&cells, width).join(" | ")));
     }
     out.push('\n');
+    out
+}
+
+/// A table with no real header row, written as plain HTML so it has no
+/// `<thead>` to draw an empty band over. `cell_html` renders each cell's own
+/// blocks, the same call the pipe-table path uses for a cell that nests
+/// another table.
+fn table_html(rows: &[Vec<crate::model::Cell>], width: usize) -> String {
+    let mut out = String::from("<table>\n");
+    for row in rows {
+        out.push_str("<tr>");
+        for i in 0..width {
+            // Raw, because nothing inside a block of raw HTML is read as
+            // markdown: `Shift + T` in backticks would reach the reader with
+            // its backticks still on it.
+            let html = row.get(i).map(|c| cell_html(&c.blocks, true)).unwrap_or_default();
+            out.push_str(&format!("<td>{html}</td>"));
+        }
+        out.push_str("</tr>\n");
+    }
+    out.push_str("</table>\n\n");
     out
 }
 
@@ -552,6 +572,10 @@ fn pad(cells: &[String], width: usize) -> Vec<String> {
 
 fn list_item(marker: &str, body: &str) -> String {
     let body = body.trim_end();
+    // A continuation line belongs to the item only when it is indented past
+    // the marker. `-` needs two spaces and `1.` needs three, so two spaces for
+    // every marker dropped the rest of a numbered step out of its own list.
+    let pad = " ".repeat(marker.chars().count() + 1);
     let mut out = String::new();
     for (i, line) in body.lines().enumerate() {
         if i == 0 {
@@ -559,7 +583,7 @@ fn list_item(marker: &str, body: &str) -> String {
         } else if line.is_empty() {
             out.push('\n');
         } else {
-            out.push_str(&format!("  {line}\n"));
+            out.push_str(&format!("{pad}{line}\n"));
         }
     }
     out

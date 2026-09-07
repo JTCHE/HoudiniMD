@@ -247,14 +247,22 @@ fn parse_bracket(body: &str) -> Option<Inline> {
                 });
             }
             "fold" => return Some(Inline::Fold { name: value.into() }),
-            // `Link:` says nothing about the target beyond "this is a link";
-            // what follows is an ordinary help path, relative or not.
-            "link" => wiki_target(value),
+            // `Link:` and `Attr:` say nothing about the target beyond "this is
+            // a link"; what follows is an ordinary help path, relative or not.
+            // `Attr:` names an attribute reference specifically, but points at
+            // the same kind of page.
+            "link" | "attr" => wiki_target(value),
             // A shelf tool lives under the shelf section, the same way a node
             // lives under `nodes`. Left alone, the name reads as a page beside
-            // whatever page wrote the link.
-            "shelf" => wiki_target(&format!("/shelf/{value}")),
-            "node" => LinkTarget::Node { path: value.into() },
+            // whatever page wrote the link. `Tool:`, `Small:` and `Large:` are
+            // the same link at three icon sizes, and some of them already
+            // write the section into the value.
+            "shelf" | "tool" | "small" | "large" => match value.starts_with('/') {
+                true => wiki_target(value),
+                false => wiki_target(&format!("/shelf/{value}")),
+            },
+            // `Nodes:` and the misspelt `Npde:` are `Node:`.
+            "node" | "nodes" | "npde" => LinkTarget::Node { path: value.into() },
             "exp" => LinkTarget::Expression { name: value.into() },
             "vex" => LinkTarget::Vex { name: value.into() },
             "mantra" => LinkTarget::Mantra { name: value.into() },
@@ -262,19 +270,52 @@ fn parse_bracket(body: &str) -> Option<Inline> {
             // Every HAPI cross-reference is written against the `hapi`
             // module, so the doc build drops it from the path and keeps it
             // only in the label: `hapi.AttributeInfo#count` links to
-            // `AttributeInfo.html#count`.
+            // `AttributeInfo.html#count`. A Python module other than `hapi`
+            // — `pdg`, `pdgd` — has no flat namespace of its own: it is an
+            // ordinary wiki page under `tops`, so `pdg.WorkItem#addAttrib`
+            // links to `tops/pdg/WorkItem#addAttrib` and the bare `pdg#attrib`
+            // (no class) links to the module's own page, `tops/pdg#attrib`.
             "py" => {
-                let value = value.strip_prefix("hapi.").unwrap_or(value);
-                let (path, member) = match value.split_once('#') {
-                    Some((path, member)) => (path.to_string(), Some(member.to_string())),
-                    None => (value.to_string(), None),
+                let (module, class, member) = match split_first(value, &['.', '#']) {
+                    None => (value, "", None),
+                    Some((module, '#', rest)) => (module, "", Some(rest)),
+                    Some((module, _, rest)) => match split_first(rest, &['.', '#']) {
+                        None => (module, rest, None),
+                        Some((class, _, member)) => (module, class, Some(member)),
+                    },
                 };
-                LinkTarget::Py { path, member }
+                if module == "hapi" {
+                    LinkTarget::Py {
+                        path: class.to_string(),
+                        member: member.map(str::to_string),
+                    }
+                } else {
+                    // Absolute, with a leading slash: `assets::link` treats
+                    // anything else as relative to the page the link sits on,
+                    // which is almost never `tops`.
+                    let path = if class.is_empty() {
+                        format!("/tops/{module}")
+                    } else {
+                        format!("/tops/{module}/{class}")
+                    };
+                    let label = match (class.is_empty(), member) {
+                        (true, Some(m)) => format!("{module}.{m}"),
+                        (true, None) => module.to_string(),
+                        (false, Some(m)) => format!("{module}.{class}.{m}"),
+                        (false, None) => format!("{module}.{class}"),
+                    };
+                    let target = LinkTarget::Wiki {
+                        path,
+                        anchor: member.map(str::to_string),
+                    };
+                    return Some(link(Some(&label), value, target));
+                }
             }
             "wp" => LinkTarget::Wikipedia {
                 article: value.into(),
             },
-            "hom" => {
+            // `Hou:hou.clone.deleteClone` is a `Hom:` link under another name.
+            "hom" | "hou" => {
                 let (path, member) = match value.split_once('#') {
                     Some((path, member)) => (path.to_string(), Some(member.to_string())),
                     None => (value.to_string(), None),
@@ -286,7 +327,10 @@ fn parse_bracket(body: &str) -> Option<Inline> {
             },
             _ => wiki_target(target),
         };
-        return Some(link(text, target, target_kind));
+        // The value, not the whole shortcut: a link with no label of its own
+        // falls back to this text, and `Tool:whitewater` is not what the
+        // reader should see on the page.
+        return Some(link(text, value, target_kind));
     }
     Some(link(text, target, wiki_target(target)))
 }
@@ -316,6 +360,9 @@ fn default_text(target: &LinkTarget, raw: &str) -> Vec<Inline> {
             None => format!("hapi.{path}"),
         },
         LinkTarget::Wikipedia { article } => article.replace('_', " "),
+        // A bare URL shows itself, and `https` is part of it. `raw` here is
+        // the value after the scheme, which would drop it.
+        LinkTarget::Web { url } => url.clone(),
         _ => raw.to_string(),
     };
     vec![Inline::Text { text }]
@@ -343,6 +390,15 @@ fn wiki_target(target: &str) -> LinkTarget {
         path: path.strip_suffix(".html").unwrap_or(path).to_string(),
         anchor,
     }
+}
+
+/// Splits `s` on the first byte in `seps`, returning the piece before it, the
+/// separator that matched, and the piece after. `None` when none of `seps`
+/// appears at all.
+fn split_first<'a>(s: &'a str, seps: &[char]) -> Option<(&'a str, char, &'a str)> {
+    let i = s.find(seps)?;
+    let sep = s[i..].chars().next().expect("find() landed on a boundary");
+    Some((&s[..i], sep, &s[i + sep.len_utf8()..]))
 }
 
 /// `Node:sop/copy` gives `("node", "sop/copy")`. A path such as `/nodes/sop`
