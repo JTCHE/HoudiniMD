@@ -1,0 +1,19 @@
+<svg width="128" height="52" viewBox="0 0 128 52" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Sponsor on GitHub">
+  <defs>
+    <linearGradient id="sFace" x1="0" y1="3" x2="0" y2="45" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#E571AE"/>
+      <stop offset="1" stop-color="#C9508F"/>
+    </linearGradient>
+    <filter id="sShadow" x="-20%" y="-40%" width="140%" height="200%">
+      <feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="hsl(325, 96%, 12%)" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+  <g filter="url(#sShadow)">
+    <rect x="4" y="3" width="120" height="42" rx="13" fill="url(#sFace)"/>
+  </g>
+  <rect x="4.5" y="3.5" width="119" height="41" rx="12.5" fill="none" stroke="#ffffff" stroke-opacity="0.24"/>
+  <g transform="translate(18,14)">
+    <path d="M10 17.2 C10 17.2 2 12.1 2 7.1 A4.3 4.3 0 0 1 10 5.3 A4.3 4.3 0 0 1 18 7.1 C18 12.1 10 17.2 10 17.2 Z" fill="#ffffff"/>
+  </g>
+  <text x="48" y="30" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="15.5" font-weight="600" letter-spacing="-0.2" fill="#ffffff">Sponsor</text>
+</svg>

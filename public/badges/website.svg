@@ -1,0 +1,20 @@
+<svg width="190" height="52" viewBox="0 0 190 52" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Open HoudiniMD">
+  <defs>
+    <linearGradient id="wFace" x1="0" y1="3" x2="0" y2="45" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4C8DFF"/>
+      <stop offset="1" stop-color="#2F6BF0"/>
+    </linearGradient>
+    <filter id="wShadow" x="-20%" y="-40%" width="140%" height="200%">
+      <feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="hsl(221, 96%, 12%)" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+  <g filter="url(#wShadow)">
+    <rect x="4" y="3" width="182" height="42" rx="13" fill="url(#wFace)"/>
+  </g>
+  <rect x="4.5" y="3.5" width="181" height="41" rx="12.5" fill="none" stroke="#ffffff" stroke-opacity="0.22"/>
+  <g transform="translate(18,14)" stroke="#ffffff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M4 16 L16 4"/>
+    <path d="M8 4 L16 4 L16 12"/>
+  </g>
+  <text x="48" y="30" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="15.5" font-weight="600" letter-spacing="-0.2" fill="#ffffff">Open HoudiniMD</text>
+</svg>
