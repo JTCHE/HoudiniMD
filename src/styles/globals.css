@@ -129,7 +129,21 @@ html {
      `max-w-4xl` would silently resolve to the 128px spacing step, not 56rem.
      Ask for the thing you mean instead: `max-w-page` is the content column
      every page and the footer share. */
-  --container-page: 48rem;
+  /* The measure, as a fixed cap: the same line on every window wide enough to
+     draw it, not a line that reaches 80 characters at one width only.
+     `ch` is the advance of `0`, which in Geist is 10.61px against a mean
+     character of 7.31px — measured on real body prose, not on a sample of
+     digits. So 105 characters of running text is 105 x 7.31 = 72ch, not
+     105ch. The cap includes the column's own `px-page-x`, because the box is
+     border-box.
+
+     This is a CEILING, not the width. The gutter that holds the contents
+     list is taken off the container before the column centres in what is
+     left, so a narrow window shrinks the column on its own — Houdini's help
+     pane gives the page 927px and the column draws 695 there, gutter and all.
+     The ceiling only bites on a wide window, and it is set so that the text
+     reaches the gutter instead of leaving a band of nothing beside it. */
+  --container-page: calc(72ch + 2 * var(--page-x));
   --container-overlay: 32rem;
   /* The landing column: the heading, the field and the list below it share one
      axis, narrower than a page of prose because none of the three is prose. */

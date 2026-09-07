@@ -9,7 +9,7 @@ import { FloatingPill } from "./toc/FloatingPill";
 import { scroller, useActiveIndex } from "./toc/measure";
 import { TocList } from "./toc/TocList";
 
-// The content column is max-w-page (56rem) and centred, so the list in the
+// The content column is max-w-page (105 characters at most) and centred, so the list in the
 // gutter only appears once that gutter is wide enough to hold it; below that
 // the page falls back to the inline list plus the floating pill.
 //
@@ -85,7 +85,7 @@ export function TableOfContents({ headings }: { headings: Heading[] }) {
           window: the window has a panel down its left side, so a list placed
           against the window centres itself over the reading column and lands
           on the page's own header. */}
-      <div className="not-prose print:hidden hidden @min-[1024px]:block absolute top-0 left-full ml-lg h-full w-52">
+      <div className="not-prose print:hidden hidden @min-[920px]:block absolute top-0 left-full ml-lg h-full w-52">
         <nav
           ref={sidebarList}
           aria-label="On this page"
@@ -104,7 +104,7 @@ export function TableOfContents({ headings }: { headings: Heading[] }) {
           It carries no bottom margin: the first heading under it already has
           the space every heading has, and a margin here would add a second
           gap on top of it. */}
-      <nav ref={inline} aria-label="On this page" className="not-prose print:hidden @min-[1024px]:hidden -mt-2">
+      <nav ref={inline} aria-label="On this page" className="not-prose print:hidden @min-[920px]:hidden -mt-2">
         {title}
         <div className={collapsed ? "relative max-h-40 overflow-hidden" : undefined}>
           <TocList headings={headings} top={top} active={active} />

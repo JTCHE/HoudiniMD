@@ -156,7 +156,7 @@ export default function Page() {
           page moves left by half of it — breadcrumbs and article together —
           so the column stays centred on what is left, and the list is not
           paid for by the text's own width. */}
-      <div className={cn("flex min-h-0 flex-1 flex-col", hasToc && "@min-[1024px]:pr-[232px]")}>
+      <div className={cn("flex min-h-0 flex-1 flex-col", hasToc && "@min-[920px]:pr-[232px]")}>
         {/* The same page on sidefx.com, for a reader who wants the original. It
           sits on the breadcrumb line because that line is already the answer
           to "where am I", and the source is the last part of that answer. */}
