@@ -23,6 +23,25 @@ if (await invoke<boolean>("clean_start").catch(() => false)) {
 // other theme on the way in.
 startTheme();
 
+// An animation that runs against a window nobody is reading is pure cost, so
+// the body says when the window is idle and the stylesheet pauses the motion.
+// See AGENTS.md, "Animation and compositing".
+const idle = () => document.body.setAttribute("data-idle", String(!document.hasFocus()));
+window.addEventListener("focus", idle);
+window.addEventListener("blur", idle);
+idle();
+
+// The webview brings a browser menu with it — reload, inspect, save picture —
+// and none of it belongs in a window that draws its own chrome. A field the
+// reader types in keeps its menu, because cut, copy and paste live there.
+if (import.meta.env.PROD) {
+  document.addEventListener("contextmenu", (event) => {
+    const at = event.target as HTMLElement | null;
+    if (at?.closest("input, textarea, [contenteditable='true']")) return;
+    event.preventDefault();
+  });
+}
+
 // Every control in the window acts on the press from here on — one listener,
 // no prop to remember. See lib/ui/press.
 startPress();

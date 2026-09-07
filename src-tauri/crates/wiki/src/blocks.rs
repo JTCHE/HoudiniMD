@@ -54,6 +54,16 @@ fn lines_of(source: &str) -> Vec<Line> {
             if text.starts_with("//") {
                 continue;
             }
+            // A line of literal HTML the source embeds for layout — a `<div
+            // style="...">` around an image, its matching `</div>` — has no
+            // prose of its own and no page to draw the layout in. Dropping
+            // the line leaves what it wrapped (an image, a paragraph) as
+            // plain flow instead of a tag the reader has to read past. See
+            // format.txt, "Embedding HTML", and spec: Local — Raw HTML from
+            // the source reaches the reader.
+            if is_bare_html_tag(text) {
+                continue;
+            }
         }
         if text.starts_with("{{{") {
             in_code = true;
@@ -72,6 +82,24 @@ fn lines_of(source: &str) -> Vec<Line> {
 pub fn parse_source(source: &str) -> (Props, Vec<Block>) {
     let lines = lines_of(source);
     parse_container(&lines)
+}
+
+/// A line that is nothing but one HTML tag: `<div style="...">`, `</div>`,
+/// `<br>`. Real prose does not open or close on its own line like this, so a
+/// line matching it carries no text of its own.
+fn is_bare_html_tag(text: &str) -> bool {
+    let Some(inner) = text
+        .strip_prefix('<')
+        .and_then(|s| s.strip_suffix('>'))
+        .map(|s| s.strip_prefix('/').unwrap_or(s))
+        .map(|s| s.strip_suffix('/').unwrap_or(s))
+    else {
+        return false;
+    };
+    let tag = inner.split_whitespace().next().unwrap_or(inner);
+    !tag.is_empty()
+        && tag.chars().all(|c| c.is_ascii_alphabetic())
+        && !inner.contains(['<', '>'])
 }
 
 /// Parse the lines of one container: its own properties, then its blocks.
@@ -487,9 +515,19 @@ fn single_line_block(text: &str, children: &[Line], has_children: bool) -> Optio
             }
             let (props, children) = child(children);
             if name == "usage" {
-                return Some(Block::Usage {
-                    signature: label.trim().trim_matches('`').to_string(),
-                    children,
+                let text = label.trim();
+                return Some(match clean_signature(text) {
+                    Some(signature) => Block::Usage { signature, children },
+                    // A few HOM pages write a call and its return type
+                    // instead of a signature — `` `f()` -> Type `` — which is
+                    // running text with a code span in it, not a signature
+                    // to draw as a block.
+                    None => Block::Item {
+                        name,
+                        label: inline::parse(text),
+                        props,
+                        children,
+                    },
                 });
             }
             Block::Item {
@@ -575,6 +613,16 @@ fn single_line_block(text: &str, children: &[Line], has_children: bool) -> Optio
         }
     };
     Some(block)
+}
+
+/// A `:usage:` signature is one run of backticks: `` `float noise(float pos)` ``.
+/// The reader has to replace the parts written as `<name>` or `<<name>>` —
+/// format.txt, "Styles" — so those markers are not part of the signature
+/// either. `None` means the label is not one clean span of backticks, so it
+/// is not a signature at all.
+fn clean_signature(text: &str) -> Option<String> {
+    let inner = text.strip_prefix('`')?.strip_suffix('`')?;
+    Some(inner.replace(['<', '>'], ""))
 }
 
 fn definition(term: &str, props: Props, children: Vec<Block>) -> Block {

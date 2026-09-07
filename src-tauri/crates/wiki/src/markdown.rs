@@ -33,10 +33,39 @@ pub fn title(title: &Title) -> String {
 
 pub fn blocks(blocks: &[Block], depth: u8) -> String {
     let mut out = String::new();
+    let mut run: Vec<&Block> = Vec::new();
     for block in blocks {
+        if matches!(block, Block::Item { name, .. } if name == "task") {
+            run.push(block);
+            continue;
+        }
+        flush_tasks(&mut run, &mut out);
         out.push_str(&one(block, depth));
     }
+    flush_tasks(&mut run, &mut out);
     out
+}
+
+/// A run of `:task:` blocks is the "To.../Do this" table SideFX draws for
+/// them. Markdown has no `task-desc`/`task-howto` pair of cells, so a table
+/// is the closest shape it has; see `parameters()`, which does the same
+/// thing for `@parameters` and every other `@`-section of `Term:` entries.
+fn flush_tasks(run: &mut Vec<&Block>, out: &mut String) {
+    if run.is_empty() {
+        return;
+    }
+    out.push_str("| To... | Do this |\n| --- | --- |\n");
+    for block in run.drain(..) {
+        let Block::Item { label, children, .. } = block else {
+            continue;
+        };
+        out.push_str(&format!(
+            "| {} | {} |\n",
+            cell_text(&inlines(label)),
+            cell_text(&cell_html(children, false))
+        ));
+    }
+    out.push('\n');
 }
 
 fn one(block: &Block, depth: u8) -> String {
@@ -66,7 +95,12 @@ fn one(block: &Block, depth: u8) -> String {
                 None => capitalise(name),
             };
             let body = match name.as_str() {
-                "parameters" => parameters(children, depth),
+                // `@globals` is a plain type/name/description list, the same
+                // shape as `@parameters` — see `parameters()`. Every other
+                // `@`-section of `Term:` entries (`methods`, `inputs`,
+                // `env_variables`...) draws each entry on its own instead,
+                // so only these two take the table path.
+                "parameters" | "globals" => parameters(children, depth),
                 _ => blocks(children, depth),
             };
             format!("## {heading}\n\n{body}")
@@ -144,14 +178,14 @@ fn one(block: &Block, depth: u8) -> String {
                 indent(&blocks(children, depth + 1))
             )
         }
-        // Raw HTML is written on one line. A blank line inside it ends the
-        // HTML block for the markdown reader, which then draws the closing
-        // tags as text — that is how `</table>` used to reach the reader.
-        Block::Html {
-            tag,
-            attributes,
-            children,
-        } => format!("{}\n\n", html(tag, attributes, children)),
+        // `tag>>` is SideFX's own pseudo-HTML, not a real element the reader's
+        // markdown renderer knows — `<steps>` has no meaning to it, and a
+        // `<div style="...">` layout wrapper has no page to draw its layout
+        // in. Its content is already ordinary blocks (a numbered list, a
+        // picture, a paragraph), so it draws as plain flow with the wrapper
+        // dropped, the same as format.txt says a reader should see it: a
+        // list, a picture, a paragraph, not the tag around them.
+        Block::Html { children, .. } => blocks(children, depth),
         Block::RawHtml { html } => format!("{html}\n\n"),
     }
 }
@@ -234,7 +268,13 @@ fn item(name: &str, label: &str, props: &Props, children: &[Block], depth: u8) -
             };
             quote(&format!("[!{kind}]{title}\n\n{body}"))
         }
-        "usage" => body,
+        // Only reached when `:usage:` was not one clean signature — see
+        // `clean_signature` in blocks.rs. The label is running text, not a
+        // marker to draw as a block.
+        "usage" => match label.is_empty() {
+            true => body,
+            false => format!("{label}\n\n{body}"),
+        },
         "col" | "box" | "tab" | "task" | "disclosure" | "bubble" | "fig" | "caption" => {
             if label.is_empty() {
                 body
@@ -284,6 +324,9 @@ fn parameters(children: &[Block], depth: u8) -> String {
             ));
         }
         out.push('\n');
+        // Shares its row format with `flush_side_by_side`; kept separate
+        // because a parameter table also has to split on a folder heading
+        // and a group divider, which no other side-by-side content does.
     };
 
     for child in children {
@@ -465,12 +508,19 @@ fn table(rows: &[Vec<crate::model::Cell>], depth: u8) -> String {
     if width == 0 {
         return String::new();
     }
+    // A table inside a cell has no markdown of its own to fall back on: a
+    // pipe table is a run of whole lines, and a cell is one line of one. The
+    // parameters table already writes nested content as HTML for the same
+    // reason; a nested table takes that route too, instead of running the
+    // pipe-table renderer a second time and flattening its own pipes into
+    // the cell's text.
     let cell = |cell: &crate::model::Cell| {
-        blocks(&cell.blocks, depth + 1)
-            .replace('|', "\\|")
-            .split_whitespace()
-            .collect::<Vec<_>>()
-            .join(" ")
+        let text = if cell.blocks.iter().any(|b| matches!(b, Block::Table { .. })) {
+            cell_html(&cell.blocks, false)
+        } else {
+            blocks(&cell.blocks, depth + 1)
+        };
+        cell_text(&text)
     };
     let mut out = String::new();
     let heading = rows.first().is_some_and(|r| r.iter().all(|c| c.heading));
@@ -613,6 +663,10 @@ pub fn url(target: &LinkTarget) -> String {
         LinkTarget::Hom { path, member } => match member {
             Some(member) => format!("/hom/{}#{member}", path.replace('.', "/")),
             None => format!("/hom/{}", path.replace('.', "/")),
+        },
+        LinkTarget::Py { path, member } => match member {
+            Some(member) => format!("/hapi/{path}#{member}"),
+            None => format!("/hapi/{path}"),
         },
         LinkTarget::HScript { name } => format!("/commands/{name}"),
         LinkTarget::Wikipedia { article } => {

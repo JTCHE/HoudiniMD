@@ -12,7 +12,7 @@ export default function NotFoundPage({ path }: { path: string }) {
     <DocStatusBox
       icon={FileQuestion}
       path={path}
-      title="This page is not in this Houdini build"
+      title="This page does not exist in the selected Houdini build"
     >
       <DocLink
         href="/"

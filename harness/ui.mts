@@ -35,6 +35,10 @@ function paint(then) {
 window.__key = { down: null, echo: null, drawn: null };
 window.__act = 0;
 window.__wanted = "";
+// The heading already on screen when a press starts. A press does not know
+// what it is about to open, so the mark fires on the first heading that is not
+// this one.
+window.__notHeading = null;
 
 addEventListener("keydown", () => {
   window.__key.down = performance.now();
@@ -61,9 +65,13 @@ new MutationObserver(() => {
   // The page ASKED FOR, by its own heading. Waiting for any content at all
   // stopped being a measurement the moment the app began holding the previous
   // page on screen while it reads the next one.
-  if (window.__marks.article === null && window.__wanted) {
+  if (window.__marks.article === null && (window.__wanted || window.__notHeading !== null)) {
     var heading = document.querySelector("article.prose h1");
-    if (heading && heading.textContent.trim().indexOf(window.__wanted) === 0) {
+    var text = heading ? heading.textContent.trim() : null;
+    var arrived = window.__notHeading !== null
+      ? text !== null && text !== window.__notHeading
+      : text !== null && text.indexOf(window.__wanted) === 0;
+    if (arrived) {
       paint((at) => (window.__marks.article ??= at));
     }
   }
@@ -105,6 +113,14 @@ const PAGES = 10;
  *  thirty to draw its first search field, and a run that dies there reports
  *  nothing at all instead of reporting a bad number. */
 const WAIT = 60_000;
+
+/** How long one press may take before it counts as a miss.
+ *
+ *  A press aims at whatever link the page happens to carry, and some of those
+ *  lead to a page the build cannot draw. Waiting `WAIT` for each one is what
+ *  turned this run into hours. A press that a reader would call broken is not a
+ *  press worth timing, so it is dropped after two seconds. */
+const PRESS_WAIT = 2_000;
 
 /** A page to open: its route, and the heading it draws when it is really open. */
 interface Doc {
@@ -150,21 +166,99 @@ function measured(name: string, unit: string, samples: number[], note: string): 
   };
 }
 
+
+/**
+ * A REAL POINTER, THE WAY A READER USES ONE.
+ *
+ * The app navigates on the press, not on the release (see lib/ui/press), and
+ * it starts reading the page the pointer is travelling towards (see `warm` in
+ * lib/pages). Neither of those shows in a measurement that jumps straight to a
+ * route: the route change already has the page in hand.
+ *
+ * So this moves the mouse onto a real link, waits only as long as a reader
+ * waits — a pointer crossing a row, not a pointer parked on it — and presses.
+ * It reports both halves, because they fail differently: `down` is the app
+ * answering the press at all, and `drawn` is the page arriving.
+ */
+async function pressThrough(
+  page: Page,
+  selector: string,
+  hoverMs: number,
+  known: Set<string>,
+): Promise<{ down: number; drawn: number } | null> {
+  const target = await page.evaluate(
+    ([sel, known]) => {
+      const here = location.pathname;
+      const pages = new Set(known);
+      const link = [...document.querySelectorAll<HTMLAnchorElement>(sel)].find((a) => {
+        const href = a.getAttribute("href") ?? "";
+        return href.startsWith("/") && href !== here && !href.startsWith("//") && pages.has(href.slice(1));
+      });
+      if (!link) return null;
+      const box = link.getBoundingClientRect();
+      return { x: box.x + box.width / 2, y: box.y + box.height / 2, href: link.getAttribute("href") };
+    },
+    [selector, [...known]] as [string, string[]],
+  );
+  if (!target) return null;
+
+  await page.evaluate(() => {
+    window.__marks.article = null;
+    window.__wanted = "";
+    var heading = document.querySelector("article.prose h1");
+    window.__notHeading = heading ? heading.textContent.trim() : "";
+  });
+  // The pointer arrives. A reader is already moving on, so the pause here is
+  // the crossing, not a rest: long enough for the hover to fire, no longer.
+  await page.mouse.move(target.x, target.y);
+  await page.waitForTimeout(hoverMs);
+
+  await page.evaluate(() => {
+    window.__act = performance.now();
+  });
+  await page.mouse.down();
+  const down = await page.evaluate(
+    ([want, limit]) =>
+      new Promise<number | null>((done) => {
+        const giveUp = performance.now() + (limit as number);
+        const seen = () => {
+          if (location.pathname === want) return done(performance.now() - window.__act);
+          if (performance.now() > giveUp) return done(null);
+          requestAnimationFrame(seen);
+        };
+        seen();
+      }),
+    [target.href, PRESS_WAIT] as [string, number],
+  );
+  const drew = await page
+    .waitForFunction(() => window.__marks.article !== null, null, { timeout: PRESS_WAIT })
+    .then(() => true)
+    .catch(() => false);
+  await page.mouse.up();
+  if (down === null || !drew) return null;
+  const drawn = await page.evaluate(() => window.__marks.article - window.__act);
+  return { down, drawn };
+}
+
 /** Opens one page by its route and returns how long it took to draw. */
 async function openPage(page: Page, target: Doc): Promise<{ drawn: number; blank: number }> {
   const path = target.path;
   await page.evaluate((to) => {
     window.__marks.article = null;
     window.__marks.emptied = null;
+    window.__notHeading = null;
     window.__wanted = to.title;
     window.__act = performance.now();
-    location.hash = `#/${to.path}`;
+    // Real paths, not a hash: the app runs on `BrowserRouter` so that Houdini
+    // can ask for `/nodes/sop/box` flat. A hash change navigates nothing.
+    history.pushState({}, "", `/${to.path}`);
+    dispatchEvent(new PopStateEvent("popstate"));
   }, target);
   try {
     await page.waitForFunction(() => window.__marks.article !== null, null, { timeout: WAIT });
   } catch (reason) {
     const state = await page.evaluate(() => ({
-      hash: location.hash,
+      at: location.pathname,
       articles: document.querySelectorAll("article").length,
       children: document.querySelectorAll("article.prose > *").length,
       mark: window.__marks.article,
@@ -184,7 +278,11 @@ async function openPage(page: Page, target: Doc): Promise<{ drawn: number; blank
 async function sample(page: Page, base: string, want: number): Promise<Doc[]> {
   await page.goto(base, { waitUntil: "commit" });
   return page.evaluate(async (count) => {
-    const all: Doc[] = await fetch("/api/titles").then((r) => r.json());
+    // A page with no title draws no `h1`, so the draw mark never fires. Those
+    // pages are a content defect, not a speed measurement.
+    const all: Doc[] = await fetch("/api/titles")
+      .then((r) => r.json())
+      .then((hits: Doc[]) => hits.filter((hit) => hit.title.trim() !== ""));
     const step = Math.floor(all.length / count) || 1;
     return all
       .filter((_, at) => at % step === 0)
@@ -196,7 +294,8 @@ async function sample(page: Page, base: string, want: number): Promise<Doc[]> {
 /** Back to the landing page, with the marks cleared for the next measurement. */
 async function home(page: Page): Promise<void> {
   await page.evaluate(() => {
-    location.hash = "#/";
+    history.pushState({}, "", "/");
+    dispatchEvent(new PopStateEvent("popstate"));
     window.__marks.results = null;
     window.__marks.article = null;
   });
@@ -216,7 +315,7 @@ export async function measureUi(port: number, runs = 3): Promise<UiMetric[]> {
     // 1. OPENING THE APP. Navigation to a search field a reader can type in.
     const start: number[] = [];
     for (let run = 0; run < runs; run++) {
-      await page.goto(base + "#/", { waitUntil: "commit" });
+      await page.goto(base + "/", { waitUntil: "commit" });
       await page.waitForFunction(() => window.__marks.field !== null, null, { timeout: WAIT });
       start.push(await page.evaluate(() => window.__marks.field));
     }
@@ -314,6 +413,33 @@ export async function measureUi(port: number, runs = 3): Promise<UiMetric[]> {
     // Zero means the old page stayed up until the new one was ready.
 
 
+
+    // 5b. A REAL PRESS ON A REAL LINK, hovered only as long as a reader
+    //     hovers. This is the number the reader actually feels, and it is the
+    //     only one that shows whether the hover prefetch is doing its job.
+    const known = new Set(await page.evaluate(() => fetch("/api/titles").then((r) => r.json()).then((hits: Doc[]) => hits.filter((h) => h.title.trim() !== "").map((h) => h.path))));
+    for (const [name, selector] of [
+      ["sidebar", "aside a[href], nav a[href]"],
+      ["doclink", "article a[href]"],
+    ] as const) {
+      for (const hoverMs of [40, 250]) {
+        const downs: number[] = [];
+        const draws: number[] = [];
+        for (let run = 0; run < runs; run++) {
+          for (const path of pages) {
+            await openPage(page, path);
+            const shot = await pressThrough(page, selector, hoverMs, known);
+            if (!shot) continue;
+            downs.push(shot.down);
+            draws.push(shot.drawn);
+          }
+        }
+        if (!draws.length) continue;
+        metrics.push(measured(`press.${name}.${hoverMs}ms.route`, "µs", us(downs), "press to the route changing"));
+        metrics.push(measured(`press.${name}.${hoverMs}ms.drawn`, "µs", us(draws), `press to drawn, after a ${hoverMs}ms hover`));
+      }
+    }
+
     // 6. HAMMERING IT. Straight from page to page with no pause, which is what
     //    a reader with the keyboard does. A number that only holds when the
     //    app is given time to breathe is not a number.
@@ -401,6 +527,7 @@ declare global {
     __key: { down: number | null; echo: number | null; drawn: number | null };
     __act: number;
     __wanted: string;
+    __notHeading: string | null;
     __events: Array<{ ms: number; blocked: number }>;
   }
 }

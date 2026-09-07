@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router";
 import { cn } from "@/lib/utils";
+import { warm } from "@/lib/pages";
 import { showToast } from "@/components/ui/toast-notification";
 import { DocTooltip, registerSlug, usePageMark } from "./Tooltip";
 import { Icons } from "@/lib/ui/icons";
@@ -66,6 +67,21 @@ export default function DocLink({
   const [visible, setVisible] = useState(false);
   const linkRef = useRef<HTMLAnchorElement>(null);
   const location = useLocation();
+  // The router updates `location` the instant a click fires, a full frame
+  // before Page.tsx swaps in the new markdown (it holds the old page on
+  // screen to avoid a blank flash — see Page.tsx). A link that reads
+  // `location` live sees its own destination as "here" during that gap and
+  // drops its icon for the frame the reader is still looking at it. Lagging
+  // one commit behind — updated in an effect, after paint — keeps every link
+  // on the outgoing page reading the outgoing location until it actually
+  // leaves with it.
+  //
+  // The dependency list matters: without one this effect runs after EVERY
+  // render of EVERY link, and a doc page carries hundreds of them.
+  const shownPath = useRef(location.pathname);
+  useEffect(() => {
+    shownPath.current = location.pathname;
+  }, [location.pathname]);
   // Which visual line the pointer entered on, for wrapped multi-line links —
   // null on keyboard focus, where there is no cursor position to anchor to.
   const hoverPosRef = useRef<{ x: number; y: number } | null>(null);
@@ -82,8 +98,12 @@ export default function DocLink({
   // The tooltip names a page, so it needs the page and not the heading in it.
   // A link that is only an anchor has no page of its own: it means this page.
   const path = hashAt >= 0 ? to.slice(0, hashAt) : to;
-  const slug = external ? null : path.replace(/^\/+/, "") || null;
-  const samePage = !external && (!slug || location.pathname === `/${slug}`);
+  const anchorOnly = hashAt >= 0 && path === "";
+  const slug = external ? null : path.replace(/^\/+/, "");
+  // A link to the home page has an empty slug too — same as an anchor-only
+  // link — but it is a real page, not "this page", so it needs its own
+  // pathname check rather than falling into the anchor-only case.
+  const samePage = !external && (anchorOnly || shownPath.current === `/${slug}`);
 
   /* Every link to a page in the help wears that page's icon. A name with its
      glyph in front of it is recognised before it is read, and the icon is the
@@ -151,6 +171,13 @@ export default function DocLink({
           const target = document.getElementById(decodeURIComponent(anchor));
           if (target) target.scrollIntoView({ behavior: "smooth" });
           else showToast(`This page has no section named "${anchor}"`, "error");
+        }}
+        // Start reading the page the pointer is travelling towards. Every
+        // other link in the app does this — the sidebar rows, the library, the
+        // bookmarks — and a doc link that did not was the one link in the
+        // window that always opened cold. See `warm` in lib/pages.
+        onPointerEnter={() => {
+          if (!samePage && slug) warm(slug);
         }}
         onMouseEnter={(e) => {
           hoverPosRef.current = { x: e.clientX, y: e.clientY };

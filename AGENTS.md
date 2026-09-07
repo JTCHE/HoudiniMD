@@ -12,6 +12,33 @@ Project information: @README.md
 - [Testing](agents/testing.md) — test the change, do not commit the test.
 - [Issues](agents/issues.md) — where specs live.
 
+## Animation and compositing
+
+An animation that never stops keeps the compositor busy. The cost is highest on
+a 120 Hz display and on a high-resolution display. Obey these rules.
+
+- Do not put an animation that repeats for ever on a control that stays on the
+  screen. A status dot, a sidebar mark and a typing dot are examples. Each one
+  looks small. Together they prevent the window from becoming idle.
+- Be careful with `animate-pulse`. Tailwind makes this animation easy to add.
+  The cost is not easy to see in the code.
+- Animate `transform` and `opacity` only. The compositor can do these two
+  without the main thread.
+- Do not put an animation together with `backdrop-blur`, a filter, a
+  transparent layer or a grain layer. Each one is a cost. Together the cost is
+  more than the sum.
+- Stop an animation that the reader cannot see. Pause it when the window loses
+  the focus.
+- Obey `prefers-reduced-motion`. Give the same information without the motion.
+- Do not remove an animation because you think it is expensive. A loading
+  skeleton, a spinner and a progress mark measured almost zero. Measure first.
+- Do not trust the performance panel of the browser tools alone. It shows
+  little work in the script and in the layout while the GPU process uses much
+  CPU. Look at the GPU process.
+
+Use an animation only when it tells the reader something. If it tells the
+reader nothing, draw it static.
+
 ## Rules
 
 - Read the documentation before you write code against a service, quote a rate,

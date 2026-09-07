@@ -9,6 +9,11 @@ import { cn } from "@/lib/utils";
 import { Icons } from "@/lib/ui/icons";
 import { toggleTheme, useTheme } from "@/lib/ui/theme";
 import { SidebarRow } from "./SidebarRow";
+import { BugReportButton } from "./BugReportButton";
+
+// Off for the beta — see spec "Cut settings pane from beta". Flip this back
+// on rather than re-writing the button when settings has something to show.
+const SETTINGS_BUTTON_PARKED = false;
 
 const FOOTER_BUTTON =
   "grid size-[30px] cursor-pointer place-items-center rounded-md text-neutral-500 " +
@@ -49,18 +54,21 @@ export function SidebarFooter({
       />
 
       <div className="flex items-center justify-between px-ms pt-ms">
-        {/* There is nothing to set yet. The button holds its place — the
-            panel's bottom row is stated in the design — and says so by being
-            disabled rather than by doing nothing when it is pressed. */}
-        <button
-          type="button"
-          aria-label="Settings"
-          title="Settings — nothing to set yet"
-          disabled
-          className={FOOTER_BUTTON}
-        >
-          <Icons.settings className="size-[18px]" />
-        </button>
+        {/* The settings button is parked here for when there is something to
+            set — cut from the beta, not deleted. See spec "Cut settings pane
+            from beta". Its slot is now the theme switch, moved over from the
+            right. */}
+        {SETTINGS_BUTTON_PARKED && (
+          <button
+            type="button"
+            aria-label="Settings"
+            title="Settings — nothing to set yet"
+            disabled
+            className={FOOTER_BUTTON}
+          >
+            <Icons.settings className="size-[18px]" />
+          </button>
+        )}
         <button
           type="button"
           aria-label={theme === "dark" ? "Switch to the light theme" : "Switch to the dark theme"}
@@ -76,6 +84,7 @@ export function SidebarFooter({
             <Icons.themeLight className="size-[16px]" />
           )}
         </button>
+        <BugReportButton />
       </div>
     </div>
   );

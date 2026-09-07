@@ -29,6 +29,10 @@ pub struct Status {
     /// Pages the install holds. Equal to `pages` once the pass is done.
     pub total: u32,
     pub done: bool,
+    /// Whether a pass has ever begun on this build. A build nobody has opened
+    /// has no row at all, and `pages: 0, done: false` alone cannot tell that
+    /// apart from a pass that started a moment ago.
+    pub started: bool,
 }
 
 /// Starts the background pass for one build. Returns at once.
@@ -43,12 +47,19 @@ pub fn start(app: AppHandle, data: PathBuf, install: crate::install::Install) {
 
 /// Reads the state of one build out of an open connection.
 pub fn status(db: &Connection, build: &str) -> Status {
-    let (pages, done) = db
+    let row = db
         .query_row("SELECT pages, done FROM builds WHERE build = ?1", [build], |row| {
             Ok((row.get::<_, u32>(0)?, row.get::<_, i64>(1)? == 1))
         })
-        .unwrap_or((0, false));
-    Status { build: build.to_string(), pages, total: pages, done }
+        .ok();
+    let (pages, done) = row.unwrap_or((0, false));
+    Status {
+        build: build.to_string(),
+        pages,
+        total: pages,
+        done,
+        started: row.is_some(),
+    }
 }
 
 fn fill(app: &AppHandle, data: &Path, install: &crate::install::Install) -> Result<(), String> {
@@ -75,12 +86,19 @@ pub fn pass(
     // A half-filled build is thrown away rather than resumed. Resuming would
     // need a per-zip cursor, and a whole pass takes seconds.
     clear(db, &build)?;
+    // Claim the build now. `clear` removed its row, and until the pass ends
+    // there is nothing to tell "indexing" from "nobody has opened this build".
+    db.execute(
+        "INSERT INTO builds (build, pages, done) VALUES (?1, 0, 0)",
+        [&build],
+    )
+    .map_err(|e| e.to_string())?;
 
     let sections = sections(&install.help);
     let total: u32 = sections.iter().map(|(_, count)| count).sum();
     let mut pages = 0u32;
     let report = |pages: u32, done: bool| {
-        report(Status { build: build.clone(), pages, total, done });
+        report(Status { build: build.clone(), pages, total, done, started: true });
     };
     report(0, false);
 

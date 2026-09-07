@@ -61,6 +61,17 @@ export function read(path: string): Promise<PageView> {
   return reading;
 }
 
+/** Drops every page held here. The cache is keyed by path alone, because a
+    process reads one build at a time — so switching the build makes all of it
+    wrong at once, and the next read has to go back to Rust. */
+export function forgetPages() {
+  READ.clear();
+  // A read already under way is reading the OLD build, so it is dropped from
+  // the dedup map too. Its own `finally` may then delete a key the next read
+  // put there, which costs one duplicate read and never a wrong page.
+  READING.clear();
+}
+
 /** Start reading a page nobody has asked for yet. A failure here is not the
     reader's business — they have not pressed anything — so it is swallowed
     and the real navigation reports it. */

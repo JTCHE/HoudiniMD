@@ -1,12 +1,91 @@
 # Deployment
 
-**Nothing in this branch deploys.** `main` is the desktop app. It ships as a
-signed installer, and that pipeline does not exist yet — see
-`[[Local — Update Channel and Signing Keys]]` and
-`[[Local — Installer and Portable Layout]]` in the spec vault.
+`main` is the desktop app. It ships as a signed installer through GitHub
+Releases, and GitHub Releases is also the update channel.
 
-Build locally with `bun run app:build`. That writes an installer under
-`src-tauri/target/release/bundle/`. It publishes nothing.
+## The pipeline
+
+One workflow, `.github/workflows/release.yml`, on a `v*` tag.
+
+1. Push a tag. Nothing else starts a release.
+2. `tauri-action` runs `bun run tauri build` on `windows-latest`.
+3. It signs the installer with the updater key and writes `latest.json`.
+4. It opens a **draft** release holding three files.
+5. You paste the release notes into the draft and publish it.
+6. Publishing is what starts the update. Installed copies read
+   `releases/latest/download/latest.json` on their next launch.
+
+## What reaches GitHub
+
+Three files, all on the release:
+
+| file | what it is |
+| --- | --- |
+| `HoudiniMD_<version>_x64-setup.exe` | the installer, about 7 MB |
+| `HoudiniMD_<version>_x64-setup.exe.sig` | the minisign signature over it |
+| `latest.json` | the newest version, and where to get it |
+
+GitHub Releases hold these.
+
+## Why the release is not a prerelease
+
+`releases/latest` skips drafts and prereleases. An installed copy asking for
+`releases/latest/download/latest.json` cannot see either one. A beta that no
+installed copy can find is not an update channel, so beta builds go out as
+ordinary releases with a beta version number.
+
+The draft step stays, because it is where the notes are written.
+
+## Release notes
+
+Write them in the vault, under `side projects/Houdini/HoudiniMD/releases/`, one
+file per version. CI cannot read the vault — it is in iCloud — so the file is
+the source and the GitHub release body is a copy. Paste it into the draft
+before publishing.
+
+Keep the notes about what the reader sees. The specs already say what was
+built and why.
+
+## Signing
+
+The private key lives in one offline backup and in the repo secret
+`TAURI_SIGNING_PRIVATE_KEY`. It has no password, so the workflow sets
+`TAURI_SIGNING_PRIVATE_KEY_PASSWORD` to the empty string. Leaving it unset
+makes the signer stop and ask on a terminal that is not there.
+
+The public key is compiled into the app from `tauri.conf.json`. Changing it
+breaks every installed copy.
+
+## Building on this machine
+
+    bun run tauri build
+
+Two traps, both cost a build here:
+
+- Run it from **Bash**, not PowerShell. `$env:NAME = ""` deletes the variable
+  rather than setting it empty, so the signer stops and asks for a password
+  that does not exist, and the build hangs after writing the bundle.
+- Stop `probe.exe` first. It holds `target/release/probe.exe` open and cargo
+  cannot replace it.
+
+## The installer
+
+Per-user, `installMode: "currentUser"`. It installs to
+`%LOCALAPPDATA%\Programs\HoudiniMD` and asks for no administrator rights.
+
+**Do not set `installMode` to `both` or `perMachine`.** Both make NSIS ask for
+administrator rights, which means a UAC prompt on every install AND on every
+silent update. Read the manifest to check a build:
+
+    strings -a <installer>.exe | grep -o 'requestedExecutionLevel level="[a-z]*"'
+
+`asInvoker` is right. `highestAvailable` is the broken one.
+
+Data lives in `%APPDATA%\com.houdinimd.app` and survives an uninstall, so a
+reinstall does not index the docs again.
+
+WebView2 comes from the downloading bootstrapper: the installer looks for the
+runtime and fetches it only when the machine does not have it.
 
 ## The site still exists
 

@@ -64,16 +64,22 @@ export function useBuild(): BuildInfo {
 
   useEffect(() => {
     let live = true;
-    void invoke<Install[]>("installs")
-      .catch(() => [] as Install[])
-      .then((installs) => {
-        if (live) setBuild((current) => ({ ...current, version: installs[0]?.version ?? "" }));
-      });
+    // The install the reader CHOSE, not the newest one on the machine. The
+    // page count below follows the chosen build, so reading the version from
+    // anywhere else makes the two lines of the card disagree.
+    const readVersion = () => {
+      void invoke<Install | null>("current_install")
+        .catch(() => null)
+        .then((install) => {
+          if (live) setBuild((current) => ({ ...current, version: install?.version ?? "" }));
+        });
+    };
     const readCount = () => {
       void titles().then((all) => {
         if (live) setBuild((current) => ({ ...current, pageCount: all.length }));
       });
     };
+    readVersion();
     readCount();
     // On a fresh index the count is read before the background pass has
     // written every page (Nodes lands last — it is the biggest zip by far).
@@ -84,11 +90,57 @@ export function useBuild(): BuildInfo {
       forgetTitles();
       readCount();
     });
+    // The version picker switches the build this process reads; every mount
+    // of this hook reads it the same way a fresh page load would.
+    const offBuildChange = onBuildChanged(() => {
+      forgetTitles();
+      readVersion();
+      readCount();
+    });
     return () => {
       live = false;
       void stop.then((off) => off());
+      offBuildChange();
     };
   }, []);
 
   return build;
+}
+
+/**
+ * Asks the reader for a Houdini folder and reads the build in it.
+ *
+ * The scan only looks where the installer puts a build, so a studio install on
+ * another drive arrives through here. The version picker and the first-launch
+ * onboarding both call this, so a folder that works in one works in the other.
+ *
+ * `false` when the reader closed the picker without choosing. Throws with what
+ * to say when the folder holds no help.
+ */
+export async function pickInstall(): Promise<boolean> {
+  const { open } = await import("@tauri-apps/plugin-dialog");
+  const folder = await open({
+    directory: true,
+    multiple: false,
+    title: "Pick a Houdini install folder",
+  });
+  if (typeof folder !== "string") return false;
+  await invoke("add_install", { path: folder });
+  announceBuildChanged();
+  return true;
+}
+
+const buildListeners = new Set<() => void>();
+
+/** Tells every `useBuild` to re-read the version and page count. Called after
+    the version picker switches the build this process reads. */
+export function announceBuildChanged() {
+  for (const notify of buildListeners) notify();
+}
+
+/** Runs when the version picker switches the build this process reads. The
+    reading view uses it to read the open page again out of the new build. */
+export function onBuildChanged(run: () => void): () => void {
+  buildListeners.add(run);
+  return () => buildListeners.delete(run);
 }

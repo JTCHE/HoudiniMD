@@ -1,0 +1,46 @@
+name: release
+
+# Tag a version to cut a release: build the Windows installer, sign it for the
+# updater, and put the installer, its signature and `latest.json` on GitHub
+# Releases. GitHub Releases IS the update channel — the app reads
+# `releases/latest/download/latest.json`. See the "Update Channel and Signing
+# Keys" spec, and agents/deployment.md.
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: install front-end dependencies
+        run: bun install
+
+      - name: build and sign
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          # The key was made with no password, so this is empty rather than a
+          # secret. An unset variable makes the signer ask on a terminal that
+          # is not there, and the build hangs.
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "HoudiniMD ${{ github.ref_name }}"
+          # A draft, so the release notes can be pasted in before anyone sees
+          # it. Publishing the draft is what starts the update: a draft is
+          # invisible to `releases/latest`, and so is a prerelease. That is why
+          # `prerelease` is false — a beta that no installed copy can find is
+          # not an update channel.
+          releaseDraft: true
+          prerelease: false
+          includeUpdaterJson: true
+          updaterJsonPreferNsis: true

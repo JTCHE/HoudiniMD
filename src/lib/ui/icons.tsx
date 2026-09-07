@@ -16,6 +16,7 @@ import {
   ArrowRight,
   Bookmark,
   BookOpen,
+  Bug,
   ChevronDown,
   ChevronRight,
   ChevronsUpDown,
@@ -86,6 +87,7 @@ export const Icons = {
   settings: Settings,
   themeLight: Sun,
   themeDark: Moon,
+  bugReport: Bug,
   search: Search,
 
   /* Window caption */

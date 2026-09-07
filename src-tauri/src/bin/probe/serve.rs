@@ -20,7 +20,7 @@ use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use houdinimd_lib::{all_titles, db, find, help, index, install, read_page};
+use houdinimd_lib::{all_titles, db, find, help, index, install, library, read_page};
 use rusqlite::Connection;
 
 /// What `invoke` becomes in the browser. `page` and the rest keep their names,
@@ -73,7 +73,7 @@ struct Serve {
 
 /// Runs until killed. `dist` is the built front-end; build it first.
 pub fn run(port: u16, data: &Path, dist: PathBuf) -> Result<(), String> {
-    let install = install::find()
+    let install = install::find(&[])
         .into_iter()
         .next()
         .ok_or("no Houdini install on this machine")?;
@@ -97,6 +97,11 @@ pub fn run(port: u16, data: &Path, dist: PathBuf) -> Result<(), String> {
     for stream in listener.incoming().flatten() {
         // One request at a time, on purpose: two measurements that overlap are
         // two measurements of each other.
+        //
+        // A browser holds its connection open after the answer, and this loop
+        // would then wait on a socket that sends nothing while every other
+        // request queues behind it. The timeout gives the loop back.
+        let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(5)));
         if let Err(reason) = answer(&state, stream) {
             eprintln!("{reason}");
         }
@@ -156,7 +161,7 @@ fn command_response(state: &Serve, command: &str, query: &str) -> (u16, &'static
         // already indexed, so there is no progress to report and a listener
         // that never fires is the truthful answer.
         _ if command.starts_with("plugin:") => Ok("0".to_string()),
-        "installs" => serde_json::to_string(&install::find()).map_err(|e| e.to_string()),
+        "installs" => serde_json::to_string(&install::find(&[])).map_err(|e| e.to_string()),
         "user_name" => serde_json::to_string(&whoami()).map_err(|e| e.to_string()),
         // The harness always runs on the store the scene seeded, so the
         // browser build never starts clean.
@@ -220,6 +225,64 @@ fn command_response(state: &Serve, command: &str, query: &str) -> (u16, &'static
                 }
             }
             serde_json::to_string(&out).map_err(|e| e.to_string())
+        }
+        // The build the app reads. The harness stands up one install, so the
+        // picker has one row and it is always the current one.
+        "current_install" => serde_json::to_string(&state.install).map_err(|e| e.to_string()),
+        "available_installs" => serde_json::to_string(&serde_json::json!([{
+            "version": state.install.version,
+            "pages": index::status(&state.db.lock().unwrap(), &state.install.version).pages,
+            "done": true,
+            "started": true,
+            "current": true,
+        }]))
+        .map_err(|e| e.to_string()),
+        // Nothing to switch to, so this is the build it already reads.
+        "select_install" => serde_json::to_string(&state.install).map_err(|e| e.to_string()),
+        // No localhost server stands behind the harness, so nothing is drawn
+        // for it. Zero is what the front-end reads as "no server".
+        "server_port" => Ok("0".to_string()),
+        "recents" => {
+            let db = state.db.lock().unwrap();
+            library::recents(&db).and_then(|rows| serde_json::to_string(&rows).map_err(|e| e.to_string()))
+        }
+        "bookmarks" => {
+            let db = state.db.lock().unwrap();
+            library::bookmarks(&db).and_then(|rows| serde_json::to_string(&rows).map_err(|e| e.to_string()))
+        }
+        "record_visit" | "toggle_bookmark" => {
+            let db = state.db.lock().unwrap();
+            let entry = library::Entry {
+                path: param(query, "path").unwrap_or_default(),
+                title: param(query, "title").unwrap_or_default(),
+                icon: param(query, "icon"),
+                at: 0,
+            };
+            if command == "record_visit" {
+                library::record_visit(&db, &entry).map(|()| "null".to_string())
+            } else {
+                library::toggle_bookmark(&db, &entry)
+                    .map(|kept| kept.to_string())
+            }
+        }
+        "forget_recent" => {
+            let db = state.db.lock().unwrap();
+            library::forget(&db, &param(query, "path").unwrap_or_default())
+                .map(|()| "null".to_string())
+        }
+        "get_setting" => {
+            let db = state.db.lock().unwrap();
+            serde_json::to_string(&db::get_setting(&db, &param(query, "key").unwrap_or_default()))
+                .map_err(|e| e.to_string())
+        }
+        "set_setting" => {
+            let db = state.db.lock().unwrap();
+            db::set_setting(
+                &db,
+                &param(query, "key").unwrap_or_default(),
+                &param(query, "value").unwrap_or_default(),
+            )
+            .map(|()| "null".to_string())
         }
         other => Err(format!("no command {other}")),
     };

@@ -20,7 +20,8 @@ import { detectLanguage } from "@/lib/markdown/utils";
 import { showToast } from "@/components/ui/toast-notification";
 import { recordVisit } from "@/lib/store/library";
 import { sideFxUrl } from "@/lib/sidefx";
-import { known, read, type PageError, type PageView } from "@/lib/pages";
+import { forgetPages, known, read, type PageError, type PageView } from "@/lib/pages";
+import { onBuildChanged } from "@/lib/install";
 
 /**
  * What to call a page whose help file gives no title.
@@ -37,7 +38,6 @@ function nameOf(view: PageView, path: string): string {
   const last = path.split("/").pop() ?? path;
   return last.charAt(0).toUpperCase() + last.slice(1);
 }
-
 
 /** The reading view. Rust reads and parses the page; this draws it with the
     same component map the site uses. */
@@ -73,6 +73,32 @@ export default function Page() {
     return () => {
       live = false;
     };
+  }, [path]);
+
+  // Switching the Houdini build makes every page held in memory wrong, so the
+  // open one is read again out of the new build.
+  //
+  // A page that the new build does not have leaves the reader where they are.
+  // The alternative is a 404 in place of a page they were reading, which loses
+  // their place to say something a line of text says better. The breadcrumb
+  // still names the build the text came from, so the window does not lie.
+  useEffect(() => {
+    return onBuildChanged(() => {
+      forgetPages();
+      read(path)
+        .then((view) => {
+          setPage(view);
+          setError(null);
+        })
+        .catch((reason: PageError) => {
+          if (reason.missing) {
+            showToast("This page does not exist in the selected Houdini build", "error");
+            return;
+          }
+          setPage(null);
+          setError(reason);
+        });
+    });
   }, [path]);
 
   // A page kept on screen keeps its scroll offset with it, so a new page that
@@ -112,7 +138,10 @@ export default function Page() {
   const isVexPage = /(^|\/)vex\//.test(`/${path}`);
 
   return (
-    <div ref={scroller} className="docs-shell @container flex min-h-0 flex-1 flex-col overflow-y-auto">
+    <div
+      ref={scroller}
+      className="docs-shell @container flex min-h-0 flex-1 flex-col overflow-y-auto"
+    >
       <SearchOverlay ref={search} />
       {/* Room for the contents list in the right gutter, taken from the box
           the column centres itself in rather than from the column. The whole
@@ -120,57 +149,63 @@ export default function Page() {
           so the column stays centred on what is left, and the list is not
           paid for by the text's own width. */}
       <div className="flex min-h-0 flex-1 flex-col @min-[1150px]:pr-[232px]">
-      {/* The same page on sidefx.com, for a reader who wants the original. It
+        {/* The same page on sidefx.com, for a reader who wants the original. It
           sits on the breadcrumb line because that line is already the answer
           to "where am I", and the source is the last part of that answer. */}
-      <div className="@container mx-auto flex w-full max-w-page items-start justify-between gap-md px-page-x pt-5">
-        {page && <Breadcrumbs path={page.path} version={page.version} title={nameOf(page, path)} />}
-        <a
-          href={sideFxUrl(path)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="group flex shrink-0 items-center text-meta text-muted-foreground transition-colors hover:text-foreground print:hidden"
-        >
-          SideFX
-          <LucideArrowUpRight
-            strokeWidth="1.75"
-            className="size-4 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
-          />
-        </a>
-      </div>
-      <div className="flex-1 flex min-w-0 flex-col">
-        {error?.missing ? (
-          <NotFoundPage path={path} />
-        ) : (
-          <main className="relative mx-auto w-full min-w-0 max-w-page px-page-x py-10">
-            {error && <p className="text-sm text-muted-foreground">{error.message}</p>}
-            {page && (
-              <article className="prose prose-neutral dark:prose-invert max-w-none">
-                <PageHeader
-                  entry={{ path, title: nameOf(page, path), icon: page.icon }}
-                  name={nameOf(page, path)}
-                  nodeType={page.nodeType}
-                  icon={page.icon}
-                  since={page.since}
-                  summary={page.summary}
-                  markdown={page.markdown}
-                />
-                <TableOfContents headings={extractHeadings(page.markdown)} />
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm, remarkCallouts, [remarkVex, { enabled: isVexPage }]]}
-                  rehypePlugins={[rehypeRaw, rehypeSlug, rehypeCards]}
-                  components={{
-                    ...markdownComponents,
-                    pre: ({ children }) => <CodeBlock language={detectLanguage(path)}>{children}</CodeBlock>,
-                  }}
-                >
-                  {page.markdown}
-                </ReactMarkdown>
-              </article>
-            )}
-          </main>
-        )}
-      </div>
+        <div className="@container mx-auto flex w-full max-w-page items-start justify-between gap-md px-page-x pt-5">
+          {page && (
+            <Breadcrumbs
+              path={page.path}
+              version={page.version}
+              title={nameOf(page, path)}
+            />
+          )}
+          <a
+            href={sideFxUrl(path)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group flex shrink-0 items-center text-meta text-muted-foreground transition-colors hover:text-foreground print:hidden"
+          >
+            SideFX
+            <LucideArrowUpRight
+              strokeWidth="1.75"
+              className="size-4 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
+            />
+          </a>
+        </div>
+        <div className="flex-1 flex min-w-0 flex-col">
+          {error?.missing ? (
+            <NotFoundPage path={path} />
+          ) : (
+            <main className="relative mx-auto w-full min-w-0 max-w-page px-page-x py-10">
+              {error && <p className="text-sm text-muted-foreground">{error.message}</p>}
+              {page && (
+                <article className="prose prose-neutral dark:prose-invert max-w-none">
+                  <PageHeader
+                    entry={{ path, title: nameOf(page, path), icon: page.icon }}
+                    name={nameOf(page, path)}
+                    nodeType={page.nodeType}
+                    icon={page.icon}
+                    since={page.since}
+                    summary={page.summary}
+                    markdown={page.markdown}
+                  />
+                  <TableOfContents headings={extractHeadings(page.markdown)} />
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm, remarkCallouts, [remarkVex, { enabled: isVexPage }]]}
+                    rehypePlugins={[rehypeRaw, rehypeSlug, rehypeCards]}
+                    components={{
+                      ...markdownComponents,
+                      pre: ({ children }) => <CodeBlock language={detectLanguage(path)}>{children}</CodeBlock>,
+                    }}
+                  >
+                    {page.markdown}
+                  </ReactMarkdown>
+                </article>
+              )}
+            </main>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -247,11 +247,30 @@ fn parse_bracket(body: &str) -> Option<Inline> {
                 });
             }
             "fold" => return Some(Inline::Fold { name: value.into() }),
+            // `Link:` says nothing about the target beyond "this is a link";
+            // what follows is an ordinary help path, relative or not.
+            "link" => wiki_target(value),
+            // A shelf tool lives under the shelf section, the same way a node
+            // lives under `nodes`. Left alone, the name reads as a page beside
+            // whatever page wrote the link.
+            "shelf" => wiki_target(&format!("/shelf/{value}")),
             "node" => LinkTarget::Node { path: value.into() },
             "exp" => LinkTarget::Expression { name: value.into() },
             "vex" => LinkTarget::Vex { name: value.into() },
             "mantra" => LinkTarget::Mantra { name: value.into() },
             "cmd" => LinkTarget::HScript { name: value.into() },
+            // Every HAPI cross-reference is written against the `hapi`
+            // module, so the doc build drops it from the path and keeps it
+            // only in the label: `hapi.AttributeInfo#count` links to
+            // `AttributeInfo.html#count`.
+            "py" => {
+                let value = value.strip_prefix("hapi.").unwrap_or(value);
+                let (path, member) = match value.split_once('#') {
+                    Some((path, member)) => (path.to_string(), Some(member.to_string())),
+                    None => (value.to_string(), None),
+                };
+                LinkTarget::Py { path, member }
+            }
             "wp" => LinkTarget::Wikipedia {
                 article: value.into(),
             },
@@ -292,6 +311,10 @@ fn default_text(target: &LinkTarget, raw: &str) -> Vec<Inline> {
             Some(member) => format!("{path}.{member}"),
             None => path.clone(),
         },
+        LinkTarget::Py { path, member } => match member {
+            Some(member) => format!("hapi.{path}.{member}"),
+            None => format!("hapi.{path}"),
+        },
         LinkTarget::Wikipedia { article } => article.replace('_', " "),
         _ => raw.to_string(),
     };
@@ -299,21 +322,26 @@ fn default_text(target: &LinkTarget, raw: &str) -> Vec<Inline> {
 }
 
 fn wiki_target(target: &str) -> LinkTarget {
+    // `[trace|drawing|#trace]` is written in the help with one pipe too many.
+    // The label was taken from the first field, so what is left here is the
+    // target and the leftovers of the typo. The last field is the real target.
+    let target = target.rsplit('|').next().unwrap_or(target);
     if let Some(rest) = target.strip_prefix('#') {
         return LinkTarget::Wiki {
             path: String::new(),
             anchor: Some(rest.to_string()),
         };
     }
-    match target.split_once('#') {
-        Some((path, anchor)) => LinkTarget::Wiki {
-            path: path.to_string(),
-            anchor: Some(anchor.to_string()),
-        },
-        None => LinkTarget::Wiki {
-            path: target.to_string(),
-            anchor: None,
-        },
+    let (path, anchor) = match target.split_once('#') {
+        Some((path, anchor)) => (path, Some(anchor.to_string())),
+        None => (target, None),
+    };
+    LinkTarget::Wiki {
+        // The help links to the page the doc build WRITES, which is HTML. The
+        // app reads the source the build writes it from, and that has no
+        // suffix at all.
+        path: path.strip_suffix(".html").unwrap_or(path).to_string(),
+        anchor,
     }
 }
 

@@ -112,6 +112,13 @@ pub enum LinkTarget {
         path: String,
         member: Option<String>,
     },
+    /// `[Py:hapi.Session]`, `[Py:hapi.AttributeInfo#count]`. The HAPI page for
+    /// a Python class or function, always under `hapi.` — the doc build drops
+    /// that module prefix from the path and keeps it only in the label.
+    Py {
+        path: String,
+        member: Option<String>,
+    },
     HScript {
         name: String,
     },

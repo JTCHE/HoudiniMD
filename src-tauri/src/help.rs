@@ -35,7 +35,12 @@ pub enum PageError {
 /// See spec: Local — Pages missing from the app index.
 pub fn page(help: &Path, path: &str) -> Result<String, PageError> {
     let path = path.trim_matches('/');
-    let (section, rest) = path.split_once('/').ok_or(PageError::Missing)?;
+    if path.is_empty() {
+        return Err(PageError::Missing);
+    }
+    // `network/` names the section's own index page, and the help writes that
+    // form as often as it writes `network/index`.
+    let (section, rest) = path.split_once('/').unwrap_or((path, "index"));
     if rest.contains("..") {
         return Err(PageError::Missing);
     }

@@ -92,7 +92,7 @@ fn main() {
         return;
     }
 
-    let Some(install) = install::find().into_iter().next() else {
+    let Some(install) = install::find(&[]).into_iter().next() else {
         eprintln!("no Houdini install on this machine — nothing to measure");
         std::process::exit(2);
     };

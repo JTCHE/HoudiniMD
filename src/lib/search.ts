@@ -34,9 +34,30 @@ export function titles(): Promise<Hit[]> {
   return all;
 }
 
+/** The title of one page, if the list is already in memory. The list is read
+    once per session for the search field, so a lookup here costs nothing and
+    never touches Rust. Undefined until that read lands, and for a path the
+    index does not hold. */
+export function titleOf(path: string): string | undefined {
+  return byPath?.get(path);
+}
+
+/** Path to title, built once per title list. A breadcrumb asks for two or
+    three ancestors on every navigation, and a scan of ten thousand rows for
+    each of them is work nobody needs. */
+let byPath: Map<string, string> | null = null;
+
+export function warmTitleIndex(): Promise<void> {
+  return titles().then((all) => {
+    if (byPath) return;
+    byPath = new Map(all.map((hit) => [hit.path, hit.title]));
+  });
+}
+
 /** Drops the cache, so the next read sees what the background pass has added. */
 export function forgetTitles() {
   all = null;
+  byPath = null;
 }
 
 /** Full-text search over the page bodies. Rust ranks it with `bm25()`.

@@ -31,6 +31,7 @@ pub fn open(data: &Path) -> Result<Connection, String> {
     db.execute("ATTACH DATABASE ?1 AS user", [user.to_string_lossy()])
         .map_err(|e| format!("{}: {e}", user.display()))?;
     reset_if_stale(&db)?;
+    reset_user_if_stale(&db)?;
     db.execute_batch(SCHEMA).map_err(|e| e.to_string())?;
     Ok(db)
 }
@@ -54,6 +55,31 @@ fn reset_if_stale(db: &Connection) -> Result<(), String> {
         )
         .map_err(|e| e.to_string())?;
         db.pragma_update(None, "user_version", VERSION)
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+/// What the `user.*` tables in `SCHEMA` describe. Raise it whenever they
+/// change shape.
+const USER_VERSION: u32 = 2;
+
+/// The same reset as `reset_if_stale`, kept apart because `user.db` holds the
+/// reader's own work and every other file in this module leaves it alone.
+/// Before the beta ships nobody has a bookmark yet, so a shape change here is
+/// still free; once real readers have them this reset has to become a real
+/// migration instead of a drop.
+fn reset_user_if_stale(db: &Connection) -> Result<(), String> {
+    let found: u32 = db
+        .query_row("PRAGMA user.user_version", [], |row| row.get(0))
+        .map_err(|e| e.to_string())?;
+    if found != USER_VERSION {
+        db.execute_batch(
+            "DROP TABLE IF EXISTS user.bookmarks;
+             DROP TABLE IF EXISTS user.recents;",
+        )
+        .map_err(|e| e.to_string())?;
+        db.pragma_update(Some("user"), "user_version", USER_VERSION)
             .map_err(|e| e.to_string())?;
     }
     Ok(())
@@ -101,7 +127,18 @@ CREATE VIRTUAL TABLE IF NOT EXISTS pages_fts USING fts5(
 -- empty the list. See spec: Local — Settings and Bookmark Sync.
 CREATE TABLE IF NOT EXISTS user.bookmarks (
   path  TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  icon  TEXT,
   added INTEGER NOT NULL
+);
+
+-- Same shape as bookmarks, one row per page the reader opened. Trimmed to
+-- the front end's own keep-count, not here.
+CREATE TABLE IF NOT EXISTS user.recents (
+  path  TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  icon  TEXT,
+  at    INTEGER NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS user.settings (
@@ -109,6 +146,23 @@ CREATE TABLE IF NOT EXISTS user.settings (
   value TEXT NOT NULL
 );
 "#;
+
+/// One row of `user.settings`. Read at the call site that needs it — there
+/// are only a handful of keys, so no cache earns its keep.
+pub fn get_setting(db: &Connection, key: &str) -> Option<String> {
+    db.query_row("SELECT value FROM user.settings WHERE key = ?1", [key], |row| row.get(0))
+        .ok()
+}
+
+pub fn set_setting(db: &Connection, key: &str, value: &str) -> Result<(), String> {
+    db.execute(
+        "INSERT INTO user.settings (key, value) VALUES (?1, ?2)
+         ON CONFLICT(key) DO UPDATE SET value = ?2",
+        [key, value],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
 
 /// Turns what the reader typed into an FTS5 query.
 ///

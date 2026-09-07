@@ -1,16 +1,52 @@
+import { useEffect, useState } from "react";
 import { ChevronRight } from "lucide-react";
 import { Link } from "react-router";
+import { titleOf, warmTitleIndex } from "@/lib/search";
 
-/** The path of a page is its place in the docs, so the trail is read from it. */
+/**
+ * The path of a page is its place in the docs, so the trail is read from it.
+ *
+ * An ancestor segment names a real index page in the install — `nodes/sop`
+ * is titled "Geometry nodes", not "Sop" — so the crumb reads that page's own
+ * title rather than guessing one from the URL.
+ *
+ * The title comes from the title list, which the search field already holds in
+ * memory for the whole session. Reading the ancestor PAGE instead would parse
+ * a zip in Rust on every navigation, and would push real pages out of the page
+ * cache to hold index pages nobody opened. The guessed text holds the crumb's
+ * place until that list lands, once, on the first navigation of a session.
+ */
 export function Breadcrumbs({ path, version, title }: { path: string; version?: string; title: string }) {
   const segments = path.split("/").filter(Boolean).slice(0, -1);
+  const [, forceRender] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    void warmTitleIndex().then(() => {
+      if (!cancelled) forceRender((n) => n + 1);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const currentHref = `/${path}`;
   const crumbs = [
-    { label: version ? `Houdini ${version}` : "Houdini", href: "/" },
-    ...segments.map((segment, index) => ({
-      label: segment.replace(/-/g, " "),
-      href: `/${segments.slice(0, index + 1).join("/")}/index`,
-    })),
-    { label: title, href: null },
+    { label: version ? `Houdini ${version}` : "Houdini", href: "/", guessed: false },
+    ...segments
+      .map((segment, index) => {
+        const ancestorPath = `${segments.slice(0, index + 1).join("/")}/index`;
+        const ancestorTitle = titleOf(ancestorPath)?.trim();
+        return {
+          label: ancestorTitle || segment.replace(/-/g, " "),
+          href: `/${ancestorPath}`,
+          guessed: !ancestorTitle,
+        };
+      })
+      // Already on this exact index page: its own title is the last crumb,
+      // and a crumb for it here would only repeat that title right next to it.
+      .filter((crumb) => crumb.href !== currentHref),
+    { label: title, href: null, guessed: false },
   ];
 
   return (
@@ -20,7 +56,10 @@ export function Breadcrumbs({ path, version, title }: { path: string; version?: 
         return (
           <span key={`${crumb.label}-${index}`} className="inline-flex items-center">
             {crumb.href ? (
-              <Link to={crumb.href} className="capitalize hover:text-foreground transition-colors">
+              <Link
+                to={crumb.href}
+                className={crumb.guessed ? "capitalize hover:text-foreground transition-colors" : "hover:text-foreground transition-colors"}
+              >
                 {crumb.label}
               </Link>
             ) : (

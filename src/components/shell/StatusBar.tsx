@@ -14,16 +14,13 @@ import { cn } from "@/lib/utils";
 import { COMMAND_KEY } from "@/lib/hotkeys";
 import { Keycap } from "@/components/ui/Keycap";
 import { IndexProgress } from "@/components/root/IndexProgress";
-import { inTauri } from "@/lib/backend";
+import { ServerPortBadge } from "@/components/root/ServerPortBadge";
 
 const HINTS: Array<{ keys: string[]; label: string }> = [
   { keys: [COMMAND_KEY, "K"], label: "Search" },
   { keys: [COMMAND_KEY, "C"], label: "Copy as Markdown" },
   { keys: [COMMAND_KEY, "D"], label: "Bookmark" },
 ];
-
-// The reader who is already in Houdini's help pane got here by pressing it.
-if (inTauri) HINTS.push({ keys: ["F1"], label: "Opens this window from Houdini" });
 
 const SMALL_KEY = "rounded-md px-sm py-xs text-caption leading-none";
 
@@ -60,8 +57,12 @@ export function StatusBar({ className }: { className?: string }) {
         ))}
       </div>
 
-      <div className="ml-auto shrink-0 text-meta text-neutral-500">
+      {/* The right of the strip states what the app is, not what the reader
+          can do: the pass it is running, then the address Houdini reaches it
+          on. Both are facts about the window rather than about the page. */}
+      <div className="ml-auto flex shrink-0 items-center gap-md text-meta text-neutral-500">
         <IndexProgress />
+        <ServerPortBadge />
       </div>
     </footer>
   );

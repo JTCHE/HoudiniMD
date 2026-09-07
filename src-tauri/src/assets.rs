@@ -1,5 +1,5 @@
-//! Turns a picture or video reference on a help page into the path the
-//! `himage` protocol reads.
+//! Turns a reference written beside a help page into the path the app reads:
+//! a picture or video for the `himage` protocol, and a link for the router.
 //!
 //! A page writes its assets the way the SideFX help server serves them, which
 //! is not the way the install stores them:
@@ -12,7 +12,7 @@
 //! Both come back as one shape, `images/…` or `videos/…`, so the protocol
 //! handler has one thing to read and the front-end has nothing to know.
 
-use wiki::{Block, Inline};
+use wiki::{Block, Inline, LinkTarget};
 
 /// The asset path for `src` as written on the page at `page`, or `None` when
 /// the reference names nothing this app can read.
@@ -55,6 +55,40 @@ pub fn resolve(page: &str, src: &str) -> Option<String> {
         return None;
     }
     Some(format!("{store}/{}", path.join("/")))
+}
+
+/// The app path for a wiki link written beside the page rather than from the
+/// help root. `news/22/index` writes `[Solaris|solaris]`, and that means
+/// `/news/22/solaris`, not a page under the index.
+///
+/// ponytail: the base is the folder the page name sits in, so a page read at
+/// its folder form (`news/22` instead of `news/22/index`) bases one level too
+/// high. The index writes the `/index` form for every folder page, so only a
+/// hand-written address reaches the other one.
+pub fn link(page: &str, target: &str) -> Option<String> {
+    if target.is_empty() || target.starts_with('/') {
+        return None;
+    }
+    let dir = page
+        .trim_matches('/')
+        .rsplit_once('/')
+        .map_or("", |(dir, _)| dir);
+
+    let mut path: Vec<&str> = Vec::new();
+    for part in dir.split('/').chain(target.split('/')) {
+        match part {
+            "" | "." => {}
+            ".." => {
+                path.pop()?;
+            }
+            part => path.push(part),
+        }
+    }
+    // A single segment is a section, not a page, and nothing links to one.
+    if path.len() < 2 {
+        return None;
+    }
+    Some(format!("/{}", path.join("/")))
 }
 
 /// Rewrites every asset reference in a page to the path the `himage` protocol
@@ -130,7 +164,12 @@ fn inlines(page: &str, inlines: &mut Vec<Inline>) {
             self::inlines(page, body);
             true
         }
-        Inline::Link { text, .. } => {
+        Inline::Link { text, target } => {
+            if let LinkTarget::Wiki { path, .. } = target
+                && let Some(resolved) = link(page, path)
+            {
+                *path = resolved;
+            }
             self::inlines(page, text);
             true
         }
@@ -140,7 +179,35 @@ fn inlines(page: &str, inlines: &mut Vec<Inline>) {
 
 #[cfg(test)]
 mod tests {
-    use super::resolve;
+    use super::{link, resolve};
+
+    #[test]
+    fn a_relative_link_stands_beside_its_page() {
+        assert_eq!(
+            link("news/22/index", "solaris").as_deref(),
+            Some("/news/22/solaris")
+        );
+        assert_eq!(
+            link("news/22/karma", "solaris").as_deref(),
+            Some("/news/22/solaris")
+        );
+        assert_eq!(
+            link("nodes/sop/box", "../../vex/functions/lerp").as_deref(),
+            Some("/vex/functions/lerp")
+        );
+    }
+
+    #[test]
+    fn an_absolute_link_is_left_alone() {
+        assert_eq!(link("news/22/index", "/nodes/sop/box"), None);
+        assert_eq!(link("news/22/index", ""), None);
+    }
+
+    #[test]
+    fn a_link_that_leaves_the_help_root_is_refused() {
+        assert_eq!(link("news/22/index", "../../../elsewhere"), None);
+        assert_eq!(link("news/index", "solaris").as_deref(), Some("/news/solaris"));
+    }
 
     #[test]
     fn absolute_image_drops_the_serving_folder() {

@@ -6,13 +6,18 @@
  * the reading view on every page it opens; bookmarks are written only when the
  * reader asks.
  *
- * The store is local to the machine and lives in `localStorage`. That is the
- * whole of it for now: the app has no account and no sync, and a list of the
- * last few dozen pages is not worth a table. When it moves behind Rust, only
- * `read` and `write` below change — every caller goes through the functions
- * under them.
+ * The store lives in `user.db`, behind `backend.ts`, so the desktop window
+ * and Houdini's help pane — two different origins — read and write the same
+ * rows. See spec: Local — User config shared between the window and the help
+ * pane.
+ *
+ * A write updates the in-memory copy at once, so the surface that made it
+ * never waits on a round trip. The OTHER surface only learns of it on its own
+ * next poll, which runs on window focus: the reader notices a change made
+ * elsewhere on the way back to the window that shows it, never mid-glance.
  */
 import { useSyncExternalStore } from "react";
+import { invoke } from "../backend";
 
 export interface LibraryEntry {
   /** Help path, as the router and `page` read it: `nodes/sop/attribwrangle`. */
@@ -24,56 +29,51 @@ export interface LibraryEntry {
   at: number;
 }
 
-/** Past this, the oldest recent falls off. A reader walks a handful of pages;
-    a list longer than the panel can ever show is a list nobody reads. */
-const RECENTS_KEEP = 50;
-
-const KEYS = {
-  recents: "houdinimd.recents",
-  bookmarks: "houdinimd.bookmarks",
-} as const;
-
-type ListName = keyof typeof KEYS;
-
-function read(list: ListName): LibraryEntry[] {
-  try {
-    const raw = window.localStorage.getItem(KEYS[list]);
-    const parsed: unknown = raw ? JSON.parse(raw) : [];
-    // A hand-edited or half-written value must not take the panel down with
-    // it: anything that is not a list of entries reads as an empty list.
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((entry): entry is LibraryEntry =>
-      !!entry && typeof entry.path === "string" && typeof entry.title === "string",
-    );
-  } catch {
-    return [];
-  }
+/** What a Rust `library::Entry` serialises to: `icon` is `null`, not absent. */
+interface WireEntry {
+  path: string;
+  title: string;
+  icon: string | null;
+  at: number;
 }
 
-/* One subscriber set for both lists. A write to either is a change to the
-   library, and the two panels that render it are always on screen together. */
+function fromWire(entries: WireEntry[]): LibraryEntry[] {
+  return entries.map(({ path, title, icon, at }) => ({ path, title, icon: icon ?? undefined, at }));
+}
+
 const listeners = new Set<() => void>();
 
-function write(list: ListName, entries: LibraryEntry[]) {
-  try {
-    window.localStorage.setItem(KEYS[list], JSON.stringify(entries));
-  } catch {
-    // A full or blocked store loses the history, not the session.
-  }
+let snapshot: { recents: LibraryEntry[]; bookmarks: LibraryEntry[] } = { recents: [], bookmarks: [] };
+
+function commit(next: typeof snapshot) {
+  snapshot = next;
   for (const notify of listeners) notify();
 }
 
-/** Newest first, the order both panels draw. */
-function newestFirst(entries: LibraryEntry[]): LibraryEntry[] {
-  return [...entries].sort((a, b) => b.at - a.at);
+/** Reads both lists off the backend and replaces the in-memory copy. */
+async function load() {
+  const [recents, bookmarks] = await Promise.all([
+    invoke<WireEntry[]>("recents").catch(() => []),
+    invoke<WireEntry[]>("bookmarks").catch(() => []),
+  ]);
+  commit({ recents: fromWire(recents), bookmarks: fromWire(bookmarks) });
+}
+
+void load();
+
+// The window has Tauri events for this; the help pane has neither an origin
+// in common with the window nor a push channel of its own, so both poll the
+// one signal they do share: the reader bringing this surface to the front.
+if (typeof window !== "undefined") {
+  window.addEventListener("focus", () => void load());
 }
 
 export function recents(): LibraryEntry[] {
-  return newestFirst(read("recents")).slice(0, RECENTS_KEEP);
+  return snapshot.recents;
 }
 
 export function bookmarks(): LibraryEntry[] {
-  return newestFirst(read("bookmarks"));
+  return snapshot.bookmarks;
 }
 
 /** Records a page the reader opened. Re-reading a page moves it to the top
@@ -83,66 +83,41 @@ export function bookmarks(): LibraryEntry[] {
     is worse than a trail one page short. */
 export function recordVisit(entry: Omit<LibraryEntry, "at">) {
   if (!entry.title.trim()) return;
-  const without = read("recents").filter((existing) => existing.path !== entry.path);
-  write("recents", [{ ...entry, at: Date.now() }, ...without].slice(0, RECENTS_KEEP));
+  const at = Date.now();
+  const without = snapshot.recents.filter((existing) => existing.path !== entry.path);
+  commit({ ...snapshot, recents: [{ ...entry, at }, ...without] });
+  void invoke("record_visit", { path: entry.path, title: entry.title, icon: entry.icon, at });
 }
 
 /** Drops one page from the trail. The trail is the reader's, so they get to
     take a page out of it. */
 export function forget(path: string) {
-  write("recents", read("recents").filter((entry) => entry.path !== path));
+  commit({ ...snapshot, recents: snapshot.recents.filter((entry) => entry.path !== path) });
+  void invoke("forget_recent", { path });
 }
 
 export function isBookmarked(path: string): boolean {
-  return read("bookmarks").some((entry) => entry.path === path);
+  return snapshot.bookmarks.some((entry) => entry.path === path);
 }
 
 /** Keeps a page, or lets it go. Returns what the page is after the call. */
 export function toggleBookmark(entry: Omit<LibraryEntry, "at">): boolean {
-  const kept = read("bookmarks");
-  const without = kept.filter((existing) => existing.path !== entry.path);
-  if (without.length !== kept.length) {
-    write("bookmarks", without);
-    return false;
-  }
-  write("bookmarks", [{ ...entry, at: Date.now() }, ...without]);
-  return true;
+  const willKeep = !isBookmarked(entry.path);
+  const at = Date.now();
+  const without = snapshot.bookmarks.filter((existing) => existing.path !== entry.path);
+  commit({ ...snapshot, bookmarks: willKeep ? [{ ...entry, at }, ...without] : without });
+  void invoke("toggle_bookmark", { path: entry.path, title: entry.title, icon: entry.icon, at });
+  return willKeep;
 }
 
 function subscribe(notify: () => void) {
   listeners.add(notify);
-  // Another window of the same app writes the same store; `storage` is the
-  // only word this one gets about it.
-  const onStorage = (event: StorageEvent) => {
-    if (event.key === KEYS.recents || event.key === KEYS.bookmarks) notify();
-  };
-  window.addEventListener("storage", onStorage);
-  return () => {
-    listeners.delete(notify);
-    window.removeEventListener("storage", onStorage);
-  };
-}
-
-/* `useSyncExternalStore` compares snapshots by identity, and both readers
-   above build a fresh array every call — which would re-render forever. The
-   snapshot is therefore cached and only rebuilt when a write says so. */
-let snapshot = { recents: [] as LibraryEntry[], bookmarks: [] as LibraryEntry[] };
-let stale = true;
-listeners.add(() => {
-  stale = true;
-});
-
-function currentSnapshot() {
-  if (stale) {
-    snapshot = { recents: recents(), bookmarks: bookmarks() };
-    stale = false;
-  }
-  return snapshot;
+  return () => listeners.delete(notify);
 }
 
 /** The library, live. Re-renders the caller when either list changes. */
 export function useLibrary() {
-  return useSyncExternalStore(subscribe, currentSnapshot, () => snapshot);
+  return useSyncExternalStore(subscribe, () => snapshot, () => snapshot);
 }
 
 const MINUTE = 60_000;

@@ -8,6 +8,12 @@
 //!
 //! The server has its own database connection. A search in the help pane must
 //! not wait on a search in the app window.
+//!
+//! Bookmarks, recents and settings write through this same `/api` GET, not a
+//! POST: every other command already reads its arguments off the query
+//! string, this is one reader on one machine with no cookie or session to
+//! forge, and a write here is one `INSERT` — a POST route would only add a
+//! second body-parsing path for the same trust level.
 
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener};
 use std::path::PathBuf;
@@ -17,7 +23,7 @@ use include_dir::{Dir, include_dir};
 use rusqlite::Connection;
 use tiny_http::{Header, Response, Server};
 
-use crate::{db, help, index, install};
+use crate::{db, help, index, install, library};
 
 /// The built front-end, inside the binary, so the server has no files to find.
 static APP: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/../dist");
@@ -39,8 +45,14 @@ pub fn start(data: PathBuf) -> Result<u16, String> {
         // A cook must always win the core, the same as the index pass.
         index::background_priority();
         let db = db::open(&data).map(Mutex::new);
+        // This thread answers every request in turn, so the install this
+        // server reads is resolved once here and kept warm across requests —
+        // the same rule as the desktop shell's `Chosen`, just without a Mutex,
+        // since nothing else touches it.
+        let mut chosen: Option<install::Install> = None;
+        let cache = install::Cache::new();
         for request in server.incoming_requests() {
-            let (status, body, kind) = answer(db.as_ref(), request.url());
+            let (status, body, kind) = answer(db.as_ref(), &mut chosen, &cache, request.url());
             // What Houdini asked for, and what it got. Houdini's help window
             // says nothing when a page fails, so without this there is no way
             // to tell a wrong path from a wrong answer.
@@ -76,42 +88,63 @@ fn bind() -> Result<(TcpListener, u16), String> {
 type Answer = (u16, Vec<u8>, &'static str);
 
 /// One request, answered: status, body, media type.
-fn answer(db: Result<&Mutex<Connection>, &String>, url: &str) -> Answer {
+fn answer(
+    db: Result<&Mutex<Connection>, &String>,
+    chosen: &mut Option<install::Install>,
+    cache: &install::Cache,
+    url: &str,
+) -> Answer {
     let (path, query) = url.split_once('?').unwrap_or((url, ""));
     let path = crate::percent_decode(path);
 
     if let Some(name) = path.strip_prefix("/hicon/") {
-        return match current().and_then(|install| help::icon(&install.root, name)) {
+        return match current(db, chosen, cache).and_then(|install| help::icon(&install.root, name)) {
             Ok(bytes) => (200, bytes, "image/svg+xml"),
             Err(reason) => not_found(reason),
         };
     }
     if let Some(name) = path.strip_prefix("/himage/") {
-        return match current().and_then(|install| help::asset(&install.help, name)) {
+        return match current(db, chosen, cache).and_then(|install| help::asset(&install.help, name)) {
             Ok(bytes) => (200, bytes, crate::media_type(name)),
             Err(reason) => not_found(reason),
         };
     }
     if let Some(command) = path.strip_prefix("/api/") {
-        return api(db, command, query);
+        return api(db, chosen, cache, command, query);
     }
     file(&path)
 }
 
 /// The same answers the desktop shell gives through `invoke`, so the front-end
 /// has one set of calls and not two. `backend.ts` picks which door to knock on.
-fn api(db: Result<&Mutex<Connection>, &String>, command: &str, query: &str) -> Answer {
+fn api(
+    db: Result<&Mutex<Connection>, &String>,
+    chosen: &mut Option<install::Install>,
+    cache: &install::Cache,
+    command: &str,
+    query: &str,
+) -> Answer {
     let call = parse(query);
-    // Every command that reads the index needs the build the pages belong to.
     let json = match command {
-        "installs" => serde_json::to_vec(&install::find()),
+        "installs" => serde_json::to_vec(&if call.refresh { cache.refresh() } else { cache.get() }),
+        // The pane reads the build the same way the window does. Which
+        // Houdini pressed F1 decided it; the card there is a label, but the
+        // label still has to name the right build.
+        "current_install" => match current(db, chosen, cache) {
+            Ok(install) => serde_json::to_vec(&install),
+            Err(reason) => return not_found(reason),
+        },
         "user_name" => serde_json::to_vec(&crate::user_name_of_this_machine()),
         "clean_start" => serde_json::to_vec(&false),
-        "page" => match current().and_then(|i| crate::read_page(&i, &call.path).map_err(|e| e.message)) {
+        "page" => match current(db, chosen, cache)
+            .and_then(|i| crate::read_page(&i, &call.path).map_err(|e| e.message))
+        {
             Ok(page) => serde_json::to_vec(&page),
             Err(reason) => return not_found(reason),
         },
-        "titles" | "search" | "meta" | "index_status" => return indexed(db, command, &call),
+        "titles" | "search" | "meta" | "index_status" => return indexed(db, chosen, cache, command, &call),
+        "recents" | "bookmarks" | "record_visit" | "forget_recent" | "toggle_bookmark" | "get_setting"
+        | "set_setting" => return user_data(db, command, &call),
         _ => return not_found(format!("no command {command}")),
     };
     match json {
@@ -122,24 +155,65 @@ fn api(db: Result<&Mutex<Connection>, &String>, command: &str, query: &str) -> A
 
 /// The commands that read the index. Held apart because they all need the same
 /// two things first: the connection, and the build.
-fn indexed(db: Result<&Mutex<Connection>, &String>, command: &str, call: &Call) -> Answer {
+fn indexed(
+    db: Result<&Mutex<Connection>, &String>,
+    chosen: &mut Option<install::Install>,
+    cache: &install::Cache,
+    command: &str,
+    call: &Call,
+) -> Answer {
     let db = match db {
         Ok(db) => db,
         Err(reason) => return (500, reason.clone().into_bytes(), "text/plain"),
-    };
-    let build = match current() {
-        Ok(install) => install.version,
-        Err(reason) => return not_found(reason),
     };
     let db = match db.lock() {
         Ok(db) => db,
         Err(_) => return (500, b"the index is unreadable".to_vec(), "text/plain"),
     };
+    let install = match install::resolve(chosen, cache, &db) {
+        Ok(install) => install,
+        Err(reason) => return not_found(reason),
+    };
+    let build = &install.version;
     let json = match command {
-        "titles" => crate::all_titles(&db, &build).and_then(|hits| ser(&hits)),
-        "search" => crate::find(&db, &build, &call.query, call.limit).and_then(|hits| ser(&hits)),
-        "meta" => crate::read_meta(&db, &build, &call.paths).and_then(|meta| ser(&meta)),
-        _ => ser(&index::status(&db, &build)),
+        "titles" => crate::all_titles(&db, build).and_then(|hits| ser(&hits)),
+        "search" => crate::find(&db, build, &call.query, call.limit).and_then(|hits| ser(&hits)),
+        "meta" => crate::read_meta(&db, &install, &call.paths).and_then(|meta| ser(&meta)),
+        _ => ser(&index::status(&db, build)),
+    };
+    match json {
+        Ok(body) => (200, body, "application/json"),
+        Err(reason) => (500, reason.into_bytes(), "text/plain"),
+    }
+}
+
+/// The reader's own data: bookmarks, recents, settings. Never keyed by build,
+/// so it needs the connection and nothing else. See spec: Local — User config
+/// shared between the window and the help pane.
+fn user_data(db: Result<&Mutex<Connection>, &String>, command: &str, call: &Call) -> Answer {
+    let db = match db {
+        Ok(db) => db,
+        Err(reason) => return (500, reason.clone().into_bytes(), "text/plain"),
+    };
+    let db = match db.lock() {
+        Ok(db) => db,
+        Err(_) => return (500, b"the index is unreadable".to_vec(), "text/plain"),
+    };
+    let entry = || library::Entry {
+        path: call.path.clone(),
+        title: call.title.clone(),
+        icon: call.icon.clone(),
+        at: call.at,
+    };
+    let json = match command {
+        "recents" => library::recents(&db).and_then(|v| ser(&v)),
+        "bookmarks" => library::bookmarks(&db).and_then(|v| ser(&v)),
+        "record_visit" => library::record_visit(&db, &entry()).and_then(|()| ser(&())),
+        "forget_recent" => library::forget(&db, &call.path).and_then(|()| ser(&())),
+        "toggle_bookmark" => library::toggle_bookmark(&db, &entry()).and_then(|kept| ser(&kept)),
+        "get_setting" => Ok(db::get_setting(&db, &call.key)).and_then(|v| ser(&v)),
+        "set_setting" => db::set_setting(&db, &call.key, &call.value).and_then(|()| ser(&())),
+        _ => unreachable!("filtered by the caller"),
     };
     match json {
         Ok(body) => (200, body, "application/json"),
@@ -180,7 +254,9 @@ fn file(path: &str) -> Answer {
     }
 }
 
-/// What the front-end asked the command for.
+/// What the front-end asked the command for. Both a read and a write travel
+/// as a query string here — see the module comment for why a POST is not
+/// worth it on a single-user localhost server.
 #[derive(Default)]
 struct Call {
     path: String,
@@ -188,6 +264,12 @@ struct Call {
     limit: u32,
     /// `meta` asks about a batch of links at once, comma separated.
     paths: Vec<String>,
+    refresh: bool,
+    title: String,
+    icon: Option<String>,
+    at: i64,
+    key: String,
+    value: String,
 }
 
 fn parse(query: &str) -> Call {
@@ -205,17 +287,29 @@ fn parse(query: &str) -> Call {
             "query" => call.query = value,
             "limit" => call.limit = value.parse().unwrap_or(20),
             "paths" => call.paths = value.split(',').map(str::to_string).collect(),
+            "refresh" => call.refresh = value == "true",
+            "title" => call.title = value,
+            "icon" if !value.is_empty() => call.icon = Some(value),
+            "at" => call.at = value.parse().unwrap_or(0),
+            "key" => call.key = value,
+            "value" => call.value = value,
             _ => {}
         }
     }
     call
 }
 
-fn current() -> Result<install::Install, String> {
-    install::find()
-        .into_iter()
-        .next()
-        .ok_or_else(|| "no Houdini install found on this machine".to_string())
+/// The install this thread reads, resolved once and kept in `chosen` across
+/// requests. One source of truth with the desktop shell's own `current` in
+/// `lib.rs`: both call `install::resolve`, neither scans the disk itself.
+fn current(
+    db: Result<&Mutex<Connection>, &String>,
+    chosen: &mut Option<install::Install>,
+    cache: &install::Cache,
+) -> Result<install::Install, String> {
+    let db = db.map_err(String::clone)?;
+    let db = db.lock().map_err(|_| "the index is unreadable".to_string())?;
+    install::resolve(chosen, cache, &db)
 }
 
 #[cfg(test)]
@@ -259,5 +353,52 @@ mod tests {
     #[test]
     fn the_root_is_the_app_itself() {
         assert_eq!(file("/").0, 200);
+    }
+
+    fn temp_db() -> Result<Mutex<Connection>, String> {
+        use std::sync::atomic::{AtomicU32, Ordering};
+        static NEXT: AtomicU32 = AtomicU32::new(0);
+        let n = NEXT.fetch_add(1, Ordering::Relaxed);
+        let data = std::env::temp_dir()
+            .join(format!("houdinimd-server-test-{}-{n}", std::process::id()));
+        Ok(Mutex::new(db::open(&data)?))
+    }
+
+    /// The same round trip Houdini's help pane makes: bookmark a page over
+    /// `/api`, then read it back, all through GET. This is the path the
+    /// window-vs-pane bug lived on, so it is the one worth a real request.
+    #[test]
+    fn a_bookmark_written_over_the_api_reads_back_over_the_api() {
+        let db = temp_db().unwrap();
+        let mut chosen = None;
+        let cache = install::Cache::new();
+
+        let (status, _, _) = api(
+            Ok(&db),
+            &mut chosen,
+            &cache,
+            "toggle_bookmark",
+            "path=nodes%2Fsop%2Fbox&title=Box&at=1",
+        );
+        assert_eq!(status, 200);
+
+        let (status, body, kind) = api(Ok(&db), &mut chosen, &cache, "bookmarks", "");
+        assert_eq!(status, 200);
+        assert_eq!(kind, "application/json");
+        let read: Vec<library::Entry> = serde_json::from_slice(&body).unwrap();
+        assert_eq!(read.len(), 1);
+        assert_eq!(read[0].path, "nodes/sop/box");
+    }
+
+    #[test]
+    fn a_setting_written_over_the_api_reads_back_over_the_api() {
+        let db = temp_db().unwrap();
+        let mut chosen = None;
+        let cache = install::Cache::new();
+
+        api(Ok(&db), &mut chosen, &cache, "set_setting", "key=build&value=22.0.368");
+        let (_, body, _) = api(Ok(&db), &mut chosen, &cache, "get_setting", "key=build");
+        let read: Option<String> = serde_json::from_slice(&body).unwrap();
+        assert_eq!(read.as_deref(), Some("22.0.368"));
     }
 }
