@@ -18,7 +18,12 @@ export const Image: Components["img"] = function MarkdownImage({ src, alt }) {
       // — a single icon, a strip of buttons — keeps its own size, because
       // there is nothing to gain from a diagram blown up four times.
       className={`markdown-media my-4 block h-auto max-w-full${fill ? " w-full" : ""}`}
-      loading="lazy"
+      // `loading="lazy"` never fires in this app: every doc page scrolls
+      // inside its own `overflow-y-auto` shell, not the window, and Chromium's
+      // native lazy loader watches the window's viewport only — an image two
+      // screens down never crosses its threshold and never loads. Eager is
+      // the honest choice, not a stopgap: a doc page carries at most a few
+      // dozen pictures, nothing like an endless feed.
       decoding="async"
       onLoad={(event) => {
         const img = event.currentTarget;
