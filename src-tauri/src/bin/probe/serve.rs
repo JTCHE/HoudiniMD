@@ -253,6 +253,7 @@ fn command_response(state: &Serve, command: &str, query: &str) -> (u16, &'static
         "record_visit" | "toggle_bookmark" => {
             let db = state.db.lock().unwrap();
             let entry = library::Entry {
+                id: None,
                 path: param(query, "path").unwrap_or_default(),
                 title: param(query, "title").unwrap_or_default(),
                 icon: param(query, "icon"),
@@ -267,7 +268,7 @@ fn command_response(state: &Serve, command: &str, query: &str) -> (u16, &'static
         }
         "forget_recent" => {
             let db = state.db.lock().unwrap();
-            library::forget(&db, &param(query, "path").unwrap_or_default())
+            library::forget(&db, param(query, "id").and_then(|v| v.parse().ok()).unwrap_or(-1))
                 .map(|()| "null".to_string())
         }
         "get_setting" => {

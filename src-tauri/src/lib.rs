@@ -1,9 +1,11 @@
 mod assets;
 pub mod db;
+pub mod examples;
 pub mod family;
 pub mod help;
 pub mod hook;
 pub mod index;
+pub mod inherit;
 pub mod install;
 pub mod library;
 pub mod sections;
@@ -227,6 +229,9 @@ pub fn read_page(install: &install::Install, path: &str) -> Result<PageView, Pag
         help::page(&install.help, target).ok()
     });
     family::append(&install.help, &parsed.props, &mut parsed.blocks);
+    let section = path.split('/').next().unwrap_or("");
+    inherit::append(&install.help, section, &parsed.props, &mut parsed.blocks);
+    examples::append(&install.help, &path, &mut parsed.blocks);
     assets::rewrite(&path, &mut parsed.blocks);
     let prop = |name: &str| wiki::model::prop(&parsed.props, name).map(str::to_string);
     Ok(PageView {
@@ -409,19 +414,19 @@ fn bookmarks(state: State<Db>) -> Result<Vec<library::Entry>, String> {
 #[tauri::command]
 fn record_visit(state: State<Db>, path: String, title: String, icon: Option<String>, at: i64) -> Result<(), String> {
     let db = state.0.lock().map_err(|e| e.to_string())?;
-    library::record_visit(&db, &library::Entry { path, title, icon, at })
+    library::record_visit(&db, &library::Entry { id: None, path, title, icon, at })
 }
 
 #[tauri::command]
-fn forget_recent(state: State<Db>, path: String) -> Result<(), String> {
+fn forget_recent(state: State<Db>, id: i64) -> Result<(), String> {
     let db = state.0.lock().map_err(|e| e.to_string())?;
-    library::forget(&db, &path)
+    library::forget(&db, id)
 }
 
 #[tauri::command]
 fn toggle_bookmark(state: State<Db>, path: String, title: String, icon: Option<String>, at: i64) -> Result<bool, String> {
     let db = state.0.lock().map_err(|e| e.to_string())?;
-    library::toggle_bookmark(&db, &library::Entry { path, title, icon, at })
+    library::toggle_bookmark(&db, &library::Entry { id: None, path, title, icon, at })
 }
 
 #[tauri::command]

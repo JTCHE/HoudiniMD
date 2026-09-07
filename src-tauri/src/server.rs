@@ -200,6 +200,7 @@ fn user_data(db: Result<&Mutex<Connection>, &String>, command: &str, call: &Call
         Err(_) => return (500, b"the index is unreadable".to_vec(), "text/plain"),
     };
     let entry = || library::Entry {
+        id: None,
         path: call.path.clone(),
         title: call.title.clone(),
         icon: call.icon.clone(),
@@ -209,7 +210,7 @@ fn user_data(db: Result<&Mutex<Connection>, &String>, command: &str, call: &Call
         "recents" => library::recents(&db).and_then(|v| ser(&v)),
         "bookmarks" => library::bookmarks(&db).and_then(|v| ser(&v)),
         "record_visit" => library::record_visit(&db, &entry()).and_then(|()| ser(&())),
-        "forget_recent" => library::forget(&db, &call.path).and_then(|()| ser(&())),
+        "forget_recent" => library::forget(&db, call.id).and_then(|()| ser(&())),
         "toggle_bookmark" => library::toggle_bookmark(&db, &entry()).and_then(|kept| ser(&kept)),
         "get_setting" => Ok(db::get_setting(&db, &call.key)).and_then(|v| ser(&v)),
         "set_setting" => db::set_setting(&db, &call.key, &call.value).and_then(|()| ser(&())),
@@ -268,6 +269,8 @@ struct Call {
     title: String,
     icon: Option<String>,
     at: i64,
+    /// Which visit `forget_recent` drops.
+    id: i64,
     key: String,
     value: String,
 }
@@ -291,6 +294,7 @@ fn parse(query: &str) -> Call {
             "title" => call.title = value,
             "icon" if !value.is_empty() => call.icon = Some(value),
             "at" => call.at = value.parse().unwrap_or(0),
+            "id" => call.id = value.parse().unwrap_or(0),
             "key" => call.key = value,
             "value" => call.value = value,
             _ => {}

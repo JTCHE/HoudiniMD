@@ -20,6 +20,9 @@ import { useSyncExternalStore } from "react";
 import { invoke } from "../backend";
 
 export interface LibraryEntry {
+  /** Which visit this is. A recent has one; a bookmark does not, because a
+      page is kept once and `path` names it. */
+  id?: number;
   /** Help path, as the router and `page` read it: `nodes/sop/attribwrangle`. */
   path: string;
   title: string;
@@ -31,6 +34,7 @@ export interface LibraryEntry {
 
 /** What a Rust `library::Entry` serialises to: `icon` is `null`, not absent. */
 interface WireEntry {
+  id?: number;
   path: string;
   title: string;
   icon: string | null;
@@ -38,7 +42,7 @@ interface WireEntry {
 }
 
 function fromWire(entries: WireEntry[]): LibraryEntry[] {
-  return entries.map(({ path, title, icon, at }) => ({ path, title, icon: icon ?? undefined, at }));
+  return entries.map(({ id, path, title, icon, at }) => ({ id, path, title, icon: icon ?? undefined, at }));
 }
 
 const listeners = new Set<() => void>();
@@ -76,24 +80,29 @@ export function bookmarks(): LibraryEntry[] {
   return snapshot.bookmarks;
 }
 
-/** Records a page the reader opened. Re-reading a page moves it to the top
-    rather than adding a second row for it.
+/** Records one visit. Coming back to a page an hour later is a second visit
+    and gets its own line: the trail is what the reader read, in the order they
+    read it, not a set of pages they have seen once.
 
     A page with no name is not recorded at all: a row the reader cannot read
-    is worse than a trail one page short. */
+    is worse than a trail one page short.
+
+    The row is written here with no `id`, because the id is the backend's to
+    give. The next `load()` — on the next window focus — replaces it with the
+    stored row, id and all. Until then the row has no id, and `forget` on it
+    does nothing but take it off the screen. */
 export function recordVisit(entry: Omit<LibraryEntry, "at">) {
   if (!entry.title.trim()) return;
   const at = Date.now();
-  const without = snapshot.recents.filter((existing) => existing.path !== entry.path);
-  commit({ ...snapshot, recents: [{ ...entry, at }, ...without] });
+  commit({ ...snapshot, recents: [{ ...entry, at }, ...snapshot.recents] });
   void invoke("record_visit", { path: entry.path, title: entry.title, icon: entry.icon, at });
 }
 
-/** Drops one page from the trail. The trail is the reader's, so they get to
-    take a page out of it. */
-export function forget(path: string) {
-  commit({ ...snapshot, recents: snapshot.recents.filter((entry) => entry.path !== path) });
-  void invoke("forget_recent", { path });
+/** Drops one VISIT from the trail. The trail is the reader's, so they get to
+    take a line out of it — one line, not every visit to that page. */
+export function forget(id: number) {
+  commit({ ...snapshot, recents: snapshot.recents.filter((entry) => entry.id !== id) });
+  void invoke("forget_recent", { id });
 }
 
 export function isBookmarked(path: string): boolean {

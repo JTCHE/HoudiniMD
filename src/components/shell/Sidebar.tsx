@@ -157,7 +157,7 @@ export function Sidebar({ currentPath, className }: { currentPath?: string; clas
             ) : (
               [...recents].reverse().map((entry) => (
                 <SidebarRow
-                  key={entry.path}
+                  key={entry.id ?? `${entry.path}-${entry.at}`}
                   label={entry.title}
                   icon={entry.icon ?? null}
                   to={`/${entry.path}`}

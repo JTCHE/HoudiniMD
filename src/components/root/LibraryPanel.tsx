@@ -208,10 +208,13 @@ export function LibraryPanel({ className }: { className?: string }) {
           >
             {entries.map((entry) => (
               <LibraryRow
-                key={entry.path}
+                // A page read twice is two lines, so the path is not a key
+                // here. The id is the backend's; a visit made in this session
+                // has none until the next load, and falls back to its time.
+                key={entry.id ?? `${entry.path}-${entry.at}`}
                 entry={entry}
                 kept={kept.has(entry.path)}
-                onForget={tab === "recents" ? () => forget(entry.path) : undefined}
+                onForget={tab === "recents" && entry.id !== undefined ? () => forget(entry.id!) : undefined}
               />
             ))}
           </FadeList>

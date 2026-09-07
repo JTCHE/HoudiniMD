@@ -14,53 +14,57 @@ const RECENTS_KEEP: usize = 50;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Entry {
+    /// Which VISIT this is. A recent has one; a bookmark does not, because a
+    /// page is kept once and `path` names it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<i64>,
     pub path: String,
     pub title: String,
     pub icon: Option<String>,
-    /// Epoch milliseconds — when it was last read, or when it was kept.
+    /// Epoch milliseconds — when it was read, or when it was kept.
     pub at: i64,
 }
 
 pub fn recents(db: &Connection) -> Result<Vec<Entry>, String> {
-    read(db, "recents", "at")
+    read(db, "id, path, title, icon, at", "recents", "at")
 }
 
 pub fn bookmarks(db: &Connection) -> Result<Vec<Entry>, String> {
-    read(db, "bookmarks", "added")
+    read(db, "NULL, path, title, icon, added", "bookmarks", "added")
 }
 
-fn read(db: &Connection, table: &str, time_column: &str) -> Result<Vec<Entry>, String> {
+fn read(db: &Connection, columns: &str, table: &str, time_column: &str) -> Result<Vec<Entry>, String> {
     let mut statement = db
         .prepare(&format!(
-            "SELECT path, title, icon, {time_column} FROM user.{table} ORDER BY {time_column} DESC"
+            "SELECT {columns} FROM user.{table} ORDER BY {time_column} DESC"
         ))
         .map_err(|e| e.to_string())?;
     let rows = statement
         .query_map([], |row| {
             Ok(Entry {
-                path: row.get(0)?,
-                title: row.get(1)?,
-                icon: row.get(2)?,
-                at: row.get(3)?,
+                id: row.get(0)?,
+                path: row.get(1)?,
+                title: row.get(2)?,
+                icon: row.get(3)?,
+                at: row.get(4)?,
             })
         })
         .map_err(|e| e.to_string())?;
     rows.collect::<Result<_, _>>().map_err(|e| e.to_string())
 }
 
-/// Records a page the reader opened. Re-reading a page moves it to the top
-/// rather than adding a second row for it, and the list is trimmed to
-/// `RECENTS_KEEP` here, in the one place that writes it.
+/// Records one visit. Coming back to a page an hour later is a second visit
+/// and gets its own row; the list is trimmed to `RECENTS_KEEP` here, in the
+/// one place that writes it.
 pub fn record_visit(db: &Connection, entry: &Entry) -> Result<(), String> {
     db.execute(
-        "INSERT INTO user.recents (path, title, icon, at) VALUES (?1, ?2, ?3, ?4)
-         ON CONFLICT(path) DO UPDATE SET title = ?2, icon = ?3, at = ?4",
+        "INSERT INTO user.recents (path, title, icon, at) VALUES (?1, ?2, ?3, ?4)",
         rusqlite::params![entry.path, entry.title, entry.icon, entry.at],
     )
     .map_err(|e| e.to_string())?;
     db.execute(
-        "DELETE FROM user.recents WHERE path NOT IN (
-           SELECT path FROM user.recents ORDER BY at DESC LIMIT ?1
+        "DELETE FROM user.recents WHERE id NOT IN (
+           SELECT id FROM user.recents ORDER BY at DESC, id DESC LIMIT ?1
          )",
         [RECENTS_KEEP as i64],
     )
@@ -68,10 +72,10 @@ pub fn record_visit(db: &Connection, entry: &Entry) -> Result<(), String> {
     Ok(())
 }
 
-/// Drops one page from the trail. The trail is the reader's, so they get to
-/// take a page out of it.
-pub fn forget(db: &Connection, path: &str) -> Result<(), String> {
-    db.execute("DELETE FROM user.recents WHERE path = ?1", [path])
+/// Drops one VISIT from the trail. The trail is the reader's, so they get to
+/// take a line out of it — one line, not every visit to that page.
+pub fn forget(db: &Connection, id: i64) -> Result<(), String> {
+    db.execute("DELETE FROM user.recents WHERE id = ?1", [id])
         .map_err(|e| e.to_string())?;
     Ok(())
 }
@@ -106,7 +110,7 @@ mod tests {
     }
 
     fn entry(path: &str, at: i64) -> Entry {
-        Entry { path: path.to_string(), title: path.to_string(), icon: None, at }
+        Entry { id: None, path: path.to_string(), title: path.to_string(), icon: None, at }
     }
 
     #[test]
@@ -119,15 +123,23 @@ mod tests {
         assert_eq!(bookmarks(&db).unwrap().len(), 0);
     }
 
+    /// A page read twice is two lines in the trail, at the two times it was
+    /// read. Forgetting one of them leaves the other.
     #[test]
-    fn a_revisited_page_moves_to_the_top_not_twice() {
+    fn a_revisited_page_gets_its_own_line() {
         let db = db();
         record_visit(&db, &entry("a", 1)).unwrap();
         record_visit(&db, &entry("b", 2)).unwrap();
         record_visit(&db, &entry("a", 3)).unwrap();
         let all = recents(&db).unwrap();
-        assert_eq!(all.len(), 2);
+        assert_eq!(all.len(), 3);
         assert_eq!(all[0].path, "a");
+        assert_eq!(all[2].path, "a");
+
+        forget(&db, all[0].id.unwrap()).unwrap();
+        let left = recents(&db).unwrap();
+        assert_eq!(left.len(), 2);
+        assert_eq!(left[1].path, "a");
     }
 
     /// The whole point of the move to `user.db`: the window and Houdini's help
@@ -147,7 +159,7 @@ mod tests {
         toggle_bookmark(&window, &entry("nodes/sop/box", 1)).unwrap();
         assert_eq!(bookmarks(&pane).unwrap().len(), 1, "the pane should see the window's bookmark");
 
-        forget(&pane, "does-not-exist").unwrap(); // a write from the other side, exercised too
+        forget(&pane, -1).unwrap(); // a write from the other side, exercised too
         record_visit(&pane, &entry("nodes/sop/box", 2)).unwrap();
         assert_eq!(recents(&window).unwrap().len(), 1, "the window should see the pane's visit");
     }
