@@ -30,7 +30,10 @@ export function BugReportButton() {
       title="File a bug on GitHub"
       className={FOOTER_BUTTON}
     >
-      <Icons.bugReport className="size-[18px]" />
+      <Icons.bugReport
+        strokeWidth="1.5"
+        className="size-4.5"
+      />
     </a>
   );
 }

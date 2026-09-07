@@ -147,11 +147,15 @@ export function Sidebar({ currentPath, className }: { currentPath?: string; clas
 
       <div className="mt-auto flex flex-col">
         {recentsOpen && (
-          <FadeList className="mb-2xs max-h-[240px]" deps={[recents.length]}>
+          // Reversed: the button that opens this list sits at the BOTTOM of
+          // the panel, so the newest page belongs next to it — oldest at the
+          // top, scrolling up, the way the button's own place in the panel
+          // reads.
+          <FadeList className="mb-2xs max-h-[240px]" deps={[recents.length]} reverse>
             {recents.length === 0 ? (
               <p className="px-sm py-xs text-caption text-neutral-400">Nothing read yet.</p>
             ) : (
-              recents.map((entry) => (
+              [...recents].reverse().map((entry) => (
                 <SidebarRow
                   key={entry.path}
                   label={entry.title}

@@ -104,6 +104,38 @@ fn found(read: Result<Option<Vec<u8>>, String>, absent: &str) -> Result<Vec<u8>,
         .ok_or_else(|| absent.to_string())
 }
 
+/// Every entry name in a zip that starts with `prefix` and ends `.txt`. Used
+/// to list a whole family of pages, such as every VEX function, rather than
+/// read one page by its own path.
+pub fn entries(zip: &Path, prefix: &str) -> Vec<String> {
+    let Ok(mut open) = ARCHIVES.lock() else {
+        return Vec::new();
+    };
+    if !open.contains_key(zip) {
+        let Ok(file) = File::open(zip) else {
+            return Vec::new();
+        };
+        let Ok(archive) = zip::ZipArchive::new(BufReader::new(file)) else {
+            return Vec::new();
+        };
+        open.insert(zip.to_path_buf(), archive);
+    }
+    let Some(archive) = open.get(zip) else {
+        return Vec::new();
+    };
+    archive
+        .file_names()
+        .filter(|name| name.starts_with(prefix) && name.ends_with(".txt"))
+        .map(str::to_string)
+        .collect()
+}
+
+/// The text of one entry, read the same way `page` reads a `.txt`.
+pub fn text(zip: &Path, name: &str) -> Option<String> {
+    let bytes = read(zip, name).ok().flatten()?;
+    String::from_utf8(bytes).ok()
+}
+
 /// `Ok(None)` means the archive holds no such entry. `Err` means the archive
 /// itself could not be read.
 fn read(zip: &Path, name: &str) -> Result<Option<Vec<u8>>, String> {

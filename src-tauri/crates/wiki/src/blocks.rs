@@ -622,6 +622,13 @@ fn single_line_block(text: &str, children: &[Line], has_children: bool) -> Optio
 /// is not a signature at all.
 fn clean_signature(text: &str) -> Option<String> {
     let inner = text.strip_prefix('`')?.strip_suffix('`')?;
+    // A HOM page often writes the call and its return type as two spans,
+    // `` `f()` -> `Type` ``. Stripping only the outer pair would leave the
+    // inner backticks in the signature, so a second span means this is
+    // running text, not one signature.
+    if inner.contains('`') {
+        return None;
+    }
     Some(inner.replace(['<', '>'], ""))
 }
 

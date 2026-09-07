@@ -12,6 +12,7 @@
 import { useState } from "react";
 import { useLocation } from "react-router";
 import { cn } from "@/lib/utils";
+import { inTauri } from "@/lib/backend";
 import { isCommand, isTyping, useHotkey } from "@/lib/hotkeys";
 import { TitleBar } from "./TitleBar";
 import { Sidebar } from "./Sidebar";
@@ -19,7 +20,10 @@ import { StatusBar } from "./StatusBar";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const location = useLocation();
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  // Closed by default inside Houdini's help pane: that window is small, and
+  // giving the page its full width back matters more there than in the
+  // desktop window, which has room to spare. The reader can still open it.
+  const [sidebarOpen, setSidebarOpen] = useState(inTauri);
 
   // ⌘B shows and hides the panel, the shortcut every editor with a panel
   // uses for it.

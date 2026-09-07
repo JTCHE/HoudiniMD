@@ -1,5 +1,6 @@
 mod assets;
 pub mod db;
+pub mod family;
 pub mod help;
 pub mod hook;
 pub mod index;
@@ -225,6 +226,7 @@ pub fn read_page(install: &install::Install, path: &str) -> Result<PageView, Pag
     wiki::include::resolve(&mut parsed.blocks, &path, &|target| {
         help::page(&install.help, target).ok()
     });
+    family::append(&install.help, &parsed.props, &mut parsed.blocks);
     assets::rewrite(&path, &mut parsed.blocks);
     let prop = |name: &str| wiki::model::prop(&parsed.props, name).map(str::to_string);
     Ok(PageView {

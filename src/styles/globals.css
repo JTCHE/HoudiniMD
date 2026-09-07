@@ -129,7 +129,7 @@ html {
      `max-w-4xl` would silently resolve to the 128px spacing step, not 56rem.
      Ask for the thing you mean instead: `max-w-page` is the content column
      every page and the footer share. */
-  --container-page: 56rem;
+  --container-page: 48rem;
   --container-overlay: 32rem;
   /* The landing column: the heading, the field and the list below it share one
      axis, narrower than a page of prose because none of the three is prose. */
@@ -499,6 +499,13 @@ html {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
+  /* Neither the width nor the height is set on this element — both track the
+     file's own size. Before the file arrives there is no size to track, and
+     this browser draws that as a 2px box instead of holding the line's
+     height, so a page of these before they finish loading reads as empty.
+     `auto <ratio>` guesses a wide screenshot's shape until the real one
+     is known, then the real one wins. */
+  aspect-ratio: auto 16 / 9;
 }
 
 .markdown-video {
@@ -594,6 +601,12 @@ html {
 .image-group .markdown-media {
   height: 100%;
   width: auto;
+  /* `width: auto` needs the picture's own ratio to size itself. Before the
+     file arrives there is no ratio yet, and the row is lazy — most of these
+     pictures sit below the fold — so the browser had nothing to go on and
+     drew the figure at its fixed height and near-zero width. `auto 1` keeps
+     that square guess only until the real ratio is known, then swaps to it. */
+  aspect-ratio: auto 1;
   max-width: none;
   margin: 0;
 }
@@ -787,7 +800,7 @@ button:active kbd.kbd-button {
   --page-x: var(--print-page-x);
 }
 
-/* main/footer are capped at max-w-page (56rem ≈ 896px) — wider than A4's
+/* main/footer are capped at max-w-page (--container-page, above) — wider than A4's
    printable width even after margins. Without this, PrintPagination.tsx
    measures text wrapped at that wider on-screen width (fewer, longer
    lines) while the real print pass wraps it at A4's ~695px (more, shorter

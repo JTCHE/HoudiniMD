@@ -17,15 +17,20 @@ One workflow, `.github/workflows/release.yml`, on a `v*` tag.
 
 ## What reaches GitHub
 
-Three files, all on the release:
+Two files, and nothing else:
 
 | file | what it is |
 | --- | --- |
 | `HoudiniMD_<version>_x64-setup.exe` | the installer, about 7 MB |
-| `HoudiniMD_<version>_x64-setup.exe.sig` | the minisign signature over it |
-| `latest.json` | the newest version, and where to get it |
+| `latest.json` | the newest version, where to get it, and its signature |
 
-GitHub Releases hold these.
+The `.sig` file Tauri writes is **not** uploaded (`uploadUpdaterSignatures:
+false`). The signature the app checks is inside `latest.json`; the `.sig` file
+is a second copy that nothing reads, and beside the installer it asks the
+reader a question they cannot answer.
+
+GitHub adds `Source code (zip)` and `Source code (tar.gz)` on publish. That
+cannot be turned off.
 
 ## Why the release is not a prerelease
 
@@ -43,8 +48,22 @@ file per version. CI cannot read the vault — it is in iCloud — so the file i
 the source and the GitHub release body is a copy. Paste it into the draft
 before publishing.
 
-Keep the notes about what the reader sees. The specs already say what was
-built and why.
+A release note is about one version, not about the project.
+
+Write what changed in this version, as a list. Nothing else. For the first
+release, say "first release" and list what it ships.
+
+Keep these out. They are project facts, and they belong in the README:
+
+- What the product is, and what it is for.
+- How to install it, and what it runs on.
+- The feature list that is true of every version.
+- How the updater works.
+- Where to report a fault.
+- Credits and licence.
+
+A reader opens a release note to answer one question: what is different now.
+Every line that does not answer this question is bloat.
 
 ## Signing
 
@@ -89,8 +108,8 @@ runtime and fetches it only when the machine does not have it.
 
 ## The site still exists
 
-The Next.js site lives on `web`, and releases from `web-prod`. It serves
-through the 90-day wind down agreed with SideFX and then stops.
+The Next.js site lives on `web`, and releases from `web-prod`.
+It will wind down on January 1st, 2027.
 
 The Cloudflare app is installed on the repo, so a push to `web-prod` runs
 `bun run deploy` in Cloudflare CI. **CI is the only place that deploys.** Never

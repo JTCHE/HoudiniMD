@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ChevronRight } from "lucide-react";
 import { Link } from "react-router";
 import { titleOf, warmTitleIndex } from "@/lib/search";
+import { toTitleCase } from "@/lib/markdown/page-title";
 
 /**
  * The path of a page is its place in the docs, so the trail is read from it.
@@ -32,21 +33,22 @@ export function Breadcrumbs({ path, version, title }: { path: string; version?: 
 
   const currentHref = `/${path}`;
   const crumbs = [
-    { label: version ? `Houdini ${version}` : "Houdini", href: "/", guessed: false },
+    { label: version ? `Houdini ${version}` : "Houdini", href: "/" },
     ...segments
       .map((segment, index) => {
         const ancestorPath = `${segments.slice(0, index + 1).join("/")}/index`;
         const ancestorTitle = titleOf(ancestorPath)?.trim();
         return {
-          label: ancestorTitle || segment.replace(/-/g, " "),
+          // The guess is Title Cased here rather than by CSS `capitalize`,
+          // because CSS cannot know that `sop` is an acronym.
+          label: ancestorTitle || toTitleCase(segment.replace(/-/g, " ")),
           href: `/${ancestorPath}`,
-          guessed: !ancestorTitle,
         };
       })
       // Already on this exact index page: its own title is the last crumb,
       // and a crumb for it here would only repeat that title right next to it.
       .filter((crumb) => crumb.href !== currentHref),
-    { label: title, href: null, guessed: false },
+    { label: title, href: null },
   ];
 
   return (
@@ -56,10 +58,7 @@ export function Breadcrumbs({ path, version, title }: { path: string; version?: 
         return (
           <span key={`${crumb.label}-${index}`} className="inline-flex items-center">
             {crumb.href ? (
-              <Link
-                to={crumb.href}
-                className={crumb.guessed ? "capitalize hover:text-foreground transition-colors" : "hover:text-foreground transition-colors"}
-              >
+              <Link to={crumb.href} className="hover:text-foreground transition-colors">
                 {crumb.label}
               </Link>
             ) : (

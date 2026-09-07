@@ -31,12 +31,7 @@ interface SidebarFooterProps {
   className?: string;
 }
 
-export function SidebarFooter({
-  recentCount,
-  recentsOpen,
-  onToggleRecents,
-  className,
-}: SidebarFooterProps) {
+export function SidebarFooter({ recentCount, recentsOpen, onToggleRecents, className }: SidebarFooterProps) {
   const theme = useTheme();
 
   return (
@@ -73,15 +68,21 @@ export function SidebarFooter({
           type="button"
           aria-label={theme === "dark" ? "Switch to the light theme" : "Switch to the dark theme"}
           className={FOOTER_BUTTON}
-          onClick={(toggleTheme)}
+          onClick={toggleTheme}
         >
           {/* Not one size. A crescent fills less of its box than a sun with
               eight rays around it, so drawn at the same size the moon reads
               as the smaller, lighter icon of the two. */}
           {theme === "dark" ? (
-            <Icons.themeDark className="size-[18px]" />
+            <Icons.themeLight
+              className="size-md"
+              strokeWidth="2"
+            />
           ) : (
-            <Icons.themeLight className="size-[16px]" />
+            <Icons.themeDark
+              className="size-md"
+              strokeWidth="2"
+            />
           )}
         </button>
         <BugReportButton />

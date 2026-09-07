@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { LucideArrowUpRight } from "lucide-react";
 import { useLocation } from "react-router";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import rehypeSlug from "rehype-slug";
+import { cn } from "@/lib/utils";
 import { Breadcrumbs } from "@/components/docs/Breadcrumbs";
 import SearchOverlay, { type SearchOverlayRef } from "@/components/docs/SearchOverlay";
 import { PageHeader } from "@/components/docs/PageHeader";
@@ -136,6 +137,13 @@ export default function Page() {
   const scroller = useRef<HTMLDivElement>(null);
 
   const isVexPage = /(^|\/)vex\//.test(`/${path}`);
+  // Read once and shared: the gutter reserved for the sticky list (below) and
+  // the list itself (TableOfContents) have to agree on whether there is one —
+  // TableOfContents draws nothing under two headings, and a gutter held open
+  // for a list that never draws is a page pushed left off centre for no list
+  // at all.
+  const headings = useMemo(() => (page ? extractHeadings(page.markdown) : []), [page]);
+  const hasToc = headings.length >= 2;
 
   return (
     <div
@@ -148,7 +156,7 @@ export default function Page() {
           page moves left by half of it — breadcrumbs and article together —
           so the column stays centred on what is left, and the list is not
           paid for by the text's own width. */}
-      <div className="flex min-h-0 flex-1 flex-col @min-[1150px]:pr-[232px]">
+      <div className={cn("flex min-h-0 flex-1 flex-col", hasToc && "@min-[1024px]:pr-[232px]")}>
         {/* The same page on sidefx.com, for a reader who wants the original. It
           sits on the breadcrumb line because that line is already the answer
           to "where am I", and the source is the last part of that answer. */}
@@ -190,7 +198,7 @@ export default function Page() {
                     summary={page.summary}
                     markdown={page.markdown}
                   />
-                  <TableOfContents headings={extractHeadings(page.markdown)} />
+                  <TableOfContents headings={headings} />
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm, remarkCallouts, [remarkVex, { enabled: isVexPage }]]}
                     rehypePlugins={[rehypeRaw, rehypeSlug, rehypeCards]}

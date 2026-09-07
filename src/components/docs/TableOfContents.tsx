@@ -2,6 +2,8 @@
 
 import { ChevronDown } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
+import { cn } from "@/lib/utils";
+import { useOverflow } from "@/lib/ui/overflow";
 import type { Heading } from "@/lib/markdown/headings";
 import { FloatingPill } from "./toc/FloatingPill";
 import { scroller, useActiveIndex } from "./toc/measure";
@@ -32,6 +34,13 @@ export function TableOfContents({ headings }: { headings: Heading[] }) {
   const [floating, setFloating] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const active = useActiveIndex(headings);
+  // A short list never needs to scroll, but "never" is only true up to
+  // rounding: a row's own hit-area padding can leave it a couple of px taller
+  // than its text, which tips `scrollHeight` past `clientHeight` on a list
+  // that has no real next row. Scrolling is turned on only past that, so a
+  // list that fits draws no scrollbar at all.
+  const sidebarList = useRef<HTMLElement>(null);
+  const sidebarOverflows = useOverflow(sidebarList, [headings]);
 
   /* The inline list leaving the top of the scroller is what promotes the pill.
      The watch is set by a ref callback, not by an effect: the list is not on
@@ -76,10 +85,14 @@ export function TableOfContents({ headings }: { headings: Heading[] }) {
           window: the window has a panel down its left side, so a list placed
           against the window centres itself over the reading column and lands
           on the page's own header. */}
-      <div className="not-prose print:hidden hidden @min-[1150px]:block absolute top-0 left-full ml-lg h-full w-52">
+      <div className="not-prose print:hidden hidden @min-[1024px]:block absolute top-0 left-full ml-lg h-full w-52">
         <nav
+          ref={sidebarList}
           aria-label="On this page"
-          className="thin-scroll sticky top-24 max-h-[calc(100dvh-8rem)] overflow-y-auto"
+          className={cn(
+            "sticky top-24 max-h-[calc(100dvh-8rem)]",
+            sidebarOverflows ? "thin-scroll overflow-y-auto" : "overflow-hidden",
+          )}
         >
           {title}
           <TocList headings={headings} top={top} active={active} density="tight" />
@@ -91,12 +104,12 @@ export function TableOfContents({ headings }: { headings: Heading[] }) {
           It carries no bottom margin: the first heading under it already has
           the space every heading has, and a margin here would add a second
           gap on top of it. */}
-      <nav ref={inline} aria-label="On this page" className="not-prose print:hidden @min-[1150px]:hidden -mt-2">
+      <nav ref={inline} aria-label="On this page" className="not-prose print:hidden @min-[1024px]:hidden -mt-2">
         {title}
-        <div className={collapsed ? "relative max-h-56 overflow-hidden" : undefined}>
+        <div className={collapsed ? "relative max-h-40 overflow-hidden" : undefined}>
           <TocList headings={headings} top={top} active={active} />
           {collapsed && (
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-linear-to-b from-transparent to-background" />
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-linear-to-b from-transparent to-background" />
           )}
         </div>
         {headings.length > LONG && (
