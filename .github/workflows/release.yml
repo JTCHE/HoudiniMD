@@ -49,3 +49,8 @@ jobs:
           prerelease: false
           includeUpdaterJson: true
           updaterJsonPreferNsis: true
+          # The signature the app checks lives INSIDE latest.json. The `.sig`
+          # file is a second copy of it that nothing reads, and on the release
+          # page it sits beside the installer and asks the reader a question
+          # they cannot answer.
+          uploadUpdaterSignatures: false
