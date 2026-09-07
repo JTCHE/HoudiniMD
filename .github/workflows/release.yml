@@ -13,6 +13,11 @@ on:
 jobs:
   build-and-release:
     runs-on: windows-latest
+    # The job creates a release and uploads to it. Without this the default
+    # token is read-only and the build fails at the last step with
+    # "Resource not accessible by integration".
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
