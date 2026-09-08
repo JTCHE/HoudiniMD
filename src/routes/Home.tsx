@@ -31,7 +31,7 @@ export default function Home() {
   const cold = library.recents.length === 0 && library.bookmarks.length === 0;
 
   return (
-    <main className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+    <main className="relative flex min-h-0 flex-1 flex-col overflow-hidden @container">
       {/* The field is a watermark in the top corner rather than a full-bleed
           backdrop: the window already carries a panel and two bars, and a
           pattern behind all of it would be one texture too many. */}
@@ -47,14 +47,13 @@ export default function Home() {
               <h1 className="text-[34px] leading-[36px] font-semibold tracking-[-0.032em] text-neutral-950">
                 {cold ? "Welcome to HoudiniMD." : name ? `${greeting()}, ${name}` : greeting()}
               </h1>
-              <p className="flex items-center gap-sm text-[16px] leading-[24px] tracking-[-0.012em] text-neutral-500">
+              <p className="flex items-center flex-wrap gap-x-sm text-[16px] leading-6 tracking-[-0.012em] text-neutral-500">
                 {version === null ? (
                   "Reading the Houdini install…"
                 ) : version ? (
                   <>
                     <span>Houdini {version}</span>
-                    <span aria-hidden="true">·</span>
-                    <span>
+                    <span className="before:content-['·'] before:mr-sm @max-xs:before:content-none @max-xs:before:mr-0">
                       {pageCount === null ? "counting pages…" : `${pageCount.toLocaleString()} pages`}
                     </span>
                   </>

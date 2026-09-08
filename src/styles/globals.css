@@ -29,7 +29,6 @@
    pointed at the same attribute theme.ts writes. */
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
-
 html {
   background: var(--background);
   color-scheme: light dark;
@@ -74,6 +73,8 @@ html {
      for the first paint and for a glyph the file does not have. */
   --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Geist Mono Variable", ui-monospace, Menlo, Consolas, monospace;
+
+  --breakpoint-xs: 20rem;
 
   /* ── Spacing ladder ────────────────────────────────────────────────────
      One ladder, consumed by name. Responsiveness lives in the media query on
@@ -310,7 +311,6 @@ html {
   --brand: oklch(0.664 0.195 43.1);
   --brand-bright: oklch(0.71 0.19 43.1);
   --brand-foreground: oklch(0.985 0 0);
-
 
   /* Surfaces.
 
