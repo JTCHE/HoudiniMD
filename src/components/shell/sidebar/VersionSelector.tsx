@@ -111,7 +111,9 @@ function Picker({ version, pageCount, className }: VersionSelectorProps) {
   useEffect(() => {
     if (!open) return;
     setRows(null);
-    void invoke<BuildRow[]>("available_installs").then(setRows);
+    void invoke<BuildRow[]>("available_installs")
+      .catch(() => [])
+      .then(setRows);
   }, [open]);
 
   useEffect(() => {

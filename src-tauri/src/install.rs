@@ -100,6 +100,14 @@ pub fn find(picked: &[PathBuf]) -> Vec<Install> {
         }
     }
 
+    for root in registry_roots() {
+        if let Some(install) = read(root)
+            && !found.iter().any(|i| i.version == install.version)
+        {
+            found.push(install);
+        }
+    }
+
     found.sort_by(|a, b| parts(&b.version).cmp(&parts(&a.version)));
     found
 }
@@ -154,6 +162,31 @@ fn roots() -> Vec<PathBuf> {
 #[cfg(not(windows))]
 fn roots() -> Vec<PathBuf> {
     vec![PathBuf::from("/Applications/Houdini")]
+}
+
+/// The installer writes its own path into the registry, so a build on another
+/// drive or in a studio's own folder — anywhere `roots()` does not look — is
+/// still found. `HKLM\SOFTWARE\Side Effects Software\Houdini` holds one value
+/// per build, keyed by its four-part version, e.g. `21.0.0.729`.
+#[cfg(windows)]
+fn registry_roots() -> Vec<PathBuf> {
+    use winreg::enums::HKEY_LOCAL_MACHINE;
+    use winreg::RegKey;
+
+    let Ok(key) = RegKey::predef(HKEY_LOCAL_MACHINE)
+        .open_subkey(r"SOFTWARE\Side Effects Software\Houdini")
+    else {
+        return Vec::new();
+    };
+    key.enum_values()
+        .filter_map(|entry| entry.ok())
+        .filter_map(|(_, value)| value.to_string().parse::<PathBuf>().ok())
+        .collect()
+}
+
+#[cfg(not(windows))]
+fn registry_roots() -> Vec<PathBuf> {
+    Vec::new()
 }
 
 /// `$HFS` is the install folder on Windows and a framework inside it on macOS,

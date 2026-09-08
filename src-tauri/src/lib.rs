@@ -93,7 +93,10 @@ fn available_installs(
     cache: State<install::Cache>,
 ) -> Result<Vec<BuildRow>, String> {
     let db = state.0.lock().map_err(|e| e.to_string())?;
-    let now = current(&db, &chosen, &cache)?.version;
+    // A machine with no install yet still needs this list — empty, so the
+    // reader can reach the "pick a folder" row instead of getting an error
+    // in place of the picker.
+    let now = current(&db, &chosen, &cache).map(|i| i.version).unwrap_or_default();
     Ok(cache
         .refresh()
         .into_iter()
