@@ -290,6 +290,62 @@ fn fold_cell(heading: bool, body: &str, extra: &[Line]) -> Cell {
     }
 }
 
+/// Turns the `Html` blocks that `table>>` / `tr>>` / `th>>` / `td>>` parse
+/// into — each already carrying its own children, from the same recursive
+/// descent every pseudo-HTML tag goes through — into a `Block::Table`, the
+/// same shape `cell_row` builds from the `|`-terminated markup. `None` if
+/// what is under `table>>` is not, in fact, a clean grid of rows and cells:
+/// a table row wrapping something else stays a plain `Html` block rather
+/// than a table with a hole in it.
+///
+/// A bare `th>>` or `td>>` sitting directly under `table>>`, outside any
+/// `tr>>`, is dropped rather than treated as a broken row: the intermediate
+/// dynamics reference sets column widths this way — three empty `th
+/// width="33%">>` lines before the real rows — and a width with nothing
+/// else to say has nowhere to go in a markdown table regardless.
+fn table_of(children: &[Block]) -> Option<Block> {
+    let mut rows = Vec::with_capacity(children.len());
+    for row in children {
+        let Block::Html {
+            tag,
+            children: cells,
+            ..
+        } = row
+        else {
+            return None;
+        };
+        if tag == "th" || tag == "td" {
+            continue;
+        }
+        if tag != "tr" {
+            return None;
+        }
+        let mut cell_row = Vec::with_capacity(cells.len());
+        for cell in cells {
+            let Block::Html {
+                tag,
+                children: body,
+                ..
+            } = cell
+            else {
+                return None;
+            };
+            let heading = match tag.as_str() {
+                "th" => true,
+                "td" => false,
+                _ => return None,
+            };
+            cell_row.push(Cell {
+                heading,
+                blocks: body.clone(),
+                props: Vec::new(),
+            });
+        }
+        rows.push(cell_row);
+    }
+    (!rows.is_empty()).then_some(Block::Table { rows })
+}
+
 fn code_block(lines: &[Line], start: usize) -> (Block, usize) {
     let indent = lines[start].indent;
     let first = lines[start].text.trim_start_matches('{').trim().to_string();
@@ -487,13 +543,38 @@ fn html_parts(text: &str) -> Option<(&str, &str, &str)> {
         && tag.starts_with(|c: char| c.is_ascii_lowercase())
         && tag.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit());
     let attributed = attributes.is_empty()
-        || attributes
-            .split_whitespace()
-            .all(|part| part.contains('=') && !part.contains('`'));
+        || attribute_tokens(attributes).all(|part| part.contains('=') && !part.contains('`'));
     if !named || !attributed {
         return None;
     }
     Some((tag, attributes, rest.trim()))
+}
+
+/// Splits an attribute string on whitespace, except inside a `"..."` value —
+/// `style="margin-left: 2em"` is one token, not two. A naive
+/// `split_whitespace` cut a quoted value with a space in half, so its second
+/// half had no `=` and the whole tag was rejected, not just the attribute.
+fn attribute_tokens(attributes: &str) -> impl Iterator<Item = &str> {
+    let mut tokens = Vec::new();
+    let mut start = None;
+    let mut quoted = false;
+    for (i, c) in attributes.char_indices() {
+        match c {
+            '"' => quoted = !quoted,
+            c if c.is_whitespace() && !quoted => {
+                if let Some(from) = start.take() {
+                    tokens.push(&attributes[from..i]);
+                }
+                continue;
+            }
+            _ => {}
+        }
+        start.get_or_insert(i);
+    }
+    if let Some(from) = start {
+        tokens.push(&attributes[from..]);
+    }
+    tokens.into_iter()
 }
 
 enum Kind {
@@ -653,6 +734,22 @@ fn single_line_block(text: &str, children: &[Line], has_children: bool) -> Optio
                     },
                 );
             }
+            // SideFX also writes a table as pseudo-HTML — `table>>`, `tr>>`,
+            // `th>>` / `td>>` — instead of the `|`-terminated cell markup
+            // `cell_row` builds a `Block::Table` from. It is the same shape,
+            // just a different spelling, so it has to reach the reader the
+            // same way. Left as a generic `Html` block it does not: both
+            // renderers unwrap a tag they do not recognise down to its plain
+            // children (`format.txt` says a reader should see the content,
+            // not the wrapper), which is right for a layout tag like `<div>`
+            // but throws the table's own rows and columns away with it —
+            // every cell reaches the reader as its own unrelated paragraph.
+            // See spec: Local — Bad table scrape.
+            if tag == "table"
+                && let Some(table) = table_of(&children)
+            {
+                return Some(table);
+            }
             Block::Html {
                 tag: tag.to_string(),
                 attributes: attributes.to_string(),
@@ -779,8 +876,13 @@ fn heading_parts(text: &str) -> Option<(u8, String, Option<String>)> {
             body = head;
         }
     }
+    // The closing run decides how much of `body` is title, not the level —
+    // that comes from the leading run alone. A source typo can leave the two
+    // counts unequal (`= Using Refine == (includeme)`, `== Examples ===`);
+    // still a heading, just not a perfectly balanced one, so only a missing
+    // closing run at all rejects the line.
     let closing = body.chars().rev().take_while(|c| *c == '=').count();
-    if closing != level {
+    if closing == 0 {
         return None;
     }
     let title = body[..body.len() - closing].trim();
@@ -902,6 +1004,69 @@ pub fn text_of(inlines: &[Inline]) -> String {
 
 #[cfg(test)]
 mod tests {
+    /// SideFX writes some tables as pseudo-HTML — `table>>`, `tr>>`, `th>>` /
+    /// `td>>` — rather than the `|`-terminated cell markup. Checked against
+    /// the real doc build: the VEX "Noise and randomness" page draws its
+    /// noise-cost table this way, and it reached the reader as six unrelated
+    /// paragraphs (one per header and cell) with no row or column left
+    /// between them. See spec: Local — Bad table scrape.
+    #[test]
+    fn pseudo_html_table_tags_become_a_real_table() {
+        let source = "table>>\n    tr>>\n        th>> Fruit\n        th>> Price\n    tr>>\n        td>>\n            Apple\n        td>> 1.0\n    tr>>\n        td>>\n            Banana\n        td>> 1.8\n";
+        let out = crate::markdown::blocks(&crate::parse(source).blocks, 1);
+        assert!(
+            out.contains("| Fruit | Price |") || out.contains("<th>Fruit</th><th>Price</th>"),
+            "{out}"
+        );
+        assert!(out.contains("Apple"), "{out}");
+        assert!(out.contains("1.0"), "{out}");
+        assert!(out.contains("Banana"), "{out}");
+        assert!(out.contains("1.8"), "{out}");
+        // Not the flattened-paragraph shape the bug produced: a stray closing
+        // tag or the header and its cell running together with no row break.
+        assert!(!out.contains("Fruit\n\nPrice"), "{out}");
+    }
+
+    /// A `th>>` or `td>>` sitting bare under `table>>`, outside any `tr>>` —
+    /// the dynamics reference sets column widths this way, three empty `th
+    /// width="..">>` lines before the real rows — must not make the whole
+    /// table fall back to flattened paragraphs; it is dropped and the real
+    /// rows still become a table.
+    #[test]
+    fn a_bare_header_cell_outside_a_row_does_not_break_the_table() {
+        let source = "table width=\"100%\">>\n    th width=\"33%\">>\n    th width=\"33%\">>\n\n    tr>>\n        td>> Alpha\n        td>> Bravo\n";
+        let out = crate::markdown::blocks(&crate::parse(source).blocks, 1);
+        // No `th>>` row survives as a real header (the bare ones outside any
+        // `tr>>` are dropped), so this has no column names and renders as an
+        // HTML table rather than a pipe table with a blank header band —
+        // same rule the pipe-syntax tables follow. Either way it is still a
+        // real table, not the flattened paragraphs the bug produced.
+        assert!(out.contains("<td>Alpha</td><td>Bravo</td>"), "{out}");
+    }
+
+    /// A pseudo-HTML tag the page does not use for a table — a genuine
+    /// wrapper such as `<steps>` — keeps the old behaviour: it draws as its
+    /// own plain content, wrapper dropped, not forced into a table shape.
+    #[test]
+    fn a_non_table_pseudo_html_tag_still_unwraps_to_plain_content() {
+        let source = "steps>>\n    * First.\n    * Second.\n";
+        let out = crate::markdown::blocks(&crate::parse(source).blocks, 1);
+        assert!(out.contains("First."), "{out}");
+        assert!(out.contains("Second."), "{out}");
+        assert!(!out.contains('|'), "{out}");
+    }
+
+    /// `tr>>` rows that do not hold a clean grid of `th>>` / `td>>` cells —
+    /// this one wraps a bullet list instead of a cell — are not forced into
+    /// a table with a hole in it; they keep unwrapping the old way.
+    #[test]
+    fn a_table_tag_around_something_else_is_left_alone() {
+        let source = "table>>\n    * Not a row at all.\n";
+        let out = crate::markdown::blocks(&crate::parse(source).blocks, 1);
+        assert!(out.contains("Not a row at all."), "{out}");
+        assert!(!out.contains("<table>") && !out.contains(" | "), "{out}");
+    }
+
     /// A `~~~ Group ~~~` divider owns what is indented under it. The Bullet
     /// constraint pages put 36 of their 37 parameters there.
     #[test]
@@ -941,5 +1106,54 @@ mod tests {
             ),
             "{out}"
         );
+    }
+
+    /// A quoted attribute value with a space, e.g. `style="margin-left: 2em"`,
+    /// must not split into two tokens — the second half had no `=` and threw
+    /// out the whole tag, table cells included. Checked against the real doc
+    /// build: `nodes/sop/uvflatten-2.0` draws this `div` as a raw, unparsed
+    /// paragraph without the fix. See spec: Local — Quoted attribute with a
+    /// space breaks pseudo-HTML tag recognition.
+    #[test]
+    fn a_quoted_attribute_with_a_space_does_not_reject_the_tag() {
+        let source = "div style=\"margin-left: 2em\">> Indented text.\n";
+        let out = crate::markdown::blocks(&crate::parse(source).blocks, 1);
+        assert!(out.contains("Indented text."), "{out}");
+        assert!(!out.contains("style=\"margin-left"), "{out}");
+    }
+
+    /// The same quoted-space attribute, on a `table>>` tag, must still be
+    /// reconstructed into a real table rather than falling back to
+    /// flattened paragraphs (the fix this spec's example table depends on).
+    #[test]
+    fn a_quoted_attribute_with_a_space_still_lets_a_table_assemble() {
+        let source = "table style=\"margin-left:auto;margin-right:auto;\">>\n    tr>>\n        td>> Alpha\n        td>> Bravo\n";
+        let out = crate::markdown::blocks(&crate::parse(source).blocks, 1);
+        assert!(out.contains("<td>Alpha</td><td>Bravo</td>"), "{out}");
+    }
+
+    /// A heading whose closing `=` run does not match its opening run — a
+    /// source typo, not a code-block demonstration — is still a heading:
+    /// the level comes from the opening run alone. Checked against the real
+    /// doc build: `nodes/sop/refine` (`= Using Refine == (includeme)`) and
+    /// `ref/utils/gptex` (`== Examples ===`) both reach the reader as a raw
+    /// paragraph without the fix. See spec: Local — Heading with mismatched
+    /// closing delimiters is rejected outright.
+    #[test]
+    fn a_heading_with_mismatched_closing_delimiters_still_parses() {
+        // A leading paragraph keeps the heading from being taken as the page
+        // title (`take_title` only claims a level-one heading that is the
+        // very first block) — the real page has other content above it too.
+        let source = "Intro.\n\n= Using Refine == (includeme)\n\nBody text.\n";
+        let out = crate::markdown::blocks(&crate::parse(source).blocks, 1);
+        assert!(out.contains("## Using Refine"), "{out}");
+        assert!(!out.contains('='), "{out}");
+    }
+
+    /// A heading with no closing `=` at all is not a heading — this keeps
+    /// the guard against a line that merely starts with `=`.
+    #[test]
+    fn a_line_starting_with_equals_and_no_closing_run_is_not_a_heading() {
+        assert!(super::heading_parts("= Not a heading at all").is_none());
     }
 }
