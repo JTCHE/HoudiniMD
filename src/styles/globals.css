@@ -64,6 +64,9 @@ html {
 .cursor-interactive {
   cursor: default;
 }
+/* a.cursor-interactive{
+  cursor: pointer;
+} */
 
 /* The theme is chosen, not sensed. `theme.ts` writes `data-theme` on the
    root before the first paint — the reader's choice, or the system's when
