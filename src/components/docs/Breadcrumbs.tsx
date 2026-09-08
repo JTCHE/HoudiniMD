@@ -64,7 +64,7 @@ export function Breadcrumbs({ path, version, title }: { path: string; version?: 
             ) : (
               <span className="text-foreground cursor-default">{crumb.label}</span>
             )}
-            {!isLast && <ChevronRight className="mx-1 size-3.5 shrink-0 text-muted-foreground/40" aria-hidden="true" />}
+            {!isLast && <ChevronRight className="mx-1 my-0.5 size-3.5 shrink-0 text-muted-foreground/40" aria-hidden="true" />}
           </span>
         );
       })}
