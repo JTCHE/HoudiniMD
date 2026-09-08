@@ -28,7 +28,7 @@ export function BookmarkButton({ entry }: { entry: Omit<LibraryEntry, "at"> }) {
       title={`${kept ? "Remove the bookmark" : "Keep this page"} (${COMMAND_KEY} D)`}
       onClick={(() => toggleBookmark(entry))}
       className={cn(
-        "grid size-8 shrink-0 cursor-pointer place-items-center rounded-lg border border-input",
+        "grid size-8 shrink-0 cursor-interactive place-items-center rounded-lg border border-input",
         "bg-muted/50 shadow-xs transition-colors hover:bg-muted",
         "focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none",
         kept ? "text-brand" : "text-muted-foreground hover:text-foreground",

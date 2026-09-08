@@ -55,7 +55,7 @@ export function ServerPortBadge() {
       rel="noopener noreferrer"
       onClick={open}
       title="Press to copy. Ctrl-press to open it in the browser."
-      className="flex shrink-0 cursor-pointer items-center gap-sm text-meta text-neutral-500 transition-colors duration-(--duration-fast) motion-reduce:transition-none pointer-hover:text-neutral-800 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+      className="flex shrink-0 cursor-interactive items-center gap-sm text-meta text-neutral-500 transition-colors duration-(--duration-fast) motion-reduce:transition-none pointer-hover:text-neutral-800 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
     >
       {address.slice("http://".length)}
       <span

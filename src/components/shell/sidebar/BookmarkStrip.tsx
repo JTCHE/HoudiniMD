@@ -28,7 +28,7 @@ export function BookmarkStrip({ entries, className }: { entries: LibraryEntry[];
       <Link
         to="/?tab=bookmarks"
         className={cn(
-          "flex cursor-pointer items-center gap-2xs self-start rounded-md px-sm py-2xs text-[11.5px] text-neutral-500",
+          "flex cursor-interactive items-center gap-2xs self-start rounded-md px-sm py-2xs text-[11.5px] text-neutral-500",
           "transition-colors duration-(--duration-fast) motion-reduce:transition-none",
           "pointer-hover:text-neutral-800",
           "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
@@ -56,7 +56,7 @@ export function BookmarkStrip({ entries, className }: { entries: LibraryEntry[];
               className={cn(
                 // Square. A tile carries an icon and nothing else, so its
                 // width is its height and a row of them steps evenly.
-                "grid size-chip shrink-0 cursor-pointer place-items-center rounded-lg",
+                "grid size-chip shrink-0 cursor-interactive place-items-center rounded-lg",
                 "border border-hairline bg-raised shadow-chip",
                 "transition-colors duration-(--duration-fast) motion-reduce:transition-none",
                 "pointer-hover:bg-neutral-100 active:bg-neutral-200",

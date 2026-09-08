@@ -158,7 +158,7 @@ export default function DocLink({
       <Link
         ref={linkRef}
         to={to}
-        className={classes}
+        className={cn(classes, "cursor-interactive")}
         onClick={(e) => {
           // A link to the page already open is not a navigation. The anchor
           // cases settle here, and the click never reaches the router.

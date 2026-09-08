@@ -55,6 +55,16 @@ html {
   scrollbar-color: var(--neutral-400) transparent;
 }
 
+/* Every button, row and app-internal link draws the plain Windows arrow
+   instead of the web's pointing hand — a desktop window, not a page of
+   links. A real hyperlink (an external URL, a breadcrumb to another page)
+   keeps its own `cursor-pointer` and is not this class.
+   One name, one place: change the value below to bring the hand back
+   everywhere at once, instead of hunting every button across the tree. */
+.cursor-interactive {
+  cursor: default;
+}
+
 /* The theme is chosen, not sensed. `theme.ts` writes `data-theme` on the
    root before the first paint — the reader's choice, or the system's when
    they have not made one — so the switch in the panel is one attribute.

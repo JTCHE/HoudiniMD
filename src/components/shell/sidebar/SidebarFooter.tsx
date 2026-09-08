@@ -16,7 +16,7 @@ import { BugReportButton } from "./BugReportButton";
 const SETTINGS_BUTTON_PARKED = false;
 
 const FOOTER_BUTTON =
-  "grid size-[30px] cursor-pointer place-items-center rounded-md text-neutral-500 " +
+  "grid size-[30px] cursor-interactive place-items-center rounded-md text-neutral-500 " +
   "transition-colors duration-(--duration-fast) motion-reduce:transition-none " +
   "pointer-hover:bg-raised pointer-hover:text-neutral-800 " +
   // Disabled changes what it DOES, not how loud it is: the two controls sit

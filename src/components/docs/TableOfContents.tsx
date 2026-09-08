@@ -116,7 +116,7 @@ export function TableOfContents({ headings }: { headings: Heading[] }) {
           <button
             type="button"
             onClick={(() => setExpanded((v) => !v))}
-            className="mt-1 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+            className="mt-1 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors cursor-interactive"
           >
             {expanded ? "Show less" : "Show all"}
             <ChevronDown

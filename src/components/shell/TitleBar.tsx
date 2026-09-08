@@ -17,7 +17,7 @@ import { WindowControls } from "./WindowControls";
 /* A square icon button on the bar. Smaller than a caption button and rounded,
    because it belongs to the app rather than to the window. */
 const BAR_BUTTON =
-  "grid size-[28px] shrink-0 cursor-pointer place-items-center rounded-md text-neutral-700 " +
+  "grid size-[28px] shrink-0 cursor-interactive place-items-center rounded-md text-neutral-700 " +
   "transition-colors duration-(--duration-fast) motion-reduce:transition-none " +
   "pointer-hover:not-disabled:bg-neutral-200 active:not-disabled:bg-neutral-300 " +
   "disabled:text-neutral-400 disabled:pointer-events-none " +
@@ -70,7 +70,7 @@ export function TitleBar({ sidebarOpen, onToggleSidebar, showTrail }: TitleBarPr
           // Same plate as BAR_BUTTON: 28px tall, same radius, same hover fill.
           // Only the horizontal padding differs, because a logo and a word
           // need more room than one glyph.
-          "ml-sm flex h-[28px] shrink-0 cursor-pointer items-center gap-[6px] rounded-md px-sm",
+          "ml-sm flex h-[28px] shrink-0 cursor-interactive items-center gap-[6px] rounded-md px-sm",
           "transition-colors duration-(--duration-fast) motion-reduce:transition-none",
           "pointer-hover:bg-neutral-200",
           "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",

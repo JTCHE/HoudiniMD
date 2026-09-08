@@ -92,7 +92,7 @@ export function SidebarRow({
       // max-height. Flexbox shrinks a child below its stated height to fit a
       // box like that unless told not to, which is what squeezed every Recents
       // row down to its text's own line-height.
-      "relative flex h-row w-full shrink-0 cursor-pointer items-center gap-sm rounded-md px-sm text-left",
+      "relative flex h-row w-full shrink-0 cursor-interactive items-center gap-sm rounded-md px-sm text-left",
       "transition-colors duration-(--duration-fast) motion-reduce:transition-none",
       // The row you are on is a chip lifted off the panel, not a tinted band:
       // the panel is already a shade of the page, so a tint would have to be

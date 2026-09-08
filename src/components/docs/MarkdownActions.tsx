@@ -55,7 +55,7 @@ export function MarkdownActions({ markdown }: { markdown: string }) {
       onClick={(() => {
         void copy().then((done) => done && celebrate());
       })}
-      className="flex items-center gap-2 rounded-lg border border-input bg-muted/50 px-3 py-1.5 text-xs text-muted-foreground shadow-xs transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 cursor-pointer"
+      className="flex items-center gap-2 rounded-lg border border-input bg-muted/50 px-3 py-1.5 text-xs text-muted-foreground shadow-xs transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 cursor-interactive"
     >
       {copied ? <Check className="size-3.5" aria-hidden="true" /> : <Copy className="size-3.5" aria-hidden="true" />}
       {copied ? "Copied" : "Copy as Markdown"}

@@ -62,7 +62,7 @@ function LibraryRow({ entry, kept, onForget }: { entry: LibraryEntry; kept: bool
         to={`/${entry.path}`}
         aria-label={entry.title}
         onPointerEnter={() => warm(entry.path)}
-        className="absolute inset-0 rounded-lg focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        className="absolute inset-0 cursor-interactive rounded-lg focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
       />
 
       <button
@@ -71,7 +71,7 @@ function LibraryRow({ entry, kept, onForget }: { entry: LibraryEntry; kept: bool
         aria-pressed={kept}
         onClick={(() => toggleBookmark(entry))}
         className={cn(
-          "absolute -left-[13px] top-1/2 grid size-[15px] -translate-y-1/2 cursor-pointer place-items-center rounded-sm",
+          "absolute -left-[13px] top-1/2 grid size-[15px] -translate-y-1/2 cursor-interactive place-items-center rounded-sm",
           // An unkept row shows its flag only under the pointer or the
           // keyboard, so a list of unkept pages is a list of pages and not a
           // column of empty outlines.
@@ -117,7 +117,7 @@ function LibraryRow({ entry, kept, onForget }: { entry: LibraryEntry; kept: bool
             aria-label={`Remove ${entry.title} from recents`}
             onClick={(onForget)}
             className={cn(
-              "grid size-[15px] cursor-pointer place-items-center rounded-sm text-neutral-400",
+              "grid size-[15px] cursor-interactive place-items-center rounded-sm text-neutral-400",
               "opacity-0 group-hover:opacity-100 focus-visible:opacity-100",
               "transition-opacity duration-(--duration-fast) motion-reduce:transition-none",
               "pointer-hover:text-neutral-800",
@@ -169,7 +169,7 @@ export function LibraryPanel({ className }: { className?: string }) {
               aria-selected={active}
               onClick={(() => setTab(id))}
               className={cn(
-                "flex cursor-pointer items-center gap-sm rounded-lg px-sm py-[6px] text-[13.5px] font-medium tracking-[-0.012em]",
+                "flex cursor-interactive items-center gap-sm rounded-lg px-sm py-[6px] text-[13.5px] font-medium tracking-[-0.012em]",
                 "transition-colors duration-(--duration-fast) motion-reduce:transition-none",
                 active
                   ? "border border-hairline bg-raised text-neutral-950 shadow-chip"

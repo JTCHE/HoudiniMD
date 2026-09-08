@@ -16,7 +16,7 @@ import { Icons } from "@/lib/ui/icons";
 /* Windows' own caption button: a wide, short target with no radius, reaching
    the full height of the bar so the pointer catches it at the screen corner. */
 const CAPTION_BUTTON =
-  "grid h-full w-caption-w shrink-0 cursor-pointer place-items-center text-neutral-700 " +
+  "grid h-full w-caption-w shrink-0 cursor-interactive place-items-center text-neutral-700 " +
   "transition-colors duration-(--duration-fast) motion-reduce:transition-none " +
   "pointer-hover:bg-neutral-200 active:bg-neutral-300 " +
   "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:-ring-offset-2";

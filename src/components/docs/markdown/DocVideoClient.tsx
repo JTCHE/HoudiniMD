@@ -46,7 +46,7 @@ function ClickToPlay() {
   return (
     <PlayButton
       aria-label="Play video"
-      className="absolute inset-0 z-1 cursor-pointer bg-transparent"
+      className="absolute inset-0 z-1 cursor-interactive bg-transparent"
     />
   );
 }
@@ -72,7 +72,7 @@ export default function DocVideoClient({ src, title }: DocVideoClientProps) {
   return (
     <div
       ref={boxRef}
-      className="markdown-media isolate my-4 bg-muted cursor-pointer"
+      className="markdown-media isolate my-4 bg-muted cursor-interactive"
       style={{ aspectRatio: ratio }}
       onLoadedMetadataCapture={(e) => {
         const video = e.currentTarget.querySelector("video");

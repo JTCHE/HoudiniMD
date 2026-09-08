@@ -62,7 +62,7 @@ export function CodePanel({ children, language }: CodePanelProps) {
         type="button"
         onClick={(handleCopy)}
         aria-label="Copy code"
-        className="absolute cursor-pointer right-2 top-2 select-none rounded-md border border-white/15 bg-white/10 px-2.5 py-1 text-xs font-medium text-white/70 backdrop-blur-sm transition-all duration-150 hover:bg-white/20 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 active:scale-95"
+        className="absolute cursor-interactive right-2 top-2 select-none rounded-md border border-white/15 bg-white/10 px-2.5 py-1 text-xs font-medium text-white/70 backdrop-blur-sm transition-all duration-150 hover:bg-white/20 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 active:scale-95"
       >
         {copied ? "Copied" : "Copy"}
       </button>

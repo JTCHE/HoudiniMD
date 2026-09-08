@@ -27,7 +27,7 @@ export function PasteSearchButton({
       onClick={mode === "paste" ? onPaste : undefined}
       disabled={disabled}
       className={cn(
-        "relative shrink-0 cursor-pointer select-none rounded-lg border border-control-edge",
+        "relative shrink-0 cursor-interactive select-none rounded-lg border border-control-edge",
         "bg-linear-to-b from-control-top to-control-bottom",
         "px-md py-sm text-label text-sm font-semibold whitespace-nowrap text-control-foreground",
         // The sheen along the top edge is what makes the key read as raised.

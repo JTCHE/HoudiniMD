@@ -40,7 +40,7 @@ interface BuildRow {
     saying "indexing…" for the first is a lie the reader can see through. */
 /** Every row of the popover, so the folder row cannot drift from the builds. */
 const ROW =
-  "flex w-full cursor-pointer items-center justify-between gap-sm rounded-md px-sm py-[7px] text-left text-[13px] " +
+  "flex w-full cursor-interactive items-center justify-between gap-sm rounded-md px-sm py-[7px] text-left text-[13px] " +
   "transition-colors duration-(--duration-fast) motion-reduce:transition-none disabled:cursor-default " +
   "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none";
 
@@ -81,7 +81,7 @@ function Card({
       className={cn(
         "flex h-[46px] w-full items-center justify-between rounded-lg px-ms text-left",
         "border border-hairline bg-raised shadow-chip",
-        onClick && "cursor-pointer pointer-hover:bg-neutral-100",
+        onClick && "cursor-interactive pointer-hover:bg-neutral-100",
         "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
         className,
       )}
