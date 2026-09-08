@@ -17,7 +17,7 @@
 *temp*
 
 *debug*
-.trash/*
+*.trash*
 
 # next.js
 /.next/
