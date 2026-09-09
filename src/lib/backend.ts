@@ -22,13 +22,21 @@ export function invoke<T>(command: string, args?: Args): Promise<T> {
 
 /// The same command, asked for over HTTP. Arrays go as one comma separated
 /// value, which is what `parse` in `server.rs` reads back.
+///
+/// Builds the query with `toString()`, not `.size`: Houdini's help pane runs
+/// on the QtWebEngine that ships with that Houdini build, and older ones
+/// carry a Chromium old enough to have no `URLSearchParams.size` at all —
+/// reading it there is `undefined`, which is falsy, so every call silently
+/// lost its arguments. `path` never reached the page read, so the pane always
+/// said a page was missing. See spec: Local — What the help pane shows.
 async function http<T>(command: string, args?: Args): Promise<T> {
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(args ?? {})) {
     if (value === undefined || value === null) continue;
     query.set(key, Array.isArray(value) ? value.join(",") : String(value));
   }
-  const url = `/api/${command}${query.size ? `?${query}` : ""}`;
+  const search = query.toString();
+  const url = `/api/${command}${search ? `?${search}` : ""}`;
   const answer = await fetch(url);
   if (!answer.ok) throw new Error(await answer.text());
   return (await answer.json()) as T;
