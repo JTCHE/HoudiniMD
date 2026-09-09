@@ -11,6 +11,7 @@ Project information: @README.md
 - [Front-end](agents/frontend.md) — the design language, and how to look at a change.
 - [Testing](agents/testing.md) — test the change, do not commit the test.
 - [Issues](agents/issues.md) — where specs live.
+- [Houdini's help pane](agents/houdini-pane.md) — an old Chromium, and how to debug it from the outside.
 
 ## Animation and compositing
 
