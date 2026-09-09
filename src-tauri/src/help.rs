@@ -34,15 +34,39 @@ pub enum PageError {
 /// could not reach at all while this only opened archives.
 /// See spec: Local — Pages missing from the app index.
 pub fn page(help: &Path, path: &str) -> Result<String, PageError> {
+    page_at(help, path)?.ok_or(PageError::Missing)
+}
+
+/// The same read as `page`, tried against `roots` in order — a build's own
+/// help first, then each package's. The first root that holds the page wins;
+/// a root that cannot be read at all is skipped rather than failing the whole
+/// lookup, so one broken package zip does not hide every other root's pages.
+pub fn page_layered(roots: &[PathBuf], path: &str) -> Result<String, PageError> {
+    let mut last = None;
+    for root in roots {
+        match page_at(root, path) {
+            Ok(Some(source)) => return Ok(source),
+            Ok(None) => {}
+            Err(reason) => last = Some(reason),
+        }
+    }
+    match last {
+        Some(reason) => Err(reason),
+        None => Err(PageError::Missing),
+    }
+}
+
+/// `Ok(None)` means this one root holds no such page.
+fn page_at(help: &Path, path: &str) -> Result<Option<String>, PageError> {
     let path = path.trim_matches('/');
     if path.is_empty() {
-        return Err(PageError::Missing);
+        return Ok(None);
     }
     // `network/` names the section's own index page, and the help writes that
     // form as often as it writes `network/index`.
     let (section, rest) = path.split_once('/').unwrap_or((path, "index"));
     if rest.contains("..") {
-        return Err(PageError::Missing);
+        return Ok(None);
     }
     let names = [format!("{rest}.txt"), format!("{rest}/index.txt")];
 
@@ -60,8 +84,12 @@ pub fn page(help: &Path, path: &str) -> Result<String, PageError> {
     if found.is_none() && folder.is_dir() {
         found = names.iter().find_map(|name| std::fs::read(folder.join(name)).ok());
     }
-    let bytes = found.ok_or(PageError::Missing)?;
-    String::from_utf8(bytes).map_err(|e| PageError::Unreadable(e.to_string()))
+    match found {
+        Some(bytes) => String::from_utf8(bytes)
+            .map(Some)
+            .map_err(|e| PageError::Unreadable(e.to_string())),
+        None => Ok(None),
+    }
 }
 
 /// `SOP/box.svg` lives in `config/Icons/icons.zip` under the same name.
@@ -74,10 +102,35 @@ pub fn icon(install_root: &Path, name: &str) -> Result<Vec<u8>, String> {
     found(read(&zip, name.trim_matches('/')), &format!("no icon {name}"))
 }
 
+/// The same read as `icon`, then a package's own icons — loose files, not a
+/// zip; a package ships too few to be worth archiving. `help/icons/` is where
+/// a package's node-doc icons actually live (SideFX Labs ships 167 there);
+/// `config/Icons/` is checked too, since that is where `icon()` itself reads
+/// core icons from and a package can use it the same way.
+pub fn icon_layered(install_root: &Path, packages: &[PathBuf], name: &str) -> Result<Vec<u8>, String> {
+    if let Ok(bytes) = icon(install_root, name) {
+        return Ok(bytes);
+    }
+    let clean = name.trim_matches('/');
+    if clean.contains("..") {
+        return Err(format!("no icon {name}"));
+    }
+    for package in packages {
+        for folder in [package.join("help").join("icons"), package.join("config").join("Icons")] {
+            if let Ok(bytes) = std::fs::read(folder.join(clean)) {
+                return Ok(bytes);
+            }
+        }
+    }
+    Err(format!("no icon {name}"))
+}
+
 /// Reads one asset, named the way `assets::resolve` writes it.
 ///
 /// `images/shelf/copy.jpg` is an entry in `images.zip`. `videos/tween.webm` is
 /// a loose file: the install ships 958 of them beside the zips, not inside one.
+/// `movies/rotate.gif` is the same shape as `videos`, under the name a
+/// package's own help uses for it.
 pub fn asset(help: &Path, path: &str) -> Result<Vec<u8>, String> {
     let absent = format!("no asset {path}");
     let Some((store, name)) = path.trim_matches('/').split_once('/') else {
@@ -85,18 +138,32 @@ pub fn asset(help: &Path, path: &str) -> Result<Vec<u8>, String> {
     };
     match store {
         "images" => found(read(&help.join("images.zip"), name), &absent),
-        "videos" => video(help, name).ok_or(absent),
+        "videos" => loose(help, "videos", name).ok_or(absent),
+        "movies" => loose(help, "movies", name).ok_or(absent),
         _ => Err(absent),
     }
 }
 
-/// A video is read whole. The `himage` handler serves the range the player
-/// asked for out of these bytes; the largest file in the install is 6.3 MB.
-fn video(help: &Path, name: &str) -> Option<Vec<u8>> {
+/// The same read as `asset`, tried against each help root in turn.
+pub fn asset_layered(roots: &[PathBuf], path: &str) -> Result<Vec<u8>, String> {
+    let mut last = format!("no asset {path}");
+    for root in roots {
+        match asset(root, path) {
+            Ok(bytes) => return Ok(bytes),
+            Err(reason) => last = reason,
+        }
+    }
+    Err(last)
+}
+
+/// A video or movie is read whole. The `himage` handler serves the range the
+/// player asked for out of these bytes; the largest file in the install is
+/// 6.3 MB.
+fn loose(help: &Path, folder: &str, name: &str) -> Option<Vec<u8>> {
     if name.contains("..") {
         return None;
     }
-    std::fs::read(help.join("videos").join(name)).ok()
+    std::fs::read(help.join(folder).join(name)).ok()
 }
 
 fn found(read: Result<Option<Vec<u8>>, String>, absent: &str) -> Result<Vec<u8>, String> {

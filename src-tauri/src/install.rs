@@ -83,6 +83,20 @@ pub struct Install {
     pub root: PathBuf,
     /// `$HFS/houdini/help`, which holds one zip per doc section.
     pub help: PathBuf,
+    /// Every package root this build's Houdini Path adds — SideFX Labs and
+    /// any other package, including a reader's own — each shaped like `root`
+    /// itself: a `help/` and a `config/Icons/` of its own. See `packages.rs`.
+    pub packages: Vec<PathBuf>,
+}
+
+impl Install {
+    /// Every place a page might live, this build's own help first, then each
+    /// package's — the order `page_layered` and `asset_layered` search in.
+    pub fn help_roots(&self) -> Vec<PathBuf> {
+        std::iter::once(self.help.clone())
+            .chain(self.packages.iter().map(|p| p.join("help")))
+            .collect()
+    }
 }
 
 /// Newest build first, so the caller can take the first one as the default.
@@ -142,7 +156,8 @@ fn read_versioned(root: PathBuf, version: String) -> Option<Install> {
     if !help.is_dir() {
         return None;
     }
-    Some(Install { version, root, help })
+    let packages = crate::packages::discover(&root, &version);
+    Some(Install { version, root, help, packages })
 }
 
 /// The build number the path carries, read from the end backwards. Every
@@ -330,7 +345,12 @@ mod tests {
     }
 
     fn fake_install(version: &str) -> Install {
-        Install { version: version.to_string(), root: PathBuf::new(), help: PathBuf::new() }
+        Install {
+            version: version.to_string(),
+            root: PathBuf::new(),
+            help: PathBuf::new(),
+            packages: Vec::new(),
+        }
     }
 
     fn chosen_of(install: Option<Install>) -> Chosen {

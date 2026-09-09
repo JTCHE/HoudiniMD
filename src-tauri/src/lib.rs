@@ -8,6 +8,7 @@ pub mod index;
 pub mod inherit;
 pub mod install;
 pub mod library;
+mod packages;
 pub mod sections;
 pub mod server;
 pub mod update;
@@ -216,7 +217,8 @@ fn page(state: State<Db>, chosen: State<Arc<install::Chosen>>, cache: State<Arc<
 /// harness times this call; the command is the one line that finds the install.
 pub fn read_page(install: &install::Install, path: &str) -> Result<PageView, PageError> {
     let path = path.to_string();
-    let source = help::page(&install.help, &path).map_err(|reason| match reason {
+    let roots = install.help_roots();
+    let source = help::page_layered(&roots, &path).map_err(|reason| match reason {
         help::PageError::Missing => PageError {
             missing: true,
             message: format!("no page {path} in Houdini {}", install.version),
@@ -225,7 +227,7 @@ pub fn read_page(install: &install::Install, path: &str) -> Result<PageView, Pag
     })?;
     let mut parsed = wiki::parse(&source);
     wiki::include::resolve(&mut parsed.blocks, &path, &|target| {
-        help::page(&install.help, target).ok()
+        help::page_layered(&roots, target).ok()
     });
     family::append(&install.help, &parsed.props, &mut parsed.blocks);
     let section = path.split('/').next().unwrap_or("");
@@ -376,8 +378,9 @@ pub fn read_meta(
     if missing.is_empty() {
         return Ok(found);
     }
+    let roots = install.help_roots();
     for path in missing {
-        let Ok(source) = help::page(&install.help, &path) else {
+        let Ok(source) = help::page_layered(&roots, &path) else {
             continue;
         };
         let parsed = wiki::parse(&source);
@@ -605,7 +608,7 @@ fn current_for(app: &tauri::AppHandle) -> Result<install::Install, String> {
 /// `himage://localhost/videos/tween.webm`; `assets::resolve` wrote that path.
 fn asset_response(app: &tauri::AppHandle, request: Request<Vec<u8>>) -> Response<Vec<u8>> {
     let name = percent_decode(request.uri().path());
-    let bytes = match current_for(app).and_then(|install| help::asset(&install.help, &name)) {
+    let bytes = match current_for(app).and_then(|install| help::asset_layered(&install.help_roots(), &name)) {
         Ok(bytes) => bytes,
         Err(reason) => {
             return Response::builder()
@@ -675,7 +678,7 @@ pub(crate) fn media_type(name: &str) -> &'static str {
 fn icon_response(app: &tauri::AppHandle, request: Request<Vec<u8>>) -> Response<Vec<u8>> {
     let name = request.uri().path().trim_start_matches('/').to_string();
     let name = percent_decode(&name);
-    match current_for(app).and_then(|install| help::icon(&install.root, &name)) {
+    match current_for(app).and_then(|install| help::icon_layered(&install.root, &install.packages, &name)) {
         Ok(bytes) => Response::builder()
             .header("Content-Type", "image/svg+xml")
             .header("Cache-Control", "max-age=31536000")

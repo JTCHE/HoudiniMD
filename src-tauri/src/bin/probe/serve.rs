@@ -139,13 +139,13 @@ fn route(state: &Serve, path: &str, query: &str) -> (u16, &'static str, Vec<u8>)
         return command_response(state, command, query);
     }
     if let Some(name) = path.strip_prefix("/asset/") {
-        return match help::asset(&state.install.help, name) {
+        return match help::asset_layered(&state.install.help_roots(), name) {
             Ok(bytes) => (200, media_type(name), bytes),
             Err(reason) => (404, "text/plain", reason.into_bytes()),
         };
     }
     if let Some(name) = path.strip_prefix("/icon/") {
-        return match help::icon(&state.install.root, name) {
+        return match help::icon_layered(&state.install.root, &state.install.packages, name) {
             Ok(bytes) => (200, "image/svg+xml", bytes),
             Err(reason) => (404, "text/plain", reason.into_bytes()),
         };
