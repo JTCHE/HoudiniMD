@@ -17,7 +17,7 @@
 
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener};
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use include_dir::{Dir, include_dir};
 use rusqlite::Connection;
@@ -38,21 +38,20 @@ const TRIES: u16 = 20;
 /// Starts the server on the first free port and answers on a thread of its own.
 /// Returns the port it took, which is the port the hook writes into
 /// `misc.externalhelpurl.val`.
-pub fn start(data: PathBuf) -> Result<u16, String> {
+///
+/// `chosen` and `cache` are the same instances the desktop window reads, not
+/// copies — a build switched in the window is a build this thread serves on
+/// its very next request, and a folder picked by hand in the window is a
+/// folder this thread's scan already knows about too.
+pub fn start(data: PathBuf, chosen: Arc<install::Chosen>, cache: Arc<install::Cache>) -> Result<u16, String> {
     let (listener, port) = bind()?;
     let server = Server::from_listener(listener, None).map_err(|e| e.to_string())?;
     std::thread::spawn(move || {
         // A cook must always win the core, the same as the index pass.
         index::background_priority();
         let db = db::open(&data).map(Mutex::new);
-        // This thread answers every request in turn, so the install this
-        // server reads is resolved once here and kept warm across requests —
-        // the same rule as the desktop shell's `Chosen`, just without a Mutex,
-        // since nothing else touches it.
-        let mut chosen: Option<install::Install> = None;
-        let cache = install::Cache::new();
         for request in server.incoming_requests() {
-            let (status, body, kind) = answer(db.as_ref(), &mut chosen, &cache, request.url());
+            let (status, body, kind) = answer(db.as_ref(), &chosen, &cache, request.url());
             // What Houdini asked for, and what it got. Houdini's help window
             // says nothing when a page fails, so without this there is no way
             // to tell a wrong path from a wrong answer.
@@ -90,7 +89,7 @@ type Answer = (u16, Vec<u8>, &'static str);
 /// One request, answered: status, body, media type.
 fn answer(
     db: Result<&Mutex<Connection>, &String>,
-    chosen: &mut Option<install::Install>,
+    chosen: &install::Chosen,
     cache: &install::Cache,
     url: &str,
 ) -> Answer {
@@ -119,7 +118,7 @@ fn answer(
 /// has one set of calls and not two. `backend.ts` picks which door to knock on.
 fn api(
     db: Result<&Mutex<Connection>, &String>,
-    chosen: &mut Option<install::Install>,
+    chosen: &install::Chosen,
     cache: &install::Cache,
     command: &str,
     query: &str,
@@ -157,7 +156,7 @@ fn api(
 /// two things first: the connection, and the build.
 fn indexed(
     db: Result<&Mutex<Connection>, &String>,
-    chosen: &mut Option<install::Install>,
+    chosen: &install::Chosen,
     cache: &install::Cache,
     command: &str,
     call: &Call,
@@ -303,12 +302,12 @@ fn parse(query: &str) -> Call {
     call
 }
 
-/// The install this thread reads, resolved once and kept in `chosen` across
-/// requests. One source of truth with the desktop shell's own `current` in
-/// `lib.rs`: both call `install::resolve`, neither scans the disk itself.
+/// The install this thread reads. `chosen` is the same `Arc` the desktop
+/// shell's own `current` in `lib.rs` reads, so this and the window always
+/// agree on the build, even mid-session after a switch.
 fn current(
     db: Result<&Mutex<Connection>, &String>,
-    chosen: &mut Option<install::Install>,
+    chosen: &install::Chosen,
     cache: &install::Cache,
 ) -> Result<install::Install, String> {
     let db = db.map_err(String::clone)?;
@@ -374,19 +373,19 @@ mod tests {
     #[test]
     fn a_bookmark_written_over_the_api_reads_back_over_the_api() {
         let db = temp_db().unwrap();
-        let mut chosen = None;
+        let chosen = install::Chosen::new();
         let cache = install::Cache::new();
 
         let (status, _, _) = api(
             Ok(&db),
-            &mut chosen,
+            &chosen,
             &cache,
             "toggle_bookmark",
             "path=nodes%2Fsop%2Fbox&title=Box&at=1",
         );
         assert_eq!(status, 200);
 
-        let (status, body, kind) = api(Ok(&db), &mut chosen, &cache, "bookmarks", "");
+        let (status, body, kind) = api(Ok(&db), &chosen, &cache, "bookmarks", "");
         assert_eq!(status, 200);
         assert_eq!(kind, "application/json");
         let read: Vec<library::Entry> = serde_json::from_slice(&body).unwrap();
@@ -397,11 +396,11 @@ mod tests {
     #[test]
     fn a_setting_written_over_the_api_reads_back_over_the_api() {
         let db = temp_db().unwrap();
-        let mut chosen = None;
+        let chosen = install::Chosen::new();
         let cache = install::Cache::new();
 
-        api(Ok(&db), &mut chosen, &cache, "set_setting", "key=build&value=22.0.368");
-        let (_, body, _) = api(Ok(&db), &mut chosen, &cache, "get_setting", "key=build");
+        api(Ok(&db), &chosen, &cache, "set_setting", "key=build&value=22.0.368");
+        let (_, body, _) = api(Ok(&db), &chosen, &cache, "get_setting", "key=build");
         let read: Option<String> = serde_json::from_slice(&body).unwrap();
         assert_eq!(read.as_deref(), Some("22.0.368"));
     }

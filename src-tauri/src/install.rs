@@ -6,6 +6,20 @@ use std::sync::Mutex;
 
 use serde::Serialize;
 
+/// The install every read in this process uses, resolved once by
+/// `resolve` and kept warm across calls. Shared as one `Arc` between the
+/// desktop window and the localhost server, so a build switched in one is a
+/// build switched in both — see spec: Local — window and pane read the same
+/// build.
+#[derive(Default)]
+pub struct Chosen(Mutex<Option<Install>>);
+
+impl Chosen {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
 /// Caches the result of `find()`, which walks Program Files. A page read, an
 /// icon and an image all used to pay for that scan; now only a cold cache and
 /// an explicit `refresh()` do.
@@ -61,7 +75,9 @@ impl Default for Cache {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Install {
-    /// The build string, taken from the install folder name: `22.0.368`.
+    /// The build string: `22.0.368`. Read from the registry when the install
+    /// came from there, since that name is authoritative; guessed from the
+    /// install folder's own name otherwise.
     pub version: String,
     /// `$HFS`, the install root. Icons and other assets hang off it.
     pub root: PathBuf,
@@ -100,8 +116,8 @@ pub fn find(picked: &[PathBuf]) -> Vec<Install> {
         }
     }
 
-    for root in registry_roots() {
-        if let Some(install) = read(root)
+    for (version, root) in registry_roots() {
+        if let Some(install) = read_versioned(root, version)
             && !found.iter().any(|i| i.version == install.version)
         {
             found.push(install);
@@ -114,15 +130,19 @@ pub fn find(picked: &[PathBuf]) -> Vec<Install> {
 
 /// Reads one install folder. `None` when it holds no help.
 pub fn read(root: PathBuf) -> Option<Install> {
+    let version = version(&root)?;
+    read_versioned(root, version)
+}
+
+/// Reads one install folder whose version is already known — the registry
+/// names it, so there is nothing to guess from the folder's own name. `None`
+/// when it holds no help.
+fn read_versioned(root: PathBuf, version: String) -> Option<Install> {
     let help = root.join("houdini").join("help");
     if !help.is_dir() {
         return None;
     }
-    Some(Install {
-        version: version(&root)?,
-        root,
-        help,
-    })
+    Some(Install { version, root, help })
 }
 
 /// The build number the path carries, read from the end backwards. Every
@@ -167,9 +187,12 @@ fn roots() -> Vec<PathBuf> {
 /// The installer writes its own path into the registry, so a build on another
 /// drive or in a studio's own folder — anywhere `roots()` does not look — is
 /// still found. `HKLM\SOFTWARE\Side Effects Software\Houdini` holds one value
-/// per build, keyed by its four-part version, e.g. `21.0.0.729`.
+/// per build, keyed by its four-part version, e.g. `21.0.0.729`. That value
+/// name is the version, taken as-is: an install folder that carries no
+/// version in its own name (a studio's `C:\Houdini21`, say) has nowhere else
+/// to read one from.
 #[cfg(windows)]
-fn registry_roots() -> Vec<PathBuf> {
+fn registry_roots() -> Vec<(String, PathBuf)> {
     use winreg::enums::HKEY_LOCAL_MACHINE;
     use winreg::RegKey;
 
@@ -180,12 +203,15 @@ fn registry_roots() -> Vec<PathBuf> {
     };
     key.enum_values()
         .filter_map(|entry| entry.ok())
-        .filter_map(|(_, value)| value.to_string().parse::<PathBuf>().ok())
+        .filter_map(|(name, value)| {
+            let root = value.to_string().parse::<PathBuf>().ok()?;
+            Some((name, root))
+        })
         .collect()
 }
 
 #[cfg(not(windows))]
-fn registry_roots() -> Vec<PathBuf> {
+fn registry_roots() -> Vec<(String, PathBuf)> {
     Vec::new()
 }
 
@@ -263,11 +289,8 @@ pub fn add_picked(
 /// first entry `Cache::get` returns — when nothing is chosen yet, or when the
 /// chosen build is no longer on the machine. Writes the result back as the
 /// choice, so a fallback taken once is not taken again.
-pub fn resolve(
-    chosen: &mut Option<Install>,
-    cache: &Cache,
-    db: &rusqlite::Connection,
-) -> Result<Install, String> {
+pub fn resolve(chosen: &Chosen, cache: &Cache, db: &rusqlite::Connection) -> Result<Install, String> {
+    let mut chosen = chosen.0.lock().map_err(|e| e.to_string())?;
     if let Some(install) = chosen.as_ref() {
         if install.help.is_dir() {
             return Ok(install.clone());
@@ -283,6 +306,14 @@ pub fn resolve(
     let _ = crate::db::set_setting(db, BUILD_KEY, &picked.version);
     *chosen = Some(picked.clone());
     Ok(picked)
+}
+
+/// Overwrites what `resolve` hands out next, without touching the persisted
+/// choice's freshness check — used when the reader switches build by hand, so
+/// the window and the F1 pane pick it up on their very next read.
+pub fn set_chosen(chosen: &Chosen, install: Install) -> Result<(), String> {
+    *chosen.0.lock().map_err(|e| e.to_string())? = Some(install);
+    Ok(())
 }
 
 #[cfg(test)]
@@ -302,6 +333,10 @@ mod tests {
         Install { version: version.to_string(), root: PathBuf::new(), help: PathBuf::new() }
     }
 
+    fn chosen_of(install: Option<Install>) -> Chosen {
+        Chosen(Mutex::new(install))
+    }
+
     /// A one-shot cache that never scans the disk — `resolve` should only ever
     /// need what it is given.
     fn cache_of(installs: Vec<Install>) -> Cache {
@@ -314,8 +349,8 @@ mod tests {
     fn nothing_chosen_yet_falls_back_to_the_first_found_install() {
         let db = temp_db();
         let cache = cache_of(vec![fake_install("22.0.368"), fake_install("21.0.829")]);
-        let mut chosen = None;
-        let picked = resolve(&mut chosen, &cache, &db).unwrap();
+        let chosen = chosen_of(None);
+        let picked = resolve(&chosen, &cache, &db).unwrap();
         assert_eq!(picked.version, "22.0.368");
         // The fallback is written back, so a restart reads the same build.
         assert_eq!(crate::db::get_setting(&db, BUILD_KEY).as_deref(), Some("22.0.368"));
@@ -326,8 +361,8 @@ mod tests {
         let db = temp_db();
         crate::db::set_setting(&db, BUILD_KEY, "19.5.000").unwrap();
         let cache = cache_of(vec![fake_install("22.0.368")]);
-        let mut chosen = None;
-        let picked = resolve(&mut chosen, &cache, &db).unwrap();
+        let chosen = chosen_of(None);
+        let picked = resolve(&chosen, &cache, &db).unwrap();
         assert_eq!(picked.version, "22.0.368");
         assert_eq!(crate::db::get_setting(&db, BUILD_KEY).as_deref(), Some("22.0.368"));
     }
@@ -337,8 +372,8 @@ mod tests {
         let db = temp_db();
         crate::db::set_setting(&db, BUILD_KEY, "21.0.829").unwrap();
         let cache = cache_of(vec![fake_install("22.0.368"), fake_install("21.0.829")]);
-        let mut chosen = None;
-        let picked = resolve(&mut chosen, &cache, &db).unwrap();
+        let chosen = chosen_of(None);
+        let picked = resolve(&chosen, &cache, &db).unwrap();
         assert_eq!(picked.version, "21.0.829");
     }
 
@@ -348,14 +383,36 @@ mod tests {
         // A cache with nothing in it: if `resolve` asked it a second time
         // instead of trusting `chosen`, this would fail to find anything.
         let cache = Cache::new();
-        let mut chosen = Some(fake_install("22.0.368"));
+        let mut warm = fake_install("22.0.368");
         // `Install.help` is empty here, which is not a directory, so the
         // freshness check below matters: a fake install has no help folder,
         // and this test's whole point is that `resolve` never checks past
         // `chosen` when the caller already trusts it — see the version test
         // above for the "gone from disk" path instead.
-        chosen.as_mut().unwrap().help = std::env::temp_dir();
-        let picked = resolve(&mut chosen, &cache, &db).unwrap();
+        warm.help = std::env::temp_dir();
+        let chosen = chosen_of(Some(warm));
+        let picked = resolve(&chosen, &cache, &db).unwrap();
         assert_eq!(picked.version, "22.0.368");
+    }
+
+    #[test]
+    fn switching_the_build_is_seen_by_every_reader_of_the_same_chosen() {
+        // The bug this guards: the window and the F1 pane used to hold their
+        // own separate `chosen`, so a build switched in one was invisible to
+        // the other until its cached install vanished from disk. One
+        // `Chosen`, shared, is the fix — this is the regression test for it.
+        let db = temp_db();
+        let chosen = chosen_of(None);
+        let cache = cache_of(vec![fake_install("22.0.368")]);
+        assert_eq!(resolve(&chosen, &cache, &db).unwrap().version, "22.0.368");
+
+        let mut switched = fake_install("21.0.829");
+        switched.help = std::env::temp_dir();
+        set_chosen(&chosen, switched).unwrap();
+
+        // A cache that would now resolve differently, to prove this reads
+        // `chosen` and not the cache.
+        let cache = cache_of(vec![fake_install("22.0.368")]);
+        assert_eq!(resolve(&chosen, &cache, &db).unwrap().version, "21.0.829");
     }
 }
