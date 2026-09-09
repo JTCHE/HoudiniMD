@@ -1015,10 +1015,22 @@ pre code.hljs {
    (callout-note/-tip/-warning/-important/-caution) only set the callout-color
    and callout-icon tokens; everything else is shared. */
 .callout {
-  /* default = note */
+  /* --callout-surface is the exact result of `color-mix(in oklab,
+     var(--callout-color) 4%, var(--card))` for this color, computed once
+     (see `agents/houdini-pane.md`) and written as a literal. Two fixed
+     colors blended 4% apart do not change at runtime, so there is nothing
+     "live" a `color-mix()` version would compute that this does not — an
+     engine with no `color-mix()` gets the identical pixel, not an
+     approximation. Writing it as `color-mix(in oklab, var(--callout-color)
+     4%, var(--card))` here instead reads correctly, but do not: the
+     fallback plugin cannot fold a `var()`-based `color-mix()` either, so it
+     inserts its OWN unguarded fallback — `var(--callout-color)`, the flat
+     brand color — which then wins the cascade over this one regardless of
+     `@supports`, since it isn't gated by anything. Every type modifier below
+     carries the same literal, for the same reason. default = note. */
   --callout-color: oklch(0.62 0.13 250);
   --callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 16v-4'/%3E%3Cpath d='M12 8h.01'/%3E%3C/svg%3E");
-  --callout-surface: color-mix(in oklab, var(--callout-color) 4%, var(--card));
+  --callout-surface: rgb(247, 250, 253);
   display: block;
   /* Negative inline margin against the equal inline padding, so callout text
      sits on the page's text axis and only the surface overhangs — matching
@@ -1036,6 +1048,10 @@ pre code.hljs {
     inset 1px 1px 0 0 color-mix(in oklab, white 3%, transparent),
     inset -1px -1px 0 0 color-mix(in oklab, black 3%, transparent),
     0 1px 2px 0 color-mix(in oklab, black 4%, transparent);
+}
+
+:root[data-theme="dark"] .callout {
+  --callout-surface: rgb(25, 27, 29);
 }
 
 .callout .callout-title {
@@ -1078,25 +1094,76 @@ pre code.hljs {
   color: var(--callout-color);
 }
 .callout code {
-  background: color-mix(in oklab, var(--callout-color) 12%, var(--background));
+  /* Same precomputed-literal approach as `--callout-surface` above, and the
+     same reason: a `color-mix()` written here instead would get its own
+     unguarded plugin fallback that wins the cascade regardless of any
+     `@supports`. */
+  background: rgb(232, 241, 250);
+}
+:root[data-theme="dark"] .callout code {
+  background: rgb(17, 23, 29);
 }
 
-/* Type modifiers — tokens only, element-agnostic. */
+/* Type modifiers — tokens only, element-agnostic. `--callout-surface` and
+   `.callout code`'s background are each that type's own static blend (see
+   the note on `.callout` above) — every modifier needs its own, since the
+   blend depends on `--callout-color`, which is what a modifier exists to
+   change. */
 .callout-tip {
   --callout-color: oklch(0.6 0.14 150);
   --callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5'/%3E%3Cpath d='M9 18h6'/%3E%3Cpath d='M10 22h4'/%3E%3C/svg%3E");
+  --callout-surface: rgb(247, 251, 248);
+}
+:root[data-theme="dark"] .callout-tip {
+  --callout-surface: rgb(25, 28, 25);
+}
+.callout-tip code {
+  background: rgb(232, 243, 233);
+}
+:root[data-theme="dark"] .callout-tip code {
+  background: rgb(17, 24, 18);
 }
 .callout-warning {
   --callout-color: oklch(0.7 0.15 75);
   --callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z'/%3E%3Cpath d='M12 9v4'/%3E%3Cpath d='M12 17h.01'/%3E%3C/svg%3E");
+  --callout-surface: rgb(254, 251, 247);
+}
+:root[data-theme="dark"] .callout-warning {
+  --callout-surface: rgb(29, 27, 25);
+}
+.callout-warning code {
+  background: rgb(250, 242, 230);
+}
+:root[data-theme="dark"] .callout-warning code {
+  background: rgb(30, 24, 15);
 }
 .callout-important {
   --callout-color: oklch(0.6 0.18 300);
   --callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7.9 20A9 9 0 1 0 4 16.1L2 22Z'/%3E%3Cpath d='M12 8v4'/%3E%3Cpath d='M12 16h.01'/%3E%3C/svg%3E");
+  --callout-surface: rgb(250, 249, 254);
+}
+:root[data-theme="dark"] .callout-important {
+  --callout-surface: rgb(27, 26, 30);
+}
+.callout-important code {
+  background: rgb(241, 236, 252);
+}
+:root[data-theme="dark"] .callout-important code {
+  background: rgb(23, 20, 30);
 }
 .callout-caution {
   --callout-color: oklch(0.62 0.2 25);
   --callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15.3 2a2 2 0 0 1 1.4.6l4.7 4.7a2 2 0 0 1 .6 1.4v6.6a2 2 0 0 1-.6 1.4l-4.7 4.7a2 2 0 0 1-1.4.6H8.7a2 2 0 0 1-1.4-.6l-4.7-4.7a2 2 0 0 1-.6-1.4V8.7a2 2 0 0 1 .6-1.4l4.7-4.7A2 2 0 0 1 8.7 2z'/%3E%3Cpath d='M12 8v4'/%3E%3Cpath d='M12 16h.01'/%3E%3C/svg%3E");
+  --callout-surface: rgb(255, 248, 247);
+}
+:root[data-theme="dark"] .callout-caution {
+  --callout-surface: rgb(31, 26, 25);
+}
+.callout-caution code {
+  background: rgb(255, 235, 232);
+}
+:root[data-theme="dark"] .callout-caution code {
+  background: rgb(32, 18, 17);
 }
 
 /* In-cell variant: identical component, just tighter to fit a table cell. */
