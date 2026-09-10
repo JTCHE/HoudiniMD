@@ -29,6 +29,7 @@ import {
   Library,
   Workflow,
   PanelLeft,
+  Play,
   Search,
   Settings,
   X,
@@ -114,6 +115,8 @@ export const Icons = {
   /** A section the help holds no icon for. A section holds pages, so the page
       glyph is the wrong shape: it says the row IS a page. */
   section: Folder,
+  /** A clip that has not loaded yet. */
+  play: Play,
 
   /* The four groups the sidebar tree opens with. Keyed by the group id in
      `lib/landing/tree.ts`, so a new group there asks for a mark here. */

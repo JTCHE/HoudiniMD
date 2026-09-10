@@ -8,13 +8,18 @@ import { Image } from "./MarkdownImage";
 import { Video } from "./MarkdownVideo";
 import { Card } from "./Card";
 import { ImageGroup } from "./ImageGroup";
+import { Vimeo } from "./MarkdownVimeo";
 
-/** The parser writes two kinds of div: a `.code-panel` that carries the copy
-    button and the highlighting, and an `.image-group` row of pictures. */
+/** The parser writes a `.code-panel` that carries the copy button and the
+    highlighting, an `.image-group` row of pictures, `.columns` of `:col:`
+    blocks, and a `.vimeo` clip. */
 const Div: Components["div"] = function MarkdownDiv({ className, children, ...props }) {
   const kinds = className?.split(" ") ?? [];
   if (kinds.includes("image-group")) {
     return <ImageGroup className={className!}>{children}</ImageGroup>;
+  }
+  if (kinds.includes("vimeo")) {
+    return <Vimeo id={String((props as Record<string, unknown>)["data-id"] ?? "")} title={props.title} />;
   }
   return kinds.includes("code-panel") ? (
     <CodePanel>
