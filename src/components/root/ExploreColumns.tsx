@@ -123,7 +123,7 @@ export function ExploreColumns({ className }: { className?: string }) {
               <div className="-mx-sm flex flex-col">
                 {column.rows.map((row) => {
                   const rowClass = cn(
-                    "flex h-[32px] items-center rounded-md px-sm text-[13.5px] tracking-[-0.01em] text-neutral-800",
+                    "flex h-[32px] items-center rounded-md px-sm text-[13.5px] tracking-[-0.01em] text-neutral-800 ",
                     "transition-colors duration-(--duration-fast) motion-reduce:transition-none",
                     "pointer-hover:bg-neutral-100",
                     "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",

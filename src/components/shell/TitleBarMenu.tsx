@@ -1,0 +1,103 @@
+/**
+ * The menu behind a right-click on the app's name in the title bar.
+ *
+ * Two ways to start again: throw away what was derived from the Houdini
+ * install, or throw away the reader's own data — which includes the fact that
+ * they have run the setup, so the window comes back on the first launch.
+ * In every build, not only in a development one. See spec: Right click on
+ * HoudiniMD in title bar.
+ */
+import { useEffect, useState } from "react";
+import { cn } from "@/lib/utils";
+import { invoke } from "@/lib/backend";
+import { announceBuildChanged } from "@/lib/install";
+import { showToast } from "@/components/ui/toast-notification";
+
+const ITEM =
+  "flex w-full cursor-interactive items-center rounded-md px-sm py-[7px] text-left text-[13px] " +
+  "text-neutral-800 transition-colors duration-(--duration-fast) motion-reduce:transition-none " +
+  "pointer-hover:bg-neutral-100 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none";
+
+export function TitleBarMenu({ at, onClose }: { at: { x: number; y: number }; onClose: () => void }) {
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    const shut = () => onClose();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("mousedown", shut);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", shut);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [onClose]);
+
+  async function resetIndex() {
+    setBusy(true);
+    try {
+      await invoke("reset_index");
+      // The page count is what a reader watches, so tell every view to read it
+      // again: the count falls to nothing and climbs back as the pass runs.
+      announceBuildChanged();
+      showToast("Index cleared. Reading the install again…");
+      onClose();
+    } catch (reason) {
+      showToast(String(reason), "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Bookmarks, recents and settings are the reader's own work and nothing
+      puts them back, so this asks first. What the webview kept goes with
+      them, and the window reloads into the setup. */
+  async function resetUserData() {
+    const { confirm } = await import("@tauri-apps/plugin-dialog");
+    const sure = await confirm(
+      "Bookmarks, recent pages, and every setting are removed. This cannot be undone.",
+      { title: "Reset user data", kind: "warning", okLabel: "Reset" },
+    );
+    if (!sure) {
+      onClose();
+      return;
+    }
+    setBusy(true);
+    try {
+      await invoke("reset_user_data");
+      for (const key of Object.keys(localStorage)) {
+        if (key.startsWith("houdinimd.")) localStorage.removeItem(key);
+      }
+      window.location.reload();
+    } catch (reason) {
+      showToast(String(reason), "error");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div
+      role="menu"
+      style={{ top: at.y, left: at.x }}
+      onMouseDown={(event) => event.stopPropagation()}
+      className={cn(
+        "fixed z-50 w-[200px] overflow-hidden rounded-lg border border-hairline",
+        "bg-raised p-1 shadow-xl shadow-black/10",
+      )}
+    >
+      <button type="button" role="menuitem" disabled={busy} className={ITEM} onClick={() => void resetIndex()}>
+        Reset index
+      </button>
+      <button
+        type="button"
+        role="menuitem"
+        disabled={busy}
+        className={cn(ITEM, "text-destructive")}
+        onClick={() => void resetUserData()}
+      >
+        Reset user data
+      </button>
+    </div>
+  );
+}

@@ -85,6 +85,13 @@ pub fn releases(port: u16) -> Vec<Release> {
     found
 }
 
+/// The release series a build belongs to: `22.0.368` is `22.0`. A preferences
+/// directory covers a series, so this is what turns a chosen install into the
+/// release the hook can act on.
+pub fn series_of(build: &str) -> String {
+    build.split('.').take(2).collect::<Vec<_>>().join(".")
+}
+
 /// Turns F1 towards this app for the named releases, and records what it
 /// replaced. Applying twice writes the same file, so the installer can run it
 /// on every launch without asking whether it ran before.

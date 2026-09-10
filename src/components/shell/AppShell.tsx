@@ -14,6 +14,7 @@ import { useLocation } from "react-router";
 import { cn } from "@/lib/utils";
 import { inTauri } from "@/lib/backend";
 import { isCommand, isTyping, useHotkey } from "@/lib/hotkeys";
+import { Onboarding, useOnboarding } from "@/components/onboarding/Onboarding";
 import { TitleBar } from "./TitleBar";
 import { Sidebar } from "./Sidebar";
 import { StatusBar } from "./StatusBar";
@@ -24,6 +25,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // giving the page its full width back matters more there than in the
   // desktop window, which has room to spare. The reader can still open it.
   const [sidebarOpen, setSidebarOpen] = useState(inTauri);
+  // The setup owns the window until it is done. It is read from the settings,
+  // so the window draws neither the app nor the setup for that first moment
+  // rather than flashing the one it turns out not to need.
+  const { show: onboarding, finish } = useOnboarding();
 
   // ⌘B shows and hides the panel, the shortcut every editor with a panel
   // uses for it.
@@ -43,8 +48,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         sidebarOpen={sidebarOpen}
         onToggleSidebar={() => setSidebarOpen((open) => !open)}
         showTrail={!onLanding}
+        bare={onboarding === true}
       />
 
+      {onboarding === null && <div className="flex-1" />}
+      {onboarding === true && <Onboarding onDone={finish} />}
+      {onboarding === false && (
       <div className="flex min-h-0 flex-1">
         {sidebarOpen && <Sidebar currentPath={path || undefined} />}
 
@@ -53,6 +62,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <StatusBar />
         </div>
       </div>
+      )}
     </div>
   );
 }
