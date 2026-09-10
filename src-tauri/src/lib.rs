@@ -8,11 +8,12 @@ pub mod index;
 pub mod inherit;
 pub mod install;
 pub mod library;
+mod packages;
 pub mod sections;
 pub mod server;
 pub mod update;
 
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use serde::Serialize;
 use tauri::http::{Request, Response};
@@ -22,10 +23,6 @@ use tauri::{Manager, State};
 /// here with `user.db` attached; the background pass keeps its own connection,
 /// so a long write never holds up a search.
 pub(crate) struct Db(pub(crate) Mutex<rusqlite::Connection>);
-
-/// The install every read in this process uses, resolved once. See
-/// `install::resolve`.
-struct Chosen(Mutex<Option<install::Install>>);
 
 /// The app's own data directory, so a command that starts a background index
 /// pass does not need to ask for it again.
@@ -55,7 +52,7 @@ pub struct PageView {
 /// happens once and again only when `refresh` is asked for, which is what the
 /// version picker does when the reader opens it.
 #[tauri::command]
-fn installs(cache: State<install::Cache>, refresh: Option<bool>) -> Vec<install::Install> {
+fn installs(cache: State<Arc<install::Cache>>, refresh: Option<bool>) -> Vec<install::Install> {
     if refresh.unwrap_or(false) { cache.refresh() } else { cache.get() }
 }
 
@@ -64,8 +61,8 @@ fn installs(cache: State<install::Cache>, refresh: Option<bool>) -> Vec<install:
 #[tauri::command]
 fn current_install(
     state: State<Db>,
-    chosen: State<Chosen>,
-    cache: State<install::Cache>,
+    chosen: State<Arc<install::Chosen>>,
+    cache: State<Arc<install::Cache>>,
 ) -> Result<install::Install, String> {
     let db = state.0.lock().map_err(|e| e.to_string())?;
     current(&db, &chosen, &cache)
@@ -89,8 +86,8 @@ pub struct BuildRow {
 #[tauri::command]
 fn available_installs(
     state: State<Db>,
-    chosen: State<Chosen>,
-    cache: State<install::Cache>,
+    chosen: State<Arc<install::Chosen>>,
+    cache: State<Arc<install::Cache>>,
 ) -> Result<Vec<BuildRow>, String> {
     let db = state.0.lock().map_err(|e| e.to_string())?;
     // A machine with no install yet still needs this list — empty, so the
@@ -120,8 +117,8 @@ fn select_install(
     app: tauri::AppHandle,
     data: State<DataDir>,
     state: State<Db>,
-    chosen: State<Chosen>,
-    cache: State<install::Cache>,
+    chosen: State<Arc<install::Chosen>>,
+    cache: State<Arc<install::Cache>>,
     version: String,
 ) -> Result<BuildRow, String> {
     let install = cache
@@ -141,8 +138,8 @@ fn add_install(
     app: tauri::AppHandle,
     data: State<DataDir>,
     state: State<Db>,
-    chosen: State<Chosen>,
-    cache: State<install::Cache>,
+    chosen: State<Arc<install::Chosen>>,
+    cache: State<Arc<install::Cache>>,
     path: String,
 ) -> Result<BuildRow, String> {
     let db = state.0.lock().map_err(|e| e.to_string())?;
@@ -156,11 +153,11 @@ fn switch(
     app: tauri::AppHandle,
     data: &DataDir,
     db: &rusqlite::Connection,
-    chosen: &Chosen,
+    chosen: &install::Chosen,
     install: install::Install,
 ) -> Result<BuildRow, String> {
     db::set_setting(db, "build", &install.version)?;
-    *chosen.0.lock().map_err(|e| e.to_string())? = Some(install.clone());
+    install::set_chosen(chosen, install.clone())?;
     let status = index::status(db, &install.version);
     if !status.done {
         index::start(app, data.0.clone(), install.clone());
@@ -209,7 +206,7 @@ pub struct PageError {
 /// This never waits on the index. The first page a reader opens is parsed here
 /// even if the background pass has not reached it yet.
 #[tauri::command]
-fn page(state: State<Db>, chosen: State<Chosen>, cache: State<install::Cache>, path: String) -> Result<PageView, PageError> {
+fn page(state: State<Db>, chosen: State<Arc<install::Chosen>>, cache: State<Arc<install::Cache>>, path: String) -> Result<PageView, PageError> {
     let db = state.0.lock().map_err(|e| PageError { missing: false, message: e.to_string() })?;
     let install = current(&db, &chosen, &cache).map_err(|message| PageError { missing: false, message })?;
     drop(db);
@@ -220,7 +217,8 @@ fn page(state: State<Db>, chosen: State<Chosen>, cache: State<install::Cache>, p
 /// harness times this call; the command is the one line that finds the install.
 pub fn read_page(install: &install::Install, path: &str) -> Result<PageView, PageError> {
     let path = path.to_string();
-    let source = help::page(&install.help, &path).map_err(|reason| match reason {
+    let roots = install.help_roots();
+    let source = help::page_layered(&roots, &path).map_err(|reason| match reason {
         help::PageError::Missing => PageError {
             missing: true,
             message: format!("no page {path} in Houdini {}", install.version),
@@ -229,7 +227,7 @@ pub fn read_page(install: &install::Install, path: &str) -> Result<PageView, Pag
     })?;
     let mut parsed = wiki::parse(&source);
     wiki::include::resolve(&mut parsed.blocks, &path, &|target| {
-        help::page(&install.help, target).ok()
+        help::page_layered(&roots, target).ok()
     });
     family::append(&install.help, &parsed.props, &mut parsed.blocks);
     let section = path.split('/').next().unwrap_or("");
@@ -287,7 +285,7 @@ pub struct Section {
 /// The whole list goes to the front-end once and stays in memory there, which
 /// is what makes the pick in the search field instant. 10,450 titles are small.
 #[tauri::command]
-fn titles(state: State<Db>, chosen: State<Chosen>, cache: State<install::Cache>) -> Result<Vec<Hit>, String> {
+fn titles(state: State<Db>, chosen: State<Arc<install::Chosen>>, cache: State<Arc<install::Cache>>) -> Result<Vec<Hit>, String> {
     let db = state.0.lock().map_err(|e| e.to_string())?;
     let build = current(&db, &chosen, &cache)?.version;
     all_titles(&db, &build)
@@ -336,7 +334,7 @@ pub struct Meta {
 /// thing it will say later — the front-end batches, so this is a handful of
 /// pages at a time, not the whole viewport one at a time.
 #[tauri::command]
-fn meta(state: State<Db>, chosen: State<Chosen>, cache: State<install::Cache>, paths: Vec<String>) -> Result<Vec<Meta>, String> {
+fn meta(state: State<Db>, chosen: State<Arc<install::Chosen>>, cache: State<Arc<install::Cache>>, paths: Vec<String>) -> Result<Vec<Meta>, String> {
     let db = state.0.lock().map_err(|e| e.to_string())?;
     let install = current(&db, &chosen, &cache)?;
     read_meta(&db, &install, &paths)
@@ -380,8 +378,9 @@ pub fn read_meta(
     if missing.is_empty() {
         return Ok(found);
     }
+    let roots = install.help_roots();
     for path in missing {
-        let Ok(source) = help::page(&install.help, &path) else {
+        let Ok(source) = help::page_layered(&roots, &path) else {
             continue;
         };
         let parsed = wiki::parse(&source);
@@ -459,7 +458,7 @@ const SECTIONS_PER_PAGE: usize = 3;
 /// The title and heading columns are weighted above the body, so a page named
 /// for the words beats a page that only mentions them.
 #[tauri::command]
-fn search(state: State<Db>, chosen: State<Chosen>, cache: State<install::Cache>, query: String, limit: u32) -> Result<Vec<Hit>, String> {
+fn search(state: State<Db>, chosen: State<Arc<install::Chosen>>, cache: State<Arc<install::Cache>>, query: String, limit: u32) -> Result<Vec<Hit>, String> {
     let db = state.0.lock().map_err(|e| e.to_string())?;
     let build = current(&db, &chosen, &cache)?.version;
     find(&db, &build, &query, limit)
@@ -544,7 +543,7 @@ pub fn find(
 /// How far the background pass has got. The front-end also gets this as an
 /// `index` event, so this call is only for what it missed before it mounted.
 #[tauri::command]
-fn index_status(state: State<Db>, chosen: State<Chosen>, cache: State<install::Cache>) -> Result<index::Status, String> {
+fn index_status(state: State<Db>, chosen: State<Arc<install::Chosen>>, cache: State<Arc<install::Cache>>) -> Result<index::Status, String> {
     let db = state.0.lock().map_err(|e| e.to_string())?;
     let build = current(&db, &chosen, &cache)?.version;
     Ok(index::status(&db, &build))
@@ -586,10 +585,14 @@ pub(crate) fn display_name(parsed: &wiki::Page) -> String {
 
 /// The install every command in this process reads, resolved once and cached
 /// in `Chosen`. Never scans the disk itself — that is `install::Cache`'s job,
-/// and only the version picker asks it to.
-fn current(db: &rusqlite::Connection, chosen: &Chosen, cache: &install::Cache) -> Result<install::Install, String> {
-    let mut chosen = chosen.0.lock().map_err(|e| e.to_string())?;
-    install::resolve(&mut chosen, cache, db)
+/// and only the version picker asks it to. The same `Chosen` and `Cache` the
+/// localhost server reads, so the window and the F1 pane agree.
+fn current(
+    db: &rusqlite::Connection,
+    chosen: &install::Chosen,
+    cache: &install::Cache,
+) -> Result<install::Install, String> {
+    install::resolve(chosen, cache, db)
 }
 
 /// The same resolution, off an `AppHandle` — what the `hicon`/`himage` URI
@@ -597,7 +600,7 @@ fn current(db: &rusqlite::Connection, chosen: &Chosen, cache: &install::Cache) -
 fn current_for(app: &tauri::AppHandle) -> Result<install::Install, String> {
     let db = app.state::<Db>();
     let db = db.0.lock().map_err(|e| e.to_string())?;
-    current(&db, &app.state::<Chosen>(), &app.state::<install::Cache>())
+    current(&db, &app.state::<Arc<install::Chosen>>(), &app.state::<Arc<install::Cache>>())
 }
 
 /// Serves the pictures and videos a help page shows, out of the install.
@@ -605,7 +608,7 @@ fn current_for(app: &tauri::AppHandle) -> Result<install::Install, String> {
 /// `himage://localhost/videos/tween.webm`; `assets::resolve` wrote that path.
 fn asset_response(app: &tauri::AppHandle, request: Request<Vec<u8>>) -> Response<Vec<u8>> {
     let name = percent_decode(request.uri().path());
-    let bytes = match current_for(app).and_then(|install| help::asset(&install.help, &name)) {
+    let bytes = match current_for(app).and_then(|install| help::asset_layered(&install.help_roots(), &name)) {
         Ok(bytes) => bytes,
         Err(reason) => {
             return Response::builder()
@@ -675,7 +678,7 @@ pub(crate) fn media_type(name: &str) -> &'static str {
 fn icon_response(app: &tauri::AppHandle, request: Request<Vec<u8>>) -> Response<Vec<u8>> {
     let name = request.uri().path().trim_start_matches('/').to_string();
     let name = percent_decode(&name);
-    match current_for(app).and_then(|install| help::icon(&install.root, &name)) {
+    match current_for(app).and_then(|install| help::icon_layered(&install.root, &install.packages, &name)) {
         Ok(bytes) => Response::builder()
             .header("Content-Type", "image/svg+xml")
             .header("Cache-Control", "max-age=31536000")
@@ -788,18 +791,21 @@ pub fn run() {
                 update::data_dir(app)?
             };
             app.manage(Db(Mutex::new(db::open(&data)?)));
-            app.manage(Chosen(Mutex::new(None)));
-            app.manage(install::Cache::new());
+            let chosen = Arc::new(install::Chosen::new());
+            let cache = Arc::new(install::Cache::new());
+            app.manage(chosen.clone());
+            app.manage(cache.clone());
             app.manage(DataDir(data.clone()));
             {
                 let db = app.state::<Db>();
                 let db = db.0.lock().map_err(|e| e.to_string())?;
-                install::load_picked(&app.state::<install::Cache>(), &db);
+                install::load_picked(&cache, &db);
             }
             // The server is what makes F1 work, so it starts whether or not
             // any Houdini is hooked yet. A reader who never hooks one pays a
-            // thread and a socket for it.
-            let port = server::start(data.clone()).unwrap_or(0);
+            // thread and a socket for it. It reads the same `chosen` and
+            // `cache` as the window, not copies — see `server::start`.
+            let port = server::start(data.clone(), chosen.clone(), cache.clone()).unwrap_or(0);
             app.manage(Port(port));
             hook_from_the_command_line(&data, port);
             if let Ok(install) = current_for(&app.handle().clone()) {

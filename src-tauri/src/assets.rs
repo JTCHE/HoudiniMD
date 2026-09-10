@@ -8,9 +8,12 @@
 //! - `../images/BasisSOP.jpg` on `nodes/sop/basis` is `nodes/BasisSOP.jpg` in
 //!   the same zip. The `images` segment is a serving path, not a folder.
 //! - `/videos/tween.webm` is a loose file under `$HFS/houdini/help/videos`.
+//! - `/movies/rotate.gif` is the same shape as `videos`, under the name a
+//!   package's own help folder uses for it — SideFX Labs ships no `videos/`.
 //!
-//! Both come back as one shape, `images/…` or `videos/…`, so the protocol
-//! handler has one thing to read and the front-end has nothing to know.
+//! All three come back as one shape, `images/…`, `videos/…` or `movies/…`, so
+//! the protocol handler has one thing to read and the front-end has nothing
+//! to know.
 
 use wiki::{Block, Inline, LinkTarget};
 
@@ -46,10 +49,10 @@ pub fn resolve(page: &str, src: &str) -> Option<String> {
         }
     }
 
-    // The first `images` or `videos` segment says which store holds the file.
-    // Everything before it is the section the page lives in, which the store
-    // keeps as its own top folder.
-    let at = path.iter().position(|p| *p == "images" || *p == "videos")?;
+    // The first `images`, `videos` or `movies` segment says which store holds
+    // the file. Everything before it is the section the page lives in, which
+    // the store keeps as its own top folder.
+    let at = path.iter().position(|p| *p == "images" || *p == "videos" || *p == "movies")?;
     let store = path.remove(at);
     if path.len() <= at {
         return None;
