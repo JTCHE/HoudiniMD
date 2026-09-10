@@ -1,135 +1,144 @@
 //! The documentation engine as a Python module.
 //!
 //! The HoudiniMCP bridge reads Houdini's help through this instead of over
-//! HTTP: same install, same parse, same index as the desktop app, and no
-//! network. Every call answers with a JSON string, which is what the bridge
-//! sends on anyway.
+//! HTTP: same parse and same search as the desktop app, and no network.
+//! Every call answers with a JSON string, which is what the bridge sends on
+//! anyway.
+//!
+//! The caller names the folder the index lives in. This module has no folder
+//! of its own and never writes into the desktop app's: a machine with only the
+//! bridge on it gets only the bridge's folder.
 //!
 //! No documentation content ships here. Every page comes from the Houdini
 //! install on the machine that asks.
 
 use std::path::PathBuf;
+use std::sync::Mutex;
 
+use engine::install::{Cache, Install};
+use engine::rusqlite::Connection;
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 
-/// Where `index.db` lives: the desktop app's own folder, so a build indexed
-/// by one is a build already indexed for the other. `HOUDINIMD_DATA` points
-/// somewhere else, which is what a machine without the app uses.
-fn data_dir() -> PyResult<PathBuf> {
-    if let Some(dir) = std::env::var_os("HOUDINIMD_DATA") {
-        return Ok(PathBuf::from(dir));
-    }
-    let home = |var: &str| std::env::var_os(var).map(PathBuf::from);
-    #[cfg(windows)]
-    // A harness can start the bridge with a trimmed environment, so the
-    // profile folder stands in for a missing LOCALAPPDATA.
-    let dir = home("LOCALAPPDATA")
-        .or_else(|| home("USERPROFILE").map(|dir| dir.join("AppData").join("Local")))
-        .map(|dir| dir.join("HoudiniMD"));
-    #[cfg(target_os = "macos")]
-    let dir = home("HOME")
-        .map(|dir| dir.join("Library/Application Support").join("com.houdinimd.app"));
-    #[cfg(all(unix, not(target_os = "macos")))]
-    let dir = home("XDG_DATA_HOME")
-        .or_else(|| home("HOME").map(|dir| dir.join(".local/share")))
-        .map(|dir| dir.join("com.houdinimd.app"));
-    dir.ok_or_else(|| PyRuntimeError::new_err("no data folder on this machine; set HOUDINIMD_DATA"))
-}
-
-fn err(reason: String) -> PyErr {
-    PyRuntimeError::new_err(reason)
+fn err(reason: impl ToString) -> PyErr {
+    PyRuntimeError::new_err(reason.to_string())
 }
 
 fn json<T: serde::Serialize>(value: &T) -> PyResult<String> {
-    serde_json::to_string(value).map_err(|e| err(e.to_string()))
+    serde_json::to_string(value).map_err(err)
 }
 
-/// The install a call reads. `build` names one; without it the reader gets
-/// `$HFS` — the Houdini this bridge is talking to — and then the newest build
-/// on the machine.
-fn install(build: Option<&str>) -> PyResult<engine::install::Install> {
-    let found = engine::install::find(&[]);
-    let picked = match build {
-        Some(version) => found.into_iter().find(|i| i.version == version),
-        None => found.into_iter().next(),
-    };
-    picked.ok_or_else(|| {
-        err(match build {
-            Some(version) => format!("Houdini {version} is not on this machine"),
-            None => "no Houdini install found on this machine".to_string(),
-        })
-    })
-}
-
-/// Every Houdini install this machine holds, newest build first.
-#[pyfunction]
-fn installs() -> PyResult<String> {
-    json(&engine::install::find(&[]))
-}
-
-/// One page, such as `nodes/sop/copytopoints`, as Markdown ready to read.
+/// One reader of the documentation, with its index in `data_dir`.
 ///
-/// Never waits on the index: the page is parsed out of the install on the
-/// spot, whether or not a pass has ever run.
-#[pyfunction]
-#[pyo3(signature = (path, build=None))]
-fn page(path: &str, build: Option<&str>) -> PyResult<String> {
-    let install = install(build)?;
-    match engine::read_page(&install, path) {
-        Ok(view) => json(&view),
-        Err(reason) if reason.missing => Err(PyValueError::new_err(reason.message)),
-        Err(reason) => Err(err(reason.message)),
+/// Keep one for the life of the process: it scans for installs once and holds
+/// the index open, so a call after the first costs the query and no more.
+#[pyclass(module = "houdinimd_docs")]
+struct Docs {
+    data: PathBuf,
+    installs: Cache,
+    db: Mutex<Option<Connection>>,
+}
+
+impl Docs {
+    /// The install a call reads. `build` names one, such as `22.0.368`;
+    /// without it the reader gets `$HFS` — the Houdini the caller is talking
+    /// to — and then the newest build on the machine.
+    fn install(&self, build: Option<&str>) -> PyResult<Install> {
+        let found = self.installs.get();
+        let picked = match build {
+            Some(version) => found.into_iter().find(|i| i.version == version),
+            None => found.into_iter().next(),
+        };
+        picked.ok_or_else(|| {
+            err(match build {
+                Some(version) => format!("Houdini {version} is not on this machine"),
+                None => "no Houdini install found on this machine".to_string(),
+            })
+        })
+    }
+
+    /// Runs `read` on the open index, after filling it for this build when it
+    /// has never been filled. The pass runs once per build per machine — the
+    /// rows stay on disk — and at full priority, because a caller is waiting
+    /// on it. The app runs its pass in background mode instead; here that
+    /// doubles the wait.
+    fn with_index<T>(
+        &self,
+        py: Python<'_>,
+        install: &Install,
+        read: impl FnOnce(&Connection) -> Result<T, String> + Send,
+    ) -> PyResult<T>
+    where
+        T: Send,
+    {
+        py.detach(|| {
+            let mut db = self.db.lock().map_err(err)?;
+            if db.is_none() {
+                *db = Some(engine::db::open(&self.data).map_err(err)?);
+            }
+            let db = db.as_mut().expect("opened above");
+            if !engine::index::status(db, &install.version).done {
+                engine::index::pass(db, install, &|_| {}).map_err(err)?;
+            }
+            read(db).map_err(err)
+        })
     }
 }
 
-/// Ranked full-text search. Needs the index, so it fills it first when this
-/// build has never been indexed — a whole pass takes seconds.
-#[pyfunction]
-#[pyo3(signature = (query, limit=5, build=None))]
-fn search(query: &str, limit: u32, build: Option<&str>) -> PyResult<String> {
-    let install = install(build)?;
-    let db = index_for(&install)?;
-    json(&engine::find(&db, &install.version, query, limit).map_err(err)?)
-}
-
-/// Every page title in the build, for a caller that wants to match a name
-/// itself.
-#[pyfunction]
-#[pyo3(signature = (build=None))]
-fn titles(build: Option<&str>) -> PyResult<String> {
-    let install = install(build)?;
-    let db = index_for(&install)?;
-    json(&engine::all_titles(&db, &install.version).map_err(err)?)
-}
-
-/// Fills the index for a build and reports what it holds. The pass is skipped
-/// when the build is already indexed, so this is cheap to call every time.
-#[pyfunction]
-#[pyo3(signature = (build=None))]
-fn index(build: Option<&str>) -> PyResult<String> {
-    let install = install(build)?;
-    let db = index_for(&install)?;
-    json(&engine::index::status(&db, &install.version))
-}
-
-/// An open `index.db` with this build in it.
-fn index_for(install: &engine::install::Install) -> PyResult<engine::rusqlite::Connection> {
-    let data = data_dir()?;
-    let mut db = engine::db::open(&data).map_err(err)?;
-    if !engine::index::status(&db, &install.version).done {
-        engine::index::background_priority();
-        engine::index::pass(&mut db, install, &|_| {}).map_err(err)?;
+#[pymethods]
+impl Docs {
+    #[new]
+    fn new(data_dir: PathBuf) -> Self {
+        Docs { data: data_dir, installs: Cache::new(), db: Mutex::new(None) }
     }
-    Ok(db)
+
+    /// Every Houdini install this machine holds, newest build first.
+    fn installs(&self) -> PyResult<String> {
+        json(&self.installs.get())
+    }
+
+    /// One page, such as `nodes/sop/copytopoints`, as Markdown ready to read.
+    /// Raises `ValueError` when the build has no such page.
+    ///
+    /// Never waits on the index: the page is parsed out of the install on the
+    /// spot, whether or not a pass has ever run.
+    #[pyo3(signature = (path, build=None))]
+    fn page(&self, py: Python<'_>, path: &str, build: Option<&str>) -> PyResult<String> {
+        let install = self.install(build)?;
+        match py.detach(|| engine::read_page(&install, path)) {
+            Ok(view) => json(&view),
+            Err(reason) if reason.missing => Err(PyValueError::new_err(reason.message)),
+            Err(reason) => Err(err(reason.message)),
+        }
+    }
+
+    /// Ranked full-text search, best first.
+    #[pyo3(signature = (query, limit=5, build=None))]
+    fn search(&self, py: Python<'_>, query: &str, limit: u32, build: Option<&str>) -> PyResult<String> {
+        let install = self.install(build)?;
+        let hits = self.with_index(py, &install, |db| engine::find(db, &install.version, query, limit))?;
+        json(&hits)
+    }
+
+    /// Every page title in the build.
+    #[pyo3(signature = (build=None))]
+    fn titles(&self, py: Python<'_>, build: Option<&str>) -> PyResult<String> {
+        let install = self.install(build)?;
+        let titles = self.with_index(py, &install, |db| engine::all_titles(db, &install.version))?;
+        json(&titles)
+    }
+
+    /// Fills the index for a build, when it is not filled yet, and reports
+    /// what it holds.
+    #[pyo3(signature = (build=None))]
+    fn index(&self, py: Python<'_>, build: Option<&str>) -> PyResult<String> {
+        let install = self.install(build)?;
+        let status = self.with_index(py, &install, |db| Ok(engine::index::status(db, &install.version)))?;
+        json(&status)
+    }
 }
 
 #[pymodule]
 fn houdinimd_docs(module: &Bound<'_, PyModule>) -> PyResult<()> {
-    module.add_function(wrap_pyfunction!(installs, module)?)?;
-    module.add_function(wrap_pyfunction!(page, module)?)?;
-    module.add_function(wrap_pyfunction!(search, module)?)?;
-    module.add_function(wrap_pyfunction!(titles, module)?)?;
-    module.add_function(wrap_pyfunction!(index, module)?)?;
-    Ok(())
+    module.add_class::<Docs>()
 }
