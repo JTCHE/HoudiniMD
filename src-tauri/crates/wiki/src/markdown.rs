@@ -373,9 +373,9 @@ fn parameters(children: &[Block], depth: u8) -> String {
 ///
 /// Markdown has no block inside a cell, so everything a parameter body can
 /// hold — paragraphs, the menu of values under it, a small table of attribute
-/// names — becomes HTML that `rehype-raw` renders. Nested tables are written
-/// as a list: a table inside a table cell is parsed apart by the HTML parser
-/// before the front-end ever sees it.
+/// names — becomes HTML that `rehype-raw` renders. A nested table stays a
+/// table: the HTML parser keeps a `<table>` inside a `<td>`, and a list would
+/// lose which value sits in which column.
 fn cell_html(blocks: &[Block], raw: bool) -> String {
     let mut out = String::new();
     let gap = |out: &mut String| {
@@ -415,17 +415,17 @@ fn cell_html(blocks: &[Block], raw: bool) -> String {
                 let rows: String = rows
                     .iter()
                     .map(|row| {
-                        let cells: Vec<String> =
-                            row.iter().map(|cell| cell_html(&cell.blocks, raw)).collect();
-                        match cells.split_first() {
-                            Some((first, rest)) if !rest.is_empty() => {
-                                format!("<li><strong>{first}</strong> {}</li>", rest.join(" "))
-                            }
-                            _ => format!("<li>{}</li>", cells.join(" ")),
-                        }
+                        let cells: String = row
+                            .iter()
+                            .map(|cell| {
+                                let tag = if cell.heading { "th" } else { "td" };
+                                format!("<{tag}>{}</{tag}>", cell_html(&cell.blocks, raw))
+                            })
+                            .collect();
+                        format!("<tr>{cells}</tr>")
                     })
                     .collect();
-                out.push_str(&format!("<ul>{rows}</ul>"));
+                out.push_str(&format!("<table>{rows}</table>"));
             }
             Block::Html {
                 tag,
