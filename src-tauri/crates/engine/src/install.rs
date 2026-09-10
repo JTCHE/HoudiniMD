@@ -75,9 +75,8 @@ impl Default for Cache {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Install {
-    /// The build string: `22.0.368`. Read from the registry when the install
-    /// came from there, since that name is authoritative; guessed from the
-    /// install folder's own name otherwise.
+    /// The build string, `22.0.368`, read out of the install itself. See
+    /// `header_version`.
     pub version: String,
     /// `$HFS`, the install root. Icons and other assets hang off it.
     pub root: PathBuf,
@@ -142,7 +141,7 @@ pub fn find(picked: &[PathBuf]) -> Vec<Install> {
     }
 
     for (version, root) in registry_roots() {
-        if let Some(install) = read_versioned(root, version)
+        if let Some(install) = read_versioned(root, Some(version))
             && !found.iter().any(|i| same_root(&i.root, &install.root))
         {
             found.push(install);
@@ -153,44 +152,40 @@ pub fn find(picked: &[PathBuf]) -> Vec<Install> {
     found
 }
 
-/// Reads one install folder. `None` when it holds no help.
+/// Reads one install folder. `None` when it holds no help, or names no build.
 pub fn read(root: PathBuf) -> Option<Install> {
-    let version = version(&root)?;
-    read_versioned(root, version)
+    read_versioned(root, None)
 }
 
-/// Reads one install folder whose version is already known — the registry
-/// names it, so there is nothing to guess from the folder's own name. `None`
-/// when it holds no help.
-fn read_versioned(root: PathBuf, version: String) -> Option<Install> {
+/// Reads one install folder. The build comes from the install itself, and
+/// `registered` — the name the Windows installer wrote into the registry — is
+/// only the fallback for an install that lacks the file. The folder's own
+/// name is never read: it is the reader's to change, and a build renamed
+/// `Houdini24` is still 22.0.
+fn read_versioned(root: PathBuf, registered: Option<String>) -> Option<Install> {
     let help = root.join("houdini").join("help");
     if !help.is_dir() {
         return None;
     }
+    // ponytail: an install with no HDK headers and no registry entry (a
+    // hand-trimmed Linux install) is not found. Read `houdini_setup` if one
+    // turns up.
+    let version = header_version(&root).or(registered)?;
     let packages = crate::packages::discover(&root, &version);
     Some(Install { version, root, help, packages })
 }
 
-/// The build number the path carries, read from the end backwards. Every
-/// platform writes it into one folder along the way, and no two write it the
-/// same: `Houdini 22.0.368` on Windows, `Houdini22.0.368` on macOS, `hfs22.0`
-/// on Linux. The last folder of a macOS install is `Resources`, so the name of
-/// the folder itself is not enough.
-fn version(root: &Path) -> Option<String> {
-    root.components()
-        .rev()
-        .filter_map(|part| part.as_os_str().to_str())
-        .find_map(build)
-}
-
-fn build(name: &str) -> Option<String> {
-    let rest = name
-        .strip_prefix("Houdini")
-        .or_else(|| name.strip_prefix("hfs"))
-        .unwrap_or(name)
-        .trim_start();
-    rest.starts_with(|c: char| c.is_ascii_digit())
-        .then(|| rest.to_string())
+/// The build as SideFX writes it, `22.0.368`: `SYS_VERSION_FULL` in the HDK's
+/// `SYS_Version.h`, which every install ships on every platform. Houdini
+/// itself reports the same string.
+fn header_version(root: &Path) -> Option<String> {
+    let header = root.join("toolkit").join("include").join("SYS").join("SYS_Version.h");
+    std::fs::read_to_string(header)
+        .ok()?
+        .lines()
+        .find_map(|line| line.trim().strip_prefix("#define SYS_VERSION_FULL "))
+        .map(|value| value.trim().trim_matches('"').to_string())
+        .filter(|value| !value.is_empty())
 }
 
 /// Where the installer puts builds. One entry per drive letter it offers.
@@ -205,18 +200,23 @@ fn roots() -> Vec<PathBuf> {
     roots
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "macos")]
 fn roots() -> Vec<PathBuf> {
     vec![PathBuf::from("/Applications/Houdini")]
+}
+
+/// The Linux installer puts each build in its own `/opt/hfs<version>`.
+#[cfg(all(unix, not(target_os = "macos")))]
+fn roots() -> Vec<PathBuf> {
+    vec![PathBuf::from("/opt")]
 }
 
 /// The installer writes its own path into the registry, so a build on another
 /// drive or in a studio's own folder — anywhere `roots()` does not look — is
 /// still found. `HKLM\SOFTWARE\Side Effects Software\Houdini` holds one value
-/// per build, keyed by its four-part version, e.g. `21.0.0.729`. That value
-/// name is the version, taken as-is: an install folder that carries no
-/// version in its own name (a studio's `C:\Houdini21`, say) has nowhere else
-/// to read one from.
+/// per build, keyed by its four-part version, e.g. `21.0.0.729`. The path is
+/// what counts here; the build name comes from the install itself, and this
+/// value name is only its fallback.
 #[cfg(windows)]
 fn registry_roots() -> Vec<(String, PathBuf)> {
     use winreg::enums::HKEY_LOCAL_MACHINE;
@@ -243,12 +243,12 @@ fn registry_roots() -> Vec<(String, PathBuf)> {
 
 /// `$HFS` is the install folder on Windows and a framework inside it on macOS,
 /// so what the scan finds is not what the reader gets.
-#[cfg(windows)]
+#[cfg(not(target_os = "macos"))]
 fn hfs(entry: PathBuf) -> PathBuf {
     entry
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "macos")]
 fn hfs(entry: PathBuf) -> PathBuf {
     entry.join("Frameworks/Houdini.framework/Versions/Current/Resources")
 }
@@ -338,6 +338,28 @@ pub fn set_chosen(chosen: &Chosen, install: Install) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_build_comes_from_the_header_and_not_the_folder_name() {
+        let root = std::env::temp_dir()
+            .join(format!("houdinimd-header-test-{}", std::process::id()))
+            .join("Houdini24");
+        let sys = root.join("toolkit").join("include").join("SYS");
+        std::fs::create_dir_all(&sys).unwrap();
+        std::fs::create_dir_all(root.join("houdini").join("help")).unwrap();
+        std::fs::write(
+            sys.join("SYS_Version.h"),
+            "#define SYS_VERSION_FULL \"22.0.368\"
+#define SYS_VERSION_MAJOR \"22\"
+",
+        )
+        .unwrap();
+        assert_eq!(read(root.clone()).unwrap().version, "22.0.368");
+        // No header: the registry name stands in, and nothing reads the folder.
+        std::fs::write(sys.join("SYS_Version.h"), "").unwrap();
+        assert!(read(root.clone()).is_none());
+        assert_eq!(read_versioned(root, Some("22.0.0.368".into())).unwrap().version, "22.0.0.368");
+    }
 
     fn fake_install(version: &str) -> Install {
         Install {
