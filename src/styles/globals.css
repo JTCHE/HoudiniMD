@@ -1496,6 +1496,19 @@ span.doc-icon > img {
   margin: 0;
 }
 
+/* `[Icon:…]` and `[Largeicon:…]` in running text. SideFX draws them at 24 and
+   32px against 16px text; `[Smallicon:…]` keeps the 1em above. */
+span.doc-icon.inline-icon-normal {
+  width: 1.25em !important;
+  height: 1.25em !important;
+  vertical-align: -0.3em;
+}
+span.doc-icon.inline-icon-large {
+  width: 2em !important;
+  height: 2em !important;
+  vertical-align: middle;
+}
+
 /* ── Card-grid list items ───────────────────────────────────────────────
    Two SideFX source components render through this same markup: `.shelftab`
    groups of `.shelftool` cards (shelf/index) and `.item_group` icon lists
