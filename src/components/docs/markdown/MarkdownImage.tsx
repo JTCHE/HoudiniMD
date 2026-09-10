@@ -1,12 +1,24 @@
 import { useState } from "react";
 import type { Components } from "react-markdown";
 import { assetUrl } from "@/lib/assets";
+import DocIconClient from "./DocIconClient";
 
 /** A figure on a help page. The Rust side resolved the path against the page,
-    so this only has to build the URL. An icon does not arrive here — the
-    parser keeps icons out of the Markdown and `DocIconClient` draws them. */
-export const Image: Components["img"] = function MarkdownImage({ src, alt }) {
+    so this only has to build the URL. An inline `[Icon:TOOLS/handles]` arrives
+    here too, as an `<img data-icon>` with no `src` — see `icon` in the
+    parser's `markdown.rs` — and `DocIconClient` draws it from `icons.zip`. */
+export const Image: Components["img"] = function MarkdownImage({ src, alt, ...props }) {
   const [fill, setFill] = useState(false);
+  const data = props as Record<string, unknown>;
+  if (typeof data["data-icon"] === "string") {
+    return (
+      <DocIconClient
+        src={`${data["data-icon"]}.svg`}
+        alt={alt ?? ""}
+        className={`doc-icon inline-icon-${String(data["data-size"] ?? "normal")} mx-0.5`}
+      />
+    );
+  }
   if (!src || typeof src !== "string") return null;
   return (
     <img

@@ -1,6 +1,6 @@
 //! Markdown for the copy button and for agents.
 
-use crate::model::{prop, Block, Inline, LinkTarget, Page, Props, Title};
+use crate::model::{prop, Block, IconSize, Inline, LinkTarget, Page, Props, Title};
 
 pub fn page(page: &Page) -> String {
     let mut out = String::new();
@@ -254,6 +254,18 @@ fn html(tag: &str, attributes: &str, children: &[Block]) -> String {
 /// A value going into a double-quoted HTML attribute.
 fn attribute(value: &str) -> String {
     value.replace('&', "&amp;").replace('"', "&quot;")
+}
+
+/// `[Icon:TOOLS/handles]` names a picture in `icons.zip`, not a file beside
+/// the page. Prose leans on it — "click [Icon:TOOLS/handles] to" — so it is
+/// kept, as an `<img>` with no `src` that the front-end's `Image` draws.
+fn icon(name: &str, size: IconSize) -> String {
+    let size = match size {
+        IconSize::Small => "small",
+        IconSize::Normal => "normal",
+        IconSize::Large => "large",
+    };
+    format!("<img data-icon=\"{}\" data-size=\"{size}\" alt=\"\">", attribute(name))
 }
 
 fn item(name: &str, label: &str, props: &Props, children: &[Block], depth: u8) -> String {
@@ -518,7 +530,8 @@ fn raw_inlines(text: &[Inline]) -> String {
             Inline::Code { text } => out.push_str(&format!("<code>{}</code>", escape(text))),
             Inline::Var { name } => out.push_str(&format!("<code>&lt;{}&gt;</code>", escape(name))),
             Inline::Key { key } => out.push_str(&format!("<code>{}</code>", escape(key))),
-            Inline::Glyph { .. } | Inline::Fold { .. } | Inline::Icon { .. } => {}
+            Inline::Glyph { .. } | Inline::Fold { .. } => {}
+            Inline::Icon { src, size } => out.push_str(&icon(src, *size)),
             Inline::Image { src } => {
                 out.push_str(&format!("<img src=\"{}\" alt=\"\">", attribute(src)))
             }
@@ -703,9 +716,7 @@ pub fn inlines(inlines: &[Inline]) -> String {
             Inline::Key { key } => out.push_str(&format!("`{key}`")),
             Inline::Glyph { .. } | Inline::Fold { .. } => {}
             Inline::Image { src } => out.push_str(&format!("![]({src})")),
-            // An icon is a Houdini icon name, not a file. It carries no
-            // meaning in text, so it is left out.
-            Inline::Icon { .. } => {}
+            Inline::Icon { src, size } => out.push_str(&icon(src, *size)),
             Inline::Link { text, target } => {
                 out.push_str(&format!("[{}]({})", self::inlines(text), url(target)))
             }
