@@ -232,7 +232,7 @@ fn clear(db: &Connection, build: &str) -> Result<(), String> {
 /// pages ship loose beside the zips; reading only archives left every one of
 /// them out. `images.zip`, `videos` and `movies` are assets, not pages — see
 /// spec: Local — Image and Asset Serving.
-fn sections(roots: &[PathBuf]) -> Vec<(String, u32)> {
+pub(crate) fn sections(roots: &[PathBuf]) -> Vec<(String, u32)> {
     let mut sections: Vec<String> = roots.iter().flat_map(|help| section_names(help)).collect();
     sections.sort();
     sections.dedup();
@@ -274,7 +274,7 @@ fn count(help: &Path, section: &str) -> u32 {
 
 /// `sop/box.txt` in `nodes.zip` is the page `nodes/sop/box`, which is the path
 /// `help::page` takes back. A loose folder answers to the same paths.
-fn read_section(help: &Path, section: &str) -> Vec<(String, String)> {
+pub(crate) fn read_section(help: &Path, section: &str) -> Vec<(String, String)> {
     let mut pages = Vec::new();
     if let Ok(mut archive) = open_zip(&help.join(format!("{section}.zip"))) {
         let names: Vec<String> = archive

@@ -985,16 +985,23 @@ fn children_of(block: &mut Block) -> &mut Vec<Block> {
 
 /// The page title line, if the file starts with one.
 pub fn take_title(blocks: &mut Vec<Block>) -> Option<(Title, Vec<Block>)> {
-    if let Some(Block::Heading { level: 1, .. }) = blocks.first() {
-        let Block::Heading {
-            title, children, ..
-        } = blocks.remove(0)
-        else {
-            unreachable!("the first block is a level one heading");
-        };
-        return Some((title, children));
-    }
-    None
+    // About 150 pages put the summary, a `:warning:` or an include above the
+    // title line. What sits above it stays in the body, in front.
+    let at = blocks.iter().position(|block| {
+        !matches!(block, Block::Summary { .. } | Block::Item { .. } | Block::Include { .. })
+    })?;
+    let Block::Heading { level: 1, .. } = blocks[at] else {
+        return None;
+    };
+    let Block::Heading {
+        title, children, ..
+    } = blocks.remove(at)
+    else {
+        unreachable!("the block is a level one heading");
+    };
+    let mut body: Vec<Block> = blocks.drain(..at).collect();
+    body.extend(children);
+    Some((title, body))
 }
 
 pub fn text_of(inlines: &[Inline]) -> String {
@@ -1148,6 +1155,17 @@ mod tests {
         let out = crate::markdown::blocks(&crate::parse(source).blocks, 1);
         assert!(out.contains("## Using Refine"), "{out}");
         assert!(!out.contains('='), "{out}");
+    }
+
+    /// `nodes/lop/houdinicrowdprocedural` writes its summary above the title
+    /// line, and `vop/agentaddclip` a `:warning:`. Both lost their title.
+    #[test]
+    fn a_title_below_the_summary_or_a_warning_is_still_the_title() {
+        let page = crate::parse("#type: node\n\n\"\"\"Sum.\"\"\"\n\n= Crowd =\n\nBody.\n");
+        assert_eq!(page.title_text, "Crowd");
+        let page = crate::parse(":warning:Deprecated:\n    Old.\n\n= Agent Add Clip =\n\nBody.\n");
+        assert_eq!(page.title_text, "Agent Add Clip");
+        assert!(matches!(page.blocks.first(), Some(super::Block::Item { .. })));
     }
 
     /// A heading with no closing `=` at all is not a heading — this keeps

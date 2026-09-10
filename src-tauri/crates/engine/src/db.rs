@@ -32,8 +32,9 @@ pub fn open(data: &Path) -> Result<Connection, String> {
     Ok(db)
 }
 
-/// What `SCHEMA` describes. Raise it whenever the derived tables change shape.
-const VERSION: u32 = 2;
+/// What `SCHEMA` describes. Raise it whenever the derived tables change shape,
+/// or the parser writes different rows into them.
+const VERSION: u32 = 3;
 
 /// Throws away everything derived from the Houdini install when the shape it
 /// was written in is not the shape this build reads. `index.db` is derived, so

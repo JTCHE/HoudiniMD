@@ -97,7 +97,7 @@ pub fn link(page: &str, target: &str) -> Option<String> {
 /// Rewrites every asset reference in a page to the path the `himage` protocol
 /// reads. A reference that names nothing readable is dropped, so the reader
 /// gets the text without a broken frame in the middle of it.
-pub fn rewrite(page: &str, blocks: &mut [Block]) {
+pub fn rewrite(page: &str, blocks: &mut [Block], name_of: &dyn Fn(&str) -> Option<String>) {
     for block in blocks {
         match block {
             Block::Item {
@@ -113,48 +113,48 @@ pub fn rewrite(page: &str, blocks: &mut [Block]) {
                         }
                     }
                 }
-                inlines(page, label);
-                rewrite(page, children);
+                inlines(page, label, name_of);
+                rewrite(page, children, name_of);
             }
             Block::Heading {
                 title, children, ..
             } => {
-                inlines(page, &mut title.main);
-                rewrite(page, children);
+                inlines(page, &mut title.main, name_of);
+                rewrite(page, children, name_of);
             }
-            Block::Section { children, .. } => rewrite(page, children),
+            Block::Section { children, .. } => rewrite(page, children, name_of),
             Block::Definition { term, children, .. } => {
-                inlines(page, term);
-                rewrite(page, children);
+                inlines(page, term, name_of);
+                rewrite(page, children, name_of);
             }
-            Block::Usage { children, .. } => rewrite(page, children),
-            Block::Paragraph { text } | Block::Summary { text } => inlines(page, text),
+            Block::Usage { children, .. } => rewrite(page, children, name_of),
+            Block::Paragraph { text } | Block::Summary { text } => inlines(page, text, name_of),
             Block::Subtopic { link, children } => {
-                inlines(page, link);
-                rewrite(page, children);
+                inlines(page, link, name_of);
+                rewrite(page, children, name_of);
             }
             Block::Bullets { items } | Block::Numbers { items } => {
                 for item in items {
-                    rewrite(page, &mut item.blocks);
+                    rewrite(page, &mut item.blocks, name_of);
                 }
             }
             Block::Table { rows } => {
                 for row in rows {
                     for cell in row {
-                        rewrite(page, &mut cell.blocks);
+                        rewrite(page, &mut cell.blocks, name_of);
                     }
                 }
             }
-            Block::Html { children, .. } => rewrite(page, children),
+            Block::Html { children, .. } => rewrite(page, children, name_of),
+            Block::Divider { children, .. } => rewrite(page, children, name_of),
             Block::Code { .. }
-            | Block::Divider { .. }
             | Block::Include { .. }
             | Block::RawHtml { .. } => {}
         }
     }
 }
 
-fn inlines(page: &str, inlines: &mut Vec<Inline>) {
+fn inlines(page: &str, inlines: &mut Vec<Inline>, name_of: &dyn Fn(&str) -> Option<String>) {
     inlines.retain_mut(|inline| match inline {
         Inline::Image { src } => match resolve(page, src) {
             Some(path) => {
@@ -164,16 +164,22 @@ fn inlines(page: &str, inlines: &mut Vec<Inline>) {
             None => false,
         },
         Inline::Bold { body } | Inline::Italic { body } | Inline::Ui { body } => {
-            self::inlines(page, body);
+            self::inlines(page, body, name_of);
             true
         }
         Inline::Link { text, target } => {
-            if let LinkTarget::Wiki { path, .. } = target
-                && let Some(resolved) = link(page, path)
-            {
-                *path = resolved;
+            if let LinkTarget::Wiki { path, .. } = target {
+                // `[intro]` names a page and shows the address; SideFX shows
+                // the page's title there instead.
+                let bare = matches!(text.as_slice(), [Inline::Text { text }] if text == path);
+                if let Some(resolved) = link(page, path) {
+                    *path = resolved;
+                }
+                if bare && let Some(found) = name_of(path) {
+                    *text = vec![Inline::Text { text: found }];
+                }
             }
-            self::inlines(page, text);
+            self::inlines(page, text, name_of);
             true
         }
         _ => true,

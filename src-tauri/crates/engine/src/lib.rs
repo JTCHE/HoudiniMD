@@ -16,6 +16,7 @@ pub mod help;
 pub mod index;
 pub mod inherit;
 pub mod install;
+pub mod listing;
 pub mod packages;
 pub mod page;
 pub mod search;
