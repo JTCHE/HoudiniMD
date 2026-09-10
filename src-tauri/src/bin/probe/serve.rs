@@ -260,7 +260,7 @@ fn command_response(state: &Serve, command: &str, query: &str) -> (u16, &'static
                 at: 0,
             };
             if command == "record_visit" {
-                library::record_visit(&db, &entry).map(|()| "null".to_string())
+                library::record_visit(&db, &entry).map(|id| id.to_string())
             } else {
                 library::toggle_bookmark(&db, &entry)
                     .map(|kept| kept.to_string())
