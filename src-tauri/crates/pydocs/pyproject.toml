@@ -5,6 +5,7 @@ build-backend = "maturin"
 [project]
 name = "houdinimd-docs"
 description = "Houdini's own documentation, read out of the install on this machine."
+readme = "README.md"
 requires-python = ">=3.9"
 license = "MIT"
 authors = [{ name = "JTCHE" }]
