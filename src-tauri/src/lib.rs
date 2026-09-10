@@ -354,6 +354,7 @@ pub fn start_index(app: tauri::AppHandle, data: std::path::PathBuf, install: ins
         if let Err(message) = index::run(&data, &install, &report) {
             let _ = app.emit("index-failed", message);
         }
+        engine::listing::warm(&install.help_roots());
     });
 }
 

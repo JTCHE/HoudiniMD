@@ -5,7 +5,7 @@
 
 use serde::Serialize;
 
-use crate::{assets, examples, family, help, inherit, install};
+use crate::{assets, examples, family, help, inherit, install, listing};
 
 /// One page, ready to draw. The body is Markdown, which the front-end renders
 /// with the same component map the site uses.
@@ -50,11 +50,12 @@ pub fn read(install: &install::Install, path: &str) -> Result<PageView, PageErro
     wiki::include::resolve(&mut parsed.blocks, &path, &|target| {
         help::page_layered(&roots, target).ok()
     });
+    listing::resolve(&roots, &path, &mut parsed.blocks);
     family::append(&install.help, &parsed.props, &mut parsed.blocks);
     let section = path.split('/').next().unwrap_or("");
     inherit::append(&install.help, section, &parsed.props, &mut parsed.blocks);
     examples::append(&install.help, &path, &mut parsed.blocks);
-    assets::rewrite(&path, &mut parsed.blocks);
+    assets::rewrite(&path, &mut parsed.blocks, &|target| listing::title(&roots, target));
     let prop = |name: &str| wiki::model::prop(&parsed.props, name).map(str::to_string);
     Ok(PageView {
         path,
