@@ -128,8 +128,9 @@ pub fn apply(data: &Path, port: u16, wanted: &[String]) -> Result<Vec<String>, S
         if after != before {
             backup(&file)?;
             write(&file, &after)?;
-            changed.push(release.release);
+            changed.push(release.release.clone());
         }
+        start_with_houdini(data, &release.prefs)?;
     }
 
     save(data, &record)?;
@@ -149,6 +150,8 @@ pub fn revert(data: &Path) -> Result<Vec<String>, String> {
                 "Houdini {release} is open. Close it first, or it will write the old value back."
             ));
         }
+        // Our own file, so there is nothing of the reader's to put back.
+        let _ = std::fs::remove_file(previous.prefs.join("packages").join(PACKAGE));
         let file = previous.prefs.join("houdini.pref");
         let before = read(&file).unwrap_or_default();
         let after = apply_previous(&before, &previous);
@@ -160,6 +163,50 @@ pub fn revert(data: &Path) -> Result<Vec<String>, String> {
 
     save(data, &record)?;
     Ok(restored)
+}
+
+/// The Houdini package that starts this app when Houdini starts. F1 points at
+/// a localhost port, and a closed app answers it with "connection refused".
+/// Houdini starts its own help server the same way: on demand, from Houdini.
+const PACKAGE: &str = "houdinimd.json";
+
+/// `uiready.py` is found under `pythonX.Ylibs`, named for the Python the
+/// session runs, and it runs in interactive sessions only — never in hython.
+// ponytail: fixed list; a Houdini on a newer Python needs its version added.
+const PYTHONS: [&str; 5] = ["3.10", "3.11", "3.12", "3.13", "3.14"];
+
+/// Writes the package into one release's preferences. Its `hpath` names a
+/// folder in this app's data, so the script itself never sits among the
+/// reader's files, and removing the one package file undoes it all.
+fn start_with_houdini(data: &Path, prefs: &Path) -> Result<(), String> {
+    let root = data.join("houdini");
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let script = startup_script(&exe);
+    for python in PYTHONS {
+        write(&root.join(format!("python{python}libs")).join("uiready.py"), &script)?;
+    }
+    let package = serde_json::json!({ "hpath": root.to_string_lossy().replace('\\', "/") });
+    let text = serde_json::to_string_pretty(&package).map_err(|e| e.to_string())?;
+    write(&prefs.join("packages").join(PACKAGE), &text)
+}
+
+/// A second launch hands over to the running app and exits, so this script
+/// does not need to know whether the app is already up.
+fn startup_script(exe: &Path) -> String {
+    // Rust's debug form of a string is a valid Python string literal.
+    let exe = format!("{:?}", exe.to_string_lossy());
+    format!(
+        "# Written by HoudiniMD. Starts its help server with Houdini, so F1 has an
+# answer. HoudiniMD removes the package that loads this when F1 is given back.
+import subprocess, sys
+# DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP: the app outlives this session.
+flags = 0x00000008 | 0x00000200 if sys.platform == \"win32\" else 0
+try:
+    subprocess.Popen([{exe}, \"--background\"], creationflags=flags, close_fds=True)
+except OSError:
+    pass
+"
+    )
 }
 
 fn apply_previous(text: &str, previous: &Previous) -> String {

@@ -76,15 +76,12 @@ pub fn start(app: &tauri::AppHandle) {
         if let Err(reason) = install(&app).await {
             eprintln!("update check failed: {reason}");
         }
-        show(&app);
+        // Started by Houdini: the reader asked for F1, not for a window. The
+        // tray icon opens it.
+        if !crate::tray::in_background() {
+            crate::tray::show(&app);
+        }
     });
-}
-
-fn show(app: &tauri::AppHandle) {
-    if let Some(window) = app.get_webview_window("main") {
-        let _ = window.show();
-        let _ = window.set_focus();
-    }
 }
 
 async fn install(app: &tauri::AppHandle) -> tauri_plugin_updater::Result<()> {

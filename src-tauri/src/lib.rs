@@ -2,6 +2,7 @@ pub mod db;
 pub mod hook;
 pub mod library;
 pub mod server;
+pub mod tray;
 pub mod update;
 
 /// The reading itself is the `engine` crate, which knows nothing about a
@@ -554,7 +555,14 @@ fn hook_from_the_command_line(data: &std::path::Path, port: u16) {
 struct Port(u16);
 
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    // One process owns the port Houdini's F1 points at, so a second launch
+    // hands over to the first. It must be the first plugin. A debug build
+    // skips it: `bun run app` must start even while the installed app sits in
+    // the tray, and the two share an identifier.
+    #[cfg(not(debug_assertions))]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, _| tray::second_launch(app, argv)));
+    builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(update::plugin())
@@ -594,11 +602,13 @@ pub fn run() {
             if let Ok(install) = current_for(&app.handle().clone()) {
                 start_index(app.handle().clone(), data, install);
             }
+            tray::build(app)?;
             // The window is hidden in `tauri.conf.json`. This shows it, after
             // the update check has had its say.
             update::start(app.handle());
             Ok(())
         })
+        .on_window_event(tray::on_window_event)
         .invoke_handler(tauri::generate_handler![
             installs,
             available_installs,
