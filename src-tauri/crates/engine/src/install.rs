@@ -99,6 +99,17 @@ impl Install {
     }
 }
 
+/// Two paths that name the same install folder. The registry writes a
+/// trailing separator and the scan does not, and Windows does not care about
+/// case, so the text of a path is not what makes it one install or two.
+fn same_root(a: &Path, b: &Path) -> bool {
+    fn key(path: &Path) -> String {
+        let text = path.to_string_lossy().replace('\\', "/");
+        text.trim_end_matches('/').to_lowercase()
+    }
+    key(a) == key(b)
+}
+
 /// Newest build first, so the caller can take the first one as the default.
 pub fn find(picked: &[PathBuf]) -> Vec<Install> {
     let mut found: Vec<Install> = Vec::new();
@@ -111,7 +122,7 @@ pub fn find(picked: &[PathBuf]) -> Vec<Install> {
 
     for root in picked {
         if let Some(install) = read(root.clone())
-            && !found.iter().any(|i| i.version == install.version)
+            && !found.iter().any(|i| same_root(&i.root, &install.root))
         {
             found.push(install);
         }
@@ -123,7 +134,7 @@ pub fn find(picked: &[PathBuf]) -> Vec<Install> {
         };
         for entry in entries.flatten() {
             if let Some(install) = read(hfs(entry.path())) {
-                if !found.iter().any(|i| i.version == install.version) {
+                if !found.iter().any(|i| same_root(&i.root, &install.root)) {
                     found.push(install);
                 }
             }
@@ -132,7 +143,7 @@ pub fn find(picked: &[PathBuf]) -> Vec<Install> {
 
     for (version, root) in registry_roots() {
         if let Some(install) = read_versioned(root, version)
-            && !found.iter().any(|i| i.version == install.version)
+            && !found.iter().any(|i| same_root(&i.root, &install.root))
         {
             found.push(install);
         }
@@ -247,16 +258,18 @@ fn parts(version: &str) -> Vec<u32> {
     version.split('.').filter_map(|p| p.parse().ok()).collect()
 }
 
-/// The setting key the chosen build is persisted under.
-const BUILD_KEY: &str = "build";
+/// The setting key the chosen build is persisted under. This crate never
+/// writes a setting itself — the caller owns the store, and these are the
+/// names it should keep them under.
+pub const BUILD_KEY: &str = "build";
 
 /// The setting key the hand-picked install folders are persisted under, one
 /// path per line.
-const PICKED_KEY: &str = "picked_installs";
+pub const PICKED_KEY: &str = "picked_installs";
 
-/// Fills the cache with the folders the reader picked in an earlier session.
-pub fn load_picked(cache: &Cache, db: &rusqlite::Connection) {
-    let stored = crate::db::get_setting(db, PICKED_KEY).unwrap_or_default();
+/// Fills the cache with the folders the reader picked in an earlier session,
+/// as `PICKED_KEY` holds them.
+pub fn load_picked(cache: &Cache, stored: &str) {
     cache.set_picked(
         stored
             .lines()
@@ -267,14 +280,11 @@ pub fn load_picked(cache: &Cache, db: &rusqlite::Connection) {
 }
 
 /// Takes a folder the reader chose in the file picker and returns the install
-/// in it. The picker gives back whatever folder was open, so this also accepts
-/// a folder inside the install: `.../Houdini 21.0.829/houdini/help` names the
-/// same build as its root does.
-pub fn add_picked(
-    cache: &Cache,
-    db: &rusqlite::Connection,
-    chosen: PathBuf,
-) -> Result<Install, String> {
+/// in it, with the new `PICKED_KEY` value for the caller to persist. The
+/// picker gives back whatever folder was open, so this also accepts a folder
+/// inside the install: `.../Houdini 21.0.829/houdini/help` names the same
+/// build as its root does.
+pub fn add_picked(cache: &Cache, chosen: PathBuf) -> Result<(Install, String), String> {
     let install = std::iter::successors(Some(chosen.as_path()), |dir| dir.parent())
         .take(3)
         .find_map(|dir| read(dir.to_path_buf()))
@@ -284,27 +294,24 @@ pub fn add_picked(
     if !roots.contains(&install.root) {
         roots.push(install.root.clone());
     }
-    crate::db::set_setting(
-        db,
-        PICKED_KEY,
-        &roots
-            .iter()
-            .map(|root| root.display().to_string())
-            .collect::<Vec<_>>()
-            .join("\n"),
-    )?;
+    let stored = roots
+        .iter()
+        .map(|root| root.display().to_string())
+        .collect::<Vec<_>>()
+        .join("\n");
     cache.set_picked(roots);
-    Ok(install)
+    Ok((install, stored))
 }
 
 /// The install every reader-facing read uses: the reader's own choice, kept
 /// warm in `chosen` so this runs once per process and not once per request.
 ///
-/// Falls back to `$HFS` and then to the newest install — both already the
-/// first entry `Cache::get` returns — when nothing is chosen yet, or when the
-/// chosen build is no longer on the machine. Writes the result back as the
-/// choice, so a fallback taken once is not taken again.
-pub fn resolve(chosen: &Chosen, cache: &Cache, db: &rusqlite::Connection) -> Result<Install, String> {
+/// `wanted` is the build the reader chose, as `BUILD_KEY` holds it. Falls back
+/// to `$HFS` and then to the newest install — both already the first entry
+/// `Cache::get` returns — when nothing is chosen yet, or when the chosen build
+/// is no longer on the machine. The caller writes the result back under
+/// `BUILD_KEY`, so a fallback taken once is not taken again.
+pub fn resolve(chosen: &Chosen, cache: &Cache, wanted: Option<&str>) -> Result<Install, String> {
     let mut chosen = chosen.0.lock().map_err(|e| e.to_string())?;
     if let Some(install) = chosen.as_ref() {
         if install.help.is_dir() {
@@ -312,13 +319,10 @@ pub fn resolve(chosen: &Chosen, cache: &Cache, db: &rusqlite::Connection) -> Res
         }
     }
     let found = cache.get();
-    let wanted = crate::db::get_setting(db, BUILD_KEY);
     let picked = wanted
-        .as_deref()
         .and_then(|version| found.iter().find(|i| i.version == version).cloned())
         .or_else(|| found.first().cloned())
         .ok_or_else(|| "no Houdini install found on this machine".to_string())?;
-    let _ = crate::db::set_setting(db, BUILD_KEY, &picked.version);
     *chosen = Some(picked.clone());
     Ok(picked)
 }
@@ -334,15 +338,6 @@ pub fn set_chosen(chosen: &Chosen, install: Install) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn temp_db() -> rusqlite::Connection {
-        use std::sync::atomic::{AtomicU32, Ordering};
-        static NEXT: AtomicU32 = AtomicU32::new(0);
-        let n = NEXT.fetch_add(1, Ordering::Relaxed);
-        let data =
-            std::env::temp_dir().join(format!("houdinimd-install-test-{}-{n}", std::process::id()));
-        crate::db::open(&data).unwrap()
-    }
 
     fn fake_install(version: &str) -> Install {
         Install {
@@ -367,39 +362,30 @@ mod tests {
 
     #[test]
     fn nothing_chosen_yet_falls_back_to_the_first_found_install() {
-        let db = temp_db();
         let cache = cache_of(vec![fake_install("22.0.368"), fake_install("21.0.829")]);
         let chosen = chosen_of(None);
-        let picked = resolve(&chosen, &cache, &db).unwrap();
+        let picked = resolve(&chosen, &cache, None).unwrap();
         assert_eq!(picked.version, "22.0.368");
-        // The fallback is written back, so a restart reads the same build.
-        assert_eq!(crate::db::get_setting(&db, BUILD_KEY).as_deref(), Some("22.0.368"));
     }
 
     #[test]
     fn a_build_removed_from_the_machine_falls_back_and_overwrites_the_choice() {
-        let db = temp_db();
-        crate::db::set_setting(&db, BUILD_KEY, "19.5.000").unwrap();
         let cache = cache_of(vec![fake_install("22.0.368")]);
         let chosen = chosen_of(None);
-        let picked = resolve(&chosen, &cache, &db).unwrap();
+        let picked = resolve(&chosen, &cache, Some("19.5.000")).unwrap();
         assert_eq!(picked.version, "22.0.368");
-        assert_eq!(crate::db::get_setting(&db, BUILD_KEY).as_deref(), Some("22.0.368"));
     }
 
     #[test]
     fn a_chosen_build_still_on_the_machine_is_kept() {
-        let db = temp_db();
-        crate::db::set_setting(&db, BUILD_KEY, "21.0.829").unwrap();
         let cache = cache_of(vec![fake_install("22.0.368"), fake_install("21.0.829")]);
         let chosen = chosen_of(None);
-        let picked = resolve(&chosen, &cache, &db).unwrap();
+        let picked = resolve(&chosen, &cache, Some("21.0.829")).unwrap();
         assert_eq!(picked.version, "21.0.829");
     }
 
     #[test]
     fn a_resolved_install_is_kept_warm_without_asking_the_cache_again() {
-        let db = temp_db();
         // A cache with nothing in it: if `resolve` asked it a second time
         // instead of trusting `chosen`, this would fail to find anything.
         let cache = Cache::new();
@@ -411,7 +397,7 @@ mod tests {
         // above for the "gone from disk" path instead.
         warm.help = std::env::temp_dir();
         let chosen = chosen_of(Some(warm));
-        let picked = resolve(&chosen, &cache, &db).unwrap();
+        let picked = resolve(&chosen, &cache, None).unwrap();
         assert_eq!(picked.version, "22.0.368");
     }
 
@@ -421,10 +407,9 @@ mod tests {
         // own separate `chosen`, so a build switched in one was invisible to
         // the other until its cached install vanished from disk. One
         // `Chosen`, shared, is the fix — this is the regression test for it.
-        let db = temp_db();
         let chosen = chosen_of(None);
         let cache = cache_of(vec![fake_install("22.0.368")]);
-        assert_eq!(resolve(&chosen, &cache, &db).unwrap().version, "22.0.368");
+        assert_eq!(resolve(&chosen, &cache, None).unwrap().version, "22.0.368");
 
         let mut switched = fake_install("21.0.829");
         switched.help = std::env::temp_dir();
@@ -433,6 +418,6 @@ mod tests {
         // A cache that would now resolve differently, to prove this reads
         // `chosen` and not the cache.
         let cache = cache_of(vec![fake_install("22.0.368")]);
-        assert_eq!(resolve(&chosen, &cache, &db).unwrap().version, "21.0.829");
+        assert_eq!(resolve(&chosen, &cache, None).unwrap().version, "21.0.829");
     }
 }

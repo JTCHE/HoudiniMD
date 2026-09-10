@@ -921,6 +921,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "66b7e2430c6dff6a955451e2cfc438f09cea1965a9d6f87f7e3b90decc014099"
 
 [[package]]
+name = "engine"
+version = "0.1.0"
+dependencies = [
+ "rayon",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "wiki",
+ "windows-sys 0.61.2",
+ "winreg 0.56.0",
+ "zip 7.2.0",
+]
+
+[[package]]
 name = "enumflags2"
 version = "0.7.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1536,6 +1550,7 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 name = "houdinimd"
 version = "0.1.0-beta.1"
 dependencies = [
+ "engine",
  "include_dir",
  "rayon",
  "rusqlite",

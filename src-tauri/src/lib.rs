@@ -1,23 +1,23 @@
-mod assets;
 pub mod db;
-pub mod examples;
-pub mod family;
-pub mod help;
 pub mod hook;
-pub mod index;
-pub mod inherit;
-pub mod install;
 pub mod library;
-mod packages;
-pub mod sections;
 pub mod server;
 pub mod update;
+
+/// The reading itself is the `engine` crate, which knows nothing about a
+/// window: installs, pages, the index and the search. This app is one caller
+/// of it — the Python module is the other. Re-exported under the names the
+/// rest of this crate already uses.
+pub use engine::{
+    Hit, Meta, PageError, PageView, Section, all_titles, find, help, index, install, read_meta,
+    read_page,
+};
 
 use std::sync::{Arc, Mutex};
 
 use serde::Serialize;
 use tauri::http::{Request, Response};
-use tauri::{Manager, State};
+use tauri::{Emitter, Manager, State};
 
 /// The one connection the reader's own queries run on. `index.db` is open
 /// here with `user.db` attached; the background pass keeps its own connection,
@@ -27,26 +27,6 @@ pub(crate) struct Db(pub(crate) Mutex<rusqlite::Connection>);
 /// The app's own data directory, so a command that starts a background index
 /// pass does not need to ask for it again.
 struct DataDir(std::path::PathBuf);
-
-/// One page, ready to draw. The body is Markdown, which the front-end renders
-/// with the same component map the site uses.
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PageView {
-    path: String,
-    /// The page name, as written in the help source.
-    name: String,
-    /// The kind of page, for the header: "Geometry node", "VEX function".
-    node_type: Option<String>,
-    /// An icon path inside `icons.zip`, such as `SOP/copytopoints.svg`.
-    icon: Option<String>,
-    /// The Houdini version the node arrived in.
-    since: Option<String>,
-    summary: Option<String>,
-    markdown: String,
-    /// The build the page was read from.
-    version: String,
-}
 
 /// The installs found on this machine, newest build first. Cached: a scan
 /// happens once and again only when `refresh` is asked for, which is what the
@@ -143,7 +123,8 @@ fn add_install(
     path: String,
 ) -> Result<BuildRow, String> {
     let db = state.0.lock().map_err(|e| e.to_string())?;
-    let install = install::add_picked(&cache, &db, std::path::PathBuf::from(path))?;
+    let (install, picked) = install::add_picked(&cache, std::path::PathBuf::from(path))?;
+    db::set_setting(&db, install::PICKED_KEY, &picked)?;
     switch(app, &data, &db, &chosen, install)
 }
 
@@ -156,11 +137,11 @@ fn switch(
     chosen: &install::Chosen,
     install: install::Install,
 ) -> Result<BuildRow, String> {
-    db::set_setting(db, "build", &install.version)?;
+    db::set_setting(db, install::BUILD_KEY, &install.version)?;
     install::set_chosen(chosen, install.clone())?;
     let status = index::status(db, &install.version);
     if !status.done {
-        index::start(app, data.0.clone(), install.clone());
+        start_index(app, data.0.clone(), install.clone());
     }
     Ok(BuildRow {
         current: true,
@@ -192,92 +173,22 @@ pub fn user_name_of_this_machine() -> String {
         .unwrap_or_default()
 }
 
-/// What the reader gets instead of a page. `missing` separates "this build has
-/// no such page", which the front-end answers with the not-found page, from a
-/// failure it can only report.
-#[derive(Serialize)]
-pub struct PageError {
-    pub missing: bool,
-    pub message: String,
-}
-
 /// Reads and parses one page, such as `nodes/sop/copytopoints`.
 ///
 /// This never waits on the index. The first page a reader opens is parsed here
 /// even if the background pass has not reached it yet.
 #[tauri::command]
-fn page(state: State<Db>, chosen: State<Arc<install::Chosen>>, cache: State<Arc<install::Cache>>, path: String) -> Result<PageView, PageError> {
+fn page(
+    state: State<Db>,
+    chosen: State<Arc<install::Chosen>>,
+    cache: State<Arc<install::Cache>>,
+    path: String,
+) -> Result<PageView, PageError> {
     let db = state.0.lock().map_err(|e| PageError { missing: false, message: e.to_string() })?;
-    let install = current(&db, &chosen, &cache).map_err(|message| PageError { missing: false, message })?;
+    let install = current(&db, &chosen, &cache)
+        .map_err(|message| PageError { missing: false, message })?;
     drop(db);
     read_page(&install, &path)
-}
-
-/// The same read the `page` command does, without the app around it. The
-/// harness times this call; the command is the one line that finds the install.
-pub fn read_page(install: &install::Install, path: &str) -> Result<PageView, PageError> {
-    let path = path.to_string();
-    let roots = install.help_roots();
-    let source = help::page_layered(&roots, &path).map_err(|reason| match reason {
-        help::PageError::Missing => PageError {
-            missing: true,
-            message: format!("no page {path} in Houdini {}", install.version),
-        },
-        help::PageError::Unreadable(message) => PageError { missing: false, message },
-    })?;
-    let mut parsed = wiki::parse(&source);
-    wiki::include::resolve(&mut parsed.blocks, &path, &|target| {
-        help::page_layered(&roots, target).ok()
-    });
-    family::append(&install.help, &parsed.props, &mut parsed.blocks);
-    let section = path.split('/').next().unwrap_or("");
-    inherit::append(&install.help, section, &parsed.props, &mut parsed.blocks);
-    examples::append(&install.help, &path, &mut parsed.blocks);
-    assets::rewrite(&path, &mut parsed.blocks);
-    let prop = |name: &str| wiki::model::prop(&parsed.props, name).map(str::to_string);
-    Ok(PageView {
-        path,
-        name: display_name(&parsed),
-        node_type: node_type(&parsed.props),
-        icon: prop("icon").map(|icon| format!("{icon}.svg")),
-        since: prop("since"),
-        summary: parsed.summary.as_ref().map(|s| wiki::inline::plain(s)),
-        markdown: wiki::markdown::blocks(&parsed.blocks, 1),
-        version: install.version.clone(),
-    })
-}
-
-/// A page in the title list, and a search hit. The front-end draws both the
-/// same way, so they are one shape.
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Hit {
-    pub path: String,
-    pub title: String,
-    pub node_type: Option<String>,
-    pub icon: Option<String>,
-    /// What the page says it does, shown when nothing under a heading matched.
-    pub summary: Option<String>,
-    /// The sections of this page that matched, best first. Empty for a
-    /// title-list entry, which matched no text at all.
-    pub headings: Vec<Section>,
-    /// How well the words match, larger being better. The front-end weights
-    /// this by what KIND of page it is, which is a question about the reader
-    /// and not about the text — see `weight` in `search.ts`. Zero for a
-    /// title-list entry.
-    pub score: f64,
-}
-
-/// One matching section of a page: the row the list nests under it.
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Section {
-    /// Empty when the words were above the first heading.
-    pub heading: String,
-    /// The anchor to open the page at. Empty with an empty heading.
-    pub slug: String,
-    /// The words themselves, as they read on the page.
-    pub excerpt: String,
 }
 
 /// Every page title in the current build.
@@ -291,42 +202,6 @@ fn titles(state: State<Db>, chosen: State<Arc<install::Chosen>>, cache: State<Ar
     all_titles(&db, &build)
 }
 
-/// The title list, off an open connection. One source of truth for the command
-/// above and for the harness, which times this without an app around it.
-pub fn all_titles(db: &rusqlite::Connection, build: &str) -> Result<Vec<Hit>, String> {
-    let mut statement = db
-        .prepare(
-            "SELECT path, title, node_type, icon, summary FROM pages
-             WHERE build = ?1 ORDER BY path",
-        )
-        .map_err(|e| e.to_string())?;
-    let rows = statement
-        .query_map([build], |row| {
-            Ok(Hit {
-                path: row.get(0)?,
-                title: row.get(1)?,
-                node_type: row.get(2)?,
-                icon: row.get(3)?,
-                summary: row.get(4)?,
-                headings: Vec::new(),
-                score: 0.0,
-            })
-        })
-        .map_err(|e| e.to_string())?;
-    rows.collect::<Result<_, _>>().map_err(|e| e.to_string())
-}
-
-/// What a link hover shows: the page name, and the line under it.
-#[derive(Serialize)]
-pub struct Meta {
-    pub path: String,
-    pub title: String,
-    pub summary: Option<String>,
-    /// The page's own icon, so a link to it can carry the same mark the panel
-    /// and the search draw for it.
-    pub icon: Option<String>,
-}
-
 /// The tooltip text for a set of pages, asked for in one call.
 ///
 /// The index answers most of it. A page the background pass has not reached is
@@ -338,60 +213,6 @@ fn meta(state: State<Db>, chosen: State<Arc<install::Chosen>>, cache: State<Arc<
     let db = state.0.lock().map_err(|e| e.to_string())?;
     let install = current(&db, &chosen, &cache)?;
     read_meta(&db, &install, &paths)
-}
-
-/// The tooltip text, off an open connection. One source of truth for the
-/// command above and for the localhost server.
-pub fn read_meta(
-    db: &rusqlite::Connection,
-    install: &install::Install,
-    paths: &[String],
-) -> Result<Vec<Meta>, String> {
-    let build = &install.version;
-    let mut found: Vec<Meta> = Vec::new();
-    let mut missing: Vec<String> = Vec::new();
-    {
-        let mut statement = db
-            .prepare("SELECT title, summary, icon FROM pages WHERE build = ?1 AND path = ?2")
-            .map_err(|e| e.to_string())?;
-        for path in paths {
-            let row = statement
-                .query_row(rusqlite::params![build, path], |row| {
-                    Ok((
-                        row.get::<_, String>(0)?,
-                        row.get::<_, Option<String>>(1)?,
-                        row.get::<_, Option<String>>(2)?,
-                    ))
-                })
-                .ok();
-            match row {
-                Some((title, summary, icon)) => found.push(Meta {
-                    path: path.clone(),
-                    title,
-                    summary,
-                    icon,
-                }),
-                None => missing.push(path.clone()),
-            }
-        }
-    }
-    if missing.is_empty() {
-        return Ok(found);
-    }
-    let roots = install.help_roots();
-    for path in missing {
-        let Ok(source) = help::page_layered(&roots, &path) else {
-            continue;
-        };
-        let parsed = wiki::parse(&source);
-        found.push(Meta {
-            path,
-            title: display_name(&parsed),
-            summary: parsed.summary.as_ref().map(|s| wiki::inline::plain(s)),
-            icon: wiki::model::prop(&parsed.props, "icon").map(|icon| format!("{icon}.svg")),
-        });
-    }
-    Ok(found)
 }
 
 /// The reader's own data: bookmarks, recents, settings. One connection, one
@@ -443,10 +264,6 @@ fn set_setting(state: State<Db>, key: String, value: String) -> Result<(), Strin
     db::set_setting(&db, &key, &value)
 }
 
-/// At most this many matching sections are listed under one page. Past three
-/// the list is a page of one result, and the reader has stopped comparing.
-const SECTIONS_PER_PAGE: usize = 3;
-
 /// Full-text search over the page bodies, ranked with `bm25()`.
 ///
 /// A row of the index is a section, so the ranking is over sections and the
@@ -464,82 +281,6 @@ fn search(state: State<Db>, chosen: State<Arc<install::Chosen>>, cache: State<Ar
     find(&db, &build, &query, limit)
 }
 
-/// The ranked search, off an open connection. One source of truth for the
-/// command above and for the harness, which times this without an app around
-/// it.
-pub fn find(
-    db: &rusqlite::Connection,
-    build: &str,
-    query: &str,
-    limit: u32,
-) -> Result<Vec<Hit>, String> {
-    let Some(match_query) = db::match_query(query) else {
-        return Ok(Vec::new());
-    };
-    let mut statement = db
-        .prepare(
-            "SELECT pages_fts.path, p.title, p.node_type, p.icon, p.summary,
-                    pages_fts.heading, pages_fts.slug,
-                    snippet(pages_fts, 5, '', '', '…', 14),
-                    bm25(pages_fts, 0.0, 0.0, 0.0, 4.0, 10.0, 1.0) AS rank
-             FROM pages_fts
-             JOIN pages p ON p.build = pages_fts.build AND p.path = pages_fts.path
-             WHERE pages_fts MATCH ?1 AND pages_fts.build = ?2
-             ORDER BY rank
-             LIMIT ?3",
-        )
-        .map_err(|e| e.to_string())?;
-
-    let wanted = limit as usize;
-    let rows = statement
-        .query_map(
-            rusqlite::params![match_query, build, (wanted * SECTIONS_PER_PAGE * 4) as u32],
-            |row| {
-                Ok((
-                    Hit {
-                        path: row.get(0)?,
-                        title: row.get(1)?,
-                        node_type: row.get(2)?,
-                        icon: row.get(3)?,
-                        summary: row.get(4)?,
-                        headings: Vec::new(),
-                        // `bm25()` is more negative the better the match. The
-                        // front-end multiplies by a weight in 0..1, so the sign
-                        // is turned here and never there.
-                        score: -row.get::<_, f64>(8)?,
-                    },
-                    Section {
-                        heading: row.get(5)?,
-                        slug: row.get(6)?,
-                        excerpt: row.get(7)?,
-                    },
-                ))
-            },
-        )
-        .map_err(|e| e.to_string())?;
-
-    let mut hits: Vec<Hit> = Vec::new();
-    let mut at: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
-    for row in rows {
-        let (hit, section) = row.map_err(|e| e.to_string())?;
-        let index = match at.get(&hit.path) {
-            Some(index) => *index,
-            None => {
-                if hits.len() == wanted {
-                    continue;
-                }
-                at.insert(hit.path.clone(), hits.len());
-                hits.push(hit);
-                hits.len() - 1
-            }
-        };
-        if hits[index].headings.len() < SECTIONS_PER_PAGE && !section.excerpt.trim().is_empty() {
-            hits[index].headings.push(section);
-        }
-    }
-    Ok(hits)
-}
-
 /// How far the background pass has got. The front-end also gets this as an
 /// `index` event, so this call is only for what it missed before it mounted.
 #[tauri::command]
@@ -549,50 +290,36 @@ fn index_status(state: State<Db>, chosen: State<Arc<install::Chosen>>, cache: St
     Ok(index::status(&db, &build))
 }
 
-/// The header reads "Geometry node", not "sop". The network a node lives in is
-/// the only thing that names its kind, so the label is derived from it.
-pub(crate) fn node_type(props: &wiki::Props) -> Option<String> {
-    let kind = wiki::model::prop(props, "type")?;
-    let context = wiki::model::prop(props, "context")?;
-    if kind != "node" {
-        return None;
-    }
-    let label = match context {
-        "sop" => "Geometry node",
-        "dop" => "Dynamics node",
-        "obj" => "Object node",
-        "cop" => "Copernicus node",
-        "lop" => "LOP node",
-        "out" | "rop" => "Render node",
-        "top" => "TOP node",
-        "chop" => "Channel node",
-        "vop" => "VOP node",
-        "shop" => "Shader node",
-        "apex" => "APEX node",
-        other => return Some(format!("{other} node")),
-    };
-    Some(label.to_string())
-}
-
-/// The name a reader sees. A page that carries a `version` property is one
-/// entry of many under the same title, so the version is part of the name.
-pub(crate) fn display_name(parsed: &wiki::Page) -> String {
-    match wiki::model::prop(&parsed.props, "version") {
-        Some(version) => format!("{} {version}", parsed.title_text),
-        None => parsed.title_text.clone(),
-    }
-}
-
 /// The install every command in this process reads, resolved once and cached
 /// in `Chosen`. Never scans the disk itself — that is `install::Cache`'s job,
 /// and only the version picker asks it to. The same `Chosen` and `Cache` the
 /// localhost server reads, so the window and the F1 pane agree.
-fn current(
+pub fn current(
     db: &rusqlite::Connection,
     chosen: &install::Chosen,
     cache: &install::Cache,
 ) -> Result<install::Install, String> {
-    install::resolve(chosen, cache, db)
+    let wanted = db::get_setting(db, install::BUILD_KEY);
+    let picked = install::resolve(chosen, cache, wanted.as_deref())?;
+    // A fallback taken once is not taken again.
+    if wanted.as_deref() != Some(picked.version.as_str()) {
+        let _ = db::set_setting(db, install::BUILD_KEY, &picked.version);
+    }
+    Ok(picked)
+}
+
+/// Starts the background index pass for one build, reporting to the front-end
+/// as it goes. The pass itself is `engine::index`; the events are this app's.
+pub fn start_index(app: tauri::AppHandle, data: std::path::PathBuf, install: install::Install) {
+    std::thread::spawn(move || {
+        index::background_priority();
+        let report = |status: index::Status| {
+            let _ = app.emit("index", status);
+        };
+        if let Err(message) = index::run(&data, &install, &report) {
+            let _ = app.emit("index-failed", message);
+        }
+    });
 }
 
 /// The same resolution, off an `AppHandle` — what the `hicon`/`himage` URI
@@ -742,7 +469,7 @@ fn reset_index(
             .map_err(|e| e.to_string())?;
         current(&db, &chosen, &cache)?
     };
-    index::start(app, data.0.clone(), install);
+    start_index(app, data.0.clone(), install);
     Ok(())
 }
 
@@ -852,7 +579,10 @@ pub fn run() {
             {
                 let db = app.state::<Db>();
                 let db = db.0.lock().map_err(|e| e.to_string())?;
-                install::load_picked(&cache, &db);
+                install::load_picked(
+                    &cache,
+                    &db::get_setting(&db, install::PICKED_KEY).unwrap_or_default(),
+                );
             }
             // The server is what makes F1 work, so it starts whether or not
             // any Houdini is hooked yet. A reader who never hooks one pays a
@@ -862,7 +592,7 @@ pub fn run() {
             app.manage(Port(port));
             hook_from_the_command_line(&data, port);
             if let Ok(install) = current_for(&app.handle().clone()) {
-                index::start(app.handle().clone(), data, install);
+                start_index(app.handle().clone(), data, install);
             }
             // The window is hidden in `tauri.conf.json`. This shows it, after
             // the update check has had its say.
