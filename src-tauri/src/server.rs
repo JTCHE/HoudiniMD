@@ -208,7 +208,7 @@ fn user_data(db: Result<&Mutex<Connection>, &String>, command: &str, call: &Call
     let json = match command {
         "recents" => library::recents(&db).and_then(|v| ser(&v)),
         "bookmarks" => library::bookmarks(&db).and_then(|v| ser(&v)),
-        "record_visit" => library::record_visit(&db, &entry()).and_then(|()| ser(&())),
+        "record_visit" => library::record_visit(&db, &entry()).and_then(|id| ser(&id)),
         "forget_recent" => library::forget(&db, call.id).and_then(|()| ser(&())),
         "toggle_bookmark" => library::toggle_bookmark(&db, &entry()).and_then(|kept| ser(&kept)),
         "get_setting" => Ok(db::get_setting(&db, &call.key)).and_then(|v| ser(&v)),

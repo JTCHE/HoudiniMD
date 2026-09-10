@@ -53,15 +53,20 @@ fn read(db: &Connection, columns: &str, table: &str, time_column: &str) -> Resul
     rows.collect::<Result<_, _>>().map_err(|e| e.to_string())
 }
 
-/// Records one visit. Coming back to a page an hour later is a second visit
-/// and gets its own row; the list is trimmed to `RECENTS_KEEP` here, in the
-/// one place that writes it.
-pub fn record_visit(db: &Connection, entry: &Entry) -> Result<(), String> {
-    db.execute(
-        "INSERT INTO user.recents (path, title, icon, at) VALUES (?1, ?2, ?3, ?4)",
-        rusqlite::params![entry.path, entry.title, entry.icon, entry.at],
-    )
-    .map_err(|e| e.to_string())?;
+/// Records one visit to a page. A page already in the trail just moves to the
+/// top with a fresh `at`, rather than getting a second line; the list is
+/// trimmed to `RECENTS_KEEP` here, in the one place that writes it. Returns
+/// the row's id, so the caller can offer to forget it right away.
+pub fn record_visit(db: &Connection, entry: &Entry) -> Result<i64, String> {
+    let id = db
+        .query_row(
+            "INSERT INTO user.recents (path, title, icon, at) VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT(path) DO UPDATE SET title = excluded.title, icon = excluded.icon, at = excluded.at
+             RETURNING id",
+            rusqlite::params![entry.path, entry.title, entry.icon, entry.at],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
     db.execute(
         "DELETE FROM user.recents WHERE id NOT IN (
            SELECT id FROM user.recents ORDER BY at DESC, id DESC LIMIT ?1
@@ -69,7 +74,7 @@ pub fn record_visit(db: &Connection, entry: &Entry) -> Result<(), String> {
         [RECENTS_KEEP as i64],
     )
     .map_err(|e| e.to_string())?;
-    Ok(())
+    Ok(id)
 }
 
 /// Drops one VISIT from the trail. The trail is the reader's, so they get to
@@ -123,23 +128,23 @@ mod tests {
         assert_eq!(bookmarks(&db).unwrap().len(), 0);
     }
 
-    /// A page read twice is two lines in the trail, at the two times it was
-    /// read. Forgetting one of them leaves the other.
+    /// A page read twice is one line, moved to the top with the later time.
     #[test]
-    fn a_revisited_page_gets_its_own_line() {
+    fn a_revisited_page_moves_to_the_top_instead_of_duplicating() {
         let db = db();
         record_visit(&db, &entry("a", 1)).unwrap();
         record_visit(&db, &entry("b", 2)).unwrap();
-        record_visit(&db, &entry("a", 3)).unwrap();
+        let id = record_visit(&db, &entry("a", 3)).unwrap();
         let all = recents(&db).unwrap();
-        assert_eq!(all.len(), 3);
+        assert_eq!(all.len(), 2);
         assert_eq!(all[0].path, "a");
-        assert_eq!(all[2].path, "a");
+        assert_eq!(all[0].at, 3);
+        assert_eq!(all[0].id, Some(id));
 
-        forget(&db, all[0].id.unwrap()).unwrap();
+        forget(&db, id).unwrap();
         let left = recents(&db).unwrap();
-        assert_eq!(left.len(), 2);
-        assert_eq!(left[1].path, "a");
+        assert_eq!(left.len(), 1);
+        assert_eq!(left[0].path, "b");
     }
 
     /// The whole point of the move to `user.db`: the window and Houdini's help

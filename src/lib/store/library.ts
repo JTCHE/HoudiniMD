@@ -80,22 +80,28 @@ export function bookmarks(): LibraryEntry[] {
   return snapshot.bookmarks;
 }
 
-/** Records one visit. Coming back to a page an hour later is a second visit
-    and gets its own line: the trail is what the reader read, in the order they
-    read it, not a set of pages they have seen once.
+/** Records one visit to a page. A page already in the trail moves to the top
+    with a fresh time instead of getting a second line: the trail is the pages
+    the reader has read, most recent first, not a log of every visit.
 
     A page with no name is not recorded at all: a row the reader cannot read
     is worse than a trail one page short.
 
-    The row is written here with no `id`, because the id is the backend's to
-    give. The next `load()` — on the next window focus — replaces it with the
-    stored row, id and all. Until then the row has no id, and `forget` on it
-    does nothing but take it off the screen. */
+    The row goes in optimistically with no `id`, because the id is the
+    backend's to give. Once `record_visit` resolves, the row is patched in
+    with its real id so `forget` works on it right away, without waiting for
+    the next focus poll. */
 export function recordVisit(entry: Omit<LibraryEntry, "at">) {
   if (!entry.title.trim()) return;
   const at = Date.now();
-  commit({ ...snapshot, recents: [{ ...entry, at }, ...snapshot.recents] });
-  void invoke("record_visit", { path: entry.path, title: entry.title, icon: entry.icon, at });
+  const without = snapshot.recents.filter((existing) => existing.path !== entry.path);
+  commit({ ...snapshot, recents: [{ ...entry, at }, ...without] });
+  void invoke<number>("record_visit", { path: entry.path, title: entry.title, icon: entry.icon, at }).then((id) => {
+    commit({
+      ...snapshot,
+      recents: snapshot.recents.map((existing) => (existing.path === entry.path && existing.at === at ? { ...existing, id } : existing)),
+    });
+  });
 }
 
 /** Drops one VISIT from the trail. The trail is the reader's, so they get to

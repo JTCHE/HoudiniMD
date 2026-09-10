@@ -414,7 +414,7 @@ fn bookmarks(state: State<Db>) -> Result<Vec<library::Entry>, String> {
 /// invokes this in Tauri or asks `server.rs` for it over a query string, and a
 /// query string has no nesting.
 #[tauri::command]
-fn record_visit(state: State<Db>, path: String, title: String, icon: Option<String>, at: i64) -> Result<(), String> {
+fn record_visit(state: State<Db>, path: String, title: String, icon: Option<String>, at: i64) -> Result<i64, String> {
     let db = state.0.lock().map_err(|e| e.to_string())?;
     library::record_visit(&db, &library::Entry { id: None, path, title, icon, at })
 }
@@ -725,6 +725,40 @@ fn clean_start() -> bool {
     std::env::args().any(|argument| argument == "--clean")
 }
 
+/// Throws away everything derived from the Houdini install and reads it again.
+/// Nothing of the reader's is in these tables — see `db.rs` — so this costs a
+/// background pass and no more.
+#[tauri::command]
+fn reset_index(
+    app: tauri::AppHandle,
+    data: State<DataDir>,
+    state: State<Db>,
+    chosen: State<Arc<install::Chosen>>,
+    cache: State<Arc<install::Cache>>,
+) -> Result<(), String> {
+    let install = {
+        let db = state.0.lock().map_err(|e| e.to_string())?;
+        db.execute_batch("DELETE FROM pages; DELETE FROM pages_fts; DELETE FROM builds;")
+            .map_err(|e| e.to_string())?;
+        current(&db, &chosen, &cache)?
+    };
+    index::start(app, data.0.clone(), install);
+    Ok(())
+}
+
+/// Throws away the reader's own work: bookmarks, recent pages, and every
+/// setting — which includes the build they chose and the fact that they have
+/// run the onboarding. The window that asked for it reloads into a first
+/// launch.
+#[tauri::command]
+fn reset_user_data(state: State<Db>) -> Result<(), String> {
+    let db = state.0.lock().map_err(|e| e.to_string())?;
+    db.execute_batch(
+        "DELETE FROM user.bookmarks; DELETE FROM user.recents; DELETE FROM user.settings;",
+    )
+    .map_err(|e| e.to_string())
+}
+
 /// Every Houdini release series on this machine, and whether F1 already points
 /// here. The onboarding step draws this list.
 #[tauri::command]
@@ -741,6 +775,25 @@ fn hook_houdini(
     releases: Vec<String>,
 ) -> Result<Vec<String>, String> {
     hook::apply(&data.0, state.0, &releases)
+}
+
+/// Turns F1 towards this app for the release series the reader's own build
+/// belongs to. What the onboarding step asks for: the reader chose a build on
+/// the step before, and the hook follows that choice rather than every Houdini
+/// on the machine.
+#[tauri::command]
+fn hook_current_build(
+    data: State<DataDir>,
+    state: State<Db>,
+    port: State<Port>,
+    chosen: State<Arc<install::Chosen>>,
+    cache: State<Arc<install::Cache>>,
+) -> Result<Vec<String>, String> {
+    let install = {
+        let db = state.0.lock().map_err(|e| e.to_string())?;
+        current(&db, &chosen, &cache)?
+    };
+    hook::apply(&data.0, port.0, &[hook::series_of(&install.version)])
 }
 
 /// Puts back what F1 pointed at before this app touched it.
@@ -839,7 +892,10 @@ pub fn run() {
             set_setting,
             houdini_releases,
             hook_houdini,
-            unhook_houdini
+            hook_current_build,
+            unhook_houdini,
+            reset_index,
+            reset_user_data
         ])
         .run(tauri::generate_context!())
         .expect("error while running the application");

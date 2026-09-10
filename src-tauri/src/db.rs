@@ -62,7 +62,7 @@ fn reset_if_stale(db: &Connection) -> Result<(), String> {
 
 /// What the `user.*` tables in `SCHEMA` describe. Raise it whenever they
 /// change shape.
-const USER_VERSION: u32 = 3;
+const USER_VERSION: u32 = 4;
 
 /// The same reset as `reset_if_stale`, kept apart because `user.db` holds the
 /// reader's own work and every other file in this module leaves it alone.
@@ -132,12 +132,11 @@ CREATE TABLE IF NOT EXISTS user.bookmarks (
   added INTEGER NOT NULL
 );
 
--- One row per VISIT, not per page: a reader who comes back to a page an hour
--- later has read it twice, and the trail says so. `path` is therefore not a
--- key here, and `id` is what names one visit.
+-- One row per PAGE, not per visit: a reader who comes back to a page just
+-- bumps `at` on the row it already has. `path` is therefore a key here.
 CREATE TABLE IF NOT EXISTS user.recents (
   id    INTEGER PRIMARY KEY AUTOINCREMENT,
-  path  TEXT NOT NULL,
+  path  TEXT NOT NULL UNIQUE,
   title TEXT NOT NULL,
   icon  TEXT,
   at    INTEGER NOT NULL
