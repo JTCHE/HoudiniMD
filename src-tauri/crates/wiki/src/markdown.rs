@@ -680,7 +680,8 @@ pub fn url(target: &LinkTarget) -> String {
             None => path.clone(),
         },
         LinkTarget::Web { url } => url.clone(),
-        LinkTarget::Node { path } => format!("/nodes/{path}"),
+        // `[Node:/cop/file]` is written with a slash as often as without.
+        LinkTarget::Node { path } => format!("/nodes/{}", path.trim_start_matches('/')),
         LinkTarget::Expression { name } => format!("/expressions/{name}"),
         LinkTarget::Vex { name } => format!("/vex/functions/{name}"),
         LinkTarget::Mantra { name } => format!("/props/mantra#{name}"),
