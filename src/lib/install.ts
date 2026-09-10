@@ -59,8 +59,16 @@ function firstName(raw: string): string {
   return word.charAt(0).toUpperCase() + rest;
 }
 
+/** The last answer. The sidebar is unmounted while it is hidden, so every
+    toggle mounted the card again and drew "Reading the install…" for a frame
+    before the same build came back. */
+let lastBuild: BuildInfo = { version: null, pageCount: null };
+
 export function useBuild(): BuildInfo {
-  const [build, setBuild] = useState<BuildInfo>({ version: null, pageCount: null });
+  const [build, setBuild] = useState<BuildInfo>(lastBuild);
+  useEffect(() => {
+    lastBuild = build;
+  }, [build]);
 
   useEffect(() => {
     let live = true;
