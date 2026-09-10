@@ -1,0 +1,204 @@
+/**
+ * The first launch.
+ *
+ * Five screens: a welcome, the Houdini to read, F1, telemetry, and what a beta
+ * is. Every screen carries a default, and Enter takes the default and moves
+ * on — a reader in a hurry holds Enter and lands in the app with the settings
+ * this project recommends.
+ *
+ * Nothing here decides anything on its own. The build is `select_install`, the
+ * hook is `hook_current_build`, and the two answers are rows of
+ * `user.settings` — the same calls the sidebar and the settings make.
+ * See spec: Onboarding on First Launch.
+ */
+import { useEffect, useState } from "react";
+import { invoke, inTauri } from "@/lib/backend";
+import { announceBuildChanged } from "@/lib/install";
+import { BrandLogo } from "@/components/brand/BrandLogo";
+import { Keycap } from "@/components/ui/Keycap";
+import { StepFrame } from "./StepFrame";
+import { SettingRow } from "./SettingRow";
+import { InstallStep } from "./InstallStep";
+
+/** The `user.settings` key that says the first launch is over. */
+export const ONBOARDED = "onboarded";
+/** The `user.settings` key that holds the reader's telemetry answer. */
+export const TELEMETRY = "telemetry";
+
+/** Where the step-2 picture lives: HoudiniMD open in Houdini's help pane. It
+    ships with the app, the way the cover picture in the README does. */
+const HELP_PANE_PICTURE = "/onboarding/help-pane.webp";
+
+export function Onboarding({ onDone }: { onDone: () => void }) {
+  const [step, setStep] = useState(0);
+  const [version, setVersion] = useState("");
+  const [hookOn, setHookOn] = useState(true);
+  const [telemetryOn, setTelemetryOn] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function advance() {
+    if (busy) return;
+    setError("");
+    setBusy(true);
+    try {
+      await commit(step);
+      if (step === 4) {
+        onDone();
+        return;
+      }
+      setStep(step + 1);
+    } catch (reason) {
+      setError(String(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** What leaving a step writes. Each one is the reader's answer, applied
+      before the next screen can depend on it. */
+  async function commit(leaving: number) {
+    if (leaving === 1 && version) {
+      await invoke("select_install", { version });
+      announceBuildChanged();
+    }
+    if (leaving === 2 && hookOn) await invoke("hook_current_build");
+    if (leaving === 3) await invoke("set_setting", { key: TELEMETRY, value: String(telemetryOn) });
+    if (leaving === 4) await invoke("set_setting", { key: ONBOARDED, value: "done" });
+  }
+
+  const back = step === 0 ? undefined : () => setStep(step - 1);
+  const common = { busy, error, onBack: back, onContinue: () => void advance() };
+
+  if (step === 0) {
+    return (
+      <StepFrame
+        {...common}
+        action="Get started"
+        title={
+          <span className="flex flex-wrap items-center gap-sm">
+            Welcome to
+            <BrandLogo className="h-[1.1em] w-auto" />
+            HoudiniMD
+          </span>
+        }
+        body={
+          <>
+            A blazing fast, local alternative to Houdini’s docs. Made for power-users. This setup will take less than a minute.
+            Repeatedly press <Keycap className="px-xs py-thin text-caption">Enter</Keycap> to skip.
+          </>
+        }
+      />
+    );
+  }
+
+  if (step === 1) {
+    return (
+      <StepFrame
+        {...common}
+        step={1}
+        action="Continue"
+        title="Choose your Houdini install"
+        body="HoudiniMD reads the documentation from the build you select. You can switch between them at any time from the sidebar."
+      >
+        <InstallStep
+          value={version}
+          onChange={setVersion}
+          onError={setError}
+        />
+      </StepFrame>
+    );
+  }
+
+  if (step === 2) {
+    return (
+      <StepFrame
+        {...common}
+        step={2}
+        action="Continue"
+        title="Integrate inside Houdini"
+        body="Set HoudiniMD as the default help server for this install. Press F1 or the “Get Help” button on any node, and HoudiniMD appears directly inside Houdini, on that page."
+        media={
+          <img
+            src={HELP_PANE_PICTURE}
+            alt="HoudiniMD open in Houdini's help pane, on the Box node's page"
+            className="-mx-ms w-auto scale-150 origin-top-left"
+          />
+        }
+      >
+        <SettingRow
+          label="Set HoudiniMD as the default help server"
+          detail={version ? `Houdini ${version}` : undefined}
+          checked={hookOn}
+          onChange={setHookOn}
+        />
+      </StepFrame>
+    );
+  }
+
+  if (step === 3) {
+    return (
+      <StepFrame
+        {...common}
+        step={3}
+        action="Continue"
+        title="Help fix what breaks"
+        body="HoudiniMD sends the following data anonymously: Houdini build, OS, index time, page open time, and crash report stack traces. They help prioritise features and bug fixes, and help track down performance issues. There is no personal data linked to your usage of HoudiniMD."
+      >
+        <SettingRow
+          label="Send anonymous usage data"
+          checked={telemetryOn}
+          onChange={setTelemetryOn}
+        />
+      </StepFrame>
+    );
+  }
+
+  return (
+    <StepFrame
+      {...common}
+      step={4}
+      action="Continue"
+      title="Heads up: this is a beta"
+      body="Expect bugs. Bookmarks, recent pages and the index can be lost between builds. Some pages can miss content, or render incorrectly. File an issue using the button in the sidebar or directly on GitHub."
+    >
+      <p className="text-caption text-neutral-400">
+        The documentation is © SideFX. HoudiniMD only presents it. This is an unofficial project, not affiliated with or endorsed
+        by SideFX.
+      </p>
+    </StepFrame>
+  );
+}
+
+/**
+ * Whether the reader has been through the first launch, and how to say they
+ * have. `null` while the answer is still being read, so the window shows
+ * neither the app nor the setup for that moment rather than flashing one.
+ */
+export function useOnboarding(): { show: boolean | null; finish: () => void } {
+  const [show, setShow] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    // Houdini's help pane is not a first launch. It is the same front end
+    // served over HTTP, in a window the reader opened from inside Houdini,
+    // and the setup belongs to the desktop app that owns the settings.
+    if (!inTauri) {
+      setShow(false);
+      return;
+    }
+    let live = true;
+    void invoke<string | null>("get_setting", { key: ONBOARDED })
+      .catch(() => "done")
+      .then((answer) => {
+        if (live) setShow(answer !== "done");
+      });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  return {
+    show,
+    finish: () => setShow(false),
+  };
+}

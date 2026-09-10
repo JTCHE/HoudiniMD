@@ -7,12 +7,14 @@
  * Every control inside it stops that: a button that also dragged the window
  * would swallow the click.
  */
+import { useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { cn } from "@/lib/utils";
 import { Icons } from "@/lib/ui/icons";
 import { BrandLogo } from "@/components/brand/BrandLogo";
 import { useTrail } from "@/lib/nav";
 import { WindowControls } from "./WindowControls";
+import { TitleBarMenu } from "./TitleBarMenu";
 
 /* A square icon button on the bar. Smaller than a caption button and rounded,
    because it belongs to the app rather than to the window. */
@@ -31,12 +33,17 @@ interface TitleBarProps {
       is a trail to walk — on the first launch there is none, and two dead
       arrows on an empty window say nothing. */
   showTrail: boolean;
+  /** The bar over the first-launch setup: the name and the window's own
+      buttons, and nothing that opens a part of the app the reader has not
+      set up yet. */
+  bare?: boolean;
 }
 
-export function TitleBar({ sidebarOpen, onToggleSidebar, showTrail }: TitleBarProps) {
+export function TitleBar({ sidebarOpen, onToggleSidebar, showTrail, bare = false }: TitleBarProps) {
   const navigate = useNavigate();
   const { canGoBack, canGoForward } = useTrail();
-  const showArrows = showTrail || canGoBack || canGoForward;
+  const showArrows = !bare && (showTrail || canGoBack || canGoForward);
+  const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null);
 
   return (
     <header
@@ -52,6 +59,7 @@ export function TitleBar({ sidebarOpen, onToggleSidebar, showTrail }: TitleBarPr
         "shadow-[inset_0_-1px_0_var(--hairline)] bg-neutral-50 select-none",
       )}
     >
+      {!bare && (
       <button
         type="button"
         aria-label={sidebarOpen ? "Hide the sidebar" : "Show the sidebar"}
@@ -61,11 +69,16 @@ export function TitleBar({ sidebarOpen, onToggleSidebar, showTrail }: TitleBarPr
       >
         <Icons.sidebarToggle className="size-4" />
       </button>
+      )}
 
       {/* The name is the way home, the way a window title is in every app
           that has a home to go to. */}
       <Link
         to="/"
+        onContextMenu={(event) => {
+          event.preventDefault();
+          setMenuAt({ x: event.clientX, y: event.clientY });
+        }}
         className={cn(
           // Same plate as BAR_BUTTON: 28px tall, same radius, same hover fill.
           // Only the horizontal padding differs, because a logo and a word
@@ -117,6 +130,8 @@ export function TitleBar({ sidebarOpen, onToggleSidebar, showTrail }: TitleBarPr
       />
 
       <WindowControls />
+
+      {menuAt && <TitleBarMenu at={menuAt} onClose={() => setMenuAt(null)} />}
     </header>
   );
 }

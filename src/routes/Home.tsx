@@ -2,6 +2,7 @@ import { AsciiBackground } from "@/components/root/AsciiBackground";
 import { SearchField } from "@/components/root/search-field/SearchField";
 import { LibraryPanel } from "@/components/root/LibraryPanel";
 import { useBuild } from "@/lib/install";
+import { DISPLAY_TITLE } from "@/lib/ui/type";
 
 /**
  * What the window opens on.
@@ -30,7 +31,7 @@ export default function Home() {
         <div className="mx-auto flex min-h-0 w-full max-w-hero flex-col gap-xl">
           <div className="flex shrink-0 flex-col gap-lg">
             <header className="flex flex-col gap-xs">
-              <h1 className="text-[34px] leading-[36px] font-semibold tracking-[-0.032em] text-neutral-950">
+              <h1 className={DISPLAY_TITLE}>
                 Welcome to HoudiniMD.
               </h1>
               <p className="flex items-center flex-wrap gap-x-sm text-[16px] leading-6 tracking-[-0.012em] text-neutral-500">

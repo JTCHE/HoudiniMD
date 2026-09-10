@@ -61,8 +61,12 @@ html {
    keeps its own `cursor-pointer` and is not this class.
    One name, one place: change the value below to bring the hand back
    everywhere at once, instead of hunting every button across the tree. */
-.cursor-interactive {
-  cursor: default;
+@theme {
+  --cursor-interactive: default;
+}
+
+a {
+  @apply cursor-interactive;
 }
 /* a.cursor-interactive{
   cursor: pointer;
@@ -206,6 +210,7 @@ html {
      product, so it must not shift when the ramp flips. */
   --color-brand: var(--brand);
   --color-brand-bright: var(--brand-bright);
+  --color-brand-700: var(--brand-700);
   --color-brand-foreground: var(--brand-foreground);
   --color-brand-plate: var(--brand-plate);
 
@@ -323,6 +328,9 @@ html {
   /* Brand — #f05f04 converted to OKLCH. Identical in both themes. */
   --brand: oklch(0.664 0.195 43.1);
   --brand-bright: oklch(0.71 0.19 43.1);
+  /* The brand as TEXT. `--brand` is a plate colour: 3.31:1 on white, which a
+     word cannot be set in. This step is 4.79:1 and reads at label size. */
+  --brand-700: oklch(0.575 0.19 43.1);
   --brand-foreground: oklch(0.985 0 0);
 
   /* Surfaces.

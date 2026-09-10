@@ -17,7 +17,9 @@ import {
   Bookmark,
   BookOpen,
   Bug,
+  Check,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   ChevronsUpDown,
   Clock,
@@ -99,10 +101,12 @@ export const Icons = {
   /* Disclosure */
   expanded: ChevronDown,
   collapsed: ChevronRight,
+  stepBack: ChevronLeft,
   versionPicker: ChevronsUpDown,
 
   /* Content */
   bookmark: Bookmark,
+  chosen: Check,
   dismiss: X,
   recent: Clock,
   /** A page the help holds no icon for. */
