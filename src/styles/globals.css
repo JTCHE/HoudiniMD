@@ -651,6 +651,42 @@ a {
   text-align: center;
 }
 
+/* A run of `:col:` blocks — see flush_columns in the parser's markdown.rs.
+   Side by side while each column has room to read, stacked on a narrow
+   window. */
+.columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(16rem, 100%), 1fr));
+  gap: 1.5rem;
+  margin-block: 1.5rem;
+}
+.column > :first-child {
+  margin-top: 0;
+}
+.column > :last-child {
+  margin-bottom: 0;
+}
+/* A picture fills its column. Pictures on one line of a column stack: SideFX
+   draws the pyro divergence diagrams as two columns of three, not a row of
+   three in each column. */
+.column .markdown-media {
+  margin-inline: 0;
+}
+.column .image-group {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  margin-block: 0;
+}
+.column .image-group figure {
+  height: auto;
+}
+.column .image-group .markdown-media {
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+  aspect-ratio: auto 16 / 9;
+}
+
 /* ── Syntax highlighting (hljs / rehype-highlight) ─────────────────────── */
 /* Shared by fenced examples and VEX signature cards. */
 .code-panel {

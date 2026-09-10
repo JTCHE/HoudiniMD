@@ -34,16 +34,42 @@ pub fn title(title: &Title) -> String {
 pub fn blocks(blocks: &[Block], depth: u8) -> String {
     let mut out = String::new();
     let mut run: Vec<&Block> = Vec::new();
+    let mut columns: Vec<&Block> = Vec::new();
     for block in blocks {
         if matches!(block, Block::Item { name, .. } if name == "task") {
+            flush_columns(&mut columns, &mut out, depth);
             run.push(block);
             continue;
         }
+        if matches!(block, Block::Item { name, .. } if name == "col") {
+            flush_tasks(&mut run, &mut out);
+            columns.push(block);
+            continue;
+        }
         flush_tasks(&mut run, &mut out);
+        flush_columns(&mut columns, &mut out, depth);
         out.push_str(&one(block, depth));
     }
     flush_tasks(&mut run, &mut out);
+    flush_columns(&mut columns, &mut out, depth);
     out
+}
+
+/// A run of `:col:` blocks sits side by side: two pictures to compare, or two
+/// lists of links. Each column stays Markdown — the blank line after an HTML
+/// tag hands the text back to the Markdown parser — so a heading or a list in
+/// a column still reads as one. See `.columns` in `globals.css`.
+fn flush_columns(run: &mut Vec<&Block>, out: &mut String, depth: u8) {
+    if run.len() == 1 {
+        out.push_str(&one(run[0], depth));
+    } else if !run.is_empty() {
+        out.push_str("<div class=\"columns\">\n\n");
+        for block in run.iter() {
+            out.push_str(&format!("<div class=\"column\">\n\n{}\n\n</div>\n\n", one(block, depth).trim_end()));
+        }
+        out.push_str("</div>\n\n");
+    }
+    run.clear();
 }
 
 /// A run of `:task:` blocks is the "To.../Do this" table SideFX draws for
@@ -255,6 +281,16 @@ fn item(name: &str, label: &str, props: &Props, children: &[Block], depth: u8) -
                 flag("autoplay")
             )
         }
+        // `:vimeo: Set keyframe` with `#id: 116173730`. The front-end draws a
+        // box that loads the player only when the reader asks for it.
+        "vimeo" => match prop(props, "id") {
+            Some(id) => format!(
+                "<div class=\"not-prose vimeo\" data-id=\"{}\" title=\"{}\"></div>\n\n",
+                attribute(id.trim()),
+                attribute(label)
+            ),
+            None => String::new(),
+        },
         name if admonition(name).is_some() => {
             let (kind, head) = admonition(name).expect("the name is an admonition");
             // A blockquote that opens with `[!KIND]` is a callout to the
@@ -432,6 +468,12 @@ fn cell_html(blocks: &[Block], raw: bool) -> String {
                 attributes,
                 children,
             } => out.push_str(&html(tag, attributes, children)),
+            // A clip under a parameter: `Flow:` on the Mountain SOP shows the
+            // noise moving. It carries no children, only its source.
+            Block::Item { name, props, .. } if name == "video" || name == "vimeo" => {
+                gap(&mut out);
+                out.push_str(item(name, "", props, &[], 1).trim());
+            }
             Block::Item { children, .. } => {
                 gap(&mut out);
                 out.push_str(&cell_html(children, raw));
