@@ -1,0 +1,87 @@
+name: docs-wheel
+
+# Builds `houdinimd-docs` — the documentation engine, wrapped for Python by
+# `src-tauri/crates/pydocs` — for every platform Houdini runs on, and
+# publishes it. The HoudiniMCP bridge depends on it.
+#
+# Tag `docs-v0.1.0` (the version in pydocs/Cargo.toml) to publish to PyPI.
+# Run it by hand from the Actions tab to publish to TestPyPI first, or to
+# build without publishing.
+#
+# Publishing reads TEST_PYPI_API_TOKEN or PYPI_API_TOKEN from the repository
+# secrets. With no secret set, it falls back to PyPI trusted publishing.
+on:
+  push:
+    tags:
+      - "docs-v*"
+  workflow_dispatch:
+    inputs:
+      index:
+        description: Where to publish
+        type: choice
+        options: [testpypi, pypi, none]
+        default: testpypi
+
+jobs:
+  wheels:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64
+          # One wheel for Apple silicon and Intel Macs both.
+          - os: macos-14
+            target: universal2-apple-darwin
+          - os: ubuntu-latest
+            target: x86_64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: PyO3/maturin-action@v1
+        with:
+          working-directory: src-tauri/crates/pydocs
+          target: ${{ matrix.target }}
+          args: --release --out dist
+          # The oldest glibc the build image offers, so the wheel installs on
+          # the Linux distributions studios keep for years.
+          manylinux: auto
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.os }}-${{ matrix.target }}
+          path: src-tauri/crates/pydocs/dist
+
+  # The source, for a platform with no wheel. Building it needs Rust.
+  sdist:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: PyO3/maturin-action@v1
+        with:
+          working-directory: src-tauri/crates/pydocs
+          command: sdist
+          args: --out dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: src-tauri/crates/pydocs/dist
+
+  publish:
+    needs: [wheels, sdist]
+    if: startsWith(github.ref, 'refs/tags/docs-v') || (github.event_name == 'workflow_dispatch' && inputs.index != 'none')
+    runs-on: ubuntu-latest
+    # Trusted publishing signs the upload with this job's identity.
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist
+          repository-url: ${{ inputs.index == 'testpypi' && 'https://test.pypi.org/legacy/' || 'https://upload.pypi.org/legacy/' }}
+          password: ${{ inputs.index == 'testpypi' && secrets.TEST_PYPI_API_TOKEN || secrets.PYPI_API_TOKEN }}
+          # A file already uploaded by hand is not an error.
+          skip-existing: true
