@@ -198,7 +198,10 @@ export default function Page() {
                     summary={page.summary}
                     markdown={page.markdown}
                   />
-                  <TableOfContents headings={headings} />
+                  {/* Keyed on the page: a pill left floating by the last page
+                      stood over the top of the next one until the observer
+                      caught up, then faded out. A new page starts it hidden. */}
+                  <TableOfContents key={page.path} headings={headings} />
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm, remarkCallouts, [remarkVex, { enabled: isVexPage }]]}
                     rehypePlugins={[rehypeRaw, rehypeSlug, rehypeCards]}
