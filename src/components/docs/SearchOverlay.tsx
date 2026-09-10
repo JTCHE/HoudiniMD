@@ -7,7 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { flushSync } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 import { useLocation, useNavigate } from "react-router";
 import { showToast } from "@/components/ui/toast-notification";
 import { isCommand, useHotkey } from "@/lib/hotkeys";
@@ -202,7 +202,14 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
 
   const showList = rows.length > 0 || searchFor;
 
-  return (
+  // Rendered to `document.body`, not in place: the scroll column this
+  // component sits under carries `@container` (`container-type: inline-size`),
+  // which per the CSS Containment spec makes it the containing block for any
+  // `position: fixed` descendant. Left in place, "fixed" meant that column's
+  // box, not the window — the scrim missed the sidebar and status bar, and
+  // the column's own scroll position moved when this mounted. A portal keeps
+  // `fixed` meaning the viewport and keeps this out of that column entirely.
+  return createPortal(
     <div className="fixed inset-0 z-[60]" onClick={() => setOpen(false)}>
       {/* A plain scrim, not a blurred one. A backdrop-filter over the whole
           window is drawn again on every keystroke: it made a keystroke here
@@ -313,7 +320,8 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
         </div>
       </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 });
 

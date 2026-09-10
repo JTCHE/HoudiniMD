@@ -94,7 +94,12 @@ pub fn pass(
     )
     .map_err(|e| e.to_string())?;
 
-    let sections = sections(&install.help);
+    // A package's own help sits at `<package>/help`, shaped exactly like
+    // `install.help` — one zip or loose folder per section — so it is indexed
+    // by running the same per-section read against each root in turn and
+    // pooling the pages found. See `packages.rs`.
+    let roots = install.help_roots();
+    let sections = sections(&roots);
     let total: u32 = sections.iter().map(|(_, count)| count).sum();
     let mut pages = 0u32;
     let report = |pages: u32, done: bool| {
@@ -102,11 +107,11 @@ pub fn pass(
     };
     report(0, false);
 
-    let help = install.help.clone();
-    let load = |path: &str| crate::help::page(&help, path).ok();
+    let load = |path: &str| crate::help::page_layered(&roots, path).ok();
     let pool = pool()?;
     for (section, _) in &sections {
-        let sources = read_section(&install.help, section);
+        let sources: Vec<(String, String)> =
+            roots.iter().flat_map(|root| read_section(root, section)).collect();
         let parsed: Vec<Row> =
             pool.install(|| sources.par_iter().filter_map(|page| row(page, &load)).collect());
         pages += write(db, &build, &parsed)? as u32;
@@ -226,17 +231,32 @@ fn clear(db: &Connection, build: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// The sections of the help and how many pages each one holds.
+/// The sections across every help root and how many pages each one holds in
+/// total. A root a package contributes rarely adds a whole new section — Labs
+/// only ever adds to `nodes` — but nothing here assumes that.
 ///
 /// A section is `nodes.zip` or a plain folder such as `examples`. About 1,220
 /// pages ship loose beside the zips; reading only archives left every one of
-/// them out. `images.zip` and `videos` are assets, not pages — see spec:
-/// Local — Image and Asset Serving.
-fn sections(help: &Path) -> Vec<(String, u32)> {
+/// them out. `images.zip`, `videos` and `movies` are assets, not pages — see
+/// spec: Local — Image and Asset Serving.
+fn sections(roots: &[PathBuf]) -> Vec<(String, u32)> {
+    let mut sections: Vec<String> = roots.iter().flat_map(|help| section_names(help)).collect();
+    sections.sort();
+    sections.dedup();
+    sections
+        .into_iter()
+        .map(|section| {
+            let pages = roots.iter().map(|help| count(help, &section)).sum();
+            (section, pages)
+        })
+        .collect()
+}
+
+fn section_names(help: &Path) -> Vec<String> {
     let Ok(entries) = std::fs::read_dir(help) else {
         return Vec::new();
     };
-    let mut sections: Vec<String> = entries
+    entries
         .flatten()
         .filter_map(|entry| {
             let path = entry.path();
@@ -245,16 +265,7 @@ fn sections(help: &Path) -> Vec<(String, u32)> {
             if !zip && !path.is_dir() {
                 return None;
             }
-            (name != "images" && name != "videos").then_some(name)
-        })
-        .collect();
-    sections.sort();
-    sections.dedup();
-    sections
-        .into_iter()
-        .map(|section| {
-            let pages = count(help, &section);
-            (section, pages)
+            (name != "images" && name != "videos" && name != "movies").then_some(name)
         })
         .collect()
 }
