@@ -169,7 +169,7 @@ fn indexed(
         Ok(db) => db,
         Err(_) => return (500, b"the index is unreadable".to_vec(), "text/plain"),
     };
-    let install = match install::resolve(chosen, cache, &db) {
+    let install = match crate::current(&db, chosen, cache) {
         Ok(install) => install,
         Err(reason) => return not_found(reason),
     };
@@ -312,7 +312,7 @@ fn current(
 ) -> Result<install::Install, String> {
     let db = db.map_err(String::clone)?;
     let db = db.lock().map_err(|_| "the index is unreadable".to_string())?;
-    install::resolve(chosen, cache, &db)
+    crate::current(&db, chosen, cache)
 }
 
 #[cfg(test)]
