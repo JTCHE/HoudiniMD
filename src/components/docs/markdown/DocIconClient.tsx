@@ -35,11 +35,13 @@ export default function DocIconClient({
   const ref = useRef<HTMLImageElement>(null);
   // The page title keeps this mounted from page to page. A page whose icon
   // file is missing left the state at "broken", and every page after it drew
-  // no icon at all. A new picture starts over.
+  // no icon at all. Only that state starts over: from any other state the new
+  // picture replaces the old one in place, where a reset put a skeleton
+  // between the two on every slow read.
   const [shown, setShown] = useState(src);
   if (shown !== src) {
     setShown(src);
-    setState("loading");
+    if (state === "broken") setState("loading");
   }
 
   useLayoutEffect(() => {
