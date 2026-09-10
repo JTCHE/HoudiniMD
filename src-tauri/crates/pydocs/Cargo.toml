@@ -1,0 +1,27 @@
+[package]
+name = "pydocs"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "The HoudiniMD documentation engine as a Python module."
+
+# Deliberately outside the app's workspace: the app's release profile aborts
+# on panic, which is the wrong thing to do inside a Python interpreter, and a
+# profile can only be set at a workspace root.
+[workspace]
+
+[lib]
+name = "houdinimd_docs"
+crate-type = ["cdylib"]
+
+[dependencies]
+engine = { path = "../engine" }
+serde = "1"
+serde_json = "1"
+pyo3 = { version = "0.27", features = ["extension-module", "abi3-py39"] }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true
