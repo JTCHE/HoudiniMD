@@ -12,6 +12,8 @@ import { cn } from "@/lib/utils";
 import { invoke } from "@/lib/backend";
 import { announceBuildChanged } from "@/lib/install";
 import { showToast } from "@/components/ui/toast-notification";
+import { TELEMETRY } from "@/components/onboarding/Onboarding";
+import { Icons } from "@/lib/ui/icons";
 
 const ITEM =
   "flex w-full cursor-interactive items-center rounded-md px-sm py-[7px] text-left text-[13px] " +
@@ -20,6 +22,21 @@ const ITEM =
 
 export function TitleBarMenu({ at, onClose }: { at: { x: number; y: number }; onClose: () => void }) {
   const [busy, setBusy] = useState(false);
+  // The settings pane is cut from the beta, and the telemetry must be one
+  // click from off at any time, so its switch lives here until the pane is back.
+  const [telemetry, setTelemetry] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    void invoke<string | null>("get_setting", { key: TELEMETRY })
+      .then((value) => setTelemetry(value === "true"))
+      .catch(() => {});
+  }, []);
+
+  async function toggleTelemetry() {
+    const next = !telemetry;
+    await invoke("set_setting", { key: TELEMETRY, value: String(next) });
+    setTelemetry(next);
+  }
 
   useEffect(() => {
     const shut = () => onClose();
@@ -86,6 +103,29 @@ export function TitleBarMenu({ at, onClose }: { at: { x: number; y: number }; on
         "bg-raised p-1 shadow-xl shadow-black/10",
       )}
     >
+      <button
+        type="button"
+        role="menuitemcheckbox"
+        aria-checked={telemetry === true}
+        disabled={telemetry === null}
+        className={cn(ITEM, "justify-between")}
+        onClick={() => void toggleTelemetry()}
+      >
+        Send usage data
+        {telemetry && <Icons.chosen className="size-[14px] text-neutral-600" />}
+      </button>
+      <button
+        type="button"
+        role="menuitem"
+        className={ITEM}
+        onClick={() => {
+          void invoke("show_telemetry_log").catch((reason) => showToast(String(reason), "error"));
+          onClose();
+        }}
+      >
+        See what is sent
+      </button>
+      <div role="separator" className="mx-sm my-1 h-px bg-hairline" />
       <button type="button" role="menuitem" disabled={busy} className={ITEM} onClick={() => void resetIndex()}>
         Reset index
       </button>

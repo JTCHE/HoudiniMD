@@ -2,6 +2,7 @@ pub mod db;
 pub mod hook;
 pub mod library;
 pub mod server;
+pub mod telemetry;
 pub mod tray;
 pub mod update;
 
@@ -180,16 +181,40 @@ pub fn user_name_of_this_machine() -> String {
 /// even if the background pass has not reached it yet.
 #[tauri::command]
 fn page(
+    app: tauri::AppHandle,
     state: State<Db>,
     chosen: State<Arc<install::Chosen>>,
     cache: State<Arc<install::Cache>>,
     path: String,
 ) -> Result<PageView, PageError> {
+    let started = std::time::Instant::now();
     let db = state.0.lock().map_err(|e| PageError { missing: false, message: e.to_string() })?;
     let install = current(&db, &chosen, &cache)
         .map_err(|message| PageError { missing: false, message })?;
     drop(db);
-    read_page(&install, &path)
+    let view = read_page(&install, &path);
+    if view.is_ok() {
+        telemetry::page_opened(&app, started.elapsed().as_secs_f64() * 1000.0);
+    }
+    view
+}
+
+/// An error the front end did not catch, for the telemetry. Sends nothing when
+/// the reader said no.
+#[tauri::command]
+fn report_error(app: tauri::AppHandle, message: String) {
+    telemetry::error(&app, &message);
+}
+
+/// Opens the file that holds every payload the telemetry has sent.
+#[tauri::command]
+fn show_telemetry_log(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    let log = telemetry::log_path(&app);
+    if !log.exists() {
+        std::fs::write(&log, "").map_err(|e| e.to_string())?;
+    }
+    app.opener().open_path(log.to_string_lossy(), None::<&str>).map_err(|e| e.to_string())
 }
 
 /// Every page title in the current build.
@@ -314,7 +339,16 @@ pub fn current(
 pub fn start_index(app: tauri::AppHandle, data: std::path::PathBuf, install: install::Install) {
     std::thread::spawn(move || {
         index::background_priority();
+        let started = std::time::Instant::now();
+        // A build already indexed reports `done` at once; only a pass that
+        // reported progress first did any work worth timing.
+        let worked = std::sync::atomic::AtomicBool::new(false);
         let report = |status: index::Status| {
+            if !status.done {
+                worked.store(true, std::sync::atomic::Ordering::Relaxed);
+            } else if worked.load(std::sync::atomic::Ordering::Relaxed) {
+                telemetry::index_done(&app, started.elapsed().as_secs_f64(), status.pages);
+            }
             let _ = app.emit("index", status);
         };
         if let Err(message) = index::run(&data, &install, &report) {
@@ -578,6 +612,8 @@ pub fn run() {
             } else {
                 update::data_dir(app)?
             };
+            telemetry::catch_panics(data.clone());
+            app.manage(telemetry::Telemetry::new(data.clone()));
             app.manage(Db(Mutex::new(db::open(&data)?)));
             let chosen = Arc::new(install::Chosen::new());
             let cache = Arc::new(install::Cache::new());
@@ -603,6 +639,7 @@ pub fn run() {
                 start_index(app.handle().clone(), data, install);
             }
             tray::build(app)?;
+            telemetry::start(app.handle());
             // The window is hidden in `tauri.conf.json`. This shows it, after
             // the update check has had its say.
             update::start(app.handle());
@@ -635,7 +672,9 @@ pub fn run() {
             hook_current_build,
             unhook_houdini,
             reset_index,
-            reset_user_data
+            reset_user_data,
+            report_error,
+            show_telemetry_log
         ])
         .run(tauri::generate_context!())
         .expect("error while running the application");

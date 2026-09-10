@@ -1,0 +1,13 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "houdinimd-telemetry",
+  "main": "worker.ts",
+  "compatibility_date": "2026-08-01",
+  "routes": [{ "pattern": "telemetry.houdinimd.com", "custom_domain": true }],
+  // One data point per event, kept three months by Analytics Engine itself.
+  "analytics_engine_datasets": [{ "binding": "EVENTS", "dataset": "houdinimd_app" }],
+  // Per install id. An app sends a handful of events a session.
+  "ratelimits": [{ "name": "LIMITER", "namespace_id": "1003", "simple": { "limit": 30, "period": 60 } }],
+  "observability": { "enabled": false },
+  "limits": { "cpu_ms": 20 }
+}

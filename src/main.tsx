@@ -1,5 +1,5 @@
 import { StrictMode } from "react";
-import { invoke } from "./lib/backend";
+import { invoke, inTauri } from "./lib/backend";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes } from "react-router";
 import Home from "./routes/Home";
@@ -40,6 +40,14 @@ if (import.meta.env.PROD) {
     if (at?.closest("input, textarea, [contenteditable='true']")) return;
     event.preventDefault();
   });
+}
+
+// An error nothing caught goes to the telemetry, which sends nothing unless
+// the reader agreed to it. See src-tauri/src/telemetry.rs.
+if (inTauri) {
+  const report = (message: string) => void invoke("report_error", { message }).catch(() => {});
+  window.addEventListener("error", (event) => report(`${event.message}\n${event.error?.stack ?? ""}`));
+  window.addEventListener("unhandledrejection", (event) => report(String(event.reason?.stack ?? event.reason)));
 }
 
 // Every control in the window acts on the press from here on — one listener,
