@@ -1,8 +1,14 @@
 # houdinimd-docs
 
-Houdini's own documentation, read out of the Houdini install on this machine.
+A parser and search engine for the Houdini documentation.
+
+Houdini ships its help as thousands of text pages (about 12,000 in Houdini
+22.0 with SideFX Labs), written in SideFX's own wiki markup. Nothing outside
+Houdini reads that format. This module parses the markup, converts every page
+to clean Markdown, and indexes all of them for ranked full-text search.
+
 It is the documentation engine of the [HoudiniMD](https://houdinimd.com)
-desktop app, compiled from Rust into a Python module. The
+desktop app, written in Rust and compiled into a Python module. The
 [HoudiniMCP](https://github.com/JTCHE/houdini-mcp) bridge uses it.
 
 No documentation ships in this package. Every page comes from the help files
