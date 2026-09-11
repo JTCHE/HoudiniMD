@@ -23,8 +23,10 @@ interface PageHeaderProps {
 export function PageHeader({ name, nodeType, icon, since, summary, markdown, entry }: PageHeaderProps) {
   return (
     <header className="not-prose border-b border-border pb-3 mb-6">
+      {/* The actions hold the right of the title line at every width. What
+          wraps is the title side: a long name, then the Since pill under it. */}
       <div className="flex flex-wrap items-start justify-between gap-x-8 gap-y-3">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 min-w-0">
+        <div className="flex min-w-0 flex-1 basis-0 flex-wrap items-center gap-x-3 gap-y-2">
           <PageTitle name={name} nodeType={nodeType} icon={icon} />
           {since && (
             <span className="inline-flex items-center rounded-md border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
