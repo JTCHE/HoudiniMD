@@ -21,6 +21,7 @@ import { SettingRow } from "./SettingRow";
 import { InstallStep } from "./InstallStep";
 import { McpStep } from "./McpStep";
 import { showToast } from "@/components/ui/toast-notification";
+import { setupDone } from "@/lib/telemetry";
 
 /** The `user.settings` key that says the first launch is over. */
 export const ONBOARDED = "onboarded";
@@ -78,7 +79,12 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
       );
     }
     if (leaving === 4) await invoke("set_setting", { key: TELEMETRY, value: String(telemetryOn) });
-    if (leaving === 5) await invoke("set_setting", { key: ONBOARDED, value: "done" });
+    if (leaving === 5) {
+      await invoke("set_setting", { key: ONBOARDED, value: "done" });
+      // The only event that says a setup ended, so it is also how many
+      // installs never finish one.
+      setupDone(`hook=${hookOn} mcp=${mcpOn && agent ? agent : "no"}`);
+    }
   }
 
   const back =

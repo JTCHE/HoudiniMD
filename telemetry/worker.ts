@@ -21,7 +21,7 @@ interface Env {
   LIMITER: { limit(options: { key: string }): Promise<{ success: boolean }> };
 }
 
-const KINDS = new Set(["launch", "index", "pages", "crash", "error"]);
+const KINDS = new Set(["launch", "index", "pages", "crash", "error", "setup", "feature"]);
 
 const str = (value: unknown, max: number) => (typeof value === "string" ? value.slice(0, max) : "");
 const num = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? value : 0);

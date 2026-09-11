@@ -2,7 +2,9 @@
 //!
 //! What goes out, and nothing else: a random id made on this machine, the app
 //! version, the Houdini build, the operating system version, how long an index
-//! pass took, how long pages take to open, and crash messages. No page path,
+//! pass took, how long pages take to open, which answers the first launch got,
+//! the names of the parts of the app a session used, and crash messages. Each
+//! name is a fixed word this code writes. No page path,
 //! no title, no search, no user name, no file path. Every payload is also
 //! written to `telemetry.log` in the data folder before it is sent, so the
 //! reader can read exactly what left the machine.
@@ -33,11 +35,17 @@ pub struct Telemetry {
     data: PathBuf,
     opens: Mutex<Vec<f64>>,
     errors: Mutex<Vec<String>>,
+    features: Mutex<Vec<String>>,
 }
 
 impl Telemetry {
     pub fn new(data: PathBuf) -> Self {
-        Self { data, opens: Mutex::new(Vec::new()), errors: Mutex::new(Vec::new()) }
+        Self {
+            data,
+            opens: Mutex::new(Vec::new()),
+            errors: Mutex::new(Vec::new()),
+            features: Mutex::new(Vec::new()),
+        }
     }
 }
 
@@ -84,6 +92,23 @@ pub fn page_opened(app: &AppHandle, ms: f64) {
     sorted.sort_by(f64::total_cmp);
     let at = |share: f64| sorted[((sorted.len() - 1) as f64 * share).round() as usize];
     send(app, "pages", json!({ "count": sorted.len(), "median_ms": at(0.5), "p95_ms": at(0.95) }));
+}
+
+/// A named thing happened. `kind` is `setup` (the first launch ended, and the
+/// answers it got) or `feature` (a part of the app was used). The pair is sent
+/// once per launch, so a count is sessions that did it, not presses. `name` is
+/// a fixed word the code writes, never something the reader typed.
+pub fn track(app: &AppHandle, kind: &str, name: &str) {
+    {
+        let state = app.state::<Telemetry>();
+        let Ok(mut seen) = state.features.lock() else { return };
+        let key = format!("{kind}/{name}");
+        if seen.contains(&key) || seen.len() >= 40 {
+            return;
+        }
+        seen.push(key);
+    }
+    send(app, kind, json!({ "message": name }));
 }
 
 /// An error the front end did not catch. Each message is sent once per launch.
