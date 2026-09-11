@@ -532,8 +532,9 @@ fn text_in(text: &[Inline], raw: bool) -> String {
 /// This writes only what a table cell needs, and drops what `inlines` drops.
 fn raw_inlines(text: &[Inline]) -> String {
     let mut out = String::new();
-    for inline in text {
+    for (at, inline) in text.iter().enumerate() {
         match inline {
+            Inline::Icon { .. } if marks_a_link(text, at) => {}
             Inline::Text { text } => out.push_str(&escape(text)),
             Inline::Raw { text } => out.push_str(text),
             Inline::Bold { body } | Inline::Ui { body } => {
@@ -718,10 +719,22 @@ fn capitalise(name: &str) -> String {
     }
 }
 
+/// Whether the icon at `at` stands just before a link to a page in the help.
+/// The app draws that page's own icon in front of every such link, so the
+/// icon the source writes there would show twice.
+fn marks_a_link(inlines: &[Inline], at: usize) -> bool {
+    let next = inlines[at + 1..]
+        .iter()
+        .find(|inline| !matches!(inline, Inline::Text { text } if text.trim().is_empty()));
+    matches!(next, Some(Inline::Link { target, .. })
+        if !matches!(target, LinkTarget::Web { .. } | LinkTarget::Wikipedia { .. }))
+}
+
 pub fn inlines(inlines: &[Inline]) -> String {
     let mut out = String::new();
-    for inline in inlines {
+    for (at, inline) in inlines.iter().enumerate() {
         match inline {
+            Inline::Icon { .. } if marks_a_link(inlines, at) => {}
             Inline::Text { text } | Inline::Raw { text } => out.push_str(text),
             Inline::Bold { body } | Inline::Ui { body } => {
                 out.push_str(&format!("**{}**", self::inlines(body)))
@@ -792,5 +805,19 @@ mod tests {
         assert_eq!(url(&wiki), "/nodes/dop/popsprite#parms");
         let other = LinkTarget::Node { path: "/sop/box".into() };
         assert_eq!(url(&other), "/nodes/sop/box");
+    }
+
+    #[test]
+    fn an_icon_before_a_page_link_is_left_to_the_link() {
+        let icon = || Inline::Icon { src: "SOP/bulge".into(), size: IconSize::Normal };
+        let link = |target| Inline::Link { text: vec![Inline::Text { text: "Bulge".into() }], target };
+        let page = inlines(&[icon(), link(LinkTarget::Node { path: "sop/bulge".into() })]);
+        assert_eq!(page, "[Bulge](/nodes/sop/bulge)");
+        let spaced = inlines(&[icon(), Inline::Text { text: " ".into() }, link(LinkTarget::Node { path: "sop/bulge".into() })]);
+        assert!(!spaced.contains("data-icon"), "{spaced}");
+        let web = inlines(&[icon(), link(LinkTarget::Web { url: "https://example.com".into() })]);
+        assert!(web.contains("data-icon"), "{web}");
+        let alone = inlines(&[icon(), Inline::Text { text: " tool".into() }]);
+        assert!(alone.contains("data-icon"), "{alone}");
     }
 }
