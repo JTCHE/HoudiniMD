@@ -769,7 +769,9 @@ pre code[class] {
 .hljs-params,
 .hljs-variable,
 .vex-tk-arg {
-  color: var(--foreground);
+  /* Not --foreground: the code panel is dark in both themes, so in the light
+     theme that colour drew the names black on black. */
+  color: oklch(0.93 0 0);
 }
 .hljs-operator,
 .hljs-punctuation,
