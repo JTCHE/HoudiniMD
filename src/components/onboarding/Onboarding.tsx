@@ -58,7 +58,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
   /** What leaving a step writes. Each one is the reader's answer, applied
       before the next screen can depend on it. */
   async function commit(leaving: number) {
-    if (leaving === 1 && version) {
+    if (leaving === 1) {
       await invoke("select_install", { version });
       announceBuildChanged();
     }
@@ -67,7 +67,13 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
     if (leaving === 4) await invoke("set_setting", { key: ONBOARDED, value: "done" });
   }
 
-  const back = step === 0 ? undefined : () => setStep(step - 1);
+  const back =
+    step === 0
+      ? undefined
+      : () => {
+          setError("");
+          setStep(step - 1);
+        };
   const common = { busy, error, onBack: back, onContinue: () => void advance() };
 
   if (step === 0) {
@@ -96,6 +102,8 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
     return (
       <StepFrame
         {...common}
+        // The app reads nothing without a build, so no build, no way on.
+        ready={Boolean(version)}
         step={1}
         action="Continue"
         title="Choose your Houdini install"

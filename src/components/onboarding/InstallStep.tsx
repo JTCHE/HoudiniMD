@@ -73,6 +73,11 @@ export function InstallStep({
 
   return (
     <div className="-mx-ms flex flex-col gap-sm">
+      {installs.length === 0 && (
+        <p className="px-ms text-meta text-neutral-500">
+          No Houdini install found on this machine. Install Houdini, or pick the folder of one.
+        </p>
+      )}
       {installs.map((install) => {
         const chosen = install.version === value;
         return (
