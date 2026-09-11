@@ -11,7 +11,7 @@
  * list nobody widened on purpose.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { listen } from "../../lib/backend";
+import { invoke, listen } from "../../lib/backend";
 import { cn } from "@/lib/utils";
 import { titles, forgetTitles, type Hit } from "@/lib/search";
 import { buildTree, type TreeBranch } from "@/lib/landing/tree";
@@ -30,8 +30,9 @@ import { FadeList } from "@/components/ui/FadeList";
     biggest zip), so the first build can land before Nodes exists. Rebuild
     once the pass finishes so the tree does not stay stuck on that first,
     partial read for the rest of the session. */
-function useTree(): TreeBranch[] {
+function useTree(): { tree: TreeBranch[]; reading: boolean } {
   const [tree, setTree] = useState<TreeBranch[]>(cached ?? []);
+  const [reading, setReading] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -42,7 +43,12 @@ function useTree(): TreeBranch[] {
       });
     };
     if (!cached) load();
+    // Houdini's help pane gets no events, so the state is read once as well.
+    void invoke<{ done: boolean }>("index_status")
+      .then((status) => live && setReading(!status.done))
+      .catch(() => {});
     const stop = listen<{ done: boolean }>("index", (event) => {
+      setReading(!event.payload.done);
       if (!event.payload.done) return;
       forgetTitles();
       cached = null;
@@ -54,7 +60,7 @@ function useTree(): TreeBranch[] {
     };
   }, []);
 
-  return tree;
+  return { tree, reading };
 }
 
 let cached: TreeBranch[] | null = null;
@@ -75,7 +81,7 @@ function storedWidth(): number {
 
 export function Sidebar({ currentPath, className }: { currentPath?: string; className?: string }) {
   const { version, pageCount } = useBuild();
-  const tree = useTree();
+  const { tree, reading } = useTree();
   const { recents, bookmarks } = useLibrary();
   const [recentsOpen, setRecentsOpen] = useState(false);
   const [width, setWidth] = useState(storedWidth);
@@ -139,6 +145,7 @@ export function Sidebar({ currentPath, className }: { currentPath?: string; clas
           below, and scrolls inside that — the footer never leaves the bottom
           of the window. */}
       <PageTree
+        reading={reading}
         groups={tree}
         currentPath={currentPath}
         bookmarked={new Set(bookmarks.map((entry) => entry.path))}
