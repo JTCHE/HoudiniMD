@@ -29,7 +29,11 @@ export function toTitleCase(text: string): string {
     .map((word, i) => {
       if (!word) return word;
       const lower = word.toLowerCase();
-      if (ACRONYMS.has(lower)) return lower.toUpperCase();
+      // A word the source already writes in caps is an acronym it knows about:
+      // "TOP node" and "APEX node" come in that way.
+      if (ACRONYMS.has(lower) || (/[A-Z]/.test(word) && word === word.toUpperCase() && word.length > 1)) {
+        return word.toUpperCase();
+      }
       const isMinor = i !== 0 && i !== words.length - 1 && MINOR_WORDS.has(lower);
       return isMinor ? lower : lower.charAt(0).toUpperCase() + lower.slice(1);
     })
