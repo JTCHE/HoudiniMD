@@ -56,8 +56,12 @@ pub fn build(app: &tauri::App) -> tauri::Result<()> {
     Ok(())
 }
 
-/// The close button hides the window. The process, and F1 with it, stays.
+/// The close button hides the first window. The process, and F1 with it,
+/// stays. A window opened after it (Ctrl N) closes for good.
 pub fn on_window_event(window: &Window, event: &WindowEvent) {
+    if window.label() != "main" {
+        return;
+    }
     if let WindowEvent::CloseRequested { api, .. } = event {
         api.prevent_close();
         let _ = window.hide();

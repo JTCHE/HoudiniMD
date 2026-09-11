@@ -3,7 +3,8 @@
   "identifier": "default",
   "description": "The window drives its own title bar: it is drawn in the page, so the page has to be able to drag, minimize, maximize and close the window it is in.",
   "windows": [
-    "main"
+    "main",
+    "window-*"
   ],
   "permissions": [
     "core:default",
