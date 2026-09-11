@@ -117,8 +117,9 @@ export default function DocLink({
      glyph in front of it is recognised before it is read, and the icon is the
      same one the panel and the search draw for that page. The answer arrives
      with the batch the tooltips already ask for, so a link costs no call of
-     its own. */
-  const marked = mark && !external && !!slug && !samePage;
+     its own. A link to the open page wears it too: in a "see also" list it
+     sits among its siblings, and a row without the glyph reads as broken. */
+  const marked = mark && !external && !!slug;
   const meta = usePageMark(marked ? slug : null);
   const glyph = marked ? (
     meta?.icon ? (
