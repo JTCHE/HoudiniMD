@@ -107,7 +107,7 @@ export function TableOfContents({ headings }: { headings: Heading[] }) {
           title is centred in a box as tall as the bar, so "On this page" is
           always on the breadcrumbs' line. The list under the title scrolls on
           its own and is never taller than the scroller. */}
-      <div className="not-prose print:hidden hidden @min-[780px]:block absolute top-0 left-full ml-lg h-full w-52">
+      <div className="not-prose print:hidden hidden @min-[780px]:block absolute top-0 left-full ml-lg h-full w-44">
         <nav
           aria-label="On this page"
           className="sticky top-0 flex max-h-[calc(100dvh-var(--spacing-titlebar)-var(--spacing-statusbar))] flex-col"
