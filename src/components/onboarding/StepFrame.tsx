@@ -20,6 +20,7 @@ export function StepFrame({
   error,
   action,
   busy,
+  ready = true,
   onBack,
   onContinue,
 }: {
@@ -37,6 +38,8 @@ export function StepFrame({
   /** The word on the key. */
   action: string;
   busy?: boolean;
+  /** False while the step still needs an answer. The key dims and stays shut. */
+  ready?: boolean;
   onBack?: () => void;
   onContinue: () => void;
 }) {
@@ -44,7 +47,10 @@ export function StepFrame({
   // The key takes the focus on every step, and nothing else in the flow takes
   // it away — see the `onMouseDown` guards. So Enter is always "continue",
   // with no key handler of the window's own: the button answers it itself.
-  useEffect(() => key.current?.focus(), [step]);
+  // A disabled key cannot take the focus, so it takes it again once enabled.
+  useEffect(() => {
+    if (!busy && ready) key.current?.focus();
+  }, [step, busy, ready]);
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -75,7 +81,9 @@ export function StepFrame({
       <div className="flex min-h-0 flex-1 items-center justify-center px-lg">
         <div className="flex h-[560px] w-full max-w-[560px] flex-col gap-lg">
           <div className="flex min-h-0 flex-1 flex-col justify-center gap-lg">
-            <div className="overflow-hidden rounded-lg border border-hairline shadow-pane aspect-[2.4]">{media}</div>
+            {media && (
+              <div className="overflow-hidden rounded-lg border border-hairline shadow-pane aspect-[2.4]">{media}</div>
+            )}
             <div className="flex flex-col gap-sm">
               <h1 className={DISPLAY_TITLE}>{title}</h1>
               <p className="text-[15.5px] leading-[1.52] tracking-[-0.02em] text-neutral-500">{body}</p>
@@ -89,9 +97,9 @@ export function StepFrame({
                 surface in this app does, so its label stays on the axis. */}
             <PrimaryButton
               ref={key}
-              disabled={busy}
+              disabled={busy || !ready}
               onClick={onContinue}
-              className="-mx-ms w-auto"
+              className={cn("-mx-ms w-auto", !ready && "opacity-40 disabled:cursor-not-allowed")}
             >
               {action}
             </PrimaryButton>
