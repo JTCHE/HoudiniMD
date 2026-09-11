@@ -39,12 +39,6 @@ export function useOverflow(node: RefObject<HTMLElement | null>, deps: unknown[]
 export const FADE_OUT =
   "[mask-image:linear-gradient(to_bottom,black_0,black_calc(100%-40px),transparent_100%)]";
 
-/** The fade under a bar that stays put while content scrolls beneath it: the
-    bar's own ground runs on below its edge and thins out, so a line passing
-    under it fades before it is cut. The bar must be positioned. */
-export const FADE_UNDER =
-  "after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-6 after:bg-linear-to-b after:from-background after:to-transparent after:content-['']";
-
 /** Both edges: a short fade in at the top, the full fade out at the bottom. */
 export const FADE_BOTH =
   "[mask-image:linear-gradient(to_bottom,transparent_0,black_8px,black_calc(100%-40px),transparent_100%)]";

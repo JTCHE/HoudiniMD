@@ -26,7 +26,7 @@ export function StatusBar({ className }: { className?: string }) {
   return (
     <footer
       className={cn(
-        "flex h-statusbar shrink-0 items-center gap-lg px-lg select-none",
+        "status-scrim flex h-statusbar shrink-0 items-center gap-lg px-lg select-none",
         className,
       )}
     >

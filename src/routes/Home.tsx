@@ -18,7 +18,7 @@ export default function Home() {
   const { version, pageCount } = useBuild();
 
   return (
-    <main className="relative flex min-h-0 flex-1 flex-col overflow-hidden @container">
+    <main className="relative flex min-h-0 flex-1 flex-col overflow-hidden pb-statusbar @container">
       {/* The field is a watermark in the top corner rather than a full-bleed
           backdrop: the window already carries a panel and two bars, and a
           pattern behind all of it would be one texture too many. */}

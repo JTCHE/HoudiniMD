@@ -75,7 +75,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         <div className={cn("relative flex min-w-0 flex-1 flex-col overflow-hidden")}>
           {children}
-          <StatusBar />
+          {/* The strip lies over the bottom of the page, which runs on under
+              it and fades out (see .status-scrim), so the page needs room for
+              it at its own foot. Only its contents take the pointer: the
+              scrollbar under it still drags. */}
+          <StatusBar className="pointer-events-none absolute inset-x-0 bottom-0 z-10 [&>*]:pointer-events-auto" />
         </div>
       </div>
       )}
