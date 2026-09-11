@@ -63,9 +63,9 @@ export function FloatingPill({
     if (row) el.scrollTop = row.offsetTop - el.clientHeight / 2 + row.offsetHeight / 2;
   }, [open, active]);
 
-  // The pill's own horizontal padding (pl-3.5) is what the negative margin
-  // cancels, putting the icon on the page's shared vertical axis.
-  const pillAlign = "-ml-3.5 pl-3.5 pr-3";
+  // The negative margin cancels the pill's border and left padding (1px +
+  // pl-3.5), putting the icon on the page's shared vertical axis.
+  const pillAlign = "-ml-[15px] pl-3.5 pr-3";
 
   return (
     <div
@@ -78,7 +78,9 @@ export function FloatingPill({
         floating ? "opacity-100" : "pointer-events-none opacity-0"
       }`}
     >
-      <div className="mx-auto flex max-w-page px-page-x">
+      {/* Already inside the article, so the column's padding is not added
+          again here. */}
+      <div className="flex">
         <div className="relative">
           <button
             type="button"
@@ -106,7 +108,7 @@ export function FloatingPill({
             // bottom of the screen under Safari's bottom bar. svh is the
             // smallest state — the panel fits with every bar on screen.
             style={{ maxHeight: "calc(100svh - var(--header-h, 3.5rem) - 6rem)" }}
-            className={`-ml-3.5 absolute left-0 top-full mt-2 w-[min(20rem,calc(100vw-3rem))] overflow-y-auto overscroll-contain border border-border bg-background rounded-2xl shadow-xl shadow-black/20 p-1.5 origin-top-left transition-[opacity,transform] duration-200 ease-out motion-reduce:transition-none ${expanded ? "opacity-100 scale-100" : "pointer-events-none opacity-0 scale-[0.98]"}`}
+            className={`-ml-[15px] absolute left-0 top-full mt-2 w-[min(20rem,calc(100vw-3rem))] overflow-y-auto overscroll-contain border border-border bg-background rounded-2xl shadow-xl shadow-black/20 p-1.5 origin-top-left transition-[opacity,transform] duration-200 ease-out motion-reduce:transition-none ${expanded ? "opacity-100 scale-100" : "pointer-events-none opacity-0 scale-[0.98]"}`}
           >
             <TocList headings={headings} top={top} active={active} padded onNavigate={() => setOpen(false)} />
           </div>
