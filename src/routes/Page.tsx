@@ -26,6 +26,7 @@ import { onBuildChanged } from "@/lib/install";
 import { isCommand, isTyping, useHotkey } from "@/lib/hotkeys";
 import { invoke, inTauri } from "@/lib/backend";
 import { flashText } from "@/lib/ui/flash-text";
+import { FADE_OUT } from "@/lib/ui/overflow";
 
 /**
  * What to call a page whose help file gives no title.
@@ -248,7 +249,13 @@ export default function Page() {
       ref={scroller}
       // The bar's width is held on a short page too, so the column does not
       // step sideways between a page that scrolls and one that does not.
-      className="docs-shell @container flex min-h-0 flex-1 flex-col overflow-y-auto [scrollbar-gutter:stable]"
+      // The text falls off above the status bar the way the sidebar's lists
+      // do, not against a hard edge. The page ends on the bottom padding of
+      // `main`, which is deeper than the fade, so the last line always reads.
+      className={cn(
+        "docs-shell @container flex min-h-0 flex-1 flex-col overflow-y-auto [scrollbar-gutter:stable]",
+        FADE_OUT,
+      )}
     >
       <SearchOverlay ref={search} />
       {/* Room for the contents list in the right gutter, taken from the box
