@@ -23,7 +23,8 @@ import { recordVisit } from "@/lib/store/library";
 import { sideFxUrl } from "@/lib/sidefx";
 import { forgetPages, known, read, type PageError, type PageView } from "@/lib/pages";
 import { onBuildChanged } from "@/lib/install";
-import { isTyping, useHotkey } from "@/lib/hotkeys";
+import { isCommand, isTyping, useHotkey } from "@/lib/hotkeys";
+import { invoke, inTauri } from "@/lib/backend";
 import { flashText } from "@/lib/ui/flash-text";
 
 /**
@@ -186,6 +187,23 @@ export default function Page() {
     shell.scrollTo({ top: aim.current, behavior: "smooth" });
   });
   const aim = useRef<number | null>(null);
+
+  // Ctrl Alt C or Ctrl L copies where an agent can read this page as a file:
+  // the Markdown the local server answers at `<page>.md`. Houdini's help pane
+  // is already on that server; the desktop window asks for its port.
+  useHotkey((event) => {
+    const key = event.key.toLowerCase();
+    const wanted = (event.ctrlKey && event.altKey && key === "c") || (isCommand(event) && !event.shiftKey && key === "l");
+    if (!wanted || isTyping(event.target)) return;
+    event.preventDefault();
+    void (inTauri ? invoke<number>("server_port").catch(() => 0) : Promise.resolve(Number(window.location.port)))
+      .then((port) => {
+        if (!port) throw new Error("The local server is not running");
+        return navigator.clipboard.writeText(`http://localhost:${port}/${path}.md`);
+      })
+      .then(() => showToast("Copied the page path"))
+      .catch((reason: Error) => showToast(reason.message || "Could not copy the page path", "error"));
+  });
   useEffect(() => {
     const shell = scroller.current;
     if (!shell) return;
