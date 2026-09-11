@@ -4,12 +4,12 @@ build-backend = "maturin"
 
 [project]
 name = "houdinimd-docs"
-description = "Houdini's own documentation, read out of the install on this machine."
+description = "Parses Houdini's help, written in SideFX's own wiki markup, into clean Markdown, and indexes it for ranked full-text search."
 readme = "README.md"
 requires-python = ">=3.9"
 license = "MIT"
 authors = [{ name = "JTCHE" }]
-keywords = ["houdini", "documentation", "sidefx"]
+keywords = ["houdini", "documentation", "sidefx", "markdown", "parser", "full-text-search"]
 classifiers = [
   "Programming Language :: Rust",
   "Programming Language :: Python :: Implementation :: CPython",
