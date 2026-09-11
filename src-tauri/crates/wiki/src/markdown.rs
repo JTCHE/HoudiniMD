@@ -741,16 +741,27 @@ pub fn inlines(inlines: &[Inline]) -> String {
     out
 }
 
+/// The old particle context `pop` was removed from Houdini, and each of its
+/// nodes that lives on is now a DOP named `pop<name>`. Some pages still link
+/// to the old path: `Node:pop/location` is `/nodes/dop/poplocation` today.
+/// A name with no DOP stays a dead link, as it was.
+fn retired(path: String) -> String {
+    match path.strip_prefix("/nodes/pop/") {
+        Some(name) => format!("/nodes/dop/pop{name}"),
+        None => path,
+    }
+}
+
 /// The path a link points at inside the app.
 pub fn url(target: &LinkTarget) -> String {
     match target {
         LinkTarget::Wiki { path, anchor } => match anchor {
-            Some(anchor) => format!("{path}#{anchor}"),
-            None => path.clone(),
+            Some(anchor) => format!("{}#{anchor}", retired(path.clone())),
+            None => retired(path.clone()),
         },
         LinkTarget::Web { url } => url.clone(),
         // `[Node:/cop/file]` is written with a slash as often as without.
-        LinkTarget::Node { path } => format!("/nodes/{}", path.trim_start_matches('/')),
+        LinkTarget::Node { path } => retired(format!("/nodes/{}", path.trim_start_matches('/'))),
         LinkTarget::Expression { name } => format!("/expressions/{name}"),
         LinkTarget::Vex { name } => format!("/vex/functions/{name}"),
         LinkTarget::Mantra { name } => format!("/props/mantra#{name}"),
@@ -766,5 +777,20 @@ pub fn url(target: &LinkTarget) -> String {
         LinkTarget::Wikipedia { article } => {
             format!("https://en.wikipedia.org/wiki/{article}")
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_link_to_the_old_pop_context_goes_to_its_dop() {
+        let node = LinkTarget::Node { path: "pop/location".into() };
+        assert_eq!(url(&node), "/nodes/dop/poplocation");
+        let wiki = LinkTarget::Wiki { path: "/nodes/pop/sprite".into(), anchor: Some("parms".into()) };
+        assert_eq!(url(&wiki), "/nodes/dop/popsprite#parms");
+        let other = LinkTarget::Node { path: "/sop/box".into() };
+        assert_eq!(url(&other), "/nodes/sop/box");
     }
 }
