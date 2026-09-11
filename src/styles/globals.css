@@ -570,6 +570,11 @@ a {
   border: none;
   border-radius: 0;
 }
+/* Full screen, the bars around a clip of another shape are the screen's own
+   edge, and a screen edge is black. */
+.markdown-video[data-media-player][data-layout="video"][data-fullscreen] {
+  background-color: black;
+}
 
 /* vidstack's own base.css inherits a 16/9 aspect-ratio down onto the <video>
    tag itself (height: auto + aspect-ratio: inherit), so it sizes independent
