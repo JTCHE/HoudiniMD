@@ -26,6 +26,7 @@ import { onBuildChanged } from "@/lib/install";
 import { isCommand, isTyping, useHotkey } from "@/lib/hotkeys";
 import { invoke, inTauri } from "@/lib/backend";
 import { flashText } from "@/lib/ui/flash-text";
+import { readingLine, scrollTopFor } from "@/components/docs/toc/measure";
 
 /**
  * What to call a page whose help file gives no title.
@@ -119,20 +120,62 @@ export default function Page() {
     recordVisit({ path, title: nameOf(page, path), icon: page.icon });
   }, [page, path]);
 
-  // A search hit names a section, so the reader arrives at `#parameters` and
-  // has to land on it. The anchor is waited for rather than read at once: the
-  // heading does not exist until the markdown above has rendered.
+  // A search hit names a section, and F1 names a parameter, so the reader
+  // arrives at `#parameters` or `#class` and has to land on it. The anchor is
+  // waited for rather than read at once: the heading does not exist until the
+  // markdown above has rendered.
+  //
+  // One frame is not enough. On a cold page the pictures and the icons above
+  // the anchor have no height yet, so the anchor sits near the end of a short
+  // page, the scroll is clipped to that end, and the reader lands on the last
+  // line of the page instead. The aim is held until the box stops growing, or
+  // until the reader takes over.
   useEffect(() => {
     const id = decodeURIComponent(location.hash.slice(1));
     if (!id || !page) return;
+    const box = scroller.current;
+    if (!box) return;
+    // The page's own `#id:` anchor first: a heading slug made from the text
+    // can be the same word as a parameter name (a "Locomotion" folder over
+    // a `locomotion` parameter), and F1 asks for the parameter.
+    const find = () =>
+      document.querySelector<HTMLElement>(`span[id="${CSS.escape(id)}"]`) ?? document.getElementById(id);
+    const aimAtIt = () => {
+      const target = find();
+      if (target) box.scrollTo({ top: scrollTopFor(target, box) - readingLine() });
+      return Boolean(target);
+    };
+
+    const watch = new ResizeObserver(() => aimAtIt());
+    const stop = () => {
+      watch.disconnect();
+      box.removeEventListener("wheel", stop);
+      box.removeEventListener("touchstart", stop);
+      clearTimeout(timer);
+    };
+    // The reader wins: a wheel or a finger ends the aim where they put it.
+    box.addEventListener("wheel", stop, { passive: true });
+    box.addEventListener("touchstart", stop, { passive: true });
+    const timer = setTimeout(stop, 3000);
+
     const frame = requestAnimationFrame(() => {
-      const target = document.getElementById(id);
-      // A doc page can name a section that this page does not have. Saying so
-      // beats a click that looks like it did nothing.
-      if (target) target.scrollIntoView({ block: "start" });
-      else showToast(`This page has no section named "${id}"`, "error");
+      // A doc page can name a section that this page does not have, and F1 on
+      // a spare parameter names one no page has. Saying so beats a click that
+      // looks like it did nothing.
+      if (!aimAtIt()) {
+        showToast(`This page has no section named "${id}"`, "error");
+        stop();
+        return;
+      }
+      // The article, not the box: the box keeps its own size while the page
+      // inside it grows.
+      const article = box.querySelector("article");
+      if (article) watch.observe(article);
     });
-    return () => cancelAnimationFrame(frame);
+    return () => {
+      cancelAnimationFrame(frame);
+      stop();
+    };
   }, [location.hash, page]);
 
   // A search excerpt the reader picked: the page opens at those words and
