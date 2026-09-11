@@ -43,7 +43,12 @@ const TRIES: u16 = 20;
 /// copies — a build switched in the window is a build this thread serves on
 /// its very next request, and a folder picked by hand in the window is a
 /// folder this thread's scan already knows about too.
-pub fn start(data: PathBuf, chosen: Arc<install::Chosen>, cache: Arc<install::Cache>) -> Result<u16, String> {
+pub fn start(
+    app: tauri::AppHandle,
+    data: PathBuf,
+    chosen: Arc<install::Chosen>,
+    cache: Arc<install::Cache>,
+) -> Result<u16, String> {
     let (listener, port) = bind()?;
     let server = Server::from_listener(listener, None).map_err(|e| e.to_string())?;
     std::thread::spawn(move || {
@@ -58,7 +63,8 @@ pub fn start(data: PathBuf, chosen: Arc<install::Chosen>, cache: Arc<install::Ca
                 .iter()
                 .find(|header| header.field.equiv("Sec-Fetch-Site"))
                 .map_or(true, |header| header.value.as_str() == "same-origin");
-            let (status, body, kind) = answer(db.as_ref(), &chosen, &cache, request.url(), from_app);
+            let (status, body, kind) =
+                answer(&app, db.as_ref(), &chosen, &cache, request.url(), from_app);
             // What Houdini asked for, and what it got. Houdini's help window
             // says nothing when a page fails, so without this there is no way
             // to tell a wrong path from a wrong answer.
@@ -95,6 +101,7 @@ type Answer = (u16, Vec<u8>, &'static str);
 
 /// One request, answered: status, body, media type.
 fn answer(
+    app: &tauri::AppHandle,
     db: Result<&Mutex<Connection>, &String>,
     chosen: &install::Chosen,
     cache: &install::Cache,
@@ -121,7 +128,7 @@ fn answer(
         };
     }
     if let Some(command) = path.strip_prefix("/api/") {
-        return api(db, chosen, cache, command, query);
+        return api(app, db, chosen, cache, command, query);
     }
     // `/nodes/sop/box.md` is the page as Markdown, for an agent that reads a
     // file and not an app. The "copy page path" keys hand out this address.
@@ -139,6 +146,7 @@ fn answer(
 /// The same answers the desktop shell gives through `invoke`, so the front-end
 /// has one set of calls and not two. `backend.ts` picks which door to knock on.
 fn api(
+    app: &tauri::AppHandle,
     db: Result<&Mutex<Connection>, &String>,
     chosen: &install::Chosen,
     cache: &install::Cache,
@@ -156,6 +164,18 @@ fn api(
             Err(reason) => return not_found(reason),
         },
         "user_name" => serde_json::to_vec(&crate::user_name_of_this_machine()),
+        // The help pane is a real surface, so what a reader does there counts
+        // the same as what they do in the window.
+        "report_use" => {
+            if call.kind == "setup" || call.kind == "feature" {
+                crate::telemetry::track(app, &call.kind, &call.name);
+            }
+            serde_json::to_vec(&true)
+        }
+        "report_search" => {
+            crate::telemetry::search(app, call.hits, call.rank);
+            serde_json::to_vec(&true)
+        }
         "clean_start" => serde_json::to_vec(&false),
         "page" => match current(db, chosen, cache)
             .and_then(|i| crate::read_page(&i, &call.path).map_err(|e| e.message))
@@ -313,6 +333,11 @@ struct Call {
     value: String,
     /// The outside link `open_url` opens.
     url: String,
+    /// What the telemetry calls carry.
+    kind: String,
+    name: String,
+    hits: u32,
+    rank: i32,
 }
 
 fn parse(query: &str) -> Call {
@@ -338,6 +363,10 @@ fn parse(query: &str) -> Call {
             "key" => call.key = value,
             "value" => call.value = value,
             "url" => call.url = value,
+            "kind" => call.kind = value,
+            "name" => call.name = value,
+            "hits" => call.hits = value.parse().unwrap_or(0),
+            "rank" => call.rank = value.parse().unwrap_or(-1),
             _ => {}
         }
     }

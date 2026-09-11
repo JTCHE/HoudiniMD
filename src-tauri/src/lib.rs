@@ -216,6 +216,12 @@ fn report_use(app: tauri::AppHandle, kind: String, name: String) {
     }
 }
 
+/// One search that ended. See `telemetry::search`. No words, ever.
+#[tauri::command]
+fn report_search(app: tauri::AppHandle, hits: u32, rank: i32) {
+    telemetry::search(&app, hits, rank);
+}
+
 /// Opens the file that holds every payload the telemetry has sent.
 #[tauri::command]
 fn show_telemetry_log(app: tauri::AppHandle) -> Result<(), String> {
@@ -767,7 +773,7 @@ pub fn run() {
             // any Houdini is hooked yet. A reader who never hooks one pays a
             // thread and a socket for it. It reads the same `chosen` and
             // `cache` as the window, not copies — see `server::start`.
-            let port = server::start(data.clone(), chosen.clone(), cache.clone()).unwrap_or(0);
+            let port = server::start(app.handle().clone(), data.clone(), chosen.clone(), cache.clone()).unwrap_or(0);
             app.manage(Port(port));
             hook_from_the_command_line(&data, port);
             if let Ok(install) = current_for(&app.handle().clone()) {
@@ -812,6 +818,7 @@ pub fn run() {
             reset_user_data,
             report_error,
             report_use,
+            report_search,
             show_telemetry_log,
             open_page,
             save_page,

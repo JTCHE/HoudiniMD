@@ -17,8 +17,8 @@ import { COMMAND_KEY, isCommand, isTyping, useHotkey } from "@/lib/hotkeys";
 import { Icons } from "@/lib/ui/icons";
 import { toggleTheme, useTheme } from "@/lib/ui/theme";
 import { pastedAnchor, pastedPath, resolve, titles, type Hit } from "@/lib/search";
-import { useSearch } from "@/lib/use-search";
-import { used } from "@/lib/telemetry";
+import { useSearch } from "@/lib/use-search";
+import { useSearchReport, used } from "@/lib/telemetry";
 import {
   SEARCH_LIST_CLASS,
   SearchResultList,
@@ -242,8 +242,17 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
     [location.pathname, navigate],
   );
 
+  // A pasted link is not a search, so it is reported as no query at all.
+  const tell = useSearchReport(paste ? "" : trimmed, rows.length);
+  // A query the reader gave up on is the one that says the search fell short,
+  // so the overlay reports it as it closes.
+  useEffect(() => {
+    if (!open) tell(-1);
+  }, [open, tell]);
+
   const openRow = useCallback(
-    (row: Row) => {
+    (row: Row, rank: number) => {
+      tell(rank);
       // Recents store the page, never the section the reader happened to
       // enter it by.
       if (location.pathname !== `/${row.hit.path}`) {
@@ -253,7 +262,7 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
       // the page at How to.
       go(paste && !row.section ? `${row.hit.path}${pastedAnchor(trimmed)}` : rowPath(row), row.section?.excerpt);
     },
-    [go, location.pathname, paste, trimmed],
+    [go, location.pathname, paste, trimmed, tell, rows],
   );
 
   /**
@@ -268,11 +277,13 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
     const hit = resolve(all, trimmed, hits[0]);
     if (!hit) {
       showToast(`Nothing in this Houdini build matches “${trimmed}”.`, "error");
+      tell(-1);
       return;
     }
+    tell(rows.findIndex((row) => row.hit.path === hit.path));
     if (location.pathname !== `/${hit.path}`) saveRecentSearch({ ...hit, headings: undefined });
     go(`${hit.path}${pastedAnchor(trimmed)}`);
-  }, [trimmed, hits, go, location.pathname]);
+  }, [trimmed, hits, go, location.pathname, tell, rows]);
 
   function onKeyDown(event: React.KeyboardEvent) {
     const total = skip + rows.length + (searchFor ? 1 : 0);
@@ -289,7 +300,7 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
     if (event.key === "Enter") {
       const row = rows[selected - skip];
       if (selected < skip) runCommand(commands[selected]);
-      else if (row) openRow(row);
+      else if (row) openRow(row, selected - skip);
       else void submit();
     }
   }

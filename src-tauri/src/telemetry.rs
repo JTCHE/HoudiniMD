@@ -2,7 +2,8 @@
 //!
 //! What goes out, and nothing else: a random id made on this machine, the app
 //! version, the Houdini build, the operating system version, how long an index
-//! pass took, how long pages take to open, which answers the first launch got,
+//! pass took, how long pages take to open, how many rows a search returned
+//! and which row was opened, which answers the first launch got,
 //! the names of the parts of the app a session used, and crash messages. Each
 //! name is a fixed word this code writes. No page path,
 //! no title, no search, no user name, no file path. Every payload is also
@@ -109,6 +110,17 @@ pub fn track(app: &AppHandle, kind: &str, name: &str) {
         seen.push(key);
     }
     send(app, kind, json!({ "message": name }));
+}
+
+/// One search that ended: how many rows came back, and the position of the row
+/// the reader opened. `rank` is -1 when they opened nothing.
+///
+/// The words are not sent and are not written to the log. `rank` alone gives
+/// mean reciprocal rank, which says whether the search is getting better, and
+/// a run of `hits = 0` says the index is missing something. Neither is a
+/// search term, so the promise on the consent screen holds.
+pub fn search(app: &AppHandle, hits: u32, rank: i32) {
+    send(app, "search", json!({ "count": hits, "rank": rank }));
 }
 
 /// An error the front end did not catch. Each message is sent once per launch.
