@@ -24,7 +24,7 @@ export function StepFrame({
   onBack,
   onContinue,
 }: {
-  /** Which of the four steps this is. The welcome screen has none. */
+  /** Which of the five steps this is. The welcome screen has none. */
   step?: number;
   /** The heading, as a node so the welcome screen can put the mark in it. */
   title: React.ReactNode;
@@ -72,7 +72,7 @@ export function StepFrame({
           >
             <Icons.stepBack className="size-md" />
           </button>
-          <span className="text-meta font-medium text-neutral-500">Step {step} of 4</span>
+          <span className="text-meta font-medium text-neutral-500">Step {step} of 5</span>
         </div>
       )}
 
