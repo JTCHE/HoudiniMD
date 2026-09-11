@@ -17,7 +17,8 @@ import { COMMAND_KEY, isCommand, isTyping, useHotkey } from "@/lib/hotkeys";
 import { Icons } from "@/lib/ui/icons";
 import { toggleTheme, useTheme } from "@/lib/ui/theme";
 import { pastedAnchor, pastedPath, resolve, titles, type Hit } from "@/lib/search";
-import { useSearch } from "@/lib/use-search";
+import { useSearch } from "@/lib/use-search";
+import { used } from "@/lib/telemetry";
 import {
   SEARCH_LIST_CLASS,
   SearchResultList,
@@ -132,6 +133,7 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
   if (open !== wasOpen) {
     setWasOpen(open);
     if (open) {
+      used("search");
       setQuery(seed.current);
       seed.current = "";
       const here = location.pathname.replace(/^\/+/, "");

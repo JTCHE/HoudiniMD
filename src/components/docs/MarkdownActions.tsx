@@ -5,6 +5,7 @@ import { invoke, inTauri } from "@/lib/backend";
 import { HOUDINIMD_DOCS_ROOT } from "@/lib/houdini";
 import { showToast } from "@/components/ui/toast-notification";
 import { isCommand, isTyping, useHotkey } from "@/lib/hotkeys";
+import { used } from "@/lib/telemetry";
 
 function ClaudeIcon({ className }: { className?: string }) {
   return (
@@ -128,14 +129,15 @@ export function MarkdownActions({ markdown, path, title }: { markdown: string; p
     }
   }
 
-  function run(action: () => Promise<unknown>) {
+  function run(name: string, action: () => Promise<unknown>) {
     setOpen(false);
+    used(name);
     void action().catch((reason) => showToast(String(reason), "error"));
   }
 
   // The same short request both assistants get: read this page, then answer.
   const ask = (assistant: (prompt: string) => string) =>
-    run(() =>
+    run("ask-assistant", () =>
       openWeb(
         assistant(
           `Please read the Houdini docs page for "${title}" at ${HOUDINIMD_DOCS_ROOT}/${path}.md.\n\n` +
@@ -152,6 +154,7 @@ export function MarkdownActions({ markdown, path, title }: { markdown: string; p
         ref={button}
         type="button"
         onClick={(() => {
+          used("copy-markdown");
           void copy().then((done) => done && celebrate());
         })}
         className="flex items-center gap-2 rounded-l-lg border border-input bg-muted/50 px-3 py-1.5 text-xs text-muted-foreground shadow-xs transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 cursor-interactive"
@@ -186,7 +189,7 @@ export function MarkdownActions({ markdown, path, title }: { markdown: string; p
             role="menuitem"
             className={ITEM}
             onClick={() =>
-              run(async () =>
+              run("open-markdown", async () =>
                 inTauri ? invoke("open_page", { path, source: false }) : window.open(`/${path}.md`, "_blank"),
               )
             }
@@ -201,7 +204,7 @@ export function MarkdownActions({ markdown, path, title }: { markdown: string; p
                 type="button"
                 role="menuitem"
                 className={ITEM}
-                onClick={() => run(() => invoke("open_page", { path, source: true }))}
+                onClick={() => run("open-source", () => invoke("open_page", { path, source: true }))}
               >
                 <FileText className={ICON} aria-hidden="true" />
                 Open the help source
@@ -211,7 +214,7 @@ export function MarkdownActions({ markdown, path, title }: { markdown: string; p
                 role="menuitem"
                 className={ITEM}
                 onClick={() =>
-                  run(async () => {
+                  run("save-as", async () => {
                     if (await invoke<boolean>("save_page", { name, markdown })) showToast("Page saved");
                   })
                 }

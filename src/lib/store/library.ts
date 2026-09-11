@@ -18,6 +18,7 @@
  */
 import { useSyncExternalStore } from "react";
 import { invoke } from "../backend";
+import { used } from "@/lib/telemetry";
 
 export interface LibraryEntry {
   /** Which visit this is. A recent has one; a bookmark does not, because a
@@ -118,6 +119,7 @@ export function isBookmarked(path: string): boolean {
 /** Keeps a page, or lets it go. Returns what the page is after the call. */
 export function toggleBookmark(entry: Omit<LibraryEntry, "at">): boolean {
   const willKeep = !isBookmarked(entry.path);
+  used("bookmark");
   const at = Date.now();
   const without = snapshot.bookmarks.filter((existing) => existing.path !== entry.path);
   commit({ ...snapshot, bookmarks: willKeep ? [{ ...entry, at }, ...without] : without });

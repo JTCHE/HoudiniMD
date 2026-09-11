@@ -207,6 +207,15 @@ fn report_error(app: tauri::AppHandle, message: String) {
     telemetry::error(&app, &message);
 }
 
+/// The first launch ended, or a part of the app was used. See
+/// `telemetry::track`. Sends nothing when the reader said no.
+#[tauri::command]
+fn report_use(app: tauri::AppHandle, kind: String, name: String) {
+    if kind == "setup" || kind == "feature" {
+        telemetry::track(&app, &kind, &name);
+    }
+}
+
 /// Opens the file that holds every payload the telemetry has sent.
 #[tauri::command]
 fn show_telemetry_log(app: tauri::AppHandle) -> Result<(), String> {
@@ -802,6 +811,7 @@ pub fn run() {
             reset_index,
             reset_user_data,
             report_error,
+            report_use,
             show_telemetry_log,
             open_page,
             save_page,
