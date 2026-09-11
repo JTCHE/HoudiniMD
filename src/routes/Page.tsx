@@ -26,7 +26,7 @@ import { onBuildChanged } from "@/lib/install";
 import { isCommand, isTyping, useHotkey } from "@/lib/hotkeys";
 import { invoke, inTauri } from "@/lib/backend";
 import { flashText } from "@/lib/ui/flash-text";
-import { FADE_OUT } from "@/lib/ui/overflow";
+import { FADE_OUT, FADE_UNDER } from "@/lib/ui/overflow";
 
 /**
  * What to call a page whose help file gives no title.
@@ -253,7 +253,9 @@ export default function Page() {
       // do, not against a hard edge. The page ends on the bottom padding of
       // `main`, which is deeper than the fade, so the last line always reads.
       className={cn(
-        "docs-shell @container flex min-h-0 flex-1 flex-col overflow-y-auto [scrollbar-gutter:stable]",
+        // --page-bar-h is the height of the bar that stays at the top: the
+        // list of contents, the pill and a heading's jump offset clear it.
+        "docs-shell @container flex min-h-0 flex-1 flex-col overflow-y-auto [scrollbar-gutter:stable] [--page-bar-h:3.5rem]",
         FADE_OUT,
       )}
     >
@@ -264,10 +266,20 @@ export default function Page() {
           so the column stays centred on what is left, and the list is not
           paid for by the text's own width. */}
       <div className={cn("flex min-h-0 flex-1 flex-col", hasToc && "@min-[920px]:pr-[232px]")}>
+        {/* The column: the bar, then the page. It is the box the list of
+            contents hangs off, from the top of the bar, so "On this page"
+            sits on the same line as the breadcrumbs. */}
+        <div className="relative mx-auto flex w-full max-w-page flex-1 flex-col">
         {/* The same page on sidefx.com, for a reader who wants the original. It
           sits on the breadcrumb line because that line is already the answer
-          to "where am I", and the source is the last part of that answer. */}
-        <div className="@container mx-auto flex w-full max-w-page items-start justify-between gap-md px-page-x pt-5">
+          to "where am I", and the source is the last part of that answer.
+          The bar stays at the top while the page scrolls under it. */}
+        <div
+          className={cn(
+            "@container sticky top-0 z-20 flex min-h-(--page-bar-h) shrink-0 items-center justify-between gap-md bg-background px-page-x print:static",
+            FADE_UNDER,
+          )}
+        >
           {page && (
             <Breadcrumbs
               path={page.path}
@@ -279,7 +291,7 @@ export default function Page() {
             href={sideFxUrl(path)}
             target="_blank"
             rel="noopener noreferrer"
-            className="group flex shrink-0 items-center text-meta text-muted-foreground transition-colors hover:text-foreground print:hidden"
+            className="group ml-auto flex shrink-0 items-center text-meta text-muted-foreground transition-colors hover:text-foreground print:hidden"
           >
             SideFX
             <LucideArrowUpRight
@@ -292,7 +304,7 @@ export default function Page() {
           {error?.missing ? (
             <NotFoundPage path={path} />
           ) : (
-            <main className="relative mx-auto w-full min-w-0 max-w-page px-page-x py-10">
+            <main className="w-full min-w-0 px-page-x pt-7 pb-10">
               {error && <p className="text-sm text-muted-foreground">{error.message}</p>}
               {page && (
                 <article className="prose prose-neutral dark:prose-invert max-w-none">
@@ -314,6 +326,7 @@ export default function Page() {
               )}
             </main>
           )}
+        </div>
         </div>
       </div>
     </div>

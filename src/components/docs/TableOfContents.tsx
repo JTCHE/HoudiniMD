@@ -3,7 +3,7 @@
 import { ChevronDown } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
-import { useOverflow } from "@/lib/ui/overflow";
+import { FADE_OUT, useOverflow } from "@/lib/ui/overflow";
 import type { Heading } from "@/lib/markdown/headings";
 import { FloatingPill } from "./toc/FloatingPill";
 import { scroller, useActiveIndex } from "./toc/measure";
@@ -39,7 +39,7 @@ export function TableOfContents({ headings }: { headings: Heading[] }) {
   // than its text, which tips `scrollHeight` past `clientHeight` on a list
   // that has no real next row. Scrolling is turned on only past that, so a
   // list that fits draws no scrollbar at all.
-  const sidebarList = useRef<HTMLElement>(null);
+  const sidebarList = useRef<HTMLDivElement>(null);
   const sidebarOverflows = useOverflow(sidebarList, [headings]);
 
   // The active row stays in view: the list scrolls by the least that shows it,
@@ -99,17 +99,22 @@ export function TableOfContents({ headings }: { headings: Heading[] }) {
           window: the window has a panel down its left side, so a list placed
           against the window centres itself over the reading column and lands
           on the page's own header. */}
+      {/* It hangs from the top of the page's bar and stays there, and its
+          title is centred in a box as tall as the bar, so "On this page" is
+          always on the breadcrumbs' line. The list under the title scrolls on
+          its own and is never taller than the scroller. */}
       <div className="not-prose print:hidden hidden @min-[920px]:block absolute top-0 left-full ml-lg h-full w-52">
         <nav
-          ref={sidebarList}
           aria-label="On this page"
-          className={cn(
-            "sticky top-24 max-h-[calc(100dvh-8rem)]",
-            sidebarOverflows ? "thin-scroll overflow-y-auto" : "overflow-hidden",
-          )}
+          className="sticky top-0 flex max-h-[calc(100dvh-var(--spacing-titlebar)-var(--spacing-statusbar))] flex-col"
         >
-          {title}
-          <TocList headings={headings} top={top} active={active} density="tight" />
+          <p className="flex h-(--page-bar-h) shrink-0 items-center text-sm font-medium text-foreground">On this page</p>
+          <div
+            ref={sidebarList}
+            className={cn("-mt-2 min-h-0", sidebarOverflows ? `thin-scroll overflow-y-auto pb-lg ${FADE_OUT}` : "overflow-hidden")}
+          >
+            <TocList headings={headings} top={top} active={active} density="tight" />
+          </div>
         </nav>
       </div>
 
