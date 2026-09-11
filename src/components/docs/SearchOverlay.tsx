@@ -134,9 +134,11 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
   const rows = useMemo(() => toRows(results, !empty), [results, empty]);
 
   const go = useCallback(
-    (target: string) => {
+    (target: string, find?: string) => {
       const [base, anchor] = target.split("#");
-      if (location.pathname === `/${base}`) {
+      // An excerpt goes through the router even to the open page: the page
+      // finds the words and marks them. See `flashText`.
+      if (location.pathname === `/${base}` && !find) {
         const element = anchor ? document.getElementById(anchor) : null;
         if (element) element.scrollIntoView({ behavior: "smooth" });
         else showToast("Already on this page");
@@ -144,7 +146,7 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
         return;
       }
       flushSync(() => setOpen(false));
-      navigate(`/${target}`);
+      navigate(`/${target}`, { state: find ? { find } : undefined });
     },
     [location.pathname, navigate],
   );
@@ -156,7 +158,7 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
       if (location.pathname !== `/${row.hit.path}`) {
         saveRecentSearch({ ...row.hit, headings: undefined });
       }
-      go(rowPath(row));
+      go(rowPath(row), row.section?.excerpt);
     },
     [go, location.pathname],
   );

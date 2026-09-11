@@ -1258,6 +1258,24 @@ pre code.hljs {
   padding-bottom: 0.7rem;
 }
 
+/* The words a search excerpt named, marked for a moment on the page it
+   opened. See lib/ui/flash-text.ts. */
+.flash-mark {
+  position: absolute;
+  pointer-events: none;
+  border-radius: 3px;
+  background: color-mix(in oklch, var(--brand) 26%, transparent);
+  transition: opacity 900ms ease-out;
+}
+.flash-mark[data-fading] {
+  opacity: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .flash-mark {
+    transition: none;
+  }
+}
+
 @media (max-width: 640px), (pointer: coarse) {
   pre code[class] {
     width: max-content;
