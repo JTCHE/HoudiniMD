@@ -2,6 +2,7 @@ import { Check, ChevronDown, Copy, Download, FileText, SquareArrowOutUpRight } f
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { invoke, inTauri } from "@/lib/backend";
+import { HOUDINIMD_DOCS_ROOT } from "@/lib/houdini";
 import { showToast } from "@/components/ui/toast-notification";
 import { isCommand, isTyping, useHotkey } from "@/lib/hotkeys";
 
@@ -26,10 +27,6 @@ const ITEM =
   "text-neutral-800 transition-colors duration-(--duration-fast) motion-reduce:transition-none " +
   "pointer-hover:bg-neutral-100 focus-visible:bg-neutral-100 focus-visible:outline-none";
 const ICON = "size-3.5 shrink-0 text-neutral-500";
-
-/** A web page an assistant can read. The local server is on this machine, and
-    an assistant on the web cannot reach it. */
-const SITE_DOCS = "https://houdinimd.com/docs/houdini";
 
 /** Opens a web address in the reader's browser: the desktop window hands it to
     the system, Houdini's pane opens a window of its own. */
@@ -141,7 +138,7 @@ export function MarkdownActions({ markdown, path, title }: { markdown: string; p
     run(() =>
       openWeb(
         assistant(
-          `Please read the Houdini docs page for "${title}" at ${SITE_DOCS}/${path}.md.\n\n` +
+          `Please read the Houdini docs page for "${title}" at ${HOUDINIMD_DOCS_ROOT}/${path}.md.\n\n` +
             "Concisely tell me about it using Simplified Technical English (ASD-STE100).",
         ),
       ),

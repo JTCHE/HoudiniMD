@@ -9,6 +9,7 @@ import { Video } from "./MarkdownVideo";
 import { Card } from "./Card";
 import { ImageGroup } from "./ImageGroup";
 import { Vimeo } from "./MarkdownVimeo";
+import { H2, H3, H4 } from "./MarkdownHeading";
 
 /** The parser writes a `.code-panel` that carries the copy button and the
     highlighting, an `.image-group` row of pictures, `.columns` of `:col:`
@@ -35,6 +36,9 @@ export const markdownComponents: Components = {
   h1: ({ children }) => (
     <h1 className="not-prose text-2xl font-bold tracking-tight border-b border-border pb-3 mb-6 mt-0">{children}</h1>
   ),
+  h2: H2,
+  h3: H3,
+  h4: H4,
   blockquote: Blockquote,
   div: Div,
   table: Table,
