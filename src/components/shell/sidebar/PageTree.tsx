@@ -25,7 +25,7 @@
  * transform is what `position: sticky` measures against, so a sticky row
  * inside the window sticks to the wrong box.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { groupIcon } from "@/lib/ui/icons";
 import { VirtualList } from "@/components/ui/VirtualList";
@@ -89,6 +89,14 @@ function linesOf(groups: TreeBranch[], open: Open): Line[] {
     }
   }
   return lines;
+}
+
+/** Names a header line across renders. A page line is never toggled. */
+function keyOf(line: Line): string | null {
+  if (line.kind === "group") return `group:${line.group.id}`;
+  if (line.kind === "branch") return `branch:${line.branch.id}`;
+  if (line.kind === "family") return `family:${line.label}`;
+  return null;
 }
 
 export function PageTree({ groups, currentPath, bookmarked, className }: PageTreeProps) {
@@ -192,16 +200,40 @@ export function PageTree({ groups, currentPath, bookmarked, className }: PageTre
   const openFamily = familyAt >= 0 ? (lines[familyAt] as Extract<Line, { kind: "family" }>) : null;
   const GroupMark = openGroup ? groupIcon(openGroup.id) : null;
 
-  const toggleGroup = (id: string) =>
+  /* A row that is opened or closed stays where the reader clicked it. Closing
+     a section shrinks the list, and the browser takes the lost length off the
+     scroll: the reader was thrown up the list, past the row they closed. A row
+     clicked in its pinned copy goes back to the place that copy held. */
+  const held = useRef<{ key: string; offset: number } | null>(null);
+  const hold = (key: string, slot: number) => {
+    const list = nav.current?.querySelector<HTMLElement>("[data-list]");
+    const at = lines.findIndex((line) => keyOf(line) === key);
+    if (list && at >= 0) held.current = { key, offset: Math.max(slot * ROW, at * ROW - list.scrollTop) };
+  };
+  useLayoutEffect(() => {
+    const want = held.current;
+    held.current = null;
+    const list = nav.current?.querySelector<HTMLElement>("[data-list]");
+    const at = want ? lines.findIndex((line) => keyOf(line) === want.key) : -1;
+    if (list && want && at >= 0) list.scrollTop = at * ROW - want.offset;
+  }, [lines]);
+
+  const toggleGroup = (id: string) => {
+    hold(`group:${id}`, 0);
     setOpen((now) =>
       now.group === id
         ? { group: null, branch: null, family: null }
         : { group: id, branch: null, family: null },
     );
-  const toggleBranch = (id: string) =>
+  };
+  const toggleBranch = (id: string) => {
+    hold(`branch:${id}`, 1);
     setOpen((now) => ({ ...now, branch: now.branch === id ? null : id, family: null }));
-  const toggleFamily = (label: string) =>
+  };
+  const toggleFamily = (label: string) => {
+    hold(`family:${label}`, 2);
     setOpen((now) => ({ ...now, family: now.family === label ? null : label }));
+  };
 
   return (
     <nav ref={nav} aria-label="Documentation" className={cn("relative flex min-h-0 flex-col", className)}>
