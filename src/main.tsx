@@ -40,6 +40,10 @@ if (import.meta.env.PROD) {
     if (at?.closest("input, textarea, [contenteditable='true']")) return;
     event.preventDefault();
   });
+  // Ctrl J opens the webview's downloads list, which this window has no use for.
+  document.addEventListener("keydown", (event) => {
+    if (event.ctrlKey && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "j") event.preventDefault();
+  });
 }
 
 // An error nothing caught goes to the telemetry, which sends nothing unless
