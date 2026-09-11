@@ -217,6 +217,64 @@ fn show_telemetry_log(app: tauri::AppHandle) -> Result<(), String> {
     app.opener().open_path(log.to_string_lossy(), None::<&str>).map_err(|e| e.to_string())
 }
 
+/// Writes the page to a file under the temp folder and opens it in the app the
+/// reader has for that kind of file. `source` asks for the help text the page
+/// is made from, as a `.txt`; otherwise the Markdown, as a `.md`.
+#[tauri::command]
+fn open_page(
+    app: tauri::AppHandle,
+    state: State<Db>,
+    chosen: State<Arc<install::Chosen>>,
+    cache: State<Arc<install::Cache>>,
+    path: String,
+    source: bool,
+) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    if path.split('/').any(|part| part.is_empty() || part == "." || part == "..") {
+        return Err(format!("Not a page path: {path}"));
+    }
+    let db = state.0.lock().map_err(|e| e.to_string())?;
+    let install = current(&db, &chosen, &cache)?;
+    drop(db);
+    let (text, extension) = if source {
+        let text = help::page_layered(&install.help_roots(), &path)
+            .map_err(|_| format!("No help text for {path}"))?;
+        (text, "txt")
+    } else {
+        (read_page(&install, &path).map_err(|e| e.message)?.markdown, "md")
+    };
+    // The page's own path under the temp folder, so two pages with the same
+    // last name do not write over each other.
+    let (folders, name) = path.rsplit_once('/').unwrap_or(("", &path));
+    let mut file = std::env::temp_dir().join("HoudiniMD");
+    file.extend(folders.split('/').filter(|part| !part.is_empty()));
+    std::fs::create_dir_all(&file).map_err(|e| e.to_string())?;
+    file.push(format!("{name}.{extension}"));
+    std::fs::write(&file, text).map_err(|e| e.to_string())?;
+    app.opener().open_path(file.to_string_lossy(), None::<&str>).map_err(|e| e.to_string())
+}
+
+/// Asks where to save the page, then writes its Markdown there. The dialog is
+/// opened here and not in the page, so the page never names a path to write.
+/// Async, because a blocking dialog on the main thread stops the window.
+#[tauri::command]
+async fn save_page(app: tauri::AppHandle, name: String, markdown: String) -> Result<bool, String> {
+    use tauri_plugin_dialog::DialogExt;
+    let Some(chosen) = app
+        .dialog()
+        .file()
+        .set_file_name(format!("{name}.md"))
+        .add_filter("Markdown", &["md"])
+        .add_filter("Text", &["txt"])
+        .blocking_save_file()
+    else {
+        return Ok(false);
+    };
+    let file = chosen.into_path().map_err(|e| e.to_string())?;
+    std::fs::write(file, markdown).map_err(|e| e.to_string())?;
+    Ok(true)
+}
+
 /// Every page title in the current build.
 ///
 /// The whole list goes to the front-end once and stays in memory there, which
@@ -675,7 +733,9 @@ pub fn run() {
             reset_index,
             reset_user_data,
             report_error,
-            show_telemetry_log
+            show_telemetry_log,
+            open_page,
+            save_page
         ])
         .run(tauri::generate_context!())
         .expect("error while running the application");

@@ -36,7 +36,7 @@ export function PageHeader({ name, nodeType, icon, since, summary, markdown, ent
         </div>
         <div className="flex shrink-0 items-center gap-2 pt-0.5">
           <BookmarkButton entry={entry} />
-          <MarkdownActions markdown={markdown} />
+          <MarkdownActions markdown={markdown} path={entry.path} title={name} />
         </div>
         {summary && <p className="w-full basis-full m-0 text-sm italic text-muted-foreground">{summary}</p>}
       </div>
