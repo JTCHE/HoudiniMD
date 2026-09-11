@@ -20,6 +20,8 @@ const PRIMITIVES = [
   'lpeaccumulator', 'material', 'matrix4', 'matrix3', 'matrix2', 'matrix',
   'vector4', 'vector2', 'vector', 'string', 'struct', 'float', 'light',
   'bsdf', 'dict', 'void', 'int',
+  // The help's `<type>` placeholder. The app's parser drops the brackets.
+  'type',
 ];
 
 // `<geometry>` / `<type>` / `<stage>` are placeholders SideFX uses for
@@ -28,7 +30,7 @@ const ATOM = `(?:<[^>]+>|(?:${PRIMITIVES.join('|')}))`;
 const TYPE = `(?:${ATOM}(?:\\s*\\|\\s*${ATOM})*(?:\\s*\\[\\s*\\])?)`;
 
 const SIGNATURE = new RegExp(`^(${TYPE})\\s*([A-Za-z_]\\w*)\\s*\\(([\\s\\S]*)\\)\\s*$`);
-const ARGUMENT = new RegExp(`^(${TYPE})\\s*(&?\\s*[A-Za-z_]\\w*(?:\\s*\\[\\s*\\])?)\\s*(?:=\\s*([\\s\\S]+))?$`);
+const ARGUMENT = new RegExp(`^((?:const\\s+)?${TYPE})\\s*(&?\\s*[A-Za-z_]\\w*(?:\\s*\\[\\s*\\])?)\\s*(?:=\\s*([\\s\\S]+))?$`);
 
 /** A bare identifier heading an argument description, e.g. `geohandle`, `&prim`, `<geometry>`. */
 const ARG_LABEL = /^(?:<[^>]+>|&?[A-Za-z_][\w]*(?:\[\])?)$/;
@@ -64,7 +66,8 @@ function splitArguments(list: string): string[] {
   for (const ch of list) {
     if (ch === '(' || ch === '[' || ch === '<') depth++;
     else if (ch === ')' || ch === ']' || ch === '>') depth--;
-    else if (ch === ',' && depth <= 0) {
+    // Some help pages separate arguments with `;`, as in `append`.
+    else if ((ch === ',' || ch === ';') && depth <= 0) {
       parts.push(current);
       current = '';
       continue;
@@ -77,6 +80,8 @@ function splitArguments(list: string): string[] {
 
 function parseArgument(raw: string): VexArgument | null {
   if (raw === '...') return { type: null, name: '...', variadic: true };
+  // `point(<geometry>; ...)`: the placeholder alone, with no name after it.
+  if (ARG_LABEL.test(raw)) return { type: null, name: raw.replace(/[<>]/g, '') };
   const m = raw.match(ARGUMENT);
   if (!m) return null;
   return {
@@ -91,7 +96,8 @@ function parseArgument(raw: string): VexArgument | null {
  * which is the common case, since this runs over every lone inline-code span.
  */
 export function parseSignature(text: string): VexSignature | null {
-  const m = text.trim().match(SIGNATURE);
+  // `insert` ends its signature with a `;`, the way a declaration ends.
+  const m = text.trim().replace(/;$/, '').match(SIGNATURE);
   if (!m) return null;
 
   const args: VexArgument[] = [];

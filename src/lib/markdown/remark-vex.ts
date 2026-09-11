@@ -13,6 +13,7 @@ import {
 interface MdNode {
   type: string;
   value?: string;
+  lang?: string | null;
   children?: MdNode[];
   data?: { hName?: string; hProperties?: Record<string, unknown> };
 }
@@ -46,6 +47,15 @@ function loneCode(node: MdNode | undefined): string | null {
   if (!node || node.type !== 'paragraph' || node.children?.length !== 1) return null;
   const only = node.children[0];
   return only.type === 'inlineCode' && typeof only.value === 'string' ? only.value : null;
+}
+
+/** The signature a block holds: a lone code span, or the one-line `vex`
+ *  fence the app's parser writes for `:usage:`. */
+function signatureOf(node: MdNode | undefined): VexSignature | null {
+  const fenced =
+    node?.type === 'code' && node.lang === 'vex' && !node.value?.includes('\n') ? node.value : null;
+  const text = loneCode(node) ?? fenced;
+  return text ? parseSignature(text) : null;
 }
 
 function textOf(node: MdNode | undefined): string {
@@ -108,7 +118,7 @@ export function remarkVex({ enabled }: { enabled: boolean }) {
 
     while (i < blocks.length) {
       const code = loneCode(blocks[i]);
-      const sig = code ? parseSignature(code) : null;
+      const sig = signatureOf(blocks[i]);
 
       // ── signature: consecutive overloads, each run optionally captioned ──
       if (sig) {
@@ -117,8 +127,7 @@ export function remarkVex({ enabled }: { enabled: boolean }) {
         while (i < blocks.length) {
           const rows: MdNode[] = [];
           for (;;) {
-            const c = loneCode(blocks[i]);
-            const s = c ? parseSignature(c) : null;
+            const s = signatureOf(blocks[i]);
             if (!s) break;
             current.push(s);
             rows.push(
@@ -171,7 +180,8 @@ export function remarkVex({ enabled }: { enabled: boolean }) {
             // those last two the description swallows the following function
             // whole, and its Returns then reports the wrong type.
             if (
-              (nc && (isArgumentLabel(nc) || parseSignature(nc))) ||
+              (nc && isArgumentLabel(nc)) ||
+              signatureOf(next) ||
               isText(next, 'returns') ||
               isHeading(next) ||
               isFunctionTitle(next)
