@@ -15,6 +15,7 @@ import { BrandLogo } from "@/components/brand/BrandLogo";
 import { useTrail } from "@/lib/nav";
 import { WindowControls } from "./WindowControls";
 import { TitleBarMenu } from "./TitleBarMenu";
+import { version } from "../../../src-tauri/tauri.conf.json";
 
 /* A square icon button on the bar. Smaller than a caption button and rounded,
    because it belongs to the app rather than to the window. */
@@ -96,6 +97,12 @@ export function TitleBar({ sidebarOpen, onToggleSidebar, showTrail, bare = false
           HoudiniMD
         </span>
       </Link>
+
+      {/* Which build of the app this is, outside the name's plate: it is read,
+          not pressed. */}
+      <span data-tauri-drag-region className="ml-xs shrink-0 translate-y-[0.5px] text-caption text-neutral-500">
+        v{version}
+      </span>
 
       {/* The arrows say where the trail leads before they are pressed: a
           disabled arrow is the honest answer to "is there a page behind this
