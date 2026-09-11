@@ -12,7 +12,7 @@
  */
 import { cn } from "@/lib/utils";
 import { COMMAND_KEY } from "@/lib/hotkeys";
-import { Keycap } from "@/components/ui/Keycap";
+import { Keycap, SMALL_KEY } from "@/components/ui/Keycap";
 import { IndexProgress } from "@/components/root/IndexProgress";
 import { ServerPortBadge } from "@/components/root/ServerPortBadge";
 
@@ -21,8 +21,6 @@ const HINTS: Array<{ keys: string[]; label: string }> = [
   { keys: [COMMAND_KEY, "C"], label: "Copy as Markdown" },
   { keys: [COMMAND_KEY, "D"], label: "Bookmark" },
 ];
-
-const SMALL_KEY = "rounded-md px-sm py-xs text-caption leading-none";
 
 export function StatusBar({ className }: { className?: string }) {
   return (
