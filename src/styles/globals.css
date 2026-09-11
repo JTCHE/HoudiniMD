@@ -525,7 +525,7 @@ a {
 
 /* Text selection in the brand, the one colour the window owns. */
 ::selection {
-  background: var(--brand);
+  background: var(--brand-700);
   color: var(--brand-foreground);
 }
 
