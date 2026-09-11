@@ -27,6 +27,16 @@ It follows the [llms.txt](https://llmstxt.org) standard. AI agents are automatic
 - **Houdini Integration** — After setting it as the default source, press <kbd>F1</kbd> to bring up HoudiniMD directly inside Houdini
 - **AI Native & MCP Integration** — Paired with my [Houdini MCP](https://github.com/JTCHE/houdini-mcp) fork, agents can query pure markdown directly from HoudiniMD to inform their decisions and actions inside Houdini. Accurate info, at the right time, without context bloat.
 
+## Desktop app
+
+[Download for Windows](https://github.com/JTCHE/HoudiniMD/releases/latest). Reads the docs from the Houdini build on your machine, so it works with no network. <kbd>F1</kbd> in Houdini opens the page in it.
+
+Windows shows "Windows protected your PC" because the installer is not signed yet. Select **More info**, then **Run anyway**. A signature needs a legal entity, and it is on the list.
+
+## Price
+
+Free. No account, no subscription. A doc page is public and belongs to SideFX, so no doc page is ever going behind a payment. Paid features later will be things the app makes: your own notes on a page, an index of your studio's assets, differences between two Houdini builds.
+
 ## Credits & license
 
 Built by [John C](https://jchd.me). HoudiniMD is an unofficial, independent project and is not affiliated with or endorsed by SideFX.
