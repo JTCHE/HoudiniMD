@@ -18,11 +18,11 @@ export function scroller() {
  * over its content, so it needs no offset here.
  */
 export function readingLine() {
-  // The same measure the gutter list is switched on: the scroller's width,
-  // not the window's.
+  // The same measure and breakpoint the gutter list is switched on: the
+  // scroller's width, not the window's. Below it the pill is there too.
   const box = scroller();
   const bar = box ? parseFloat(getComputedStyle(box).getPropertyValue("--page-bar-h")) * 16 || 0 : 0;
-  return bar + ((box?.clientWidth ?? window.innerWidth) >= 1150 ? 24 : 64);
+  return bar + ((box?.clientWidth ?? window.innerWidth) >= 780 ? 24 : 64);
 }
 
 /**

@@ -9,9 +9,13 @@ import { FloatingPill } from "./toc/FloatingPill";
 import { scroller, useActiveIndex } from "./toc/measure";
 import { TocList } from "./toc/TocList";
 
-// The content column is max-w-page (105 characters at most) and centred, so the list in the
-// gutter only appears once that gutter is wide enough to hold it; below that
-// the page falls back to the inline list plus the floating pill.
+// The content column is max-w-page and centred, so the list in the gutter
+// only appears once that gutter is wide enough to hold it; below that the
+// page falls back to the inline list plus the floating pill. The breakpoint,
+// 780px, is low enough that the default window and Houdini's help pane both
+// get the side list: the column narrows to make room rather than lose it to
+// an inline list above the fold. Page.tsx, FloatingPill and readingLine use
+// the same number.
 //
 // The measure is the READING COLUMN's own width, not the window's. The window
 // carries a panel down its left side that the reader can drag or hide, so a
@@ -103,7 +107,7 @@ export function TableOfContents({ headings }: { headings: Heading[] }) {
           title is centred in a box as tall as the bar, so "On this page" is
           always on the breadcrumbs' line. The list under the title scrolls on
           its own and is never taller than the scroller. */}
-      <div className="not-prose print:hidden hidden @min-[920px]:block absolute top-0 left-full ml-lg h-full w-52">
+      <div className="not-prose print:hidden hidden @min-[780px]:block absolute top-0 left-full ml-lg h-full w-52">
         <nav
           aria-label="On this page"
           className="sticky top-0 flex max-h-[calc(100dvh-var(--spacing-titlebar)-var(--spacing-statusbar))] flex-col"
@@ -123,7 +127,7 @@ export function TableOfContents({ headings }: { headings: Heading[] }) {
           It carries no bottom margin: the first heading under it already has
           the space every heading has, and a margin here would add a second
           gap on top of it. */}
-      <nav ref={inline} aria-label="On this page" className="not-prose print:hidden @min-[920px]:hidden -mt-2">
+      <nav ref={inline} aria-label="On this page" className="not-prose print:hidden @min-[780px]:hidden -mt-2">
         {title}
         <div className={collapsed ? "relative max-h-32 overflow-hidden" : undefined}>
           <TocList headings={headings} top={top} active={active} />
