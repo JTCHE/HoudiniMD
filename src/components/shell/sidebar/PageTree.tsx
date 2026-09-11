@@ -40,6 +40,9 @@ const ROW = 30;
 
 interface PageTreeProps {
   groups: TreeBranch[];
+  /** The first pass is still reading, so a category the reader expects can be
+      missing from the list. Says so, instead of leaving a hole. */
+  reading?: boolean;
   /** The page on screen, so the panel can mark it. */
   currentPath?: string;
   /** The pages the reader keeps, marked in the list they are read from. */
@@ -109,7 +112,7 @@ let kept: Open = { group: null, branch: null, family: null };
     on the same page does not open again what the reader has closed. */
 let followed: string | undefined;
 
-export function PageTree({ groups, currentPath, bookmarked, className }: PageTreeProps) {
+export function PageTree({ groups, reading, currentPath, bookmarked, className }: PageTreeProps) {
   const [open, setOpen] = useState<Open>(kept);
   useEffect(() => {
     kept = open;
@@ -124,11 +127,13 @@ export function PageTree({ groups, currentPath, bookmarked, className }: PageTre
      Opening the group, the branch and the family the page sits in makes the
      panel say where the reader IS, not where they last clicked. */
   useEffect(() => {
-    if (!currentPath || currentPath === followed) return;
+    if (!currentPath || currentPath === followed || groups.length === 0) return;
+    // Once for a page, found or not. A category that lands late must not open
+    // itself under the reader's hands.
+    followed = currentPath;
     for (const group of groups) {
       for (const branch of group.branches) {
         if (!branch.pages.some((page) => page.path === currentPath)) continue;
-        followed = currentPath;
         const { families } = familiesOf(branch.pages);
         setOpen({
           group: group.id,
@@ -409,6 +414,11 @@ export function PageTree({ groups, currentPath, bookmarked, className }: PageTre
           );
         }}
       </VirtualList>
+      {reading && (
+        <p className="px-sm py-xs text-meta text-neutral-400" role="status">
+          Still reading the docs. More categories are on the way.
+        </p>
+      )}
     </nav>
   );
 }
