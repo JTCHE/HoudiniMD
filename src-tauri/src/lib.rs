@@ -275,17 +275,26 @@ async fn save_page(app: tauri::AppHandle, name: String, markdown: String) -> Res
     Ok(true)
 }
 
-/// Opens one more window on the home page, made from the same entry in
-/// `tauri.conf.json` as the first. It stays hidden until its page has loaded,
-/// so it never shows an empty frame. Async, because a window made in a
-/// blocking command stops the window thread on Windows.
+/// Opens one more window, made from the same entry in `tauri.conf.json` as the
+/// first, on the home page or on `path` (`/nodes/sop/box#inputs`). It stays
+/// hidden until its page has loaded, so it never shows an empty frame. Async,
+/// because a window made in a blocking command stops the window thread on
+/// Windows.
 #[tauri::command]
-async fn new_window(app: tauri::AppHandle) -> Result<(), String> {
+async fn new_window(app: tauri::AppHandle, path: Option<String>) -> Result<(), String> {
     use std::sync::atomic::{AtomicU32, Ordering};
     use tauri::webview::PageLoadEvent;
     static NEXT: AtomicU32 = AtomicU32::new(1);
     let mut config = app.config().app.windows[0].clone();
     config.label = format!("window-{}", NEXT.fetch_add(1, Ordering::Relaxed));
+    if let Some(path) = path {
+        // A path in the app, never an address: the window must not load
+        // another site with the app's rights.
+        if !path.starts_with('/') || path.starts_with("//") || path.contains("..") {
+            return Err(format!("Not a page path: {path}"));
+        }
+        config.url = tauri::WebviewUrl::App(path.trim_start_matches('/').into());
+    }
     tauri::WebviewWindowBuilder::from_config(&app, &config)
         .map_err(|e| e.to_string())?
         .on_page_load(|window, load| {

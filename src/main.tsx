@@ -78,6 +78,24 @@ if (!inTauri && /QtWebEngine/.test(navigator.userAgent)) {
   );
 }
 
+// Ctrl, ⌘ or Shift on a link to a page, or the middle button, opens that page
+// in a new window of the app. Left to itself the webview hands the link to
+// the reader's browser, which has no backend to read the page from.
+if (inTauri) {
+  const openInWindow = (event: MouseEvent) => {
+    const modified = event.button === 0 && (event.ctrlKey || event.metaKey || event.shiftKey);
+    if (!(modified || event.button === 1) || event.defaultPrevented) return;
+    const link = (event.target as Element | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
+    if (!link) return;
+    const url = new URL(link.href, window.location.href);
+    if (url.origin !== window.location.origin) return;
+    event.preventDefault();
+    void invoke("new_window", { path: `${url.pathname}${url.hash}` }).catch(() => {});
+  };
+  document.addEventListener("click", openInWindow, true);
+  document.addEventListener("auxclick", openInWindow, true);
+}
+
 // Real paths, because Houdini asks for `/nodes/sop/box` flat and the reader
 // should see that in the address bar of the help window. The localhost server
 // answers any page path with the app; the desktop window never asks for one,
