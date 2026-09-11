@@ -23,6 +23,7 @@ import { recordVisit } from "@/lib/store/library";
 import { sideFxUrl } from "@/lib/sidefx";
 import { forgetPages, known, read, type PageError, type PageView } from "@/lib/pages";
 import { onBuildChanged } from "@/lib/install";
+import { isTyping, useHotkey } from "@/lib/hotkeys";
 
 /**
  * What to call a page whose help file gives no title.
@@ -135,6 +136,43 @@ export default function Page() {
   // The overlay owns ⌘K itself.
   const search = useRef<SearchOverlayRef>(null);
   const scroller = useRef<HTMLDivElement>(null);
+
+  // The arrow and page keys scroll the page, wherever the focus is. The
+  // browser scrolls the box that holds the focus, and after a click in the
+  // side panel that box is the panel. Inside the page the browser does it.
+  useHotkey((event) => {
+    const shell = scroller.current;
+    const target = event.target as HTMLElement;
+    if (!shell || event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
+    if (isTyping(target) || shell.contains(target) || target.closest("[role=menu], [role=listbox], [role=dialog]")) return;
+    const page = shell.clientHeight * 0.9;
+    const by: Record<string, number> = {
+      ArrowDown: 40,
+      ArrowUp: -40,
+      PageDown: page,
+      PageUp: -page,
+      End: shell.scrollHeight,
+      Home: -shell.scrollHeight,
+    };
+    // A space on a focused button pushes the button.
+    if (event.key === " " && target === document.body) by[" "] = event.shiftKey ? -page : page;
+    if (!(event.key in by)) return;
+    event.preventDefault();
+    // A press during a smooth scroll adds to where that scroll goes, not to
+    // where it is now. Otherwise quick presses move the page one step.
+    const max = shell.scrollHeight - shell.clientHeight;
+    const from = aim.current ?? shell.scrollTop;
+    aim.current = Math.min(max, Math.max(0, from + by[event.key]));
+    shell.scrollTo({ top: aim.current, behavior: "smooth" });
+  });
+  const aim = useRef<number | null>(null);
+  useEffect(() => {
+    const shell = scroller.current;
+    if (!shell) return;
+    const done = () => (aim.current = null);
+    shell.addEventListener("scrollend", done);
+    return () => shell.removeEventListener("scrollend", done);
+  }, []);
 
   const isVexPage = /(^|\/)vex\//.test(`/${path}`);
   // Read once and shared: the gutter reserved for the sticky list (below) and
