@@ -12,6 +12,8 @@
  * list row, so the caller states the size and this file states the shape.
  */
 import {
+  AppWindow,
+  House,
   ArrowLeft,
   ArrowRight,
   Bookmark,
@@ -92,6 +94,8 @@ export const Icons = {
   themeDark: Moon,
   bugReport: Bug,
   search: Search,
+  home: House,
+  newWindow: AppWindow,
 
   /* Window caption */
   captionMinimize: CaptionMinimize,

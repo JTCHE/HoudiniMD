@@ -10,7 +10,10 @@ import {
 import { createPortal, flushSync } from "react-dom";
 import { useLocation, useNavigate } from "react-router";
 import { showToast } from "@/components/ui/toast-notification";
-import { isCommand, isTyping, useHotkey } from "@/lib/hotkeys";
+import { invoke, inTauri } from "@/lib/backend";
+import { COMMAND_KEY, isCommand, isTyping, useHotkey } from "@/lib/hotkeys";
+import { Icons } from "@/lib/ui/icons";
+import { toggleTheme, useTheme } from "@/lib/ui/theme";
 import { pastedPath, resolve, titles, type Hit } from "@/lib/search";
 import { useSearch } from "@/lib/use-search";
 import {
@@ -42,6 +45,26 @@ function saveRecentSearch(hit: Hit) {
   sessionStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(updated));
 }
 
+/** An action the overlay offers beside the pages. */
+interface Command {
+  label: string;
+  /** The words a query can start, besides the words of the label. */
+  words: string[];
+  icon: (typeof Icons)[keyof typeof Icons];
+  shortcut?: string;
+  run: () => void;
+}
+
+/** The commands a query names. Two letters at least, so the first letter of
+    a search does not put a command over the pages. */
+function matchCommands(all: Command[], query: string): Command[] {
+  const typed = query.trim().toLowerCase();
+  if (typed.length < 2) return [];
+  return all.filter((command) =>
+    [...command.label.toLowerCase().split(" "), ...command.words].some((word) => word.startsWith(typed)),
+  );
+}
+
 /**
  * The search a reader opens from a page, over the page they are reading.
  *
@@ -53,7 +76,7 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [recent, setRecent] = useState<Hit[]>([]);
-  const [selected, setSelected] = useState(0);
+  const [picked, setPicked] = useState<number | null>(null);
   const [direct, setDirect] = useState<Hit | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
@@ -143,7 +166,7 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
   const [shown, setShown] = useState(hits);
   if (hits !== shown) {
     setShown(hits);
-    setSelected(0);
+    setPicked(null);
   }
 
   const empty = trimmed === "";
@@ -152,6 +175,44 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
   const searchFor = !empty && !paste;
   // Same flattening the list renders, so the arrow-key indices line up with it.
   const rows = useMemo(() => toRows(results, !empty), [results, empty]);
+
+  // Commands go above the pages. Their names are generic, so they seldom
+  // stand in front of a page the reader wanted.
+  const theme = useTheme();
+  const commands = useMemo(() => {
+    const all: Command[] = [
+      { label: "Home", words: ["start"], icon: Icons.home, run: () => navigate("/") },
+      { label: "Bookmarks", words: ["saved"], icon: Icons.bookmark, run: () => navigate("/?tab=bookmarks") },
+      { label: "Recent pages", words: ["history"], icon: Icons.recent, run: () => navigate("/?tab=recents") },
+      theme === "dark"
+        ? { label: "Light theme", words: ["theme", "mode"], icon: Icons.themeLight, run: toggleTheme }
+        : { label: "Dark theme", words: ["theme", "mode"], icon: Icons.themeDark, run: toggleTheme },
+    ];
+    if (inTauri) {
+      all.push({
+        label: "New window",
+        words: [],
+        icon: Icons.newWindow,
+        shortcut: `${COMMAND_KEY} N`,
+        run: () => void invoke("new_window").catch(() => {}),
+      });
+    }
+    return paste ? [] : matchCommands(all, query);
+  }, [navigate, theme, paste, query]);
+  // The arrow keys walk the commands first, then the rows, then "Search for".
+  // A command is picked at the start only when the query is one of its whole
+  // words: "bo" is more often Box than Bookmarks.
+  const skip = commands.length;
+  const typed = trimmed.toLowerCase();
+  const exact = commands.findIndex((command) =>
+    [...command.label.toLowerCase().split(" "), ...command.words].includes(typed),
+  );
+  const selected = picked ?? (exact >= 0 ? exact : rows.length > 0 ? skip : 0);
+
+  const runCommand = useCallback((command: Command) => {
+    flushSync(() => setOpen(false));
+    command.run();
+  }, []);
 
   const go = useCallback(
     (target: string, find?: string) => {
@@ -202,27 +263,28 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
   }, [trimmed, hits, go, location.pathname]);
 
   function onKeyDown(event: React.KeyboardEvent) {
-    const total = rows.length + (searchFor ? 1 : 0);
+    const total = skip + rows.length + (searchFor ? 1 : 0);
     if (total === 0) return;
 
     if (event.key === "ArrowDown") {
       event.preventDefault();
-      setSelected((s) => (s + 1) % total);
+      setPicked((selected + 1) % total);
     }
     if (event.key === "ArrowUp") {
       event.preventDefault();
-      setSelected((s) => (s - 1 + total) % total);
+      setPicked((selected - 1 + total) % total);
     }
     if (event.key === "Enter") {
-      const row = rows[selected];
-      if (row) openRow(row);
+      const row = rows[selected - skip];
+      if (selected < skip) runCommand(commands[selected]);
+      else if (row) openRow(row);
       else void submit();
     }
   }
 
   if (!open) return null;
 
-  const showList = rows.length > 0 || searchFor;
+  const showList = skip > 0 || rows.length > 0 || searchFor;
 
   // Rendered to `document.body`, not in place: the scroll column this
   // component sits under carries `@container` (`container-type: inline-size`),
@@ -254,7 +316,10 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
             autoCorrect="on"
             spellCheck={true}
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setPicked(null);
+            }}
             onKeyDown={onKeyDown}
             placeholder="Search docs or paste a SideFX URL…"
             // [&::-webkit-search-cancel-button]:appearance-none hides the
@@ -295,8 +360,8 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
             // Recents are pages the reader already picked; their old heading
             // hits and excerpts are noise.
             withSubHits={!empty}
-            selected={selected}
-            onSelect={setSelected}
+            selected={selected - skip}
+            onSelect={(index) => setPicked(index + skip)}
             onActivate={openRow}
             className={SEARCH_LIST_CLASS}
             rowRounded={false}
@@ -305,6 +370,30 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
                 <li className="px-4 pt-2 pb-1 text-xs text-muted-foreground/60 select-none">
                   Recent
                 </li>
+              ) : skip > 0 ? (
+                <>
+                  <li className="px-4 pt-2 pb-1 text-xs text-muted-foreground/60 select-none">Commands</li>
+                  {commands.map((command, i) => (
+                    <li key={command.label}>
+                      <button
+                        type="button"
+                        className={`flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors ${
+                          selected === i ? "bg-muted" : "hover:bg-muted/50"
+                        }`}
+                        onClick={() => runCommand(command)}
+                        onMouseMove={() => setPicked(i)}
+                      >
+                        <span className="grid size-5 shrink-0 place-items-center text-muted-foreground">
+                          <command.icon className="size-[17px]" aria-hidden="true" />
+                        </span>
+                        <span className="min-w-0 flex-1 truncate text-sm font-medium">{command.label}</span>
+                        {command.shortcut && (
+                          <kbd className="shrink-0 font-sans text-xs text-muted-foreground">{command.shortcut}</kbd>
+                        )}
+                      </button>
+                    </li>
+                  ))}
+                </>
               ) : null
             }
             footer={
@@ -312,10 +401,10 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
                 <li>
                   <button
                     className={`w-full text-left px-4 py-2.5 flex items-center gap-2 transition-colors text-muted-foreground ${
-                      selected === rows.length ? "bg-muted" : "hover:bg-muted/50"
+                      selected === skip + rows.length ? "bg-muted" : "hover:bg-muted/50"
                     }`}
                     onClick={(() => void submit())}
-                    onMouseMove={() => setSelected(rows.length)}
+                    onMouseMove={() => setPicked(skip + rows.length)}
                   >
                     <span className="text-xs shrink-0">Search for</span>
                     <span className="text-sm font-mono truncate">&ldquo;{trimmed}&rdquo;</span>
