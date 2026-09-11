@@ -299,6 +299,13 @@ async fn new_window(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// Closes the window that asks, as its own close button does: the first
+/// window hides to the tray (see `tray::on_window_event`), another one closes.
+#[tauri::command]
+fn close_window(window: tauri::Window) -> Result<(), String> {
+    window.close().map_err(|e| e.to_string())
+}
+
 /// Every page title in the current build.
 ///
 /// The whole list goes to the front-end once and stays in memory there, which
@@ -760,7 +767,8 @@ pub fn run() {
             show_telemetry_log,
             open_page,
             save_page,
-            new_window
+            new_window,
+            close_window
         ])
         .run(tauri::generate_context!())
         .expect("error while running the application");
