@@ -212,7 +212,6 @@ export default function Page() {
     return () => shell.removeEventListener("scrollend", done);
   }, []);
 
-  const isVexPage = /(^|\/)vex\//.test(`/${path}`);
   // Read once and shared: the gutter reserved for the sticky list (below) and
   // the list itself (TableOfContents) have to agree on whether there is one —
   // TableOfContents draws nothing under two headings, and a gutter held open
@@ -220,6 +219,29 @@ export default function Page() {
   // at all.
   const headings = useMemo(() => (page ? extractHeadings(page.markdown) : []), [page]);
   const hasToc = headings.length >= 2;
+  const name = useMemo(() => (page ? nameOf(page, path) : ""), [page, path]);
+
+  // react-markdown keeps nothing between renders, so each render of this view
+  // parsed the whole page again — on a navigation that included the old page,
+  // drawn once more under the new path while the new one is read. The element
+  // is built once per page, from the page's own path: React skips an element
+  // it has already drawn.
+  const body = useMemo(
+    () =>
+      page && (
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm, remarkCallouts, [remarkVex, { enabled: /(^|\/)vex\//.test(`/${page.path}`) }]]}
+          rehypePlugins={[rehypeRaw, rehypeSlug, rehypeCards]}
+          components={{
+            ...markdownComponents,
+            pre: ({ children }) => <CodeBlock language={detectLanguage(page.path)}>{children}</CodeBlock>,
+          }}
+        >
+          {page.markdown}
+        </ReactMarkdown>
+      ),
+    [page],
+  );
 
   return (
     <div
@@ -243,7 +265,7 @@ export default function Page() {
             <Breadcrumbs
               path={page.path}
               version={page.version}
-              title={nameOf(page, path)}
+              title={name}
             />
           )}
           <a
@@ -268,8 +290,8 @@ export default function Page() {
               {page && (
                 <article className="prose prose-neutral dark:prose-invert max-w-none">
                   <PageHeader
-                    entry={{ path, title: nameOf(page, path), icon: page.icon }}
-                    name={nameOf(page, path)}
+                    entry={{ path, title: name, icon: page.icon }}
+                    name={name}
                     nodeType={page.nodeType}
                     icon={page.icon}
                     since={page.since}
@@ -280,16 +302,7 @@ export default function Page() {
                       stood over the top of the next one until the observer
                       caught up, then faded out. A new page starts it hidden. */}
                   <TableOfContents key={page.path} headings={headings} />
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm, remarkCallouts, [remarkVex, { enabled: isVexPage }]]}
-                    rehypePlugins={[rehypeRaw, rehypeSlug, rehypeCards]}
-                    components={{
-                      ...markdownComponents,
-                      pre: ({ children }) => <CodeBlock language={detectLanguage(path)}>{children}</CodeBlock>,
-                    }}
-                  >
-                    {page.markdown}
-                  </ReactMarkdown>
+                  {body}
                 </article>
               )}
             </main>
