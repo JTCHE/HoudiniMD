@@ -24,21 +24,28 @@ export function PageHeader({ name, nodeType, icon, since, summary, markdown, ent
   return (
     <header className="not-prose border-b border-border pb-3 mb-6">
       {/* The actions hold the right of the title line at every width. What
-          wraps is the title side: a long name, then the Since pill under it. */}
+          wraps is the title side: a long name wraps under itself. */}
       <div className="flex flex-wrap items-start justify-between gap-x-8 gap-y-3">
         <div className="flex min-w-0 flex-1 basis-0 flex-wrap items-center gap-x-3 gap-y-2">
           <PageTitle name={name} nodeType={nodeType} icon={icon} />
-          {since && (
-            <span className="inline-flex items-center rounded-md border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-              Since {since}
-            </span>
-          )}
         </div>
         <div className="flex shrink-0 items-center gap-2 pt-0.5">
           <BookmarkButton entry={entry} />
           <MarkdownActions markdown={markdown} path={entry.path} title={name} />
         </div>
-        {summary && <p className="w-full basis-full m-0 text-sm italic text-muted-foreground">{summary}</p>}
+        {/* The summary and the Since pill share one row, which the pill would
+            otherwise take for itself under the title. The pill keeps the right
+            of the row and goes under a summary too long to leave it room. */}
+        {(summary || since) && (
+          <div className="flex w-full basis-full flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
+            {summary && <p className="m-0 min-w-0 flex-1 text-sm italic text-muted-foreground">{summary}</p>}
+            {since && (
+              <span className="inline-flex shrink-0 items-center rounded-md border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                Since {since}
+              </span>
+            )}
+          </div>
+        )}
       </div>
     </header>
   );
