@@ -12,16 +12,17 @@ export function scroller() {
 }
 
 /**
- * Distance from the top of the scroller to the first readable line: room for
- * the floating pill where it exists, nothing else. The title bar (the app's
- * `<header>`) sits above the scroller, not over its content, so it needs no
- * offset here — unlike the sticky site header this code was ported from.
+ * Distance from the top of the scroller to the first readable line: the
+ * page's bar, which stays at the top of the scroller, and the floating pill
+ * under it where the pill exists. The title bar sits above the scroller, not
+ * over its content, so it needs no offset here.
  */
 export function readingLine() {
   // The same measure the gutter list is switched on: the scroller's width,
   // not the window's.
   const box = scroller();
-  return (box?.clientWidth ?? window.innerWidth) >= 1150 ? 24 : 76;
+  const bar = box ? parseFloat(getComputedStyle(box).getPropertyValue("--page-bar-h")) * 16 || 0 : 0;
+  return bar + ((box?.clientWidth ?? window.innerWidth) >= 1150 ? 24 : 64);
 }
 
 /**

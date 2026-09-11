@@ -988,13 +988,12 @@ button:active kbd.kbd-button {
 :root {
   --header-h: var(--spacing-titlebar);
 }
-/* Covers direct hash URLs. In-page TOC clicks scroll themselves (see
-   scrollToHeading): Safari honours scroll-margin only inside a scroll-snap
-   container, so on iOS this rule alone drops the heading under the header. */
+/* Covers direct hash URLs and a jump from the search. In-page TOC clicks
+   scroll themselves (see scrollToHeading). The title bar is above the page's
+   scroller, not over it; the page's own bar stays at the top of the scroller,
+   so a heading lands clear of that bar (--page-bar-h, set on the scroller). */
 :is(h1, h2, h3, h4, h5, h6)[id] {
-  scroll-margin-top: calc(var(--header-h, 3.5rem) + 1.5rem);
-  /* Pre-15.4 iOS spelling of the same thing. */
-  scroll-snap-margin-top: calc(var(--header-h, 3.5rem) + 1.5rem);
+  scroll-margin-top: calc(var(--page-bar-h, 0px) + 1.5rem);
 }
 
 @keyframes dropdown-in {

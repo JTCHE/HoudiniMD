@@ -74,7 +74,8 @@ export function FloatingPill({
       // a panel down its left side, and a pill fixed to the window centres
       // itself over that panel instead of over the page. The wrapper carries
       // no height, so it lies over the text rather than pushing it down.
-      className={`print:hidden @min-[920px]:hidden sticky top-3 z-20 h-0 transition-opacity duration-300 ease-out motion-reduce:transition-none ${
+      // It rides just under the page's bar, which stays at the top.
+      className={`print:hidden @min-[920px]:hidden sticky top-[calc(var(--page-bar-h)+0.5rem)] z-20 h-0 transition-opacity duration-300 ease-out motion-reduce:transition-none ${
         floating ? "opacity-100" : "pointer-events-none opacity-0"
       }`}
     >
