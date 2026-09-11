@@ -206,7 +206,9 @@ export default function Page() {
   return (
     <div
       ref={scroller}
-      className="docs-shell @container flex min-h-0 flex-1 flex-col overflow-y-auto"
+      // The bar's width is held on a short page too, so the column does not
+      // step sideways between a page that scrolls and one that does not.
+      className="docs-shell @container flex min-h-0 flex-1 flex-col overflow-y-auto [scrollbar-gutter:stable]"
     >
       <SearchOverlay ref={search} />
       {/* Room for the contents list in the right gutter, taken from the box
