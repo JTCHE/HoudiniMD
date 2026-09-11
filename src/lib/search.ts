@@ -447,8 +447,14 @@ export function pastedPath(text: string): string {
     .replace(/[#?].*$/, "")
     .replace(/^\/?docs\/houdini\d*\//, "")
     .replace(/^\/+|\/+$/g, "")
-    // SideFX serves `box.html`; the page here is `box`.
-    .replace(/\.html?$/, "");
+    // SideFX serves `box.html`, and the copied page path is `box.md` (the
+    // file an agent reads); the page here is `box`.
+    .replace(/\.(html?|md)$/, "");
+}
+
+/** The section a pasted link names, as `#anchor`, or nothing. */
+export function pastedAnchor(text: string): string {
+  return text.trim().match(/#[^#?\s]+$/)?.[0] ?? "";
 }
 
 /**
