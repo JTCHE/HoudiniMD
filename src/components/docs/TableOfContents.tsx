@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDown } from "lucide-react";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useOverflow } from "@/lib/ui/overflow";
 import type { Heading } from "@/lib/markdown/headings";
@@ -41,6 +41,20 @@ export function TableOfContents({ headings }: { headings: Heading[] }) {
   // list that fits draws no scrollbar at all.
   const sidebarList = useRef<HTMLElement>(null);
   const sidebarOverflows = useOverflow(sidebarList, [headings]);
+
+  // The active row stays in view: the list scrolls by the least that shows it,
+  // with one row of room past it. scrollTop, not scrollIntoView, which scrolls
+  // the article too.
+  useEffect(() => {
+    const list = sidebarList.current;
+    const row = list?.querySelector<HTMLElement>("[aria-current]");
+    if (!list || !row) return;
+    const box = list.getBoundingClientRect();
+    const at = row.getBoundingClientRect();
+    const room = at.height * 1.5;
+    if (at.top < box.top + room) list.scrollTop -= box.top + room - at.top;
+    else if (at.bottom > box.bottom - room) list.scrollTop += at.bottom - (box.bottom - room);
+  }, [active]);
 
   /* The inline list leaving the top of the scroller is what promotes the pill.
      The watch is set by a ref callback, not by an effect: the list is not on
