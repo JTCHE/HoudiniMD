@@ -153,10 +153,17 @@ fn one(block: &Block, depth: u8) -> String {
             out.push('\n');
             out
         }
+        // The term sits on the line over its text, as a `<dt>` over its `<dd>`.
+        // A blank line between them made two paragraphs as far apart as any
+        // two, and the term no longer read as the name of the text under it.
+        // The hard break holds only before a paragraph: before a list or a
+        // code fence the backslash prints.
         Block::Definition { term, children, .. } => {
+            let tight = matches!(children.first(), Some(Block::Paragraph { text }) if image_group(text).is_none());
             format!(
-                "**{}**\n\n{}",
+                "**{}**{}{}",
                 inlines(term),
+                if tight { "\\\n" } else { "\n\n" },
                 indent(&blocks(children, depth + 1))
             )
         }
@@ -554,7 +561,10 @@ fn raw_inlines(text: &[Inline]) -> String {
 /// Anything going into a pipe-table cell. A cell is one line, and a bar in it
 /// ends the cell.
 fn cell_text(body: &str) -> String {
-    body.replace('|', "\\|")
+    // A cell is one line, so the hard break under a definition term
+    // becomes the `<br>` it stands for before the lines are joined.
+    body.replace("\\\n", "<br>")
+        .replace('|', "\\|")
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ")
