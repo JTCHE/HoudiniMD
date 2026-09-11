@@ -911,6 +911,27 @@ const AREAS: Area[] = [
   },
   {
     id: "page",
+    name: "A link wears one icon, not two",
+    scenes: ["docs-node", "docs-vex"],
+    check: async (page) => {
+      // A link to a page draws that page's icon. An icon the source writes
+      // just in front of the same link draws a second one beside it.
+      const doubled = await page.evaluate(() => {
+        const icon = (node: Node | null) =>
+          node instanceof Element && (node.matches("img, svg, [data-doc-icon]") || !!node.querySelector("[data-doc-icon]"));
+        return [...document.querySelectorAll("article a")]
+          .filter((link) => {
+            let before = link.parentElement?.matches("span.relative") ? link.parentElement.previousSibling : link.previousSibling;
+            while (before && before.nodeType === Node.TEXT_NODE && !(before.textContent ?? "").trim()) before = before.previousSibling;
+            return icon(before) && icon(link.firstElementChild);
+          })
+          .map((link) => (link.textContent ?? "").trim());
+      });
+      return doubled.length === 0 ? null : one("", "page.link_icon", "one icon per link", doubled.slice(0, 4).join(", "));
+    },
+  },
+  {
+    id: "page",
     name: "The contents pill opens",
     scenes: ["docs-many-headings"],
     check: async (page) => {
