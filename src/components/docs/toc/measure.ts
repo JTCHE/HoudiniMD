@@ -45,7 +45,7 @@ export function headingEls() {
  * whatever sits above `box` (the title bar) cancels out of the subtraction —
  * no header height to add back in.
  */
-function scrollTopFor(el: HTMLElement, box: HTMLElement) {
+export function scrollTopFor(el: HTMLElement, box: HTMLElement) {
   return el.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop;
 }
 

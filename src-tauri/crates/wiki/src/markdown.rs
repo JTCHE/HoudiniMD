@@ -98,14 +98,16 @@ fn one(block: &Block, depth: u8) -> String {
     match block {
         Block::Heading {
             level,
+            id,
             title: heading,
             children,
             ..
         } => {
             let level = (*level).clamp(2, 6);
             format!(
-                "{} {}\n\n{}",
+                "{} {}{}\n\n{}",
                 "#".repeat(level as usize),
+                anchor(id),
                 title(heading),
                 blocks(children, depth)
             )
@@ -158,10 +160,11 @@ fn one(block: &Block, depth: u8) -> String {
         // two, and the term no longer read as the name of the text under it.
         // The hard break holds only before a paragraph: before a list or a
         // code fence the backslash prints.
-        Block::Definition { term, children, .. } => {
+        Block::Definition { term, id, children, .. } => {
             let tight = matches!(children.first(), Some(Block::Paragraph { text }) if image_group(text).is_none());
             format!(
-                "**{}**{}{}",
+                "{}**{}**{}{}",
+                anchor(id),
                 inlines(term),
                 if tight { "\\\n" } else { "\n\n" },
                 indent(&blocks(children, depth + 1))
@@ -256,6 +259,22 @@ fn html(tag: &str, attributes: &str, children: &[Block]) -> String {
         false => format!("{tag} {attributes}"),
     };
     format!("<{head}>{}</{tag}>", cell_html(children, true))
+}
+
+/// The `#id:` of a heading or a term, where Houdini's F1 and a `[text|#id]`
+/// link land. On a parameter it is the parameter's internal name, which an
+/// agent needs too. It goes before the text: after it, the heading's own slug
+/// would pick up the trailing space.
+///
+/// One row can document two parameters (`#id: goal_x, goal_y`), and F1 on
+/// either lands on it. Only the first line: a body indented with tabs under
+/// `#id:` runs on into the value (`sop/volumewrangle`).
+fn anchor(id: &Option<String>) -> String {
+    let line = id.as_deref().and_then(|id| id.lines().next()).unwrap_or_default();
+    line.split([',', ' ', '\t'])
+        .filter(|id| !id.is_empty())
+        .map(|id| format!("<span id=\"{}\"></span>", attribute(id)))
+        .collect()
 }
 
 /// A value going into a double-quoted HTML attribute.
@@ -375,11 +394,12 @@ fn parameters(children: &[Block], depth: u8) -> String {
         }
         out.push_str("| Parameter | Description |\n| --- | --- |\n");
         for block in run.drain(..) {
-            let Block::Definition { term, children, .. } = block else {
+            let Block::Definition { term, id, children, .. } = block else {
                 continue;
             };
             out.push_str(&format!(
-                "| {} | {} |\n",
+                "| {}{} | {} |\n",
+                anchor(id),
                 cell_text(&inlines(term)),
                 cell_text(&cell_html(children, false))
             ));
@@ -395,6 +415,7 @@ fn parameters(children: &[Block], depth: u8) -> String {
             Block::Definition { .. } => run.push(child),
             Block::Heading {
                 level,
+                id,
                 title: heading,
                 children,
                 ..
@@ -402,8 +423,9 @@ fn parameters(children: &[Block], depth: u8) -> String {
                 flush(&mut run, &mut out);
                 let level = (*level).clamp(3, 6);
                 out.push_str(&format!(
-                    "{} {}\n\n{}",
+                    "{} {}{}\n\n{}",
                     "#".repeat(level as usize),
+                    anchor(id),
                     title(heading),
                     parameters(children, depth)
                 ));
@@ -451,10 +473,11 @@ fn cell_html(blocks: &[Block], raw: bool) -> String {
                 out.push_str(&text_in(text, raw));
             }
             // The menu of values under a parameter — `Static`, `Animated`.
-            Block::Definition { term, children, .. } => {
+            Block::Definition { term, id, children, .. } => {
                 gap(&mut out);
                 out.push_str(&format!(
-                    "<strong>{}</strong><br>{}",
+                    "{}<strong>{}</strong><br>{}",
+                    anchor(id),
                     text_in(term, raw),
                     cell_html(children, raw)
                 ));

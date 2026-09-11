@@ -1153,8 +1153,8 @@ mod tests {
         // very first block) — the real page has other content above it too.
         let source = "Intro.\n\n= Using Refine == (includeme)\n\nBody text.\n";
         let out = crate::markdown::blocks(&crate::parse(source).blocks, 1);
-        assert!(out.contains("## Using Refine"), "{out}");
-        assert!(!out.contains('='), "{out}");
+        assert!(out.contains("## <span id=\"includeme\"></span>Using Refine"), "{out}");
+        assert!(!out.contains("=="), "{out}");
     }
 
     /// `nodes/lop/houdinicrowdprocedural` writes its summary above the title
