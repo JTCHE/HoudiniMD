@@ -16,7 +16,7 @@ import { invoke, inTauri } from "@/lib/backend";
 import { COMMAND_KEY, isCommand, isTyping, useHotkey } from "@/lib/hotkeys";
 import { Icons } from "@/lib/ui/icons";
 import { toggleTheme, useTheme } from "@/lib/ui/theme";
-import { pastedPath, resolve, titles, type Hit } from "@/lib/search";
+import { pastedAnchor, pastedPath, resolve, titles, type Hit } from "@/lib/search";
 import { useSearch } from "@/lib/use-search";
 import {
   SEARCH_LIST_CLASS,
@@ -247,9 +247,11 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
       if (location.pathname !== `/${row.hit.path}`) {
         saveRecentSearch({ ...row.hit, headings: undefined });
       }
-      go(rowPath(row), row.section?.excerpt);
+      // A pasted link keeps the section it names: `…/cacheif#how-to` opens
+      // the page at How to.
+      go(paste && !row.section ? `${row.hit.path}${pastedAnchor(trimmed)}` : rowPath(row), row.section?.excerpt);
     },
-    [go, location.pathname],
+    [go, location.pathname, paste, trimmed],
   );
 
   /**
@@ -267,7 +269,7 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
       return;
     }
     if (location.pathname !== `/${hit.path}`) saveRecentSearch({ ...hit, headings: undefined });
-    go(hit.path);
+    go(`${hit.path}${pastedAnchor(trimmed)}`);
   }, [trimmed, hits, go, location.pathname]);
 
   function onKeyDown(event: React.KeyboardEvent) {
