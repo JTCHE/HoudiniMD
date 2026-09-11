@@ -1316,6 +1316,10 @@ pre code.hljs {
    a page like xyzdist shows six signatures and three descriptions in one
    undifferentiated stack. */
 .vex-sig-caption {
+  /* The card scrolls sideways under a long signature. Sticky, the caption
+     stays over the visible part, so its band does not stop half way. */
+  position: sticky;
+  left: 0;
   margin: 0;
   padding: 0.75rem 1rem;
   font-size: 0.86rem;
