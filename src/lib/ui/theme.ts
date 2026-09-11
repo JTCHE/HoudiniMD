@@ -10,6 +10,7 @@
  * and no re-render.
  */
 import { useSyncExternalStore } from "react";
+import { inTauri } from "@/lib/backend";
 
 export type Theme = "light" | "dark";
 
@@ -24,7 +25,10 @@ function stored(): Theme | null {
   }
 }
 
+/** Houdini's help pane is a panel of a dark application, and its browser
+    reports light whatever Windows says. There the default is dark. */
 function system(): Theme {
+  if (!inTauri) return "dark";
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
