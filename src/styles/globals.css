@@ -529,6 +529,51 @@ a {
   color: var(--brand-foreground);
 }
 
+/* Where the page runs under the chrome: under the page bar at the top and
+   under the key strip at the bottom. The ground is solid for the first half,
+   where the chrome's own text sits, then thins out on an eased ramp. A
+   straight ramp leaves a hard line where it leaves the solid part; an eased
+   one reads as the page fading out, as the sidebar's lists do. The stops are
+   set on the element, so they take the ground of its theme. */
+.page-bar-scrim,
+.status-scrim {
+  --scrim-stops:
+    var(--background) 50%,
+    color-mix(in srgb, var(--background) 98.7%, transparent) 54.05%,
+    color-mix(in srgb, var(--background) 95.1%, transparent) 57.75%,
+    color-mix(in srgb, var(--background) 89.6%, transparent) 61.25%,
+    color-mix(in srgb, var(--background) 82.5%, transparent) 64.5%,
+    color-mix(in srgb, var(--background) 74.1%, transparent) 67.6%,
+    color-mix(in srgb, var(--background) 64.8%, transparent) 70.5%,
+    color-mix(in srgb, var(--background) 55%, transparent) 73.3%,
+    color-mix(in srgb, var(--background) 45%, transparent) 76.05%,
+    color-mix(in srgb, var(--background) 35.2%, transparent) 78.8%,
+    color-mix(in srgb, var(--background) 25.9%, transparent) 81.6%,
+    color-mix(in srgb, var(--background) 17.5%, transparent) 84.5%,
+    color-mix(in srgb, var(--background) 10.4%, transparent) 87.65%,
+    color-mix(in srgb, var(--background) 4.9%, transparent) 91.1%,
+    color-mix(in srgb, var(--background) 1.3%, transparent) 95.5%,
+    transparent 100%;
+}
+.page-bar-scrim::before,
+.status-scrim::before {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+.page-bar-scrim::before {
+  top: 0;
+  height: calc(100% + 1rem);
+  background: linear-gradient(to bottom, var(--background) 0, var(--scrim-stops));
+}
+.status-scrim::before {
+  bottom: 0;
+  height: calc(100% + 1.75rem);
+  background: linear-gradient(to top, var(--background) 0, var(--scrim-stops));
+}
+
 .markdown-media {
   margin-inline: -1rem;
   border: 1px solid var(--border);
