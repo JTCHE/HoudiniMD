@@ -100,10 +100,20 @@ function keyOf(line: Line): string | null {
   return null;
 }
 
+/* What the tree has open, kept outside it: the panel unmounts when it is
+   hidden, and showing it again must show what the reader left, not a fresh
+   tree. Nothing opens by itself. The tree starts closed, and it opens only
+   for the reader's click or to show the page the reader is on. */
+let kept: Open = { group: null, branch: null, family: null };
+/** The last page the tree opened itself to show, so showing the panel again
+    on the same page does not open again what the reader has closed. */
+let followed: string | undefined;
+
 export function PageTree({ groups, currentPath, bookmarked, className }: PageTreeProps) {
-  // Nodes opens with the panel: it is where most sessions start, and a list
-  // that opens entirely closed asks for a click before it says anything.
-  const [open, setOpen] = useState<Open>({ group: "nodes", branch: null, family: null });
+  const [open, setOpen] = useState<Open>(kept);
+  useEffect(() => {
+    kept = open;
+  }, [open]);
   const [top, setTop] = useState(0);
 
   const lines = useMemo(() => linesOf(groups, open), [groups, open]);
@@ -114,10 +124,11 @@ export function PageTree({ groups, currentPath, bookmarked, className }: PageTre
      Opening the group, the branch and the family the page sits in makes the
      panel say where the reader IS, not where they last clicked. */
   useEffect(() => {
-    if (!currentPath) return;
+    if (!currentPath || currentPath === followed) return;
     for (const group of groups) {
       for (const branch of group.branches) {
         if (!branch.pages.some((page) => page.path === currentPath)) continue;
+        followed = currentPath;
         const { families } = familiesOf(branch.pages);
         setOpen({
           group: group.id,
