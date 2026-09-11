@@ -65,6 +65,14 @@ export default function DocLink({
 }) {
   const classes = cn(underline && LINK, fullWidth && "w-full", className);
   const [visible, setVisible] = useState(false);
+  // The next page can reuse this link for another href at the same place in
+  // the tree. The pointer never left it, so the old tooltip stayed up and
+  // named the new link's page.
+  const [shownHref, setShownHref] = useState(href);
+  if (shownHref !== href) {
+    setShownHref(href);
+    setVisible(false);
+  }
   const linkRef = useRef<HTMLAnchorElement>(null);
   const location = useLocation();
   // The router updates `location` the instant a click fires, a full frame
@@ -160,6 +168,9 @@ export default function DocLink({
         to={to}
         className={cn(classes, "cursor-interactive")}
         onClick={(e) => {
+          // The pointer does not leave a link that the next page draws in
+          // the same place, so the tooltip is put away here.
+          setVisible(false);
           // A link to the page already open is not a navigation. The anchor
           // cases settle here, and the click never reaches the router.
           if (!samePage) return;
