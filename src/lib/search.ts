@@ -1,6 +1,18 @@
 import { invoke } from "./backend";
 
 /** One matching section of a page — a row nested under it in the list. */
+/**
+ * An excerpt as the reader sees it. The index keeps the page's markdown, so
+ * an excerpt can hold `**density**` or `[Copy to Points](/nodes/sop/copytopoints)`,
+ * or half of a link where the snippet cut it.
+ */
+export function excerptText(excerpt: string): string {
+  return excerpt
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/\]\([^)\s]*\)?/g, "")
+    .replace(/\*\*|__|`|\[/g, "");
+}
+
 export interface Section {
   /** Empty when the words were above the first heading. */
   heading: string;

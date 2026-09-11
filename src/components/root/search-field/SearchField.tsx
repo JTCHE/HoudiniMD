@@ -69,9 +69,10 @@ export function SearchField({ className, autoFocus = true }: { className?: strin
     return () => document.removeEventListener("pointerdown", closeOnOutsidePress);
   }, []);
 
-  function go(path: string) {
+  /** `find` is the excerpt of a row, which the page opens at and marks. */
+  function go(path: string, find?: string) {
     setClosed(true);
-    navigate(`/${path}`);
+    navigate(`/${path}`, { state: find ? { find } : undefined });
   }
 
   /**
@@ -91,7 +92,8 @@ export function SearchField({ className, autoFocus = true }: { className?: strin
       return;
     }
     // A row of the list may name a heading of the page, not only the page.
-    go(open && rows[selected]?.hit === hit ? rowPath(rows[selected]) : hit.path);
+    const row = open && rows[selected]?.hit === hit ? rows[selected] : null;
+    go(row ? rowPath(row) : hit.path, row?.section?.excerpt);
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -229,7 +231,7 @@ export function SearchField({ className, autoFocus = true }: { className?: strin
           query={query}
           selected={selected}
           onSelect={setSelected}
-          onActivate={(row) => go(rowPath(row))}
+          onActivate={(row) => go(rowPath(row), row.section?.excerpt)}
           className={cn("absolute top-full right-0 left-0 z-10", SEARCH_DROPDOWN_CLASS)}
         />
       )}

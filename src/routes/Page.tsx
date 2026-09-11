@@ -24,6 +24,7 @@ import { sideFxUrl } from "@/lib/sidefx";
 import { forgetPages, known, read, type PageError, type PageView } from "@/lib/pages";
 import { onBuildChanged } from "@/lib/install";
 import { isTyping, useHotkey } from "@/lib/hotkeys";
+import { flashText } from "@/lib/ui/flash-text";
 
 /**
  * What to call a page whose help file gives no title.
@@ -132,6 +133,25 @@ export default function Page() {
     });
     return () => cancelAnimationFrame(frame);
   }, [location.hash, page]);
+
+  // A search excerpt the reader picked: the page opens at those words and
+  // marks them. Once per navigation, so the same excerpt picked twice marks
+  // twice. Runs after the section scroll above and wins over it.
+  const flashed = useRef<string | null>(null);
+  useEffect(() => {
+    const find = (location.state as { find?: string } | null)?.find;
+    if (!find || page?.path !== path || flashed.current === location.key) return;
+    flashed.current = location.key;
+    const frame = requestAnimationFrame(() => {
+      const shell = scroller.current;
+      const article = shell?.querySelector("article");
+      const main = article?.parentElement;
+      if (!shell || !article || !main) return;
+      const section = location.hash ? document.getElementById(decodeURIComponent(location.hash.slice(1))) : null;
+      flashText(article, main, shell, find, section);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [location.key, location.state, location.hash, page, path]);
 
   // The overlay owns ⌘K itself.
   const search = useRef<SearchOverlayRef>(null);

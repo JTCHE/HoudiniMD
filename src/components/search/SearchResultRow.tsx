@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { iconUrl } from "@/lib/assets";
+import { excerptText } from "@/lib/search";
 
 /**
  * One result row (icon + title + category), and the nested rows under it.
@@ -182,7 +183,7 @@ export function SearchResultRow({
             <span className="truncate text-xs text-muted-foreground">{title}</span>
             {excerpt && (
               <span className="line-clamp-2 text-[0.7rem] leading-snug text-muted-foreground/60">
-                {query ? <Highlight text={excerpt} query={query} /> : excerpt}
+                {query ? <Highlight text={excerptText(excerpt)} query={query} /> : excerptText(excerpt)}
               </span>
             )}
           </span>
