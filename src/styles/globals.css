@@ -119,12 +119,12 @@ a {
      the ladder above, and they stay fixed across the media query below.
      Naming them `--spacing-*` is what puts them on `h-`, `w-`, `p-` and `gap-`
      alike, so one name serves the bar's height and the gap that clears it. */
-  --spacing-titlebar: 41px;
+  /* The Windows 11 title bar: 32px tall, caption buttons 46px wide. Houdini's
+     own window sits beside this one, and a taller bar reads as a web page. */
+  --spacing-titlebar: 32px;
   --spacing-statusbar: 44px;
   --spacing-sidebar: 289px;
-  /* A caption button is a fixed Windows hit target, wider than it is tall. */
-  --spacing-caption-w: 44px;
-  --spacing-caption-h: 40px;
+  --spacing-caption-w: 46px;
   /* ONE row height for the panel. A group header, a context, a page and the
      recents row are the same object at different depths, so they are the same
      height; two heights is what made the panel look assembled rather than
