@@ -29,7 +29,10 @@ export const Image: Components["img"] = function MarkdownImage({ src, alt, ...pr
       // screenshot 40px short of the text reads as a mistake. A small figure
       // — a single icon, a strip of buttons — keeps its own size, because
       // there is nothing to gain from a diagram blown up four times.
-      className={`markdown-media my-4 block h-auto max-w-full${fill ? " w-full" : ""}`}
+      // The ground is a mid grey in both themes: many pictures are drawn on
+      // a clear ground with dark lines and labels, which vanish on the dark
+      // page, and a mid grey keeps both dark and light marks readable.
+      className={`markdown-media my-4 block h-auto max-w-full bg-neutral-500${fill ? " w-full" : ""}`}
       // `loading="lazy"` never fires in this app: every doc page scrolls
       // inside its own `overflow-y-auto` shell, not the window, and Chromium's
       // native lazy loader watches the window's viewport only — an image two
