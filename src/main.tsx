@@ -58,6 +58,26 @@ if (inTauri) {
 // no prop to remember. See lib/ui/press.
 startPress();
 
+// Houdini's help pane opens no window for a link that asks for one: an outside
+// link did nothing there. The local server opens it in the reader's browser.
+// Only in that pane, not in a browser on another machine, where the link must
+// open on that machine. Added after the press rule, which cancels the leftover
+// click of a press, so that click is not sent a second time.
+if (!inTauri && /QtWebEngine/.test(navigator.userAgent)) {
+  document.addEventListener(
+    "click",
+    (event) => {
+      const link = (event.target as Element | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
+      if (!link || event.defaultPrevented) return;
+      const url = new URL(link.href, window.location.href);
+      if (url.origin === window.location.origin || !/^https?:$/.test(url.protocol)) return;
+      event.preventDefault();
+      void invoke("open_url", { url: url.href }).catch(() => {});
+    },
+    true,
+  );
+}
+
 // Real paths, because Houdini asks for `/nodes/sop/box` flat and the reader
 // should see that in the address bar of the help window. The localhost server
 // answers any page path with the app; the desktop window never asks for one,

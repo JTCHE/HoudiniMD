@@ -51,7 +51,14 @@ pub fn start(data: PathBuf, chosen: Arc<install::Chosen>, cache: Arc<install::Ca
         index::background_priority();
         let db = db::open(&data).map(Mutex::new);
         for request in server.incoming_requests() {
-            let (status, body, kind) = answer(db.as_ref(), &chosen, &cache, request.url());
+            // A browser names the site of the page that sent a request. The
+            // old Chromium in some Houdini builds sends no such header.
+            let from_app = request
+                .headers()
+                .iter()
+                .find(|header| header.field.equiv("Sec-Fetch-Site"))
+                .map_or(true, |header| header.value.as_str() == "same-origin");
+            let (status, body, kind) = answer(db.as_ref(), &chosen, &cache, request.url(), from_app);
             // What Houdini asked for, and what it got. Houdini's help window
             // says nothing when a page fails, so without this there is no way
             // to tell a wrong path from a wrong answer.
@@ -92,9 +99,14 @@ fn answer(
     chosen: &install::Chosen,
     cache: &install::Cache,
     url: &str,
+    from_app: bool,
 ) -> Answer {
     let (path, query) = url.split_once('?').unwrap_or((url, ""));
     let path = crate::percent_decode(path);
+
+    if path == "/api/open_url" {
+        return open_url(&parse(query).url, from_app);
+    }
 
     if let Some(name) = path.strip_prefix("/hicon/") {
         return match current(db, chosen, cache).and_then(|install| help::icon(&install.root, name)) {
@@ -231,6 +243,23 @@ fn user_data(db: Result<&Mutex<Connection>, &String>, command: &str, call: &Call
     }
 }
 
+/// Houdini's help pane opens no window for a link that asks for one, so the
+/// pane sends an outside link here and the reader's own browser opens it.
+/// Only for the app's own page: a page on another site gets a refusal, or any
+/// site the reader visits could open tabs on this machine.
+fn open_url(url: &str, from_app: bool) -> Answer {
+    if !from_app {
+        return (403, b"only the app opens links".to_vec(), "text/plain");
+    }
+    if !(url.starts_with("https://") || url.starts_with("http://")) {
+        return (400, b"only a web address opens".to_vec(), "text/plain");
+    }
+    match tauri_plugin_opener::open_url(url, None::<&str>) {
+        Ok(()) => (200, b"null".to_vec(), "application/json"),
+        Err(reason) => (500, reason.to_string().into_bytes(), "text/plain"),
+    }
+}
+
 fn ser<T: serde::Serialize>(value: &T) -> Result<Vec<u8>, String> {
     serde_json::to_vec(value).map_err(|e| e.to_string())
 }
@@ -282,6 +311,8 @@ struct Call {
     id: i64,
     key: String,
     value: String,
+    /// The outside link `open_url` opens.
+    url: String,
 }
 
 fn parse(query: &str) -> Call {
@@ -306,6 +337,7 @@ fn parse(query: &str) -> Call {
             "id" => call.id = value.parse().unwrap_or(0),
             "key" => call.key = value,
             "value" => call.value = value,
+            "url" => call.url = value,
             _ => {}
         }
     }
