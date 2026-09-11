@@ -61,6 +61,7 @@ export function WindowControls({ className }: { className?: string }) {
     <div className={cn("flex h-full items-center", className)}>
       <button
         type="button"
+        tabIndex={-1}
         aria-label="Minimize"
         className={CAPTION_BUTTON}
         onClick={(() => void appWindow()?.minimize())}
@@ -69,6 +70,7 @@ export function WindowControls({ className }: { className?: string }) {
       </button>
       <button
         type="button"
+        tabIndex={-1}
         aria-label={maximized ? "Restore" : "Maximize"}
         className={CAPTION_BUTTON}
         onClick={(() => void appWindow()?.toggleMaximize())}
@@ -77,6 +79,7 @@ export function WindowControls({ className }: { className?: string }) {
       </button>
       <button
         type="button"
+        tabIndex={-1}
         aria-label="Close"
         className={cn(
           CAPTION_BUTTON,

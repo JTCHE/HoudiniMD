@@ -62,6 +62,7 @@ export function TitleBar({ sidebarOpen, onToggleSidebar, showTrail, bare = false
       {!bare && (
       <button
         type="button"
+        tabIndex={-1}
         aria-label={sidebarOpen ? "Hide the sidebar" : "Show the sidebar"}
         aria-pressed={sidebarOpen}
         className={BAR_BUTTON}
@@ -75,6 +76,7 @@ export function TitleBar({ sidebarOpen, onToggleSidebar, showTrail, bare = false
           that has a home to go to. */}
       <Link
         to="/"
+        tabIndex={-1}
         onContextMenu={(event) => {
           event.preventDefault();
           setMenuAt({ x: event.clientX, y: event.clientY });
@@ -103,6 +105,7 @@ export function TitleBar({ sidebarOpen, onToggleSidebar, showTrail, bare = false
         <span className="ml-sm flex shrink-0 items-center gap-2xs">
           <button
             type="button"
+        tabIndex={-1}
             aria-label="Back"
             disabled={!canGoBack}
             className={BAR_BUTTON}
@@ -112,6 +115,7 @@ export function TitleBar({ sidebarOpen, onToggleSidebar, showTrail, bare = false
           </button>
           <button
             type="button"
+        tabIndex={-1}
             aria-label="Forward"
             disabled={!canGoForward}
             className={BAR_BUTTON}
