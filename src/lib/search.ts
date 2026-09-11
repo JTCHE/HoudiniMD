@@ -8,6 +8,9 @@ import { invoke } from "./backend";
  */
 export function excerptText(excerpt: string): string {
   return excerpt
+    // A tag the page writes as raw HTML (a video, a line break). Only a real
+    // tag shape, so `a < b` in code keeps its text.
+    .replace(/<\/?[a-z][^<>]*>/gi, " ")
     .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
     .replace(/\]\([^)\s]*\)?/g, "")
     .replace(/\*\*|__|`|\[/g, "");
