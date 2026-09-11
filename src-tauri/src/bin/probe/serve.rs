@@ -20,7 +20,7 @@ use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use houdinimd_lib::{all_titles, db, find, help, index, install, library, read_page};
+use houdinimd_lib::{all_titles, db, find, help, index, install, library, read_meta, read_page};
 use rusqlite::Connection;
 
 /// What `invoke` becomes in the browser. `page` and the rest keep their names,
@@ -200,31 +200,14 @@ fn command_response(state: &Serve, command: &str, query: &str) -> (u16, &'static
         // `meta` takes a list, which the stub joins with commas. It is the one
         // command whose arguments are not one value.
         "meta" => {
-            let db = state.db.lock().unwrap();
-            let build = &state.install.version;
-            let asked = param(query, "paths").unwrap_or_default();
-            let mut out = Vec::new();
-            for path in asked.split(',').filter(|p| !p.is_empty()) {
-                let row = db
-                    .query_row(
-                        "SELECT title, summary, icon FROM pages WHERE build = ?1 AND path = ?2",
-                        rusqlite::params![build, path],
-                        |row| {
-                            Ok((
-                                row.get::<_, String>(0)?,
-                                row.get::<_, Option<String>>(1)?,
-                                row.get::<_, Option<String>>(2)?,
-                            ))
-                        },
-                    )
-                    .ok();
-                if let Some((title, summary, icon)) = row {
-                    out.push(
-                        serde_json::json!({ "path": path, "title": title, "summary": summary, "icon": icon }),
-                    );
-                }
-            }
-            serde_json::to_string(&out).map_err(|e| e.to_string())
+            let asked: Vec<String> = param(query, "paths")
+                .unwrap_or_default()
+                .split(',')
+                .filter(|p| !p.is_empty())
+                .map(String::from)
+                .collect();
+            read_meta(&state.db.lock().unwrap(), &state.install, &asked)
+                .and_then(|meta| serde_json::to_string(&meta).map_err(|e| e.to_string()))
         }
         // The build the app reads. The harness stands up one install, so the
         // picker has one row and it is always the current one.
