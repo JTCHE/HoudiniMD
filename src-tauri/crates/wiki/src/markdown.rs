@@ -323,6 +323,12 @@ fn item(name: &str, label: &str, props: &Props, children: &[Block], depth: u8) -
             true => body,
             false => format!("{label}\n\n{body}"),
         },
+        // `:arg:geohandle:` names one argument of a VEX function. The name is
+        // code, the way the reader types it, and the front-end sets it beside
+        // its type from the signature.
+        "arg" => format!("`{}`\n\n{body}", label.trim_end_matches(':').trim()),
+        // `:null:` only carries an `#id:` for an include to point at.
+        "null" => body,
         "col" | "box" | "tab" | "task" | "disclosure" | "bubble" | "fig" | "caption" => {
             if label.is_empty() {
                 body

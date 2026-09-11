@@ -1248,6 +1248,11 @@ pre code.hljs {
 }
 .vex-sig-row:first-child {
   padding-top: 0.7rem;
+  /* The copy button sits over the first row. The row is as wide as its
+     text, so a long signature scrolls clear of the button. */
+  width: max-content;
+  min-width: 100%;
+  padding-right: calc(1rem + var(--code-copy-clearance));
 }
 .vex-sig-row:last-child {
   padding-bottom: 0.7rem;
