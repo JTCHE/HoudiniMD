@@ -111,6 +111,16 @@ fn answer(
     if let Some(command) = path.strip_prefix("/api/") {
         return api(db, chosen, cache, command, query);
     }
+    // `/nodes/sop/box.md` is the page as Markdown, for an agent that reads a
+    // file and not an app. The "copy page path" keys hand out this address.
+    if let Some(page) = path.strip_suffix(".md") {
+        return match current(db, chosen, cache)
+            .and_then(|i| crate::read_page(&i, page.trim_start_matches('/')).map_err(|e| e.message))
+        {
+            Ok(view) => (200, view.markdown.into_bytes(), "text/markdown; charset=utf-8"),
+            Err(reason) => not_found(reason),
+        };
+    }
     file(&path)
 }
 
