@@ -1,8 +1,8 @@
 /**
  * The first launch.
  *
- * Five screens: a welcome, the Houdini to read, F1, telemetry, and what a beta
- * is. Every screen carries a default, and Enter takes the default and moves
+ * Six screens: a welcome, the Houdini to read, F1, Houdini MCP, telemetry, and
+ * what a beta is. Every screen carries a default, and Enter takes the default and moves
  * on — a reader in a hurry holds Enter and lands in the app with the settings
  * this project recommends.
  *
@@ -19,6 +19,8 @@ import { Keycap } from "@/components/ui/Keycap";
 import { StepFrame } from "./StepFrame";
 import { SettingRow } from "./SettingRow";
 import { InstallStep } from "./InstallStep";
+import { McpStep } from "./McpStep";
+import { showToast } from "@/components/ui/toast-notification";
 
 /** The `user.settings` key that says the first launch is over. */
 export const ONBOARDED = "onboarded";
@@ -28,11 +30,15 @@ export const TELEMETRY = "telemetry";
 /** Where the step-2 picture lives: HoudiniMD open in Houdini's help pane. It
     ships with the app, the way the cover picture in the README does. */
 const HELP_PANE_PICTURE = "/onboarding/help-pane.webp";
+/** The step-3 picture: the cover of the Houdini MCP repository. */
+const MCP_PICTURE = "/onboarding/houdini-mcp.webp";
 
 export function Onboarding({ onDone }: { onDone: () => void }) {
   const [step, setStep] = useState(0);
   const [version, setVersion] = useState("");
   const [hookOn, setHookOn] = useState(true);
+  const [mcpOn, setMcpOn] = useState(true);
+  const [agent, setAgent] = useState("");
   const [telemetryOn, setTelemetryOn] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -43,7 +49,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
     setBusy(true);
     try {
       await commit(step);
-      if (step === 4) {
+      if (step === 5) {
         onDone();
         return;
       }
@@ -63,8 +69,16 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
       announceBuildChanged();
     }
     if (leaving === 2 && hookOn) await invoke("hook_current_build");
-    if (leaving === 3) await invoke("set_setting", { key: TELEMETRY, value: String(telemetryOn) });
-    if (leaving === 4) await invoke("set_setting", { key: ONBOARDED, value: "done" });
+    // The download takes longer than the rest of the setup, so the setup does
+    // not wait on it. The toast says how it ended, on whatever screen is open.
+    if (leaving === 3 && mcpOn && agent) {
+      void invoke("install_houdini_mcp", { agent }).then(
+        () => showToast("Houdini MCP is installed. Restart Houdini and your agent."),
+        (reason) => showToast(`Houdini MCP did not install: ${String(reason)}`, "error"),
+      );
+    }
+    if (leaving === 4) await invoke("set_setting", { key: TELEMETRY, value: String(telemetryOn) });
+    if (leaving === 5) await invoke("set_setting", { key: ONBOARDED, value: "done" });
   }
 
   const back =
@@ -150,6 +164,27 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
         {...common}
         step={3}
         action="Continue"
+        title="Connect your AI agent"
+        body="Houdini MCP connects your agent to Houdini and to these docs. Ask it to pull the docs, and it walks them on its own, for the exact build you use."
+        media={
+          <img
+            src={MCP_PICTURE}
+            alt="Claude, ChatGPT and Gemini marks linked to the Houdini mark"
+            className="size-full object-cover"
+          />
+        }
+      >
+        <McpStep on={mcpOn} onToggle={setMcpOn} agent={agent} onAgent={setAgent} />
+      </StepFrame>
+    );
+  }
+
+  if (step === 4) {
+    return (
+      <StepFrame
+        {...common}
+        step={4}
+        action="Continue"
         title="Help fix what breaks"
         body="HoudiniMD sends the following data anonymously: Houdini build, OS, index time, page open time, and crash report stack traces. They help prioritise features and bug fixes, and help track down performance issues. There is no personal data linked to your usage of HoudiniMD."
       >
@@ -165,7 +200,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
   return (
     <StepFrame
       {...common}
-      step={4}
+      step={5}
       action="Continue"
       title="Heads up: this is a beta"
       body="Expect bugs. Bookmarks, recent pages and the index can be lost between builds. Some pages can miss content, or render incorrectly. File an issue using the button in the sidebar or directly on GitHub."

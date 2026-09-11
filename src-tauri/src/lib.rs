@@ -1,6 +1,7 @@
 pub mod db;
 pub mod hook;
 pub mod library;
+pub mod mcp;
 pub mod server;
 pub mod telemetry;
 pub mod tray;
@@ -657,6 +658,32 @@ fn hook_current_build(
     hook::apply(&data.0, port.0, &[hook::series_of(&install.version)])
 }
 
+/// The agents on this machine that Houdini MCP can connect to.
+#[tauri::command]
+fn mcp_agents() -> Vec<mcp::Agent> {
+    mcp::agents()
+}
+
+/// Installs Houdini MCP for the release series of the reader's own build and
+/// for one agent. The onboarding does not wait on it: the download runs off
+/// the main thread, and the answer comes back whenever it is done.
+#[tauri::command]
+async fn install_houdini_mcp(
+    state: State<'_, Db>,
+    chosen: State<'_, Arc<install::Chosen>>,
+    cache: State<'_, Arc<install::Cache>>,
+    agent: String,
+) -> Result<(), String> {
+    let install = {
+        let db = state.0.lock().map_err(|e| e.to_string())?;
+        current(&db, &chosen, &cache)?
+    };
+    let release = hook::series_of(&install.version);
+    tauri::async_runtime::spawn_blocking(move || mcp::install(&release, &agent))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 /// Puts back what F1 pointed at before this app touched it.
 #[tauri::command]
 fn unhook_houdini(data: State<DataDir>) -> Result<Vec<String>, String> {
@@ -770,6 +797,8 @@ pub fn run() {
             hook_houdini,
             hook_current_build,
             unhook_houdini,
+            mcp_agents,
+            install_houdini_mcp,
             reset_index,
             reset_user_data,
             report_error,
