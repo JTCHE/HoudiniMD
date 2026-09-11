@@ -10,7 +10,7 @@ import {
 import { createPortal, flushSync } from "react-dom";
 import { useLocation, useNavigate } from "react-router";
 import { showToast } from "@/components/ui/toast-notification";
-import { isCommand, useHotkey } from "@/lib/hotkeys";
+import { isCommand, isTyping, useHotkey } from "@/lib/hotkeys";
 import { pastedPath, resolve, titles, type Hit } from "@/lib/search";
 import { useSearch } from "@/lib/use-search";
 import {
@@ -68,12 +68,31 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
     },
   }));
 
+  // A letter typed on the page is the start of a search: the overlay opens
+  // with that letter in it. A key with a modifier is a shortcut, and a key in
+  // a field or a menu belongs to that control.
+  const seed = useRef("");
   useHotkey((event) => {
     if (isCommand(event) && event.key === "k") {
       event.preventDefault();
       setOpen((was) => !was);
     }
     if (event.key === "Escape") setOpen(false);
+    const target = event.target as HTMLElement;
+    if (
+      !open &&
+      !event.defaultPrevented &&
+      !event.ctrlKey &&
+      !event.metaKey &&
+      !event.altKey &&
+      /^[\p{L}\p{N}]$/u.test(event.key) &&
+      !isTyping(target) &&
+      !target.closest("[role=menu], [role=listbox], [role=dialog]")
+    ) {
+      event.preventDefault();
+      seed.current = event.key;
+      setOpen(true);
+    }
   });
 
   // Reset the query and read the recents the moment `open` flips true, during
@@ -82,7 +101,8 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
   if (open !== wasOpen) {
     setWasOpen(open);
     if (open) {
-      setQuery("");
+      setQuery(seed.current);
+      seed.current = "";
       const here = location.pathname.replace(/^\/+/, "");
       setRecent(getRecentSearches().filter((hit) => hit.path !== here));
     }
