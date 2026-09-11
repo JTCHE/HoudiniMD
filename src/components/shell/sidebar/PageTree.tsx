@@ -26,6 +26,7 @@
  * inside the window sticks to the wrong box.
  */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router";
 import { cn } from "@/lib/utils";
 import { groupIcon } from "@/lib/ui/icons";
 import { VirtualList } from "@/components/ui/VirtualList";
@@ -199,6 +200,31 @@ export function PageTree({ groups, currentPath, bookmarked, className }: PageTre
   const openBranch = openGroup?.branches.find((branch) => branch.id === open.branch);
   const openFamily = familyAt >= 0 ? (lines[familyAt] as Extract<Line, { kind: "family" }>) : null;
   const GroupMark = openGroup ? groupIcon(openGroup.id) : null;
+
+  /* Ctrl and the wheel over the panel step through the pages of the open
+     branch, in the order the panel draws them: a quick way to look through a
+     family of nodes. One notch is one page; the many small steps of a touchpad
+     add up to one. Without the cancel, Ctrl and the wheel zoom the window. */
+  const navigate = useNavigate();
+  useEffect(() => {
+    const panel = nav.current;
+    if (!panel || !openBranch) return;
+    const { families, loose } = familiesOf(openBranch.pages);
+    const pages = [...families.flatMap((family) => family.pages), ...loose];
+    let sum = 0;
+    const onWheel = (event: WheelEvent) => {
+      if (!event.ctrlKey) return;
+      event.preventDefault();
+      sum += event.deltaY;
+      if (Math.abs(sum) < 50) return;
+      const at = pages.findIndex((page) => page.path === currentPath);
+      const next = pages[at < 0 ? 0 : at + Math.sign(sum)];
+      sum = 0;
+      if (next) navigate(`/${next.path}`);
+    };
+    panel.addEventListener("wheel", onWheel, { passive: false });
+    return () => panel.removeEventListener("wheel", onWheel);
+  }, [openBranch, currentPath, navigate]);
 
   /* A row that is opened or closed stays where the reader clicked it. Closing
      a section shrinks the list, and the browser takes the lost length off the
