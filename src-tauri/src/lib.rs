@@ -275,6 +275,30 @@ async fn save_page(app: tauri::AppHandle, name: String, markdown: String) -> Res
     Ok(true)
 }
 
+/// Opens one more window on the home page, made from the same entry in
+/// `tauri.conf.json` as the first. It stays hidden until its page has loaded,
+/// so it never shows an empty frame. Async, because a window made in a
+/// blocking command stops the window thread on Windows.
+#[tauri::command]
+async fn new_window(app: tauri::AppHandle) -> Result<(), String> {
+    use std::sync::atomic::{AtomicU32, Ordering};
+    use tauri::webview::PageLoadEvent;
+    static NEXT: AtomicU32 = AtomicU32::new(1);
+    let mut config = app.config().app.windows[0].clone();
+    config.label = format!("window-{}", NEXT.fetch_add(1, Ordering::Relaxed));
+    tauri::WebviewWindowBuilder::from_config(&app, &config)
+        .map_err(|e| e.to_string())?
+        .on_page_load(|window, load| {
+            if load.event() == PageLoadEvent::Finished {
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        })
+        .build()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// Every page title in the current build.
 ///
 /// The whole list goes to the front-end once and stays in memory there, which
@@ -735,7 +759,8 @@ pub fn run() {
             report_error,
             show_telemetry_log,
             open_page,
-            save_page
+            save_page,
+            new_window
         ])
         .run(tauri::generate_context!())
         .expect("error while running the application");

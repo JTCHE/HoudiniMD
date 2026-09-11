@@ -12,7 +12,7 @@
 import { useState } from "react";
 import { useLocation } from "react-router";
 import { cn } from "@/lib/utils";
-import { inTauri } from "@/lib/backend";
+import { invoke, inTauri } from "@/lib/backend";
 import { isCommand, isTyping, useHotkey } from "@/lib/hotkeys";
 import { Onboarding, useOnboarding } from "@/components/onboarding/Onboarding";
 import { TitleBar } from "./TitleBar";
@@ -37,6 +37,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     if (isTyping(event.target)) return;
     event.preventDefault();
     setSidebarOpen((open) => !open);
+  });
+
+  // ⌘N opens one more window, as in a browser. Only the desktop app makes
+  // windows: in Houdini's pane the key stays Qt's.
+  useHotkey((event) => {
+    if (!inTauri || event.key.toLowerCase() !== "n" || !isCommand(event) || event.shiftKey) return;
+    event.preventDefault();
+    void invoke("new_window").catch(() => {});
   });
 
   const path = location.pathname.replace(/^\/+/, "");
