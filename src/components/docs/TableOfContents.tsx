@@ -120,10 +120,10 @@ export function TableOfContents({ headings }: { headings: Heading[] }) {
           gap on top of it. */}
       <nav ref={inline} aria-label="On this page" className="not-prose print:hidden @min-[920px]:hidden -mt-2">
         {title}
-        <div className={collapsed ? "relative max-h-40 overflow-hidden" : undefined}>
+        <div className={collapsed ? "relative max-h-32 overflow-hidden" : undefined}>
           <TocList headings={headings} top={top} active={active} />
           {collapsed && (
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-linear-to-b from-transparent to-background" />
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-linear-to-b from-transparent to-background" />
           )}
         </div>
         {headings.length > LONG && (
