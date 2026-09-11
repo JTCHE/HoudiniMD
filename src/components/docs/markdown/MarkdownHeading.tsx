@@ -1,0 +1,42 @@
+import { Link2 } from "lucide-react";
+import type { Components } from "react-markdown";
+import { useLocation } from "react-router";
+import { showToast } from "@/components/ui/toast-notification";
+import { HOUDINIMD_DOCS_ROOT } from "@/lib/houdini";
+
+type Tag = "h2" | "h3" | "h4";
+
+/** A section heading with a button that copies a link to it. The link is to
+    the same section on the website, which anyone can open: the local server
+    is on this machine only. */
+function heading(Tag: Tag): NonNullable<Components[Tag]> {
+  return function MarkdownHeading({ node: _node, children, ...props }) {
+    const location = useLocation();
+    const copy = () => {
+      const path = location.pathname.replace(/^\/+/, "");
+      navigator.clipboard.writeText(`${HOUDINIMD_DOCS_ROOT}/${path}#${props.id}`).then(
+        () => showToast("Copied the link to this section"),
+        () => showToast("Could not copy the link", "error"),
+      );
+    };
+    return (
+      <Tag {...props}>
+        {children}
+        {props.id && (
+          <button
+            type="button"
+            aria-label="Copy the link to this section"
+            onClick={copy}
+            className="heading-copy ml-2 inline-flex translate-y-[0.1em] cursor-interactive rounded-sm p-0.5 align-baseline text-muted-foreground transition-[opacity,color] duration-150 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 motion-reduce:transition-none"
+          >
+            <Link2 className="size-[0.75em]" aria-hidden="true" />
+          </button>
+        )}
+      </Tag>
+    );
+  };
+}
+
+export const H2 = heading("h2");
+export const H3 = heading("h3");
+export const H4 = heading("h4");

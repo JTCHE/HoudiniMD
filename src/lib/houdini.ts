@@ -3,6 +3,10 @@ export const SIDEFX_DOCS_ROOT = `${SIDEFX_ORIGIN}/docs`;
 export const HOUDINI_DOCS_ROOT = `${SIDEFX_DOCS_ROOT}/houdini`;
 export const HOUDINI_ICON_ROOT = `${HOUDINI_DOCS_ROOT}/icons`;
 
+/** The same docs on the website. A link to share, or for an assistant on the
+    web to read, goes here: the local server is on this machine only. */
+export const HOUDINIMD_DOCS_ROOT = "https://houdinimd.com/docs/houdini";
+
 /** Versions that SideFX publishes in its documentation catalog, newest first. */
 export const HOUDINI_DOC_VERSIONS = ["22.0", "21.0", "20.5", "20.0", "19.5"] as const;
 

@@ -718,6 +718,14 @@ a {
   .group:not(:hover) .code-panel {
     scrollbar-color: transparent transparent;
   }
+  /* The same for the link beside a section heading. */
+  .heading-copy {
+    opacity: 0;
+  }
+  :hover > .heading-copy,
+  .heading-copy:focus-visible {
+    opacity: 1;
+  }
 }
 
 /* Reset: scoped to code elements our renderer outputs (always have a class attr, even if empty) */
