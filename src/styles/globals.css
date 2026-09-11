@@ -700,6 +700,24 @@ a {
   border: 1px solid oklch(1 0 0 / 10%);
   border-radius: var(--radius-lg);
   overflow-x: auto;
+  scrollbar-color: oklch(1 0 0 / 22%) transparent;
+}
+
+/* With a pointer, a code panel shows its copy button and its scrollbar when
+   the pointer is on it. The code cut at the edge already says it scrolls. A
+   touch screen has no hover, so there both stay. */
+@media (hover: hover) {
+  .code-copy {
+    opacity: 0;
+  }
+  .group:hover > .code-copy,
+  .code-copy:focus-visible,
+  .code-copy[data-copied] {
+    opacity: 1;
+  }
+  .group:not(:hover) .code-panel {
+    scrollbar-color: transparent transparent;
+  }
 }
 
 /* Reset: scoped to code elements our renderer outputs (always have a class attr, even if empty) */
