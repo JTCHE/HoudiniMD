@@ -12,6 +12,7 @@ import {
 } from "@/components/search/SearchResultList";
 import { AnimatedPlaceholder } from "./AnimatedPlaceholder";
 import { PasteSearchButton } from "./PasteSearchButton";
+import { useSearchReport } from "@/lib/telemetry";
 
 /**
  * The search field: one input, one key, and the list it opens.
@@ -69,6 +70,13 @@ export function SearchField({ className, autoFocus = true }: { className?: strin
     return () => document.removeEventListener("pointerdown", closeOnOutsidePress);
   }, []);
 
+  const tell = useSearchReport(query, hits.length);
+  // A list the reader closed without opening a row is the case that says the
+  // search fell short, so it is reported too.
+  useEffect(() => {
+    if (closed) tell(-1);
+  }, [closed, tell]);
+
   /** `find` is the excerpt of a row, which the page opens at and marks. */
   function go(path: string, find?: string) {
     setClosed(true);
@@ -89,8 +97,10 @@ export function SearchField({ className, autoFocus = true }: { className?: strin
     const hit = resolve(all, wanted, rows[selected]?.hit);
     if (!hit) {
       setError(`Nothing in this Houdini build matches “${wanted}”.`);
+      tell(-1);
       return;
     }
+    tell(rows.findIndex((row) => row.hit.path === hit.path));
     // A row of the list may name a heading of the page, not only the page.
     const row = open && rows[selected]?.hit === hit ? rows[selected] : null;
     go(row ? rowPath(row) : hit.path, row?.section?.excerpt);
@@ -231,7 +241,10 @@ export function SearchField({ className, autoFocus = true }: { className?: strin
           query={query}
           selected={selected}
           onSelect={setSelected}
-          onActivate={(row) => go(rowPath(row), row.section?.excerpt)}
+          onActivate={(row, rank) => {
+            tell(rank);
+            go(rowPath(row), row.section?.excerpt);
+          }}
           className={cn("absolute top-full right-0 left-0 z-10", SEARCH_DROPDOWN_CLASS)}
         />
       )}

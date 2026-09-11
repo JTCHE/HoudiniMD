@@ -12,6 +12,8 @@
  *
  * Read it with the Analytics Engine SQL API:
  *   SELECT blob1 AS kind, blob3 AS build, count() FROM houdinimd_app GROUP BY kind, build
+ * Mean reciprocal rank, which says whether the search is getting better:
+ *   SELECT avg(if(double6 < 0, 0, 1 / (double6 + 1))) FROM houdinimd_app WHERE blob1 = 'search'
  * `index1` is the install id. `visitorName()` in houdinimd-analytics turns it
  * into a readable name.
  */
@@ -21,7 +23,7 @@ interface Env {
   LIMITER: { limit(options: { key: string }): Promise<{ success: boolean }> };
 }
 
-const KINDS = new Set(["launch", "index", "pages", "crash", "error", "setup", "feature"]);
+const KINDS = new Set(["launch", "index", "pages", "crash", "error", "setup", "feature", "search"]);
 
 const str = (value: unknown, max: number) => (typeof value === "string" ? value.slice(0, max) : "");
 const num = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? value : 0);
@@ -51,7 +53,7 @@ export default {
     env.EVENTS.writeDataPoint({
       indexes: [id],
       blobs: [event.kind as string, str(event.app, 32), str(event.build, 32), str(event.os, 64), str(event.message, 4000)],
-      doubles: [num(event.seconds), num(event.pages), num(event.count), num(event.median_ms), num(event.p95_ms)],
+      doubles: [num(event.seconds), num(event.pages), num(event.count), num(event.median_ms), num(event.p95_ms), num(event.rank)],
     });
     return new Response(null, { status: 204 });
   },

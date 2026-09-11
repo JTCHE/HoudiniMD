@@ -49,8 +49,16 @@ jobs:
           prerelease: false
           includeUpdaterJson: true
           updaterJsonPreferNsis: true
-          # The signature the app checks lives INSIDE latest.json. The `.sig`
-          # file is a second copy of it that nothing reads, and on the release
-          # page it sits beside the installer and asks the reader a question
-          # they cannot answer.
-          uploadUpdaterSignatures: false
+
+      # The signature the app checks lives INSIDE latest.json. The `.sig` file
+      # is a second copy that nothing reads, and on the release page it sits
+      # beside the installer and asks the reader a question they cannot
+      # answer. tauri-action has no switch for it, so it goes after the fact.
+      - name: drop the .sig assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          gh release view $tag --json assets --jq '.assets[].name' |
+            Where-Object { $_ -like "*.sig" } |
+            ForEach-Object { gh release delete-asset $tag $_ --yes }

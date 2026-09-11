@@ -80,7 +80,7 @@ export function SearchResultList({
   query: string;
   selected: number;
   onSelect: (index: number) => void;
-  onActivate: (row: Row) => void;
+  onActivate: (row: Row, index: number) => void;
   /** Off for lists of pages the reader already chose, where sub-hits are noise. */
   withSubHits?: boolean;
   header?: React.ReactNode;
@@ -131,7 +131,7 @@ export function SearchResultList({
             query={query}
             active={i === selected}
             rounded={rowRounded}
-            onClick={() => onActivate(row)}
+            onClick={() => onActivate(row, i)}
             onMouseMove={() => onSelect(i)}
           />
         </li>

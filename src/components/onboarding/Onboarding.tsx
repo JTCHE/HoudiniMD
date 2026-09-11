@@ -192,7 +192,18 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
         step={4}
         action="Continue"
         title="Help fix what breaks"
-        body="HoudiniMD sends the following data anonymously: Houdini build, OS, index time, page open time, and crash report stack traces. They help prioritise features and bug fixes, and help track down performance issues. There is no personal data linked to your usage of HoudiniMD."
+        body={
+          <>
+            HoudiniMD sends this, and nothing else, under a random number made on this machine: your Houdini build, your
+            Windows version, how long the index takes, how long a page takes to open, crash and error messages, the answers
+            you give on this setup, the names of the parts of the app you use, and for a search, how many results came back
+            and which one you opened.
+            <br />
+            <br />
+            <strong>Never your search words, page titles, file paths or user name.</strong> You can read every line that
+            leaves this machine: the app name in the title bar has “See what is sent”.
+          </>
+        }
       >
         <SettingRow
           label="Send anonymous usage data"

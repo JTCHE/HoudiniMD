@@ -62,6 +62,9 @@ reader nothing, draw it static.
   in a temporary directory.
 - Do not commit SQL migration files. Write them in `migrations/`, apply, then delete
   the file.
+- A release page holds the installer and `latest.json`, and nothing else. Never
+  put a `.sig` file on it: the signature the app checks is inside `latest.json`,
+  so the file is a second copy that nothing reads.
 - Look at a UI change before you report it done. A build that compiles is not a
   page that reads.
 - This machine has an interactive desktop. To look at the app, serve the built `dist` with a
