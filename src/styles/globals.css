@@ -523,10 +523,10 @@ a {
   }
 }
 
-/* Text selection — inverted color scheme, dark mode handled via CSS vars */
+/* Text selection in the brand, the one colour the window owns. */
 ::selection {
-  background: var(--foreground);
-  color: var(--background);
+  background: var(--brand);
+  color: var(--brand-foreground);
 }
 
 .markdown-media {
