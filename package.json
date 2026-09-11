@@ -14,7 +14,8 @@
     "lint": "eslint .",
     "harness": "node harness/run.mts",
     "design": "node harness/design.mts",
-    "pane": "node harness/pane.mts"
+    "pane": "node harness/pane.mts",
+    "slowmo": "node harness/slowmo.mts"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.3.0",
