@@ -1075,117 +1075,83 @@ button:active kbd.kbd-button {
   }
 }
 
-/* ── Print — A4 page box, tighter listicles/headings, no dangling breaks ── */
+/* ── Print ──────────────────────────────────────────────────────────────── */
+/* The paper size is the printer's. The margin repeats on every sheet. The
+   window chrome is hidden where it is drawn (print:hidden), and theme.ts
+   prints the light theme. */
 @page {
-  size: A4;
-  /* margin stays 0 on both axes — verified empirically (headless Chrome
-     print-to-pdf) that @page's vertical margin does NOT repeat on interior
-     pages here, only the first; and the horizontal axis is the one some
-     print-dialog margin overrides can zero out entirely regardless. Real
-     margin on every page — both axes — comes from PrintPagination.tsx
-     instead, which inserts actual spacer elements at every break it forces. */
-  margin: 0;
+  margin: 1.5cm 1.3cm;
 }
 
-:root {
-  /* Single source for the print page-margin value, read by the
-     [data-print-measure] rule below. */
-  --print-page-x: 1.3cm;
-}
+@media print {
+  /* The margin is the sheet's, so the column takes the whole sheet. */
+  .max-w-page {
+    max-width: none;
+  }
+  :root {
+    --page-x: 0px;
+  }
 
-/* Print-time spacing/break rules. Gated by [data-print-measure] rather than
-   `@media print` — PrintPagination.tsx sets that attribute on beforeprint and
-   only clears it on afterprint, so it's already a reliable "printing is
-   active" flag, and using it here (instead of a separate @media print block)
-   means the styles measurement reads are byte-for-byte what real print uses.
-   A second, @media-print-only copy of these rules previously existed for the
-   actual print render — but since measurement only saw the un-tightened
-   screen margins, computed heights ran larger than the real printed ones,
-   forcing page breaks earlier than necessary and leaving avoidable gaps. */
-:root[data-print-measure] {
-  /* @page margin is unreliable across browsers (Chrome's print-dialog
-     margin dropdown can override it entirely; Safari ignores it and
-     hardcodes its own) — so @page stays at 0 and this content padding
-     is the single, physical-unit source of the print margin instead. */
-  --page-x: var(--print-page-x);
-}
+  .prose :where(li) {
+    margin-top: 0.15em;
+    margin-bottom: 0.15em;
+    break-inside: avoid;
+  }
+  .prose :where(li > p) {
+    margin-bottom: 0.1em;
+  }
+  .prose :where(li > p + p) {
+    margin-top: 0.1em;
+  }
+  .prose :where(ul, ol, p) {
+    margin-top: 0.4em;
+    margin-bottom: 0.4em;
+  }
+  .prose :where(h1, h2, h3, h4, h5, h6) {
+    margin-top: 0.9em;
+    margin-bottom: 0.4em;
+    /* A heading alone at the foot of a sheet goes to the next one with its
+       text. */
+    break-after: avoid-page;
+    break-inside: avoid;
+  }
 
-/* main/footer are capped at max-w-page (--container-page, above) — wider than A4's
-   printable width even after margins. Without this, PrintPagination.tsx
-   measures text wrapped at that wider on-screen width (fewer, longer
-   lines) while the real print pass wraps it at A4's ~695px (more, shorter
-   lines) — every paragraph/cell/row height it computes runs short of the
-   real printed one, so its break/margin decisions drift off actual
-   content. Capping the width here makes measurement-time wrapping match
-   print-time wrapping exactly. */
-:root[data-print-measure] .max-w-page {
-  max-width: calc(210mm - 2 * var(--print-page-x)) !important;
-}
+  /* A long table runs over several sheets. A row can break too: a parameter
+     row with a long menu is most of a sheet, and kept whole it leaves the
+     sheet before it almost empty. */
+  table {
+    break-inside: auto;
+  }
+  figure,
+  img,
+  .callout,
+  .vex-sig-card {
+    break-inside: avoid;
+  }
 
-/* DocsPageContent's shell (header/content/footer) is a flex column so the
-   footer sticks to the viewport bottom on an empty page on SCREEN. Browsers'
-   support for fragmenting flex containers across print pages is inconsistent
-   (Chromium in particular can ignore explicit heights on a flex sibling), so
-   the manually-measured spacer PrintPagination.tsx inserts to push the
-   footer down doesn't reliably take effect inside it. Print doesn't need the
-   sticky-footer behavior anyway — falling back to plain block flow sidesteps
-   the fragmentation quirk entirely. */
-:root[data-print-measure] .docs-shell {
-  display: block;
-}
-
-:root[data-print-measure] .prose :where(li) {
-  margin-top: 0.15em !important;
-  margin-bottom: 0.15em !important;
-  break-inside: avoid;
-}
-
-:root[data-print-measure] .prose :where(li > p) {
-  margin-bottom: 0.1em !important;
-}
-
-:root[data-print-measure] .prose :where(li > p + p) {
-  margin-top: 0.1em !important;
-}
-
-:root[data-print-measure] .prose :where(h1, h2, h3, h4, h5, h6) {
-  margin-top: 0.9em !important;
-  margin-bottom: 0.4em !important;
-  /* A heading stranded alone at the bottom of a page reads as a mistake —
-     force the browser to carry it (and whatever follows) to the next page
-     instead of breaking right after it. */
-  break-after: avoid-page;
-  break-inside: avoid;
-}
-
-:root[data-print-measure] .prose :where(ul, ol) {
-  margin-top: 0.4em !important;
-  margin-bottom: 0.4em !important;
-}
-
-:root[data-print-measure] .prose :where(p) {
-  margin-top: 0.4em !important;
-  margin-bottom: 0.4em !important;
-}
-
-/* Tables: let the table itself span pages (forcing the whole thing to fit
-   on one page would leave huge blank gaps for the long parameter tables),
-   but never split a single row across the page break. */
-:root[data-print-measure] .not-prose table {
-  break-inside: auto;
-}
-:root[data-print-measure] .not-prose table tr {
-  break-inside: avoid;
-}
-/* <thead> auto-repeats at the top of every page a table spans — the browser
-   does this natively, no JS needed. Padding it gives every repeat a real
-   top margin for free, including the ones mid-document that PrintPagination
-   never sees coming (it can't predict exactly where the browser will
-   fragment a long table). Costs a bit of extra gap under the FIRST heading
-   too, since CSS can't tell "first" from "repeat" — worth it to kill the
-   stray blank spacer row this used to need. */
-:root[data-print-measure] .not-prose table thead th {
-  padding-top: calc(var(--print-page-x) + 0.5rem);
+  /* Paper does not scroll: what is wider than the sheet wraps. */
+  .md-table-wrap,
+  .code-panel {
+    overflow: visible;
+  }
+  .code-panel,
+  .code-panel code,
+  .vex-sig-row {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .vex-sig-row:first-child {
+    width: auto;
+    padding-right: 1rem;
+  }
+  /* A code panel is dark in both themes, so it keeps its ground on paper. */
+  .code-panel {
+    print-color-adjust: exact;
+  }
+  .code-copy,
+  .heading-copy {
+    display: none;
+  }
 }
 
 /* ── Anchor scroll offset — compensate for the title bar ────────────────── */

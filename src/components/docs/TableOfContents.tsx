@@ -127,19 +127,20 @@ export function TableOfContents({ headings }: { headings: Heading[] }) {
           It carries no bottom margin: the first heading under it already has
           the space every heading has, and a margin here would add a second
           gap on top of it. */}
-      <nav ref={inline} aria-label="On this page" className="not-prose print:hidden @min-[780px]:hidden -mt-2">
+      {/* On paper it is the only list, and it is printed whole. */}
+      <nav ref={inline} aria-label="On this page" className="not-prose @min-[780px]:hidden print:block! -mt-2 print:mt-0 print:mb-6">
         {title}
-        <div className={collapsed ? "relative max-h-32 overflow-hidden" : undefined}>
+        <div className={collapsed ? "relative max-h-32 overflow-hidden print:max-h-none" : undefined}>
           <TocList headings={headings} top={top} active={active} />
           {collapsed && (
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-linear-to-b from-transparent to-background" />
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-linear-to-b from-transparent to-background print:hidden" />
           )}
         </div>
         {headings.length > LONG && (
           <button
             type="button"
             onClick={(() => setExpanded((v) => !v))}
-            className="mt-1 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors cursor-interactive"
+            className="mt-1 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors cursor-interactive print:hidden"
           >
             {expanded ? "Show less" : "Show all"}
             <ChevronDown

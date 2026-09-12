@@ -53,7 +53,7 @@ export function TitleBar({ sidebarOpen, onToggleSidebar, showTrail, bare = false
         // No gap on the row itself: the caption buttons have to reach the
         // window's right edge, and a row gap would leave a strip of bar
         // beside the close button that no click can ever hit.
-        "flex h-titlebar shrink-0 items-center pl-sm",
+        "flex h-titlebar shrink-0 items-center pl-sm print:hidden",
         // The hairline is drawn INSIDE the bar. A border would take a pixel
         // off the row, and the caption buttons would stop a pixel short of
         // the bottom of the window's own bar.

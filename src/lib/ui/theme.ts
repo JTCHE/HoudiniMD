@@ -46,6 +46,9 @@ const listeners = new Set<() => void>();
     reader has not chosen. Called once, from `main.tsx`. */
 export function startTheme() {
   paint(current());
+  // Paper is white, so a print is always the light theme.
+  window.addEventListener("beforeprint", () => paint("light"));
+  window.addEventListener("afterprint", () => paint(current()));
   window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
     if (stored()) return;
     paint(system());

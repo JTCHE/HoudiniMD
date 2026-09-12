@@ -135,7 +135,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const onLanding = path === "";
 
   return (
-    <div className="flex h-dvh flex-col overflow-hidden bg-background text-foreground">
+    // A print is the page alone, at its full length: the window's own height,
+    // its bars and its panel stay on the screen.
+    <div className="flex h-dvh flex-col overflow-hidden bg-background text-foreground print:block print:h-auto print:overflow-visible">
       <TitleBar
         sidebarOpen={tight ? floating : sidebarOpen}
         onToggleSidebar={toggleSidebar}
@@ -146,13 +148,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {(onboarding === null || !ready) && <div className="flex-1" />}
       {ready && onboarding === true && <Onboarding onDone={finish} />}
       {ready && onboarding === false && (
-      <div className="relative flex min-h-0 flex-1">
-        {!tight && sidebarOpen && <Sidebar currentPath={shown || undefined} />}
+      <div className="relative flex min-h-0 flex-1 print:block">
+        {!tight && sidebarOpen && <Sidebar currentPath={shown || undefined} className="print:hidden" />}
         {tight && floating && (
           <div
             ref={card}
             className={cn(
-              "absolute inset-y-sm left-sm z-30",
+              "absolute inset-y-sm left-sm z-30 print:hidden",
               // Slides in from the edge it belongs to, once, on opening.
               "transition-[opacity,translate] duration-(--duration-fast) ease-out motion-reduce:transition-none",
               "starting:-translate-x-2 starting:opacity-0",
@@ -162,13 +164,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         )}
 
-        <div className={cn("relative flex min-w-0 flex-1 flex-col overflow-hidden")}>
+        <div className={cn("relative flex min-w-0 flex-1 flex-col overflow-hidden print:block print:overflow-visible")}>
           {children}
           {/* The strip lies over the bottom of the page, which runs on under
               it and fades out (see .status-scrim), so the page needs room for
               it at its own foot. Only its contents take the pointer: the
               scrollbar under it still drags. */}
-          <StatusBar className="pointer-events-none absolute inset-x-0 bottom-0 z-10 [&>*]:pointer-events-auto" />
+          <StatusBar className="pointer-events-none absolute inset-x-0 bottom-0 z-10 print:hidden [&>*]:pointer-events-auto" />
         </div>
       </div>
       )}
