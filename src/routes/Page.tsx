@@ -292,7 +292,7 @@ export default function Page() {
       // `main`, which is deeper than the strip, so the last line always reads.
       // --page-bar-h is the height of the bar that stays at the top: the
       // list of contents, the pill and a heading's jump offset clear it.
-      className="docs-shell @container flex min-h-0 flex-1 flex-col overflow-y-auto [scrollbar-gutter:stable] [--page-bar-h:3.5rem]"
+      className="docs-shell @container flex min-h-0 flex-1 flex-col overflow-y-auto [scrollbar-gutter:stable] [--page-bar-h:3.5rem] print:block print:overflow-visible"
     >
       <SearchOverlay ref={search} />
       {/* Room for the contents list in the right gutter, taken from the box
@@ -309,7 +309,7 @@ export default function Page() {
           sits on the breadcrumb line because that line is already the answer
           to "where am I", and the source is the last part of that answer.
           The bar stays at the top while the page scrolls under it. */}
-        <div className="page-bar-scrim @container sticky top-0 z-20 flex min-h-(--page-bar-h) shrink-0 items-center justify-between gap-md px-page-x print:static">
+        <div className="page-bar-scrim @container sticky top-0 z-20 flex min-h-(--page-bar-h) shrink-0 items-center justify-between gap-md px-page-x print:hidden">
           {page && (
             <Breadcrumbs
               path={page.path}
@@ -334,7 +334,7 @@ export default function Page() {
           {error?.missing ? (
             <NotFoundPage path={path} />
           ) : (
-            <main className="w-full min-w-0 px-page-x pt-7 pb-[calc(2.5rem+var(--spacing-statusbar))]">
+            <main className="w-full min-w-0 px-page-x pt-7 pb-[calc(2.5rem+var(--spacing-statusbar))] print:p-0">
               {error && <p className="text-sm text-muted-foreground">{error.message}</p>}
               {page && (
                 <article className="prose prose-neutral dark:prose-invert max-w-none">
