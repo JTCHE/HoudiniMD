@@ -332,6 +332,16 @@ fn close_window(window: tauri::Window) -> Result<(), String> {
     window.close().map_err(|e| e.to_string())
 }
 
+/// Opens the browser tools on the window that asks. Only a debug build has
+/// them; in a release build this does nothing.
+#[tauri::command]
+fn open_devtools(window: tauri::WebviewWindow) {
+    #[cfg(debug_assertions)]
+    window.open_devtools();
+    #[cfg(not(debug_assertions))]
+    let _ = window;
+}
+
 /// Every page title in the current build.
 ///
 /// The whole list goes to the front-end once and stays in memory there, which
@@ -844,7 +854,8 @@ pub fn run() {
             open_page,
             save_page,
             new_window,
-            close_window
+            close_window,
+            open_devtools
         ])
         .run(tauri::generate_context!())
         .expect("error while running the application");
