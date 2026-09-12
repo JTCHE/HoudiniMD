@@ -46,6 +46,15 @@ if (import.meta.env.PROD) {
   });
 }
 
+// `bun run app` has the browser tools. F12 and Ctrl Shift I open them here
+// too, so they do not depend on the keys the webview keeps for itself.
+if (import.meta.env.DEV && inTauri) {
+  document.addEventListener("keydown", (event) => {
+    const key = event.key.toLowerCase();
+    if (key === "f12" || (event.ctrlKey && event.shiftKey && key === "i")) void invoke("open_devtools").catch(() => {});
+  });
+}
+
 // An error nothing caught goes to the telemetry, which sends nothing unless
 // the reader agreed to it. See src-tauri/src/telemetry.rs.
 if (inTauri) {
