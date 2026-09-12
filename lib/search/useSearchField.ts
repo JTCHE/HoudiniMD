@@ -169,38 +169,26 @@ export function useSearchField(source: "overlay" | "home"): SearchFieldState {
     // tap. Focusing first can consume that user activation.
     const clipboard = navigator.clipboard;
     if (!clipboard) {
-      void fetch("/api/debug/paste", { method: "POST", body: "clipboard-unavailable" });
       inputRef.current?.focus();
       return;
     }
 
-    const reading = clipboard.read();
-    void fetch("/api/debug/paste", { method: "POST", body: "clipboard-read" });
-    void reading
+    void clipboard
+      .read()
       .then(async ([clipboardItem]) => {
-        if (!clipboardItem) {
-          void fetch("/api/debug/paste", { method: "POST", body: "clipboard-empty" });
-          return;
-        }
+        if (!clipboardItem) return;
         const type = clipboardItem.types.find((itemType) => itemType === "text/plain" || itemType === "text/uri-list");
-        if (!type) {
-          void fetch("/api/debug/paste", { method: "POST", body: "clipboard-type-missing" });
-          return;
-        }
+        if (!type) return;
         const text = await (await clipboardItem.getType(type)).text();
-        if (!text.trim()) {
-          void fetch("/api/debug/paste", { method: "POST", body: "clipboard-text-empty" });
-          return;
-        }
-        void fetch("/api/debug/paste", { method: "POST", body: "clipboard-text" });
+        if (!text.trim()) return;
         setQuery(text);
         void processInput(text);
       })
       // Refused, or no Clipboard API: expose the native paste control.
-      .catch((error) => {
-        void fetch("/api/debug/paste", { method: "POST", body: `clipboard-error:${error.name}` });
+      .catch(() => {
         inputRef.current?.focus();
-      });  }, [processInput]);
+      });
+  }, [processInput]);
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent) => {

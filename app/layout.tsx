@@ -26,8 +26,19 @@ export const metadata: Metadata = {
   description: websiteInfo.description,
   keywords: ["Houdini", "VEX", "SideFX", "documentation", "LLM", "AI", "llms.txt", "Python API", "HOM"],
   authors: [{ name: "HoudiniMD" }],
-  // Icons come from the app/ file conventions (favicon.ico, icon.svg, apple-icon.png).
-  // Next.js emits the <link> tags itself — declaring them here too would duplicate them.
+  // Named here, not by the app/ file conventions. A file under app/ is a route,
+  // and a route is a Worker invocation that starts Next: /icon.svg, /apple-icon.png
+  // and /manifest.webmanifest cost one bootstrap each, on every first visit.
+  // The same files in public/ are served by the asset server and never reach
+  // the Worker. Measured 12 September 2026 — see lib/edge-cache.ts.
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icon.svg", type: "image/svg+xml" },
+    ],
+    apple: "/apple-touch-icon.png",
+  },
+  manifest: "/manifest.webmanifest",
   openGraph: {
     title: websiteInfo.title,
     description: websiteInfo.description,

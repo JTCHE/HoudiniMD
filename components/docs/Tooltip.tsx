@@ -64,20 +64,34 @@ export function registerSlug(slug: string) {
   if (prefillLoaded && !metaCache.has(slug)) scheduleGeneration(slug);
 }
 
-// Eagerly load all pre-rendered meta on module init so tooltips are instant
-fetch("/api/meta-all")
-  .then((r) => r.json())
-  .then((map: Record<string, { title: string; summary: string }>) => {
-    for (const [path, entry] of Object.entries(map)) {
-      if (!metaCache.has(path)) metaCache.set(path, entry);
-    }
-    prefillLoaded = true;
-    // Schedule background generation for any registered slug not in the prefill
-    for (const slug of registeredSlugs) {
-      if (!metaCache.has(slug)) scheduleGeneration(slug);
-    }
-  })
-  .catch(() => {});
+/**
+ * Every title and summary the mirror holds, in one answer.
+ *
+ * Loaded on the first tooltip, not on module init. The answer is 1.7MB, and
+ * on module init every reader of every page downloaded it, whether or not
+ * they ever pointed at a link. The first tooltip still paints from its own
+ * `/api/meta?slug=` call, so nothing waits on this; it only makes the second
+ * and later tooltips instant.
+ */
+let prefillStarted = false;
+
+export function loadMetaPrefill() {
+  if (prefillStarted) return;
+  prefillStarted = true;
+  fetch("/api/meta-all")
+    .then((r) => r.json())
+    .then((map: Record<string, { title: string; summary: string }>) => {
+      for (const [path, entry] of Object.entries(map)) {
+        if (!metaCache.has(path)) metaCache.set(path, entry);
+      }
+      prefillLoaded = true;
+      // Schedule background generation for any registered slug not in the prefill
+      for (const slug of registeredSlugs) {
+        if (!metaCache.has(slug)) scheduleGeneration(slug);
+      }
+    })
+    .catch(() => {});
+}
 
 export function DocTooltip({
   slug,
@@ -143,6 +157,7 @@ export function DocTooltip({
 
   useEffect(() => {
     mountedRef.current = true;
+    loadMetaPrefill();
 
     const debounce = setTimeout(async () => {
       if (metaCache.has(slug)) {

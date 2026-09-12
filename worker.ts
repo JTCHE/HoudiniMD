@@ -3,6 +3,7 @@ import { recordApiSearch, recordPageView, recordSearchBeacon, recordViewBeacon }
 import { pruneAnalytics } from "./telemetry/prune";
 import type { D1Database } from "./telemetry/types";
 import { iconNeedsRefresh, iconResponse, refreshIcon, validIconPath, type IconBucket } from "./lib/icon-cache";
+import { cacheKey, fromCache, keep } from "./lib/edge-cache";
 
 // DOQueueHandler is not exported: its class is deleted while the routes are
 // frozen, and a deleted class must not stay exported. See wrangler.jsonc.
@@ -79,6 +80,17 @@ const worker = {
       }
     }
 
+    // The edge cache sits here, in front of the Next server, because the cost
+    // it saves is Next's own bootstrap. See lib/edge-cache.ts.
+    const key = cacheKey(request, url);
+    if (key) {
+      const hit = await fromCache(key);
+      if (hit) {
+        recordPageView(request, url, hit, env, ctx);
+        return hit;
+      }
+    }
+
     const response = await handler.fetch(request, env, ctx);
     recordPageView(request, url, response, env, ctx);
     recordApiSearch(request, url, response, env, ctx);
@@ -90,8 +102,10 @@ const worker = {
     ) {
       const patched = new Response(response.body, response);
       patched.headers.set("cache-control", "public, max-age=0, must-revalidate");
+      if (key) keep(key, patched, ctx);
       return patched;
     }
+    if (key) keep(key, response, ctx);
     return response;
   },
 

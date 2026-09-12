@@ -1,16 +1,15 @@
-// The service worker is served from here rather than public/ so its cache name
-// can carry a build stamp. Cached HTML names content-hashed JS/CSS chunks, and
-// every build renames those chunks — a cache that outlives the build it was
-// filled from hands the browser HTML whose every asset 404s.
-//
-// force-static is load-bearing: the stamp has to be baked once at build time.
-// Left dynamic, module scope re-runs per worker isolate, so the script body
-// would change under the browser and the cache would never survive to be hit.
-export const dynamic = "force-static";
-
-const BUILD = Date.now().toString(36);
-
-const SOURCE = `const CACHE = 'houdinimd-docs-${BUILD}';
+/**
+ * The service worker, as source.
+ *
+ * `scripts/write-build-stamp.ts` renders this into `public/sw.js` before the
+ * build, so the file ships as a static asset. The stamp in the cache name is
+ * load-bearing: cached HTML names content-hashed JS and CSS chunks, and every
+ * build renames those, so a cache that outlives its build hands the browser
+ * HTML whose every asset 404s.
+ */
+export function serviceWorkerSource(stamp: string): string {
+  return `// Written by scripts/write-build-stamp.ts. Do not edit.
+const CACHE = 'houdinimd-docs-${stamp}';
 
 self.addEventListener('install', () => self.skipWaiting());
 
@@ -54,15 +53,4 @@ self.addEventListener('fetch', (event) => {
   );
 });
 `;
-
-export function GET() {
-  return new Response(SOURCE, {
-    headers: {
-      "Content-Type": "text/javascript; charset=utf-8",
-      // The browser has to see the new script to start the update that swaps
-      // the cache. A cached sw.js keeps the previous build's cache alive.
-      "Cache-Control": "no-cache",
-      "Service-Worker-Allowed": "/",
-    },
-  });
 }
