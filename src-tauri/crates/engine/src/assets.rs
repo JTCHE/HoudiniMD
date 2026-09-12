@@ -94,10 +94,18 @@ pub fn link(page: &str, target: &str) -> Option<String> {
     Some(format!("/{}", path.join("/")))
 }
 
+/// What `rewrite` asks about the pages a link can point at.
+pub struct Links<'a> {
+    /// The title of a page, or `None` when there is no such page.
+    pub name_of: &'a dyn Fn(&str) -> Option<String>,
+    /// Whether there is such a page, without reading it.
+    pub exists: &'a dyn Fn(&str) -> bool,
+}
+
 /// Rewrites every asset reference in a page to the path the `himage` protocol
 /// reads. A reference that names nothing readable is dropped, so the reader
 /// gets the text without a broken frame in the middle of it.
-pub fn rewrite(page: &str, blocks: &mut [Block], name_of: &dyn Fn(&str) -> Option<String>) {
+pub fn rewrite(page: &str, blocks: &mut [Block], links: &Links) {
     for block in blocks {
         match block {
             Block::Item {
@@ -113,40 +121,40 @@ pub fn rewrite(page: &str, blocks: &mut [Block], name_of: &dyn Fn(&str) -> Optio
                         }
                     }
                 }
-                inlines(page, label, name_of);
-                rewrite(page, children, name_of);
+                inlines(page, label, links);
+                rewrite(page, children, links);
             }
             Block::Heading {
                 title, children, ..
             } => {
-                inlines(page, &mut title.main, name_of);
-                rewrite(page, children, name_of);
+                inlines(page, &mut title.main, links);
+                rewrite(page, children, links);
             }
-            Block::Section { children, .. } => rewrite(page, children, name_of),
+            Block::Section { children, .. } => rewrite(page, children, links),
             Block::Definition { term, children, .. } => {
-                inlines(page, term, name_of);
-                rewrite(page, children, name_of);
+                inlines(page, term, links);
+                rewrite(page, children, links);
             }
-            Block::Usage { children, .. } => rewrite(page, children, name_of),
-            Block::Paragraph { text } | Block::Summary { text } => inlines(page, text, name_of),
+            Block::Usage { children, .. } => rewrite(page, children, links),
+            Block::Paragraph { text } | Block::Summary { text } => inlines(page, text, links),
             Block::Subtopic { link, children } => {
-                inlines(page, link, name_of);
-                rewrite(page, children, name_of);
+                inlines(page, link, links);
+                rewrite(page, children, links);
             }
             Block::Bullets { items } | Block::Numbers { items } => {
                 for item in items {
-                    rewrite(page, &mut item.blocks, name_of);
+                    rewrite(page, &mut item.blocks, links);
                 }
             }
             Block::Table { rows } => {
                 for row in rows {
                     for cell in row {
-                        rewrite(page, &mut cell.blocks, name_of);
+                        rewrite(page, &mut cell.blocks, links);
                     }
                 }
             }
-            Block::Html { children, .. } => rewrite(page, children, name_of),
-            Block::Divider { children, .. } => rewrite(page, children, name_of),
+            Block::Html { children, .. } => rewrite(page, children, links),
+            Block::Divider { children, .. } => rewrite(page, children, links),
             Block::Code { .. }
             | Block::Include { .. }
             | Block::RawHtml { .. } => {}
@@ -154,7 +162,7 @@ pub fn rewrite(page: &str, blocks: &mut [Block], name_of: &dyn Fn(&str) -> Optio
     }
 }
 
-fn inlines(page: &str, inlines: &mut Vec<Inline>, name_of: &dyn Fn(&str) -> Option<String>) {
+fn inlines(page: &str, inlines: &mut Vec<Inline>, links: &Links) {
     inlines.retain_mut(|inline| match inline {
         Inline::Image { src } => match resolve(page, src) {
             Some(path) => {
@@ -164,31 +172,87 @@ fn inlines(page: &str, inlines: &mut Vec<Inline>, name_of: &dyn Fn(&str) -> Opti
             None => false,
         },
         Inline::Bold { body } | Inline::Italic { body } | Inline::Ui { body } => {
-            self::inlines(page, body, name_of);
+            self::inlines(page, body, links);
             true
         }
         Inline::Link { text, target } => {
+            if let LinkTarget::Hom { path, member: None } = target
+                && let Some(found) = hom_page(path, links.exists)
+            {
+                *target = found;
+            }
             if let LinkTarget::Wiki { path, .. } = target {
                 // `[intro]` names a page and shows the address; SideFX shows
                 // the page's title there instead.
                 let bare = matches!(text.as_slice(), [Inline::Text { text }] if text == path);
                 if let Some(resolved) = link(page, path) {
-                    *path = resolved;
+                    // `[Rig Pose|nodes/sop/kinefx--rigpose]` leaves out the
+                    // first slash. Beside its page it names nothing, so the
+                    // help root is tried too.
+                    let rooted = format!("/{path}");
+                    *path = match !(links.exists)(&resolved) && (links.exists)(&rooted) {
+                        true => rooted,
+                        false => resolved,
+                    };
                 }
-                if bare && let Some(found) = name_of(path) {
+                if bare && let Some(found) = (links.name_of)(path) {
                     *text = vec![Inline::Text { text: found }];
                 }
             }
-            self::inlines(page, text, name_of);
+            self::inlines(page, text, links);
             true
         }
         _ => true,
     });
 }
 
+/// The page a `Hom:` link names, where its plain path names nothing.
+///
+/// `hou.node` is a function, and the doc build writes it as `node_`: a disk
+/// that ignores case would give it the same file as the class `hou.Node`.
+/// `hou.Node.parm` is a method, and a method is a heading on its class page.
+/// A module's function can be a page (`hou.clone.clone`) or a heading
+/// (`hou.ui.colorFromName`), so only the pages can say which. A name that
+/// starts in upper case is a class, and a class has its own page.
+fn hom_page(path: &str, exists: &dyn Fn(&str) -> bool) -> Option<LinkTarget> {
+    let page = format!("/hom/{}", path.replace('.', "/"));
+    let (parent, name) = page.rsplit_once('/')?;
+    if !name.starts_with(|c: char| c.is_ascii_lowercase()) || exists(&page) {
+        return None;
+    }
+    let renamed = format!("{page}_");
+    if exists(&renamed) {
+        return Some(LinkTarget::Wiki { path: renamed, anchor: None });
+    }
+    // `/hom/hou` is the module itself, which no link means.
+    if parent.matches('/').count() >= 3 && exists(parent) {
+        return Some(LinkTarget::Wiki {
+            path: parent.to_string(),
+            anchor: Some(name.to_string()),
+        });
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{link, resolve};
+    use super::{hom_page, link, resolve};
+    use wiki::LinkTarget;
+
+    #[test]
+    fn a_hom_link_finds_the_page_the_doc_build_wrote() {
+        let pages = ["/hom/hou/Node", "/hom/hou/node_", "/hom/hou/ui", "/hom/hou/clone/clone"];
+        let exists = |path: &str| pages.contains(&path);
+        let wiki = |path: &str, anchor: Option<&str>| {
+            Some(LinkTarget::Wiki { path: path.into(), anchor: anchor.map(str::to_string) })
+        };
+        assert_eq!(hom_page("hou.node", &exists), wiki("/hom/hou/node_", None));
+        assert_eq!(hom_page("hou.Node.parm", &exists), wiki("/hom/hou/Node", Some("parm")));
+        assert_eq!(hom_page("hou.ui.colorFromName", &exists), wiki("/hom/hou/ui", Some("colorFromName")));
+        assert_eq!(hom_page("hou.clone.clone", &exists), None);
+        assert_eq!(hom_page("hou.Node", &exists), None);
+        assert_eq!(hom_page("hou.nothing", &exists), None);
+    }
 
     #[test]
     fn a_relative_link_stands_beside_its_page() {

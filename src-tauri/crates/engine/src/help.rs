@@ -79,6 +79,26 @@ pub fn page_layered(roots: &[PathBuf], path: &str) -> Result<String, PageError> 
     }
 }
 
+/// Whether any root holds the page, read the same way as `page_layered` but
+/// without the read: a link can ask this for every page it might mean.
+pub fn exists_layered(roots: &[PathBuf], path: &str) -> bool {
+    let path = path.trim_matches('/');
+    let (section, rest) = path.split_once('/').unwrap_or((path, "index"));
+    if path.is_empty() || rest.contains("..") {
+        return false;
+    }
+    let names = [format!("{rest}.txt"), format!("{rest}/index.txt")];
+    roots.iter().any(|help| {
+        let zip = help.join(format!("{section}.zip"));
+        let folder = help.join(section);
+        names.iter().any(|name| holds(&zip, name) || folder.join(name).is_file())
+    })
+}
+
+fn holds(zip: &Path, name: &str) -> bool {
+    with_archive(zip, |archive| archive.index_for_name(name).is_some()).unwrap_or(false)
+}
+
 /// `Ok(None)` means this one root holds no such page.
 fn page_at(help: &Path, path: &str) -> Result<Option<String>, PageError> {
     let path = path.trim_matches('/');

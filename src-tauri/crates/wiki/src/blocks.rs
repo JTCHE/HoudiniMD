@@ -790,13 +790,24 @@ fn definition(term: &str, props: Props, children: Vec<Block>) -> Block {
     let id = props
         .iter()
         .find(|(k, _)| k == "id")
-        .map(|(_, v)| v.clone());
+        .map(|(_, v)| v.clone())
+        .or_else(|| method_name(term));
     Block::Definition {
         term: inline::parse(term.trim()),
         id,
         props,
         children,
     }
+}
+
+/// `` `inputNames(self)` -> tuple of `str` `` documents a method, and a link
+/// to it is written `hou.Node#inputNames`. The term has no `#id:`, so the
+/// method's name is its id.
+fn method_name(term: &str) -> Option<String> {
+    let call = term.trim().trim_start_matches(':').trim_start().strip_prefix('`')?;
+    let (name, _) = call.split_once('(')?;
+    let plain = !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+    plain.then(|| name.to_string())
 }
 
 fn include_block(label: &str) -> Block {
@@ -1011,6 +1022,15 @@ pub fn text_of(inlines: &[Inline]) -> String {
 
 #[cfg(test)]
 mod tests {
+    /// A link to `hou.Node#inputNames` lands on the method.
+    #[test]
+    fn a_method_is_its_own_anchor() {
+        let source = "@methods\n\n::`inputNames(self)` -> tuple of `str`:\n    Returns the names.\n\n::`__len__(self)` -> `int`:\n    Returns 3.\n";
+        let out = crate::markdown::blocks(&crate::parse(source).blocks, 1);
+        assert!(out.contains("<span id=\"inputNames\"></span>"), "{out}");
+        assert!(out.contains("<span id=\"__len__\"></span>"), "{out}");
+    }
+
     /// SideFX writes some tables as pseudo-HTML — `table>>`, `tr>>`, `th>>` /
     /// `td>>` — rather than the `|`-terminated cell markup. Checked against
     /// the real doc build: the VEX "Noise and randomness" page draws its
