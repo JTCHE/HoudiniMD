@@ -2,3 +2,16 @@
 # https://opennext.js.org/cloudflare/caching#static-assets-caching
 /_next/static/*
   Cache-Control: public,max-age=31536000,immutable
+
+# The browser has to see a new service worker to start the update that swaps its
+# cache. A cached sw.js keeps the previous build's cache alive.
+/sw.js
+  Cache-Control: no-cache
+
+# Named in every page's <head>, and changed only by a deploy.
+/icon.svg
+  Cache-Control: public,max-age=86400
+/apple-touch-icon.png
+  Cache-Control: public,max-age=86400
+/manifest.webmanifest
+  Cache-Control: public,max-age=86400
