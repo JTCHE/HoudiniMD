@@ -163,8 +163,7 @@ export function remarkVex({ enabled }: { enabled: boolean }) {
       // ── arguments: runs of "label paragraph, then its description" ──
       const asLabel = code && isArgumentLabel(code) ? code : null;
       if (asLabel) {
-        const cells: MdNode[] = [];
-        let anyTyped = false;
+        const rows: { type: string | null; name: string; desc: MdNode[] }[] = [];
 
         while (i < blocks.length) {
           const c = loneCode(blocks[i]);
@@ -190,29 +189,39 @@ export function remarkVex({ enabled }: { enabled: boolean }) {
             i++;
           }
 
-          const arg: VexArgument | undefined = argIndex.get(c) ?? argIndex.get(c.replace(/^&/, ''));
-          // The label is sometimes the placeholder type (`<geometry>`) rather
-          // than the name; prefer the signature's own name when we matched.
-          const name = arg?.name ?? c;
-          if (arg?.type) anyTyped = true;
-
-          const sigCell: MdNode[] = [];
-          if (arg?.type) sigCell.push(span('vex-arg-type', arg.type));
-          sigCell.push(
-            name.startsWith('&')
-              ? box('vexName', 'vex-arg-name', [span('vex-arg-amp', '&'), span('vex-arg-id', name.slice(1))])
-              : span('vex-arg-name', name)
-          );
-
-          cells.push(box('vexArgSig', 'vex-arg-sig', sigCell));
-          cells.push(box('vexArgDesc', 'vex-arg-desc', desc));
+          // The label is sometimes the placeholder (`<geometry>`) rather than
+          // the name; prefer the signature's own name when we matched.
+          const bare = c.replace(/^&|[<>]/g, '');
+          const arg: VexArgument | undefined = argIndex.get(c) ?? argIndex.get(bare);
+          rows.push({ type: arg?.type ?? null, name: arg?.name ?? c.replace(/[<>]/g, ''), desc });
         }
 
-        if (cells.length) {
-          out.push(label('Arguments', 'vex-section-label'));
+        if (rows.length) {
           // Deprecated stubs publish no signature, so there are no types to
           // show. Drop the column rather than pad it with placeholders.
-          out.push(box('vexArgs', anyTyped ? 'vex-args' : 'vex-args vex-args-untyped', cells));
+          const typed = rows.some((row) => row.type);
+          const cells: MdNode[] = [
+            box('vexArgHead', 'vex-arg-sig vex-args-head', [
+              ...(typed ? [span('', 'Type')] : []),
+              span('', 'Name'),
+            ]),
+            box('vexArgHead', 'vex-arg-desc vex-args-head', [span('', 'Description')]),
+          ];
+          for (const row of rows) {
+            const sigCell: MdNode[] = [];
+            // A type the signature does not state is drawn as missing, so the
+            // name never slides into the type column.
+            if (typed) sigCell.push(row.type ? span('vex-arg-type', row.type) : span('vex-arg-none', '⸺'));
+            sigCell.push(
+              row.name.startsWith('&')
+                ? box('vexName', 'vex-arg-name', [span('vex-arg-amp', '&'), span('vex-arg-id', row.name.slice(1))])
+                : span('vex-arg-name', row.name)
+            );
+            cells.push(box('vexArgSig', 'vex-arg-sig', sigCell));
+            cells.push(box('vexArgDesc', 'vex-arg-desc', row.desc));
+          }
+          out.push(label('Arguments', 'vex-section-label'));
+          out.push(box('vexArgs', typed ? 'vex-args' : 'vex-args vex-args-untyped', cells));
         }
         continue;
       }
