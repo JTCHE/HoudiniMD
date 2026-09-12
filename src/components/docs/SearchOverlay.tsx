@@ -12,6 +12,7 @@ import { useLocation, useNavigate } from "react-router";
 import { BrandLogo } from "@/components/brand/BrandLogo";
 import { Keycap, SMALL_KEY } from "@/components/ui/Keycap";
 import { showToast } from "@/components/ui/toast-notification";
+import { findAnchor, jumpTo } from "@/components/docs/toc/measure";
 import { invoke, inTauri } from "@/lib/backend";
 import { COMMAND_KEY, isCommand, isTyping, useHotkey } from "@/lib/hotkeys";
 import { Icons } from "@/lib/ui/icons";
@@ -230,8 +231,8 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
       // An excerpt goes through the router even to the open page: the page
       // finds the words and marks them. See `flashText`.
       if (location.pathname === `/${base}` && !find) {
-        const element = anchor ? document.getElementById(anchor) : null;
-        if (element) element.scrollIntoView({ behavior: "smooth" });
+        const element = anchor ? findAnchor(decodeURIComponent(anchor)) : null;
+        if (element) jumpTo(element);
         else showToast("Already on this page");
         setOpen(false);
         return;
