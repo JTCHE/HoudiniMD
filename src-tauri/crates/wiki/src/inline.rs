@@ -221,7 +221,8 @@ fn parse_bracket(body: &str) -> Option<Inline> {
         Some((text, target)) => (Some(text.trim()), target.trim()),
         None => (None, body.trim()),
     };
-    if target.is_empty() {
+    // `[-1,-1]`, `[0]` and `[-1..1]` are a value in the prose, not a link.
+    if !target.chars().any(|c| c.is_ascii_alphabetic()) {
         return None;
     }
     if let Some((scheme, value)) = split_shortcut(target) {
@@ -247,6 +248,12 @@ fn parse_bracket(body: &str) -> Option<Inline> {
                 });
             }
             "fold" => return Some(Inline::Fold { name: value.into() }),
+            // `Key:h.pane.gview.sel.patternset` names a hotkey action. SideFX
+            // shows the key the action is bound to, from a table this app does
+            // not read, so the action itself is shown. It is not a page.
+            "key" => return Some(Inline::Key { key: text.unwrap_or(value).into() }),
+            // `Hweb:Request` is a page of the `hwebserver` module.
+            "hweb" => wiki_target(&format!("/hwebserver/{value}")),
             // `Link:` and `Attr:` say nothing about the target beyond "this is
             // a link"; what follows is an ordinary help path, relative or not.
             // `Attr:` names an attribute reference specifically, but points at
@@ -262,7 +269,15 @@ fn parse_bracket(body: &str) -> Option<Inline> {
                 false => wiki_target(&format!("/shelf/{value}")),
             },
             // `Nodes:` and the misspelt `Npde:` are `Node:`.
-            "node" | "nodes" | "npde" => LinkTarget::Node { path: value.into() },
+            // `Node:nodes/out/gltf` and `Node:sop/rigstashpose.html` are
+            // written too.
+            "node" | "nodes" | "npde" => {
+                let path = value.trim_start_matches('/');
+                let path = path.strip_prefix("nodes/").unwrap_or(path);
+                LinkTarget::Node {
+                    path: path.strip_suffix(".html").unwrap_or(path).into(),
+                }
+            }
             "exp" => LinkTarget::Expression { name: value.into() },
             "vex" => LinkTarget::Vex { name: value.into() },
             "mantra" => LinkTarget::Mantra { name: value.into() },
@@ -373,6 +388,16 @@ fn wiki_target(target: &str) -> LinkTarget {
     // The label was taken from the first field, so what is left here is the
     // target and the leftovers of the typo. The last field is the real target.
     let target = target.rsplit('|').next().unwrap_or(target);
+    // `[hou.Parm]` and `[Hom.hou.qt#mainWindow]` are `Hom:` links with the
+    // colon left out. No page name starts with `hou.`.
+    let hom = target.strip_prefix("Hom.").unwrap_or(target);
+    if hom.starts_with("hou.") {
+        let (path, member) = match hom.split_once('#') {
+            Some((path, member)) => (path.to_string(), Some(member.to_string())),
+            None => (hom.to_string(), None),
+        };
+        return LinkTarget::Hom { path, member };
+    }
     if let Some(rest) = target.strip_prefix('#') {
         return LinkTarget::Wiki {
             path: String::new(),
@@ -424,3 +449,36 @@ const TYPOGRAPHY: &[(&str, &str)] = &[
     ("(r)", "\u{ae}"),
     ("(R)", "\u{ae}"),
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn target(text: &str) -> LinkTarget {
+        match parse(text).as_slice() {
+            [Inline::Link { target, .. }] => target.clone(),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_value_in_brackets_is_not_a_link() {
+        let text = parse("not at [-1,-1], from [-1..1], index [0]");
+        assert!(!text.iter().any(|inline| matches!(inline, Inline::Link { .. })), "{text:?}");
+    }
+
+    #[test]
+    fn a_shortcut_is_read_the_way_the_help_means_it() {
+        let action = "h.pane.gview.sel.patternset";
+        assert_eq!(parse(&format!("[Key:{action}]")), vec![Inline::Key { key: action.into() }]);
+        let wiki = |path: &str| LinkTarget::Wiki { path: path.into(), anchor: None };
+        assert_eq!(target("[Hweb:Request]"), wiki("/hwebserver/Request"));
+        assert_eq!(target("[hou.Parm]"), LinkTarget::Hom { path: "hou.Parm".into(), member: None });
+        assert_eq!(
+            target("[main window|Hom.hou.qt#mainWindow]"),
+            LinkTarget::Hom { path: "hou.qt".into(), member: Some("mainWindow".into()) }
+        );
+        assert_eq!(target("[Node:nodes/out/gltf]"), LinkTarget::Node { path: "out/gltf".into() });
+        assert_eq!(target("[Node:sop/rigstashpose.html]"), LinkTarget::Node { path: "sop/rigstashpose".into() });
+    }
+}

@@ -59,7 +59,11 @@ pub fn read(install: &install::Install, path: &str) -> Result<PageView, PageErro
     let section = path.split('/').next().unwrap_or("");
     inherit::append(&install.help, section, &parsed.props, &mut parsed.blocks);
     examples::append(&install.help, &path, &mut parsed.blocks);
-    assets::rewrite(&path, &mut parsed.blocks, &|target| listing::title(&roots, target));
+    let links = assets::Links {
+        name_of: &|target| listing::title(&roots, target),
+        exists: &|target| help::exists_layered(&roots, target),
+    };
+    assets::rewrite(&path, &mut parsed.blocks, &links);
     let prop = |name: &str| wiki::model::prop(&parsed.props, name).map(str::to_string);
     Ok(PageView {
         path,
