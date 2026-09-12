@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router";
 import { cn } from "@/lib/utils";
 import { warm } from "@/lib/pages";
 import { showToast } from "@/components/ui/toast-notification";
+import { findAnchor, jumpTo } from "./toc/measure";
 import { DocTooltip, LinkTooltip, SectionTooltip, registerSlug, usePageMark } from "./Tooltip";
 import { Icons } from "@/lib/ui/icons";
 import DocIconClient from "./markdown/DocIconClient";
@@ -208,8 +209,8 @@ export default function DocLink({
             showToast("Already on this page");
             return;
           }
-          const target = document.getElementById(decodeURIComponent(anchor));
-          if (target) target.scrollIntoView({ behavior: "smooth" });
+          const target = findAnchor(decodeURIComponent(anchor));
+          if (target) jumpTo(target);
           else showToast(`This page has no section named "${anchor}"`, "error");
         }}
         // Start reading the page the pointer is travelling towards. Every

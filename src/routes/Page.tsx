@@ -26,7 +26,7 @@ import { onBuildChanged } from "@/lib/install";
 import { isCommand, isTyping, useHotkey } from "@/lib/hotkeys";
 import { invoke, inTauri } from "@/lib/backend";
 import { flashText } from "@/lib/ui/flash-text";
-import { readingLine, scrollTopFor } from "@/components/docs/toc/measure";
+import { findAnchor, jumpTo } from "@/components/docs/toc/measure";
 
 /**
  * What to call a page whose help file gives no title.
@@ -136,14 +136,9 @@ export default function Page() {
     if (!id || !page) return;
     const box = scroller.current;
     if (!box) return;
-    // The page's own `#id:` anchor first: a heading slug made from the text
-    // can be the same word as a parameter name (a "Locomotion" folder over
-    // a `locomotion` parameter), and F1 asks for the parameter.
-    const find = () =>
-      document.querySelector<HTMLElement>(`span[id="${CSS.escape(id)}"]`) ?? document.getElementById(id);
     const aimAtIt = () => {
-      const target = find();
-      if (target) box.scrollTo({ top: scrollTopFor(target, box) - readingLine() });
+      const target = findAnchor(id);
+      if (target) jumpTo(target);
       return Boolean(target);
     };
 

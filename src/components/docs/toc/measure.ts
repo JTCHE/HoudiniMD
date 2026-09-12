@@ -50,19 +50,31 @@ export function scrollTopFor(el: HTMLElement, box: HTMLElement) {
 }
 
 /**
- * Scroll a heading clear of the floating pill.
- *
- * Safari ignores `scroll-margin-top` outside a scroll-snap container, so the
- * CSS offset alone lands the heading under the pill on iOS every time. Doing
- * the scroll ourselves is the only offset that holds on every browser.
+ * The element an anchor names. The page's own `#id:` anchor first: a heading
+ * slug made from the text can be the same word as a parameter name (a
+ * "Locomotion" folder over a `locomotion` parameter), and F1 asks for the
+ * parameter.
  */
+export function findAnchor(id: string) {
+  return document.querySelector<HTMLElement>(`span[id="${CSS.escape(id)}"]`) ?? document.getElementById(id);
+}
+
+/**
+ * Put `el` on the first readable line, clear of the page bar and the pill.
+ * A jump, not a smooth scroll: the reader asked for that place, and the
+ * travel only delays it.
+ */
+export function jumpTo(el: HTMLElement) {
+  const box = scroller();
+  if (box) box.scrollTo({ top: scrollTopFor(el, box) - readingLine() });
+}
+
+/** Jump to a heading from the list of contents. */
 export function scrollToHeading(e: React.MouseEvent, index: number, id: string) {
   const el = headingEls()[index];
-  const box = scroller();
-  if (!el || !box || e.metaKey || e.ctrlKey || e.shiftKey) return;
+  if (!el || e.metaKey || e.ctrlKey || e.shiftKey) return;
   e.preventDefault();
-  const y = scrollTopFor(el, box) - readingLine();
-  box.scrollTo({ top: y, behavior: "smooth" });
+  jumpTo(el);
   history.replaceState(null, "", `#${id}`);
 }
 
