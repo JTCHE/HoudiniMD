@@ -1659,6 +1659,18 @@ pre code.hljs {
 .vex-arg-amp {
   color: oklch(0.72 0.14 245);
 }
+.vex-arg-none {
+  color: var(--muted-foreground);
+}
+/* The column names: prose type, so they read as labels and not as code. */
+.vex-args-head {
+  padding-block: 0.5rem;
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  line-height: 1.6;
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
 .vex-arg-desc {
   padding-right: var(--md);
   font-size: 0.9rem;
@@ -1726,6 +1738,10 @@ pre code.hljs {
   .vex-args,
   .vex-args-untyped {
     grid-template-columns: 1fr;
+  }
+  /* One column: the names of three columns label nothing. */
+  .vex-args-head {
+    display: none;
   }
   .vex-arg-sig {
     padding-right: 0;
