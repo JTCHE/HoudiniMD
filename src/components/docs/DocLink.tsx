@@ -3,7 +3,7 @@ import { Link, useLocation } from "react-router";
 import { cn } from "@/lib/utils";
 import { warm } from "@/lib/pages";
 import { showToast } from "@/components/ui/toast-notification";
-import { DocTooltip, registerSlug, usePageMark } from "./Tooltip";
+import { DocTooltip, LinkTooltip, SectionTooltip, registerSlug, usePageMark } from "./Tooltip";
 import { Icons } from "@/lib/ui/icons";
 import DocIconClient from "./markdown/DocIconClient";
 
@@ -149,16 +149,44 @@ export default function DocLink({
     };
   }, [slug]);
 
+  const hover = {
+    onMouseEnter: (e: React.MouseEvent) => {
+      hoverPosRef.current = { x: e.clientX, y: e.clientY };
+      setVisible(true);
+    },
+    onMouseLeave: () => setVisible(false),
+    onFocus: () => {
+      hoverPosRef.current = null;
+      setVisible(true);
+    },
+    onBlur: () => setVisible(false),
+  };
+  const anchored = { anchorRef: linkRef, hoverPosRef };
+  // An address off the machine gets its share card, an anchor on this page
+  // gets the words it lands on, and a page in the help gets its name.
+  const tooltip = !visible ? null : external ? (
+    /^https?:/i.test(href) && <LinkTooltip url={href} {...anchored} />
+  ) : samePage && anchor ? (
+    <SectionTooltip id={decodeURIComponent(anchor)} {...anchored} />
+  ) : (
+    slug && <DocTooltip slug={slug} {...anchored} />
+  );
+
   if (external) {
     return (
-      <a
-        href={href}
-        target="_blank"
-        rel="noopener noreferrer"
-        className={classes}
-      >
-        {children}
-      </a>
+      <>
+        <a
+          ref={linkRef}
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={classes}
+          {...hover}
+        >
+          {children}
+        </a>
+        {tooltip}
+      </>
     );
   }
 
@@ -191,27 +219,12 @@ export default function DocLink({
         onPointerEnter={() => {
           if (!samePage && slug) warm(slug);
         }}
-        onMouseEnter={(e) => {
-          hoverPosRef.current = { x: e.clientX, y: e.clientY };
-          setVisible(true);
-        }}
-        onMouseLeave={() => setVisible(false)}
-        onFocus={() => {
-          hoverPosRef.current = null;
-          setVisible(true);
-        }}
-        onBlur={() => setVisible(false)}
+        {...hover}
       >
         {glyph}
         {children}
       </Link>
-      {visible && slug && (
-        <DocTooltip
-          slug={slug}
-          anchorRef={linkRef}
-          hoverPosRef={hoverPosRef}
-        />
-      )}
+      {tooltip}
     </span>
   );
 }

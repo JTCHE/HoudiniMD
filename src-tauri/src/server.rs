@@ -63,22 +63,52 @@ pub fn start(
                 .iter()
                 .find(|header| header.field.equiv("Sec-Fetch-Site"))
                 .map_or(true, |header| header.value.as_str() == "same-origin");
-            let (status, body, kind) =
-                answer(&app, db.as_ref(), &chosen, &cache, request.url(), from_app);
-            // What Houdini asked for, and what it got. Houdini's help window
-            // says nothing when a page fails, so without this there is no way
-            // to tell a wrong path from a wrong answer.
-            #[cfg(debug_assertions)]
-            eprintln!("{status} {} {}", request.method(), request.url());
-            let header = Header::from_bytes(&b"Content-Type"[..], kind.as_bytes())
-                .expect("a static media type is a valid header");
-            let response = Response::from_data(body)
-                .with_status_code(status)
-                .with_header(header);
-            let _ = request.respond(response);
+            // A preview waits on another site, so it answers on a thread of
+            // its own: a slow site must not hold up a page read behind it.
+            if let Some(query) = request.url().strip_prefix("/api/link_preview?") {
+                let url = parse(query).url;
+                std::thread::spawn(move || respond(request, link_preview(&url, from_app)));
+                continue;
+            }
+            let answer = answer(&app, db.as_ref(), &chosen, &cache, request.url(), from_app);
+            respond(request, answer);
         }
     });
     Ok(port)
+}
+
+fn respond(request: tiny_http::Request, (status, body, kind): Answer) {
+    // What Houdini asked for, and what it got. Houdini's help window says
+    // nothing when a page fails, so without this there is no way to tell a
+    // wrong path from a wrong answer.
+    #[cfg(debug_assertions)]
+    eprintln!("{status} {} {}", request.method(), request.url());
+    let header = |name: &str, value: &str| Header::from_bytes(name.as_bytes(), value.as_bytes()).expect("a valid header");
+    // A player asks for a range as soon as the reader drags the scrub bar, and
+    // it takes the whole file as an answer that it cannot seek in.
+    let asked = request.headers().iter().find(|h| h.field.equiv("Range")).map(|h| h.value.as_str());
+    let part = if status == 200 { crate::range(asked, body.len()) } else { None };
+    let mut response = match part {
+        Some((first, last)) => Response::from_data(body[first..=last].to_vec())
+            .with_status_code(206)
+            .with_header(header("Content-Range", &format!("bytes {first}-{last}/{}", body.len()))),
+        None => Response::from_data(body).with_status_code(status),
+    };
+    response.add_header(header("Content-Type", kind));
+    response.add_header(header("Accept-Ranges", "bytes"));
+    let _ = request.respond(response);
+}
+
+/// Only for the app's own page, the same as `open_url`: another site the
+/// reader visits must not make this machine fetch addresses for it.
+fn link_preview(url: &str, from_app: bool) -> Answer {
+    if !from_app {
+        return (403, b"only the app asks for a preview".to_vec(), "text/plain");
+    }
+    match tauri::async_runtime::block_on(crate::preview::fetch(url)).and_then(|preview| ser(&preview)) {
+        Ok(body) => (200, body, "application/json"),
+        Err(reason) => (502, reason.into_bytes(), "text/plain"),
+    }
 }
 
 /// The first free port at or above `FIRST_PORT`. Bound to the network as well
@@ -128,7 +158,8 @@ fn answer(
         };
     }
     if let Some(command) = path.strip_prefix("/api/") {
-        return api(app, db, chosen, cache, command, query);
+        report(app, command, &parse(query));
+        return api(db, chosen, cache, command, query);
     }
     // `/nodes/sop/box.md` is the page as Markdown, for an agent that reads a
     // file and not an app. The "copy page path" keys hand out this address.
@@ -143,10 +174,21 @@ fn answer(
     file(&path)
 }
 
+/// The help pane is a real surface, so what a reader does there counts the
+/// same as what they do in the window.
+fn report(app: &tauri::AppHandle, command: &str, call: &Call) {
+    match command {
+        "report_use" if call.kind == "setup" || call.kind == "feature" => {
+            crate::telemetry::track(app, &call.kind, &call.name)
+        }
+        "report_search" => crate::telemetry::search(app, call.hits, call.rank),
+        _ => {}
+    }
+}
+
 /// The same answers the desktop shell gives through `invoke`, so the front-end
 /// has one set of calls and not two. `backend.ts` picks which door to knock on.
 fn api(
-    app: &tauri::AppHandle,
     db: Result<&Mutex<Connection>, &String>,
     chosen: &install::Chosen,
     cache: &install::Cache,
@@ -164,22 +206,18 @@ fn api(
             Err(reason) => return not_found(reason),
         },
         "user_name" => serde_json::to_vec(&crate::user_name_of_this_machine()),
-        // The help pane is a real surface, so what a reader does there counts
-        // the same as what they do in the window.
-        "report_use" => {
-            if call.kind == "setup" || call.kind == "feature" {
-                crate::telemetry::track(app, &call.kind, &call.name);
-            }
-            serde_json::to_vec(&true)
-        }
-        "report_search" => {
-            crate::telemetry::search(app, call.hits, call.rank);
-            serde_json::to_vec(&true)
-        }
+        // `report` already sent these.
+        "report_use" | "report_search" => serde_json::to_vec(&true),
         "clean_start" => serde_json::to_vec(&false),
-        "page" => match current(db, chosen, cache)
-            .and_then(|i| crate::read_page(&i, &call.path).map_err(|e| e.message))
-        {
+        "page" => match current(db, chosen, cache).and_then(|i| {
+            let mut page = crate::read_page(&i, &call.path).map_err(|e| e.message)?;
+            page.node_versions = db
+                .ok()
+                .and_then(|db| db.lock().ok())
+                .map(|db| engine::versions::of(&db, &i.version, &call.path))
+                .unwrap_or_default();
+            Ok(page)
+        }) {
             Ok(page) => serde_json::to_vec(&page),
             Err(reason) => return not_found(reason),
         },

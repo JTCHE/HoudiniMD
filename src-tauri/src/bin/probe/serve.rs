@@ -115,18 +115,34 @@ fn answer(state: &Serve, mut stream: TcpStream) -> Result<(), String> {
     if reader.read_line(&mut line).map_err(|e| e.to_string())? == 0 {
         return Ok(());
     }
-    // The headers are read and thrown away; nothing here answers on one.
+    // Only `Range` is kept: a player asks for one to seek.
     let mut header = String::new();
+    let mut asked = None;
     while reader.read_line(&mut header).map_err(|e| e.to_string())? > 2 {
+        if let Some((name, value)) = header.split_once(':')
+            && name.trim().eq_ignore_ascii_case("range")
+        {
+            asked = Some(value.trim().to_string());
+        }
         header.clear();
     }
     let target = line.split_whitespace().nth(1).unwrap_or("/").to_string();
     let (path, query) = target.split_once('?').unwrap_or((target.as_str(), ""));
     let path = decode(path);
 
-    let (status, kind, body) = route(state, &path, query);
+    let (status, kind, mut body) = route(state, &path, query);
+    let whole = body.len();
+    let mut part = String::new();
+    let status = match (status, houdinimd_lib::range(asked.as_deref(), whole)) {
+        (200, Some((first, last))) => {
+            body = body[first..=last].to_vec();
+            part = format!("Content-Range: bytes {first}-{last}/{whole}\r\n");
+            206
+        }
+        (status, _) => status,
+    };
     let head = format!(
-        "HTTP/1.1 {status}\r\nContent-Type: {kind}\r\nContent-Length: {}\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n",
+        "HTTP/1.1 {status}\r\nContent-Type: {kind}\r\nContent-Length: {}\r\n{part}Accept-Ranges: bytes\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n",
         body.len()
     );
     stream.write_all(head.as_bytes()).map_err(|e| e.to_string())?;
@@ -197,7 +213,11 @@ fn command_response(state: &Serve, command: &str, query: &str) -> (u16, &'static
         "page" => {
             let path = param(query, "path").unwrap_or_default();
             match read_page(&state.install, &path) {
-                Ok(page) => serde_json::to_string(&page).map_err(|e| e.to_string()),
+                Ok(mut page) => {
+                    let db = state.db.lock().unwrap();
+                    page.node_versions = engine::versions::of(&db, &state.install.version, &path);
+                    serde_json::to_string(&page).map_err(|e| e.to_string())
+                }
                 Err(error) => {
                     let body = serde_json::to_string(&error).unwrap_or_default();
                     return (404, json, body.into_bytes());
@@ -216,6 +236,10 @@ fn command_response(state: &Serve, command: &str, query: &str) -> (u16, &'static
             read_meta(&state.db.lock().unwrap(), &state.install, &asked)
                 .and_then(|meta| serde_json::to_string(&meta).map_err(|e| e.to_string()))
         }
+        "link_preview" => tauri::async_runtime::block_on(houdinimd_lib::preview::fetch(
+            &param(query, "url").unwrap_or_default(),
+        ))
+        .and_then(|preview| serde_json::to_string(&preview).map_err(|e| e.to_string())),
         // The build the app reads. The harness stands up one install, so the
         // picker has one row and it is always the current one.
         "current_install" => serde_json::to_string(&state.install).map_err(|e| e.to_string()),
