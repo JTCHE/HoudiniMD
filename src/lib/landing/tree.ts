@@ -10,17 +10,22 @@
  * The one rule that keeps it from going stale: a top-level section this file
  * does not name falls into Learn rather than disappearing. A build that adds
  * `feathers/` shows up on its own.
+ *
+ * Inside a branch, the folders are the index's: each title carries the
+ * folders above it (`place`) and arrives in the order the panel draws it. See
+ * `place.rs`. Nothing here sorts a page or names a folder.
  */
 import type { Hit } from "@/lib/search";
+import { warmIcons } from "@/lib/icons";
 
 export interface TreeBranch {
   id: string;
   label: string;
-  /** How many pages sit under it, counted from the index. */
+  /** How many pages sit under it. */
   count: number;
-  /** Sub-branches. Empty means the branch opens straight onto its pages. */
+  /** The folders inside it, drawn before its pages. */
   branches: TreeBranch[];
-  /** The pages directly under it, once the branch has been opened. */
+  /** The pages directly under it. */
   pages: Hit[];
   /** Icon path inside `icons.zip`. Only the branches this file names have
       one; a branch with no icon draws the app's own page glyph. */
@@ -87,22 +92,42 @@ function context(hit: Hit): string {
   return hit.path.split("/")[1] ?? "";
 }
 
-/** A branch's rows, newest naming first: a page named `index` lists the others
-    and is never a row of its own in a list of them. */
-function pagesOf(hits: Hit[]): Hit[] {
-  return hits
-    .filter((hit) => !hit.path.endsWith("/index"))
-    .sort((a, b) => a.title.localeCompare(b.title));
+/** A branch and the folders inside it, from the `place` of each page. A page
+    named `index` lists the others and is never a row of its own. */
+function branch(id: string, label: string, hits: Hit[], icon?: string): TreeBranch {
+  const root: TreeBranch = { id, label, count: 0, branches: [], pages: [], icon };
+  const children = new Map<TreeBranch, Map<string, TreeBranch>>();
+  for (const hit of hits) {
+    if (hit.path.endsWith("/index")) continue;
+    let at = root;
+    for (const name of hit.place ?? []) {
+      let known = children.get(at);
+      if (!known) children.set(at, (known = new Map()));
+      let next = known.get(name);
+      if (!next) {
+        next = { id: `${at.id}/${name}`, label: name, count: 0, branches: [], pages: [] };
+        known.set(name, next);
+        at.branches.push(next);
+      }
+      at = next;
+    }
+    at.pages.push(hit);
+  }
+  return settle(root);
 }
 
-function branch(
-  id: string,
-  label: string,
-  hits: Hit[],
-  branches: TreeBranch[] = [],
-  icon?: string,
-): TreeBranch {
-  return { id, label, count: hits.length, branches, pages: branches.length ? [] : pagesOf(hits), icon };
+/** Counts every folder, and folds away a folder that holds one thing: a click
+    that opens onto one row, or onto one more folder, is a click for nothing. */
+function settle(folder: TreeBranch): TreeBranch {
+  const branches: TreeBranch[] = [];
+  for (const child of folder.branches.map(settle)) {
+    if (child.pages.length === 1 && child.branches.length === 0) folder.pages.push(child.pages[0]);
+    else if (child.pages.length === 0 && child.branches.length === 1) branches.push(child.branches[0]);
+    else branches.push(child);
+  }
+  folder.branches = branches;
+  folder.count = folder.pages.length + branches.reduce((sum, child) => sum + child.count, 0);
+  return folder;
 }
 
 /** Node contexts, the named ones first in their stated order and the rest
@@ -123,13 +148,7 @@ function nodeBranches(hits: Hit[]): TreeBranch[] {
     .sort((a, b) => byContext.get(b)!.length - byContext.get(a)!.length);
 
   return [...named, ...rest].map((key) =>
-    branch(
-      `nodes/${key}`,
-      CONTEXTS[key]?.label ?? readable(key),
-      byContext.get(key)!,
-      [],
-      CONTEXTS[key]?.icon,
-    ),
+    branch(`nodes/${key}`, CONTEXTS[key]?.label ?? readable(key), byContext.get(key)!, CONTEXTS[key]?.icon),
   );
 }
 
@@ -182,55 +201,40 @@ export function buildTree(all: Hit[]): TreeBranch[] {
       ? hits.filter((hit) => group.sections!.includes(section(hit)))
       : hits.filter((hit) => !claimed.has(section(hit)));
 
-    if (group.id === "nodes") return branch(group.id, group.label, inGroup, nodeBranches(inGroup));
-    if (group.id === "languages") return branch(group.id, group.label, inGroup, languageBranches(inGroup));
-    return branch(group.id, group.label, inGroup, sectionBranches(inGroup, titleOf));
+    if (group.id === "nodes") return tier(group.id, group.label, nodeBranches(inGroup));
+    if (group.id === "languages") return tier(group.id, group.label, languageBranches(inGroup));
+    return tier(group.id, group.label, sectionBranches(inGroup, titleOf));
   }).filter((group) => group.count > 0);
 }
 
-
-/**
- * The pages of one context, gathered into families.
- *
- * A context is a flat list of a thousand names, and a flat list of a thousand
- * names is a wall. The website groups them under a taxonomy the local help
- * does not carry, so the grouping is read off the names themselves: pages that
- * start with the same word are one family — "Attribute Blur", "Attribute
- * Cast", "Attribute Copy" — and a family earns a row only when enough pages
- * join it. A version is not a kind of its own, so "Copy to Points 2.0" lands
- * beside "Copy to Points" for free.
- */
-export interface PageFamily {
-  /** The shared first word, as the pages themselves write it. */
-  label: string;
-  pages: Hit[];
+/** A group: its branches, and no pages of its own. */
+function tier(id: string, label: string, branches: TreeBranch[]): TreeBranch {
+  const count = branches.reduce((sum, child) => sum + child.count, 0);
+  return { id, label, count, branches, pages: [] };
 }
 
-/** Under this many pages, a family is not worth the row it would take. */
-const FAMILY_MIN = 4;
+/** The tree the panel draws, built once for every panel that mounts. */
+export const built: { tree: TreeBranch[] | null } = { tree: null };
 
-export function familiesOf(pages: Hit[]): { families: PageFamily[]; loose: Hit[] } {
-  const byWord = new Map<string, Hit[]>();
-  for (const page of pages) {
-    const word = page.title.trim().split(/\s+/)[0] ?? "";
-    const key = word.toLowerCase();
-    if (!key) continue;
-    const bucket = byWord.get(key);
-    if (bucket) bucket.push(page);
-    else byWord.set(key, [page]);
+/** Loads the icons of the rows the panel shows when it opens on `path`: the
+    page and its neighbours, about half a tall panel each way plus the list's
+    overscan. Run while the page is read, so a jump to a far branch lands on
+    rows that already have their icons — without the thousands the tree holds. */
+export function warmRows(path: string): Promise<void> {
+  const folder = folderOf(built.tree ?? [], path);
+  if (!folder) return Promise.resolve();
+  const at = folder.pages.findIndex((page) => page.path === path);
+  const near = folder.pages.slice(Math.max(0, at - 24), at + 25);
+  // The node contexts too: a branch row sits above every page row, and there
+  // are only a couple of dozen of them.
+  const branches = (built.tree ?? []).flatMap((group) => group.branches);
+  return warmIcons([...near, ...branches].flatMap((row) => (row.icon ? [row.icon] : [])));
+}
+
+function folderOf(folders: TreeBranch[], path: string): TreeBranch | undefined {
+  for (const folder of folders) {
+    if (folder.pages.some((page) => page.path === path)) return folder;
+    const inner = folderOf(folder.branches, path);
+    if (inner) return inner;
   }
-
-  const families: PageFamily[] = [];
-  const loose: Hit[] = [];
-  for (const bucket of byWord.values()) {
-    if (bucket.length >= FAMILY_MIN) {
-      families.push({ label: bucket[0].title.trim().split(/\s+/)[0], pages: bucket });
-    } else {
-      loose.push(...bucket);
-    }
-  }
-
-  families.sort((a, b) => a.label.localeCompare(b.label));
-  loose.sort((a, b) => a.title.localeCompare(b.title));
-  return { families, loose };
 }

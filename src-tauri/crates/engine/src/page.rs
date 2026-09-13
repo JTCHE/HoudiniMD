@@ -25,6 +25,10 @@ pub struct PageView {
     pub markdown: String,
     /// The build the page was read from.
     pub version: String,
+    /// Every version of this node, newest first, for the selector in the
+    /// header. The read leaves it empty: it comes out of the index, and the
+    /// caller that holds the index fills it with `versions::of`.
+    pub node_versions: Vec<crate::versions::NodeVersion>,
 }
 
 /// Why a page did not come back. `missing` says this build holds no such page,
@@ -59,13 +63,14 @@ pub fn read(install: &install::Install, path: &str) -> Result<PageView, PageErro
     let prop = |name: &str| wiki::model::prop(&parsed.props, name).map(str::to_string);
     Ok(PageView {
         path,
-        name: display_name(&parsed),
+        name: parsed.title_text.clone(),
         node_type: node_type(&parsed.props),
         icon: prop("icon").map(|icon| format!("{icon}.svg")),
         since: prop("since"),
         summary: parsed.summary.as_ref().map(|s| wiki::inline::plain(s)),
         markdown: wiki::markdown::blocks(&parsed.blocks, 1),
         version: install.version.clone(),
+        node_versions: Vec::new(),
     })
 }
 
@@ -91,13 +96,4 @@ pub fn node_type(props: &wiki::Props) -> Option<String> {
         other => return Some(format!("{other} node")),
     };
     Some(label.to_string())
-}
-
-/// The name a reader sees. A page that carries a `version` property is one
-/// entry of many under the same title, so the version is part of the name.
-pub fn display_name(parsed: &wiki::Page) -> String {
-    match wiki::model::prop(&parsed.props, "version") {
-        Some(version) => format!("{} {version}", parsed.title_text),
-        None => parsed.title_text.clone(),
-    }
 }

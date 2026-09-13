@@ -26,6 +26,9 @@ pub fn open(data: &Path) -> Result<Connection, String> {
         .map_err(|e| e.to_string())?;
     db.pragma_update(None, "synchronous", "NORMAL")
         .map_err(|e| e.to_string())?;
+    // 512 KB, not SQLite's 2 MB: the probe measured -4 MB and no slower search.
+    db.pragma_update(None, "cache_size", -512)
+        .map_err(|e| e.to_string())?;
 
     reset_if_stale(&db)?;
     db.execute_batch(SCHEMA).map_err(|e| e.to_string())?;
@@ -34,7 +37,7 @@ pub fn open(data: &Path) -> Result<Connection, String> {
 
 /// What `SCHEMA` describes. Raise it whenever the derived tables change shape,
 /// or the parser writes different rows into them.
-const VERSION: u32 = 3;
+const VERSION: u32 = 5;
 
 /// Throws away everything derived from the Houdini install when the shape it
 /// was written in is not the shape this build reads. `index.db` is derived, so
@@ -74,8 +77,19 @@ CREATE TABLE IF NOT EXISTS pages (
   node_type TEXT,
   icon      TEXT,
   summary   TEXT,
+  -- The versions of one node. `family` is NULL for a page with no other
+  -- version, and `rank` is 0 for the newest page. See `versions.rs`.
+  family    TEXT,
+  label     TEXT,
+  rank      INTEGER NOT NULL DEFAULT 0,
+  -- The sidebar folders above the page, one label per line, and the page's
+  -- position in the order the sidebar draws its section. See `place.rs`.
+  place     TEXT NOT NULL DEFAULT '',
+  seq       INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (build, path)
 ) WITHOUT ROWID;
+
+CREATE INDEX IF NOT EXISTS pages_family ON pages (build, family) WHERE family IS NOT NULL;
 
 -- One row per SECTION of a page, not per page: a hit names the heading the
 -- reader should land on, which is what the result list draws under the page.

@@ -35,6 +35,9 @@ export interface Hit {
   headings?: Section[];
   /** How well the words match. Weighted by `weight` below, never used raw. */
   score?: number;
+  /** The sidebar folders above the page, below its branch. Only the title
+      list carries them; Rust works them out at index time (`place.rs`). */
+  place?: string[];
 }
 
 /** Every title in the build, fetched once and kept for the session.
@@ -54,18 +57,23 @@ export function titles(): Promise<Hit[]> {
     never touches Rust. Undefined until that read lands, and for a path the
     index does not hold. */
 export function titleOf(path: string): string | undefined {
+  return byPath?.get(path)?.title;
+}
+
+/** The whole row for one page, on the same terms as `titleOf`. */
+export function hitOf(path: string): Hit | undefined {
   return byPath?.get(path);
 }
 
 /** Path to title, built once per title list. A breadcrumb asks for two or
     three ancestors on every navigation, and a scan of ten thousand rows for
     each of them is work nobody needs. */
-let byPath: Map<string, string> | null = null;
+let byPath: Map<string, Hit> | null = null;
 
 export function warmTitleIndex(): Promise<void> {
   return titles().then((all) => {
     if (byPath) return;
-    byPath = new Map(all.map((hit) => [hit.path, hit.title]));
+    byPath = new Map(all.map((hit) => [hit.path, hit]));
   });
 }
 
