@@ -1590,7 +1590,6 @@ pre code.hljs {
 .vex-args {
   display: grid;
   grid-template-columns: 16.5rem 1fr;
-  border-top: 1px solid var(--border);
   margin: 0 calc(var(--md) * -1);
 }
 .vex-arg-sig,
@@ -1625,11 +1624,9 @@ pre code.hljs {
 .vex-arg-amp {
   color: oklch(0.72 0.14 245);
 }
-.vex-arg-none {
-  color: var(--muted-foreground);
-}
-/* The column names: prose type, so they read as labels and not as code. */
-.vex-args-head {
+/* The column names: prose type, so they read as labels and not as code. The
+   same look as the head of a parameter table. */
+.vex-args .vex-args-head {
   padding-block: 0.5rem;
   font-family: var(--font-sans);
   font-size: 0.75rem;

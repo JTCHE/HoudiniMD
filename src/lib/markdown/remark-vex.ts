@@ -211,7 +211,7 @@ export function remarkVex({ enabled }: { enabled: boolean }) {
             const sigCell: MdNode[] = [];
             // A type the signature does not state is drawn as missing, so the
             // name never slides into the type column.
-            if (typed) sigCell.push(row.type ? span('vex-arg-type', row.type) : span('vex-arg-none', '⸺'));
+            if (typed) sigCell.push(span('vex-arg-type', row.type ?? '—'));
             sigCell.push(
               row.name.startsWith('&')
                 ? box('vexName', 'vex-arg-name', [span('vex-arg-amp', '&'), span('vex-arg-id', row.name.slice(1))])
@@ -220,7 +220,7 @@ export function remarkVex({ enabled }: { enabled: boolean }) {
             cells.push(box('vexArgSig', 'vex-arg-sig', sigCell));
             cells.push(box('vexArgDesc', 'vex-arg-desc', row.desc));
           }
-          out.push(label('Arguments', 'vex-section-label'));
+          out.push({ type: 'heading', depth: 2, children: [{ type: 'text', value: 'Arguments' }] } as MdNode);
           out.push(box('vexArgs', typed ? 'vex-args' : 'vex-args vex-args-untyped', cells));
         }
         continue;
