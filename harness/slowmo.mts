@@ -87,6 +87,29 @@ const FLOWS: Flow[] = [
     },
   },
   {
+    // Out to another part of the docs, then the mouse's back button: the
+    // panel draws a branch it had closed.
+    name: "back-far",
+    from: "nodes/sop/box",
+    act: async (page) => {
+      await page.click('article a[href^="/"]:not([href^="/nodes/"])');
+      await page.waitForTimeout(1500);
+      await page.goBack();
+    },
+  },
+  {
+    // A breadcrumb to a long index page: the press must show at once.
+    name: "crumb",
+    from: "nodes/sop/box",
+    act: async (page) => page.click('a[href="/nodes/sop/index"]'),
+  },
+  {
+    // Out of that long page: a big list to take down.
+    name: "index-link",
+    from: "nodes/sop/index",
+    act: async (page) => page.click('article a[href="/nodes/sop/sphere"]'),
+  },
+  {
     name: "search",
     from: "nodes/sop/box",
     act: async (page) => {
