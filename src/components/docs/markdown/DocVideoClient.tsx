@@ -1,17 +1,19 @@
-import { useRef, useState, type SVGProps } from "react";
-import { MediaPlayer, MediaProvider, PlayButton, useMediaState } from "@vidstack/react";
 import {
-  DefaultVideoLayout,
-  defaultLayoutIcons,
-} from "@vidstack/react/player/layouts/default";
-import "@vidstack/react/player/styles/base.css";
-import "@vidstack/react/player/styles/default/theme.css";
-import "@vidstack/react/player/styles/default/layouts/video.css";
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+  type ReactNode,
+  type SVGProps,
+} from "react";
+import { ProgressiveBlur } from "@jtche/progressive-blur";
 
 function icon(path: string) {
   return function PlayerIcon(props: SVGProps<SVGSVGElement>) {
     return (
-      <svg {...props} viewBox="0 0 24 24" fill="none">
+      <svg {...props} viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <path
           d={path}
           stroke="currentColor"
@@ -32,22 +34,25 @@ const MutedIcon = icon("M16 9.50009L21 14.5001M21 9.50009L16 14.5001M4.6 9.00009
 const ExpandIcon = icon("M14 10L21 3M21 3H16.5M21 3V7.5M10 14L3 21M3 21H7.5M3 21L3 16.5");
 const CompressIcon = icon("M14 10L21 3M14 10H18.5M14 10V5.5M10 14L3 21M10 14H5.5M10 14L10 18.5");
 
-const playerIcons = {
-  ...defaultLayoutIcons,
-  PlayButton: { Play: PlayIcon, Pause: PauseIcon, Replay: PlayIcon },
-  MuteButton: { Mute: MutedIcon, VolumeLow: VolumeLowIcon, VolumeHigh: VolumeHighIcon },
-  FullscreenButton: { Enter: ExpandIcon, Exit: CompressIcon },
-};
+/** Controls stay up this long after the pointer stops, while the clip plays. */
+const IDLE_MS = 2000;
+const SEEK_SECONDS = 5;
+const VOLUME_STEP = 0.05;
 
-function ClickToPlay() {
-  const paused = useMediaState("paused");
-  if (!paused) return null;
+/** m:ss, or h:mm:ss from one hour. */
+function clock(seconds: number) {
+  const s = String(Math.floor(seconds % 60)).padStart(2, "0");
+  const m = Math.floor(seconds / 60) % 60;
+  const h = Math.floor(seconds / 3600);
+  return h ? `${h}:${String(m).padStart(2, "0")}:${s}` : `${m}:${s}`;
+}
 
+/** The tooltip is the button's own `aria-label`, drawn by CSS. */
+function ControlButton({ label, onClick, children }: { label: string; onClick: () => void; children: ReactNode }) {
   return (
-    <PlayButton
-      aria-label="Play video"
-      className="absolute inset-0 z-1 cursor-interactive bg-transparent"
-    />
+    <button type="button" className="video-button" aria-label={label} onClick={onClick}>
+      {children}
+    </button>
   );
 }
 
@@ -58,63 +63,242 @@ export interface DocVideoClientProps {
 
 /**
  * The box takes 16/9 until the clip reports its own size, then corrects. The
- * site probed the header ahead of time because the clip came over the network;
- * here it is a file on this machine, so metadata arrives in the same frame and
- * a probe would only cost a read for nothing.
+ * clip is a file on this machine, so metadata arrives in the same frame.
  *
- * The surface carries a pointer cursor in both play states, and only one
- * video plays at a time: starting one pauses every other player on the page.
+ * Only one video plays at a time: starting one pauses every other on the page.
  */
 export default function DocVideoClient({ src, title }: DocVideoClientProps) {
   const [ratio, setRatio] = useState("16 / 9");
+  const [paused, setPaused] = useState(true);
+  const [idle, setIdle] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [time, setTime] = useState(clock(0));
+  const [duration, setDuration] = useState(0);
+  const [muted, setMuted] = useState(false);
+  const [volume, setVolume] = useState(1);
+  const [fullscreen, setFullscreen] = useState(false);
+  const [hover, setHover] = useState<{ x: number; label: string } | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const seekRef = useRef<HTMLInputElement>(null);
+  const idleTimer = useRef(0);
+
+  // The seek bar is written directly, not through state: it moves every frame
+  // while the clip plays, and a render per frame is waste.
+  const sync = useCallback(() => {
+    const video = videoRef.current;
+    const seek = seekRef.current;
+    if (!video || !seek) return;
+    seek.value = String(video.currentTime);
+    seek.style.setProperty("--fill", `${(video.currentTime / (video.duration || 1)) * 100}%`);
+    setTime(clock(video.currentTime));
+  }, []);
+
+  // Stop when the controls are hidden: nobody can see the bar move.
+  useEffect(() => {
+    if (paused || idle) return;
+    let frame = 0;
+    const tick = () => {
+      sync();
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [paused, idle, sync]);
+
+  useEffect(() => {
+    const onChange = () => setFullscreen(document.fullscreenElement === boxRef.current);
+    document.addEventListener("fullscreenchange", onChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", onChange);
+      clearTimeout(idleTimer.current);
+    };
+  }, []);
+
+  const wake = () => {
+    setIdle(false);
+    clearTimeout(idleTimer.current);
+    idleTimer.current = window.setTimeout(() => setIdle(true), IDLE_MS);
+  };
+
+  const togglePlay = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (video.paused) video.play().catch(() => {});
+    else video.pause();
+  };
+
+  const toggleMute = () => {
+    const video = videoRef.current;
+    if (video) video.muted = !video.muted;
+  };
+
+  const setLevel = (level: number) => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.volume = Math.min(1, Math.max(0, level));
+    video.muted = video.volume === 0;
+  };
+
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    else boxRef.current?.requestFullscreen().catch(() => {});
+  };
+
+  const seekBy = (seconds: number) => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.currentTime = Math.min(video.duration || 0, Math.max(0, video.currentTime + seconds));
+    sync();
+  };
+
+  const onKeyDown = (event: KeyboardEvent) => {
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+    const target = event.target;
+    // A focused slider moves itself, and a focused button presses itself.
+    if (target instanceof HTMLInputElement && event.key.startsWith("Arrow")) return;
+    if (target instanceof HTMLButtonElement && (event.key === " " || event.key === "Enter")) return;
+    const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+    const action = {
+      " ": togglePlay,
+      k: togglePlay,
+      m: toggleMute,
+      f: toggleFullscreen,
+      j: () => seekBy(-SEEK_SECONDS),
+      l: () => seekBy(SEEK_SECONDS),
+      ArrowLeft: () => seekBy(-SEEK_SECONDS),
+      ArrowRight: () => seekBy(SEEK_SECONDS),
+      ArrowUp: () => setLevel((videoRef.current?.volume ?? 1) + VOLUME_STEP),
+      ArrowDown: () => setLevel((videoRef.current?.volume ?? 1) - VOLUME_STEP),
+    }[key];
+    if (!action) return;
+    // Also keeps the letter out of type-to-search, which skips a handled key.
+    event.preventDefault();
+    action();
+    wake();
+  };
+
+  const level = muted ? 0 : volume;
+  const VolumeIcon = level === 0 ? MutedIcon : level < 0.5 ? VolumeLowIcon : VolumeHighIcon;
 
   return (
     <div
       ref={boxRef}
-      className="markdown-media isolate my-4 bg-muted cursor-interactive"
+      role="group"
+      aria-label={title || "Documentation video"}
+      tabIndex={0}
+      className="markdown-media markdown-video not-prose relative isolate my-4 bg-muted"
       style={{ aspectRatio: ratio }}
-      onLoadedMetadataCapture={(e) => {
-        const video = e.currentTarget.querySelector("video");
-        if (video?.videoWidth && video?.videoHeight) {
-          setRatio(`${video.videoWidth} / ${video.videoHeight}`);
-        }
-      }}
+      data-idle={(idle && !paused) || undefined}
+      onPointerMove={wake}
+      onKeyDown={onKeyDown}
     >
-      <MediaPlayer
-        className="markdown-video relative"
-        style={{ width: "100%", height: "100%" }}
-        src={{ src, type: "video/webm" }}
-        title={title || "Documentation video"}
-        viewType="video"
-        streamType="on-demand"
-        playsInline
+      <video
+        ref={videoRef}
+        src={src}
         preload="metadata"
+        playsInline
+        className="absolute inset-0 size-full cursor-interactive"
+        onClick={togglePlay}
+        onDoubleClick={toggleFullscreen}
+        onLoadedMetadata={(event) => {
+          const video = event.currentTarget;
+          if (video.videoWidth && video.videoHeight) setRatio(`${video.videoWidth} / ${video.videoHeight}`);
+          setDuration(video.duration);
+          setLoading(false);
+          sync();
+        }}
+        onDurationChange={(event) => setDuration(event.currentTarget.duration)}
+        onTimeUpdate={sync}
+        onWaiting={() => setLoading(true)}
+        onPlaying={() => setLoading(false)}
+        onCanPlay={() => setLoading(false)}
+        onError={() => setLoading(false)}
+        onVolumeChange={(event) => {
+          setMuted(event.currentTarget.muted);
+          setVolume(event.currentTarget.volume);
+        }}
         onPlay={() => {
+          setPaused(false);
+          wake();
           // The clip elements are the register, so nothing has to be kept in
-          // step with them. A player instance is not stable enough to compare:
-          // the ref is swapped after mount, so a set of instances made every
-          // player pause itself the moment it started.
-          const mine = boxRef.current?.querySelector("video");
+          // step with them.
           for (const other of document.querySelectorAll("video")) {
-            if (other !== mine) other.pause();
+            if (other !== videoRef.current) other.pause();
           }
         }}
-      >
-        <MediaProvider />
-        <ClickToPlay />
-        <DefaultVideoLayout
-          colorScheme="dark"
-          icons={playerIcons}
-          slots={{
-            chapterTitle: null,
-            googleCastButton: null,
-            pipButton: null,
-            settingsMenu: null,
-            beforeFullscreenButton: <div className="vds-controls-spacer" />,
+        onPause={() => {
+          setPaused(true);
+          sync();
+        }}
+      />
+
+      {loading && <span className="video-spinner animate-spin motion-reduce:animate-none" aria-hidden="true" />}
+
+      <ProgressiveBlur side="bottom" strength={12} steps={6} className="video-blur" />
+
+      <div className="video-controls">
+        <div
+          className="video-seek"
+          onPointerMove={(event) => {
+            const rect = event.currentTarget.getBoundingClientRect();
+            const fraction = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
+            setHover({ x: event.clientX - rect.left, label: clock(fraction * duration) });
           }}
-        />
-      </MediaPlayer>
+          onPointerLeave={() => setHover(null)}
+        >
+          {hover && (
+            <span className="video-seek-preview" style={{ left: `clamp(1rem, ${hover.x}px, calc(100% - 1rem))` }}>
+              {hover.label}
+            </span>
+          )}
+          <input
+            ref={seekRef}
+            type="range"
+            min={0}
+            max={duration || 0}
+            step="any"
+            defaultValue={0}
+            aria-label="Seek"
+            aria-valuetext={`${time} of ${clock(duration)}`}
+            onChange={(event) => {
+              const video = videoRef.current;
+              if (video) video.currentTime = Number(event.currentTarget.value);
+              sync();
+            }}
+          />
+        </div>
+
+        <div className="video-bar">
+          <ControlButton label={paused ? "Play" : "Pause"} onClick={togglePlay}>
+            {paused ? <PlayIcon className="translate-x-px" /> : <PauseIcon />}
+          </ControlButton>
+          <div className="video-volume">
+            <ControlButton label={muted ? "Unmute" : "Mute"} onClick={toggleMute}>
+              <VolumeIcon />
+            </ControlButton>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={VOLUME_STEP}
+              value={level}
+              aria-label="Volume"
+              style={{ "--fill": `${level * 100}%` } as CSSProperties}
+              onChange={(event) => setLevel(Number(event.currentTarget.value))}
+            />
+          </div>
+          <span className="video-time">
+            {time}
+            <span className="video-time-divider">/</span>
+            {clock(duration)}
+          </span>
+          <span className="flex-1" />
+          <ControlButton label={fullscreen ? "Exit full screen" : "Enter full screen"} onClick={toggleFullscreen}>
+            {fullscreen ? <CompressIcon /> : <ExpandIcon />}
+          </ControlButton>
+        </div>
+      </div>
     </div>
   );
 }
