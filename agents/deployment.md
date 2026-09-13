@@ -57,6 +57,12 @@ Put the list under two headings: `## Features` for what the reader can now do,
 and `## Fixes` for what now works as it should. A speed or memory gain is a
 fix. Leave out a heading that has no items.
 
+Sell each change. Lead with what the reader gains, and prove it with a number
+when there is one: before and after, or how many. "Performance gains: the first
+index is 6× faster, 13 s down to 2 s." "This fixes 174 broken links." The
+number must be one the reader can feel. A time is the wait from the click to
+the result, not CPU time summed across threads.
+
 Keep these out. They are project facts, and they belong in the README:
 
 - What the product is, and what it is for.
