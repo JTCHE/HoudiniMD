@@ -14,7 +14,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke, listen } from "../../lib/backend";
 import { cn } from "@/lib/utils";
 import { titles, forgetTitles, type Hit } from "@/lib/search";
-import { buildTree, type TreeBranch } from "@/lib/landing/tree";
+import { buildTree, built, type TreeBranch } from "@/lib/landing/tree";
 import { useBuild } from "@/lib/install";
 import { useLibrary } from "@/lib/store/library";
 import { VersionSelector } from "./sidebar/VersionSelector";
@@ -31,18 +31,18 @@ import { FadeList } from "@/components/ui/FadeList";
     once the pass finishes so the tree does not stay stuck on that first,
     partial read for the rest of the session. */
 function useTree(): { tree: TreeBranch[]; reading: boolean } {
-  const [tree, setTree] = useState<TreeBranch[]>(cached ?? []);
+  const [tree, setTree] = useState<TreeBranch[]>(built.tree ?? []);
   const [reading, setReading] = useState(false);
 
   useEffect(() => {
     let live = true;
     const load = () => {
       void titles().then((all: Hit[]) => {
-        cached = buildTree(all);
-        if (live) setTree(cached);
+        const next = (built.tree = buildTree(all));
+        if (live) setTree(next);
       });
     };
-    if (!cached) load();
+    if (!built.tree) load();
     // Houdini's help pane gets no events, so the state is read once as well.
     void invoke<{ done: boolean }>("index_status")
       .then((status) => live && setReading(!status.done))
@@ -51,7 +51,7 @@ function useTree(): { tree: TreeBranch[]; reading: boolean } {
       setReading(!event.payload.done);
       if (!event.payload.done) return;
       forgetTitles();
-      cached = null;
+      built.tree = null;
       load();
     });
     return () => {
@@ -63,13 +63,13 @@ function useTree(): { tree: TreeBranch[]; reading: boolean } {
   return { tree, reading };
 }
 
-let cached: TreeBranch[] | null = null;
-
 const WIDTH_KEY = "houdinimd.sidebar-width";
 const MIN_WIDTH = 232;
 const MAX_WIDTH = 460;
 
-function storedWidth(): number {
+/** The width the reader left the panel at. The shell reads it to decide
+    whether the window has room to keep the panel beside the page. */
+export function storedWidth(): number {
   try {
     const raw = Number(window.localStorage.getItem(WIDTH_KEY));
     if (Number.isFinite(raw) && raw >= MIN_WIDTH && raw <= MAX_WIDTH) return raw;
@@ -79,7 +79,17 @@ function storedWidth(): number {
   return 289;
 }
 
-export function Sidebar({ currentPath, className }: { currentPath?: string; className?: string }) {
+export function Sidebar({
+  currentPath,
+  floating = false,
+  className,
+}: {
+  currentPath?: string;
+  /** Drawn over the page as a card, because the window is too narrow to put
+      it beside the page. See `AppShell`. */
+  floating?: boolean;
+  className?: string;
+}) {
   const { version, pageCount } = useBuild();
   const { tree, reading } = useTree();
   const { recents, bookmarks } = useLibrary();
@@ -129,8 +139,8 @@ export function Sidebar({ currentPath, className }: { currentPath?: string; clas
     <aside
       style={{ width }}
       className={cn(
-        "relative flex shrink-0 flex-col gap-lg overflow-hidden",
-        "border-r border-hairline bg-neutral-100 p-ms",
+        "relative flex shrink-0 flex-col gap-lg overflow-hidden bg-neutral-100 p-ms",
+        floating ? "h-full rounded-lg border border-hairline shadow-pane" : "border-r border-hairline",
         className,
       )}
     >
@@ -183,7 +193,9 @@ export function Sidebar({ currentPath, className }: { currentPath?: string; clas
       </div>
 
       {/* The edge itself is the handle. It is wider than the hairline it sits
-          on so the pointer can find it, and it draws nothing until then. */}
+          on so the pointer can find it, and it draws nothing until then. The
+          floating card has none: its width is the docked panel's. */}
+      {!floating && (
       <div
         role="separator"
         aria-orientation="vertical"
@@ -196,6 +208,7 @@ export function Sidebar({ currentPath, className }: { currentPath?: string; clas
           "pointer-hover:bg-brand/30",
         )}
       />
+      )}
     </aside>
   );
 }

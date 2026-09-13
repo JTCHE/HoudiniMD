@@ -88,7 +88,8 @@ function Card({
     >
       <span className="flex min-w-0 flex-col">
         <span className="truncate text-[13px] font-medium tracking-[-0.012em] text-neutral-950">
-          {version ? `Houdini ${version}` : "No Houdini install found"}
+          {/* `null` is not read yet, which is not the same as no install. */}
+          {version ? `Houdini ${version}` : version === null ? "Houdini" : "No Houdini install found"}
         </span>
         <span className="truncate text-caption text-neutral-500">
           {pageCount === null ? "Reading the install…" : `${pageCount.toLocaleString()} pages`}

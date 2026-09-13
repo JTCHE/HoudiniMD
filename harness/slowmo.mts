@@ -4,6 +4,7 @@
  *   node harness/slowmo.mts                        # build, serve, every flow
  *   node harness/slowmo.mts --port 8821            # against a running --serve
  *   node harness/slowmo.mts --flow link --rate 0.05 --interval 8
+ *   node harness/slowmo.mts --app                  # film the shipped app itself
  *
  * A flash of empty content, an icon that pops in, a heading that jumps: each
  * lasts one or two frames at full speed, which is too short to see and too
@@ -23,6 +24,15 @@
  * is at full speed. Virtual time would fix that, and costs a rewrite of the
  * capture loop.
  *
+ * `--app` films the shipped binary instead of `dist/` behind `probe --serve`:
+ * the real WebView2, the real IPC, the real `hicon:` icons, attached over the
+ * webview's debugging port (`launch` in `app.mts`). A pop that only the real
+ * IPC timing causes shows there and nowhere else. The fixed network latency
+ * does not apply to it: the app reads nothing over the network.
+ *
+ * A frame is written only when it differs, pixel for pixel, from the one
+ * written before it. Its caption says how long it stayed on screen.
+ *
  * Output, per flow, in `harness/out/slowmo/<flow>/`: the frames, a contact
  * sheet (`index.html`), and `report.json`. The report lists every frame that
  * changed, and every FLASH: a frame unlike both of its neighbours while the
@@ -31,9 +41,11 @@
  */
 import { chromium, type CDPSession, type Page } from "playwright";
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
+import { resolve } from "node:path";
 import sharp from "sharp";
+import { launch, recycle, type Running } from "./app.mts";
 
 const OUT = "harness/out/slowmo";
 const VIEW = { width: 1280, height: 820 };
@@ -55,9 +67,10 @@ interface Flow {
 const FLOWS: Flow[] = [
   { name: "boot", from: "about:blank", act: async (page) => void (await page.goto(`${base()}nodes/sop/box`)) },
   {
+    // The first row of the home page's list: a page the reader was last in.
     name: "home-link",
     from: "",
-    act: async (page) => page.click('a[href="/nodes/sop/index"]'),
+    act: async (page) => page.click('main a[href^="/"]'),
   },
   {
     name: "link",
@@ -105,7 +118,9 @@ const FLOWS: Flow[] = [
 ];
 
 let port = 0;
-const base = () => `http://localhost:${port}/`;
+/** The shipped app's own origin with `--app`, else the stub server. */
+let origin = "";
+const base = () => origin || `http://localhost:${port}/`;
 
 interface Frame {
   /** Wall-clock seconds, from the compositor. */
@@ -165,6 +180,7 @@ function compare(a: Buffer, b: Buffer, view = VIEW) {
 
 async function write(flow: string, frames: Frame[], interval: number, rate: number, view = VIEW) {
   const dir = `${OUT}/${flow}`;
+  if (existsSync(dir)) recycle(resolve(dir));
   mkdirSync(dir, { recursive: true });
   if (frames.length === 0) return { flow, frames: 0, changes: [], flashes: [] };
   // Lay the frames on a regular clock: tick N shows the last frame drawn at
@@ -191,12 +207,22 @@ async function write(flow: string, frames: Frame[], interval: number, rate: numb
   }
   const moved = new Set(changes.map((c) => c.tick));
   const flashed = new Set(flashes.map((f) => f.tick));
-  ticks.forEach((frame, i) => writeFileSync(`${dir}/${String(i).padStart(4, "0")}.jpg`, frame.data));
-  const cells = ticks
-    .map((_, i) => {
+  // Pixel for pixel: a tick that shows the same pixels as the frame kept
+  // before it is not written. Each distinct frame is decoded once.
+  const pixels = new Map<Frame, Buffer>();
+  for (const frame of new Set(ticks)) pixels.set(frame, await sharp(frame.data).raw().toBuffer());
+  const kept: { tick: number; held: number }[] = [];
+  ticks.forEach((frame, i) => {
+    const last = kept.at(-1);
+    if (last && pixels.get(ticks[last.tick])!.equals(pixels.get(frame)!)) last.held += 1;
+    else kept.push({ tick: i, held: 1 });
+  });
+  for (const { tick } of kept) writeFileSync(`${dir}/${String(tick).padStart(4, "0")}.jpg`, ticks[tick].data);
+  const cells = kept
+    .map(({ tick: i, held }) => {
       const name = `${String(i).padStart(4, "0")}.jpg`;
       const mark = flashed.has(i) ? "flash" : moved.has(i) ? "moved" : "";
-      return `<figure class="${mark}"><img src="${name}" loading="lazy"><figcaption>#${i} · ${appMs(i)} ms${mark ? ` · ${mark}` : ""}</figcaption></figure>`;
+      return `<figure class="${mark}"><img src="${name}" loading="lazy"><figcaption>#${i} · ${appMs(i)} ms · held ${Math.round(held * interval * rate)} ms${mark ? ` · ${mark}` : ""}</figcaption></figure>`;
     })
     .join("\n");
   writeFileSync(
@@ -206,9 +232,9 @@ body{font:12px system-ui;margin:12px;background:#222;color:#ddd}
 main{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:8px}
 figure{margin:0;border:2px solid transparent}figure.moved{border-color:#e9b949}figure.flash{border-color:#ef4444}
 img{width:100%;display:block}figcaption{padding:2px 4px}
-</style><h1>${flow}</h1><p>${ticks.length} frames, one every ${interval} ms wall clock = ${interval * rate} ms at full speed. Yellow: changed. Red: flash.</p><main>${cells}</main>`,
+</style><h1>${flow}</h1><p>${kept.length} distinct frames of ${ticks.length} ticks, one tick every ${interval} ms wall clock = ${interval * rate} ms at full speed. Yellow: changed. Red: flash.</p><main>${cells}</main>`,
   );
-  return { flow, frames: ticks.length, changes, flashes };
+  return { flow, frames: kept.length, changes, flashes };
 }
 
 function flag(args: string[], name: string): string | undefined {
@@ -246,8 +272,12 @@ async function main() {
   const latency = Number(flag(args, "--latency") ?? 40);
   const only = flag(args, "--flow");
   const given = flag(args, "--port");
+  const real = args.includes("--app");
 
-  if (!given && !args.includes("--no-build")) {
+  if (real && !args.includes("--no-build")) {
+    const build = spawnSync("bun", ["run", "app:build"], { stdio: "inherit", shell: true });
+    if (build.status !== 0) process.exit(build.status ?? 1);
+  } else if (!real && !given && !args.includes("--no-build")) {
     for (const [cmd, cmdArgs, cwd] of [
       ["npx", ["vite", "build"], "."],
       ["cargo", ["build", "--bin", "probe"], "src-tauri"],
@@ -256,9 +286,13 @@ async function main() {
       if (run.status !== 0) process.exit(run.status ?? 1);
     }
   }
+  let app: Running | null = null;
   port = given ? Number(given) : await freePort();
   let server: ChildProcess | null = null;
-  if (!given) {
+  if (real) {
+    app = await launch();
+    origin = new URL(app.page.url()).origin + "/";
+  } else if (!given) {
     server = spawn("src-tauri/target/debug/probe.exe", ["--serve", String(port), "--dist", "dist"], { stdio: "ignore" });
   }
 
@@ -266,11 +300,23 @@ async function main() {
   const browser = await chromium.launch({ executablePath: process.env.CHROME });
   const results = [];
   try {
-    await waitForServer();
-    rmSync(OUT, { recursive: true, force: true });
+    if (!real) await waitForServer();
+    // A window still reading the docs fills its tree while it is filmed, and
+    // every flow then shows the index, not the flow.
+    await app?.page.waitForFunction(
+      () =>
+        (window as unknown as { __TAURI_INTERNALS__: { invoke: (c: string) => Promise<{ done: boolean; pages: number }> } })
+          .__TAURI_INTERNALS__.invoke("index_status")
+          // `done` alone passed on the seed's old row, a moment before the
+          // app threw that index away and started again.
+          .then((status) => status.done && status.pages > 0),
+      null,
+      { polling: 1000, timeout: 10 * 60_000 },
+    );
     for (const flow of FLOWS.filter((f) => !only || f.name === only)) {
-      const context = await browser.newContext({ viewport: flow.view ?? VIEW, deviceScaleFactor: 1 });
-      const page = await context.newPage();
+      const context = app ? app.page.context() : await browser.newContext({ viewport: flow.view ?? VIEW, deviceScaleFactor: 1 });
+      const page = app ? app.page : await context.newPage();
+      const view = flow.view ?? (app ? await page.evaluate(() => ({ width: innerWidth, height: innerHeight })) : VIEW);
       // Every flow starts in the app itself, not in the first-launch setup.
       await page.goto(base(), { waitUntil: "domcontentloaded" });
       await page.evaluate(() =>
@@ -281,9 +327,15 @@ async function main() {
         await page.goto(`${base()}${flow.from}`, { waitUntil: "networkidle" });
         await page.waitForTimeout(800);
       }
+      const cdp = await context.newCDPSession(page);
+      // The window keeps its own size; a flow that wants another one gets it
+      // emulated, and the next flow gets the window back.
+      if (app) {
+        if (flow.view) await cdp.send("Emulation.setDeviceMetricsOverride", { ...flow.view, deviceScaleFactor: 1, mobile: false });
+        else await cdp.send("Emulation.clearDeviceMetricsOverride");
+      }
       await flow.setup?.(page);
       await page.mouse.move(2, 2);
-      const cdp = await context.newCDPSession(page);
       await cdp.send("Animation.enable");
       await cdp.send("Animation.setPlaybackRate", { playbackRate: rate });
       await cdp.send("Emulation.setCPUThrottlingRate", { rate: cpu });
@@ -297,17 +349,22 @@ async function main() {
       // Long enough for the slowest transition to finish at this rate.
       const hold = Math.min(20_000, Math.max(3000, 400 / rate));
       const frames = await film(page, cdp, () => flow.act(page), hold);
-      const result = await write(flow.name, frames, interval, rate, flow.view);
+      const result = await write(flow.name, frames, interval, rate, view);
       results.push(result);
       console.log(
         `${flow.name}: ${result.frames} frames, ${result.changes.length} changed, ${result.flashes.length} flashes` +
           (result.flashes.length ? ` at app ms ${result.flashes.map((f) => f.appMs).join(", ")}` : ""),
       );
-      await context.close();
+      await cdp.send("Animation.setPlaybackRate", { playbackRate: 1 });
+      await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 });
+      await cdp.send("Network.emulateNetworkConditions", { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
+      await cdp.detach();
+      if (!app) await context.close();
     }
   } finally {
     await browser.close();
     server?.kill();
+    await app?.stop();
   }
   writeFileSync(`${OUT}/report.json`, `${JSON.stringify({ rate, interval, cpu, latency, results }, null, 2)}\n`);
   console.log(`\nContact sheets: ${OUT}/<flow>/index.html`);

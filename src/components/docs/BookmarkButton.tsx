@@ -29,7 +29,9 @@ export function BookmarkButton({ entry }: { entry: Omit<LibraryEntry, "at"> }) {
       onClick={(() => toggleBookmark(entry))}
       className={cn(
         "grid size-8 shrink-0 cursor-interactive place-items-center rounded-lg border border-input",
-        "bg-muted/50 shadow-xs transition-colors hover:bg-muted",
+        // The background only: the same button serves the next page, and a
+        // faded colour drew a kept page as not kept for a moment.
+        "bg-muted/50 shadow-xs transition-[background-color] hover:bg-muted",
         "focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none",
         kept ? "text-brand" : "text-muted-foreground hover:text-foreground",
       )}

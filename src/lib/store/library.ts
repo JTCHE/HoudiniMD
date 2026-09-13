@@ -64,7 +64,8 @@ async function load() {
   commit({ recents: fromWire(recents), bookmarks: fromWire(bookmarks) });
 }
 
-void load();
+/** The first read, so the window can wait for it before it draws. */
+export const libraryLoaded = load();
 
 // The window has Tauri events for this; the help pane has neither an origin
 // in common with the window nor a push channel of its own, so both poll the

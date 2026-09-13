@@ -1,13 +1,21 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { localIconUrl } from "@/lib/icons";
+import { useEffect, useState } from "react";
+import { flushSync } from "react-dom";
+import { loaded, localIconUrl, missing } from "@/lib/icons";
+
+function first(src: string) {
+  return missing.has(src) ? "broken" : loaded.has(src) ? "instant" : "loading";
+}
 
 /**
- * Node/tool icons come from `icons.zip` through the `hicon` protocol. A cached
- * image becomes visible before paint. A slow image shows a delayed skeleton,
- * then fades over it. An icon the zip does not hold renders nothing at all —
- * no reserved box.
+ * Node/tool icons come from `icons.zip` through the `hicon` protocol. An icon
+ * already loaded once shows on the first paint; `warmRows` loads the sidebar's
+ * next rows while their page is read. A new one stays hidden until it
+ * loads: Chromium draws its broken-image glyph for a missing icon a frame or
+ * more before the error event, so a visible new icon flashed that glyph. A slow
+ * image shows a delayed skeleton, then fades over it. An icon the zip does not
+ * hold renders the caller's fallback, and is never asked for again.
  *
  * Intrinsic size means nothing here: many SideFX icons carry a `viewBox` and no
  * `width`, so the webview reports a natural size of 0. Only a load error marks
@@ -31,26 +39,16 @@ export default function DocIconClient({
       gives nothing, where a box the size of an icon would be a hole. */
   fallback?: React.ReactNode;
 } & { width?: number; height?: number }) {
-  const [state, setState] = useState<"loading" | "skeleton" | "instant" | "loaded" | "broken">("loading");
-  const ref = useRef<HTMLImageElement>(null);
-  // The page title keeps this mounted from page to page. A page whose icon
-  // file is missing left the state at "broken", and every page after it drew
-  // no icon at all. Only that state starts over: from any other state the new
-  // picture replaces the old one in place, where a reset put a skeleton
-  // between the two on every slow read.
+  const [state, setState] = useState<"loading" | "skeleton" | "instant" | "loaded" | "broken">(() => first(src));
+  // The page title and a recycled list row keep this mounted while `src`
+  // changes. The new icon starts over like a new mount: the old picture kept
+  // in place was the wrong icon beside the new label, and the broken-image
+  // glyph when the new one was missing.
   const [shown, setShown] = useState(src);
   if (shown !== src) {
     setShown(src);
-    if (state === "broken") setState("loading");
+    setState(first(src));
   }
-
-  useLayoutEffect(() => {
-    const img = ref.current;
-    if (!img?.complete) return;
-    queueMicrotask(() => {
-      if (ref.current === img) setState("instant");
-    });
-  }, [src]);
 
   useEffect(() => {
     if (state !== "loading") return;
@@ -76,7 +74,6 @@ export default function DocIconClient({
         />
       )}
       <img
-        ref={ref}
         src={localIconUrl(src)}
         alt={alt}
         width={width}
@@ -84,19 +81,22 @@ export default function DocIconClient({
         className="col-start-1 row-start-1 size-full object-contain"
         loading={priority ? "eager" : "lazy"}
         fetchPriority={priority ? "high" : "auto"}
-        decoding="async"
+        // An icon on screen now paints with its row: an async decode draws the
+        // row first and the icon a frame later, even from the cache.
+        decoding={priority ? "sync" : "async"}
         style={{
-          // Visible by default so the native <img> can paint as soon as its
-          // bytes arrive, without waiting on hydration. Only "skeleton" (a
-          // slow load past 150ms, confirmed once JS is running) hides it —
-          // that state's own pulse is the placeholder instead.
-          opacity: state === "skeleton" ? 0 : 1,
+          opacity: state === "loading" || state === "skeleton" ? 0 : 1,
           transition: state === "skeleton" || state === "loaded" ? "opacity 200ms" : undefined,
         }}
+        // Committed in the event itself, so the icon shows in the next frame.
         onLoad={() => {
-          setState((current) => (current === "skeleton" ? "loaded" : "instant"));
+          loaded.add(src);
+          flushSync(() => setState((current) => (current === "skeleton" ? "loaded" : "instant")));
         }}
-        onError={() => setState("broken")}
+        onError={() => {
+          missing.add(src);
+          setState("broken");
+        }}
       />
     </span>
   );

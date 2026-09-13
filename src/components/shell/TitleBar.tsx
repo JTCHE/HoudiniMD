@@ -66,6 +66,9 @@ export function TitleBar({ sidebarOpen, onToggleSidebar, showTrail, bare = false
         tabIndex={-1}
         aria-label={sidebarOpen ? "Hide the sidebar" : "Show the sidebar"}
         aria-pressed={sidebarOpen}
+        // The floating panel closes on a press outside it; this press is the
+        // button's own, and must toggle it instead.
+        data-sidebar-toggle=""
         className={BAR_BUTTON}
         onClick={(onToggleSidebar)}
       >
