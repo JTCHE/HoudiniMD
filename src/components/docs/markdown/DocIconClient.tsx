@@ -82,8 +82,10 @@ export default function DocIconClient({
         loading={priority ? "eager" : "lazy"}
         fetchPriority={priority ? "high" : "auto"}
         // An icon on screen now paints with its row: an async decode draws the
-        // row first and the icon a frame later, even from the cache.
-        decoding={priority ? "sync" : "async"}
+        // row first and the icon a frame later, even from the cache. An icon
+        // this session has already drawn is in that cache, so it decodes with
+        // the row too — the back button drew a row of blank marks otherwise.
+        decoding={priority || state === "instant" ? "sync" : "async"}
         style={{
           opacity: state === "loading" || state === "skeleton" ? 0 : 1,
           transition: state === "skeleton" || state === "loaded" ? "opacity 200ms" : undefined,

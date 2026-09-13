@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ChevronRight } from "lucide-react";
 import { Link } from "react-router";
 import { titleOf, warmTitleIndex } from "@/lib/search";
+import { warm } from "@/lib/pages";
 import { toTitleCase } from "@/lib/markdown/page-title";
 
 /**
@@ -58,7 +59,13 @@ export function Breadcrumbs({ path, version, title }: { path: string; version?: 
         return (
           <span key={`${crumb.label}-${index}`} className="inline-flex items-center">
             {crumb.href ? (
-              <Link to={crumb.href} className="hover:text-foreground transition-colors">
+              <Link
+                to={crumb.href}
+                className="hover:text-foreground transition-colors"
+                // A crumb is an index page, often a long one: it is read and
+                // parsed while the pointer is on its way to the press.
+                onPointerEnter={() => crumb.href !== "/" && warm(crumb.href.slice(1))}
+              >
                 {crumb.label}
               </Link>
             ) : (

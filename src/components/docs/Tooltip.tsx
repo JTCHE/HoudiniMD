@@ -78,6 +78,11 @@ function request(
   onSettled?: (entry: MetaEntry | null) => void,
   eager = true,
 ) {
+  // The title list already holds what a call would answer for almost every
+  // page. On an index page of two thousand links, the calls held the
+  // database lock, and the next page read waited half a second behind them.
+  const hit = metaCache.has(slug) ? undefined : hitOf(slug);
+  if (hit) metaCache.set(slug, { title: hit.title, summary: hit.summary ?? "", icon: hit.icon ?? null });
   if (metaCache.has(slug)) {
     onSettled?.(metaCache.get(slug) ?? null);
     return;

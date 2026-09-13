@@ -1,10 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { LucideArrowUpRight } from "lucide-react";
 import { useLocation } from "react-router";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import rehypeRaw from "rehype-raw";
-import rehypeSlug from "rehype-slug";
+import type { Components } from "react-markdown";
 import { cn } from "@/lib/utils";
 import { Breadcrumbs } from "@/components/docs/Breadcrumbs";
 import SearchOverlay, { type SearchOverlayRef } from "@/components/docs/SearchOverlay";
@@ -12,11 +9,9 @@ import { PageHeader } from "@/components/docs/PageHeader";
 import { TableOfContents } from "@/components/docs/TableOfContents";
 import { CodeBlock } from "@/components/docs/CodeBlock";
 import { markdownComponents } from "@/components/docs/markdown";
+import { Body } from "@/components/docs/markdown/Body";
 import NotFoundPage from "@/components/docs/NotFoundPage";
 import { extractHeadings } from "@/lib/markdown/headings";
-import { remarkCallouts } from "@/lib/markdown/remark-callouts";
-import { remarkVex } from "@/lib/markdown/remark-vex";
-import { rehypeCards } from "@/lib/markdown/rehype-cards";
 import { detectLanguage } from "@/lib/markdown/utils";
 import { showToast } from "@/components/ui/toast-notification";
 import { recordVisit } from "@/lib/store/library";
@@ -260,27 +255,22 @@ export default function Page() {
   const hasToc = headings.length >= 2;
   const name = useMemo(() => (page ? nameOf(page, path) : ""), [page, path]);
 
-  // react-markdown keeps nothing between renders, so each render of this view
-  // parsed the whole page again — on a navigation that included the old page,
-  // drawn once more under the new path while the new one is read. The element
-  // is built once per page, from the page's own path: React skips an element
-  // it has already drawn.
-  const body = useMemo(
-    () =>
-      page && (
-        <ReactMarkdown
-          remarkPlugins={[remarkGfm, remarkCallouts, [remarkVex, { enabled: /(^|\/)vex\//.test(`/${page.path}`) }]]}
-          rehypePlugins={[rehypeRaw, rehypeSlug, rehypeCards]}
-          components={{
-            ...markdownComponents,
-            pre: ({ children }) => <CodeBlock language={detectLanguage(page.path)}>{children}</CodeBlock>,
-          }}
-        >
-          {page.markdown}
-        </ReactMarkdown>
-      ),
-    [page],
+  // The tree comes parsed from `read` (a worker). The components are made once
+  // per page, so the body's slices keep their elements across renders.
+  const pagePath = page?.path;
+  const components = useMemo<Components>(
+    () => ({
+      ...markdownComponents,
+      pre: ({ children }) => <CodeBlock language={detectLanguage(pagePath ?? "")}>{children}</CodeBlock>,
+    }),
+    [pagePath],
   );
+  // A reader who arrives at a place in the page needs that place drawn. Only
+  // for the page the address names: the old page stays on screen while the
+  // next one is read, and it must not draw its whole length for an address
+  // that is not its own.
+  const whole = page?.path === path && Boolean(location.hash || (location.state as { find?: string } | null)?.find);
+  const body = page?.tree && <Body key={page.path} tree={page.tree} components={components} whole={whole} />;
 
   return (
     <div

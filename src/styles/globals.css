@@ -1229,6 +1229,16 @@ pre code.hljs {
   margin-top: 0.2em !important;
 }
 
+/* A list of two thousand rows (an index page) costs a quarter of a second
+   every time the document lays out again, and the press that leaves the page
+   pays it before the next page draws. A row out of view keeps the height it
+   last measured and skips the work. 56px is the median row on those pages. */
+.prose ul:has(> li:nth-child(100)) > li,
+.prose ol:has(> li:nth-child(100)) > li {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 56px;
+}
+
 /* Line-break spacing in table cells — give second+ lines a small top margin */
 .not-prose table td br,
 .not-prose table th br {
