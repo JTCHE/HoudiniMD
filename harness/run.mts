@@ -5,7 +5,7 @@
  *   node harness/run.mts                  # everything, quiet and under load
  *   node harness/run.mts --no-load        # quiet only, for a quick check
  *   node harness/run.mts --no-build       # reuse dist/ and the built probe
- *   node harness/run.mts --app            # also watch the real app sit idle
+ *   node harness/run.mts --app            # also drive the shipped app, watch its memory
  *   node harness/run.mts --write-budgets  # take this run as the new budgets
  *   node harness/run.mts --machine slow   # judge against the slow laptop's set
  *
@@ -14,7 +14,7 @@
  *   src-tauri/src/bin/probe   the back end: indexing, search, pages, images
  *   harness/ui.mts            the front end, in a real browser
  *   harness/load.mts          a Houdini cook, so none of it is measured quiet
- *   harness/app.mts           the shipped binary, doing nothing, watched
+ *   harness/app.mts           the shipped binary, driven and watched
  *
  * `harness/budgets.json` holds what each number was when it was last measured
  * honestly. A budget is not a target and never a wish: when a real change
@@ -27,7 +27,7 @@ import { cpus, platform, totalmem } from "node:os";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { measureUi, type UiMetric } from "./ui.mts";
 import { startLoad } from "./load.mts";
-import { watchIdleApp } from "./app.mts";
+import { auditApp, auditMarkdown } from "./app.mts";
 
 const OUT = "harness/out";
 const BUDGETS = "harness/budgets.json";
@@ -315,34 +315,27 @@ async function main() {
   }
 
   if (has("--app")) {
-    const sample = await watchIdleApp();
-    if (sample) {
-      rows.push(
-        ...collect(
-          "idle app",
-          [
-            {
-              name: "cpu.idle",
-              unit: " cores",
-              value: Math.round(sample.idleCores * 10000) / 10000,
-              worst: Math.round(sample.idleCores * 10000) / 10000,
-              runs: 1,
-              note: "processor time while nothing happens",
-            },
-            {
-              name: "memory.idle",
-              unit: "MB",
-              value: Math.round(sample.memoryMb * 100) / 100,
-              worst: Math.round(sample.memoryMb * 100) / 100,
-              runs: 1,
-              note: "resident memory while nothing happens",
-            },
-          ],
-          budgets,
-        ),
-      );
-      notes.push(`The app process runs at priority **${sample.priority}**.`);
-    }
+    // The shipped binary, not the stub: `--no-build` above built only the
+    // front end and the probe.
+    if (!has("--no-build")) run("bun", ["run", "app:build"]);
+    const audit = await auditApp();
+    const mb = (n: number) => Math.round(n * 100) / 100;
+    const one = (name: string, value: number, unit: string, note: string): UiMetric => ({ name, unit, value, worst: value, runs: 1, note });
+    rows.push(
+      ...collect(
+        "app",
+        [
+          one("cpu.idle", Math.round(audit.idleCores * 10000) / 10000, " cores", "processor time, hidden to the tray"),
+          // Task Manager's number, at the end of each step of `harness/app.mts`.
+          ...audit.steps.map((step) => one(`memory.${step.name}`, mb(step.sample.app), "MB", `private working set: ${step.note}`)),
+          one("memory.peak", mb(Math.max(...audit.steps.map((step) => step.peak))), "MB", "highest private working set of the run"),
+          one("webview.fifty_pages", mb(audit.steps.find((step) => step.name === "fifty_pages")!.sample.webview), "MB", "webview processes, after 50 pages"),
+        ],
+        budgets,
+      ),
+    );
+    notes.push(`The app process runs at priority **${audit.steps[0].sample.priority}**.`);
+    notes.push(auditMarkdown(audit));
   }
 
   judge(rows);

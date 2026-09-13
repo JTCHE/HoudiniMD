@@ -295,11 +295,11 @@ fn main() {
 fn index_once(work: &Path, install: &install::Install) -> f64 {
     // Loudly. A database that survives this call is a database the pass then
     // returns from in a tenth of a millisecond, and the run reports a full
-    // index as free. That happened, and it was silent.
-    if work.exists() {
-        std::fs::remove_dir_all(work).expect("the probe's own database is in use by something else");
-    }
+    // index as free. That happened, and it was silent. Emptied the way
+    // `reset_index` empties it; the file stays.
     let mut db = db::open(work).expect("open");
+    db.execute_batch("DELETE FROM pages; DELETE FROM pages_fts; DELETE FROM builds;")
+        .expect("the probe's own database is in use by something else");
     let at = Instant::now();
     index::pass(&mut db, install, &|_| {}).expect("pass");
     at.elapsed().as_secs_f64() * 1000.0

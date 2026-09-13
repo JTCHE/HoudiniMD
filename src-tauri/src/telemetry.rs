@@ -13,7 +13,7 @@
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{LazyLock, Mutex};
 use std::time::Duration;
 
 use serde_json::{Value, json};
@@ -147,13 +147,19 @@ fn send(app: &AppHandle, kind: &str, fields: Value) {
     append(&data, &payload);
     let Some(endpoint) = endpoint() else { return };
     tauri::async_runtime::spawn(async move {
-        let _ = rustls::crypto::ring::default_provider().install_default();
-        let Ok(client) = reqwest::Client::builder().timeout(Duration::from_secs(5)).build() else { return };
+        let Some(client) = CLIENT.as_ref() else { return };
         if let Err(reason) = client.post(endpoint).json(&payload).send().await {
             eprintln!("telemetry not sent: {reason}");
         }
     });
 }
+
+/// One client for every event: each new client loads the system's root
+/// certificates again and keeps its own connection pool.
+static CLIENT: LazyLock<Option<reqwest::Client>> = LazyLock::new(|| {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+    reqwest::Client::builder().timeout(Duration::from_secs(5)).build().ok()
+});
 
 /// The event, or `None` when the reader has not said yes.
 fn payload(app: &AppHandle, kind: &str, fields: Value) -> Option<Value> {
@@ -183,13 +189,13 @@ fn payload(app: &AppHandle, kind: &str, fields: Value) -> Option<Value> {
     Some(event)
 }
 
-/// A development build writes the log and sends nothing, unless it is pointed
-/// at a local receiver with `HOUDINIMD_TELEMETRY_URL` (`wrangler dev`).
+/// `HOUDINIMD_TELEMETRY_URL` points any build at a local receiver: `wrangler
+/// dev`, or the sink `harness/app.mts` runs so a measured launch sends nothing
+/// out. Without it, a development build writes the log and sends nothing.
 fn endpoint() -> Option<String> {
-    if cfg!(debug_assertions) {
-        return std::env::var("HOUDINIMD_TELEMETRY_URL").ok();
-    }
-    Some(ENDPOINT.to_string())
+    std::env::var("HOUDINIMD_TELEMETRY_URL")
+        .ok()
+        .or_else(|| (!cfg!(debug_assertions)).then(|| ENDPOINT.to_string()))
 }
 
 fn append(data: &Path, payload: &Value) {

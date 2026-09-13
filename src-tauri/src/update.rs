@@ -78,7 +78,9 @@ pub fn start(app: &tauri::AppHandle) {
         }
         // Started by Houdini: the reader asked for F1, not for a window. The
         // tray icon opens it.
-        if !crate::tray::in_background() {
+        if crate::tray::in_background() {
+            crate::tray::rest(&app);
+        } else {
             crate::tray::show(&app);
         }
     });

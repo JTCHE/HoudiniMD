@@ -21,8 +21,10 @@
  */
 import { chromium, type Browser, type Page } from "playwright";
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
+import { resolve } from "node:path";
+import { recycle } from "./app.mts";
 
 const OUT = "harness/out/design";
 const WIDE = { width: 1280, height: 820 };
@@ -1785,7 +1787,7 @@ async function main() {
   }
   const base = `http://localhost:${port}/`;
 
-  rmSync(OUT, { recursive: true, force: true });
+  if (existsSync(OUT)) recycle(resolve(OUT));
   mkdirSync(OUT, { recursive: true });
 
   let browser: Browser | null = null;

@@ -178,14 +178,6 @@
         "load.memory.heap_50_pages": {
           "value": 50.21,
           "worst": 66.94
-        },
-        "idle app.cpu.idle": {
-          "value": 0.11,
-          "worst": 0.14
-        },
-        "idle app.memory.idle": {
-          "value": 39.08,
-          "worst": 52.1
         }
       }
     },
