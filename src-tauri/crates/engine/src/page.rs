@@ -58,7 +58,7 @@ pub fn read(install: &install::Install, path: &str) -> Result<PageView, PageErro
     })?;
     let mut parsed = wiki::parse(&source);
     wiki::include::resolve(&mut parsed.blocks, &path, &|target| {
-        help::page_layered(&roots, target).ok()
+        help::page_layered(&roots, target).ok().map(|source| std::sync::Arc::new(wiki::parse(&source).blocks))
     });
     listing::resolve(&roots, &path, &mut parsed.blocks);
     family::append(&install.help, &parsed.props, &mut parsed.blocks);

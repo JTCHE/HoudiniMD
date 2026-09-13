@@ -19,6 +19,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use houdinimd_lib::{all_titles, db, find, help, index, install, library, read_meta, read_page};
 use rusqlite::Connection;
@@ -37,6 +38,8 @@ window.__TAURI_INTERNALS__ = {
     // There is no window here and no event loop behind it: the title bar
     // draws, and its buttons do nothing.
     if (command.startsWith("plugin:window|")) return command.endsWith("|is_maximized") ? false : null;
+    // `listen` hands over the name of its callback; the poll below calls it.
+    if (command === "plugin:event|listen") (window.__listeners ??= []).push(args);
     if (command.startsWith("plugin:event|")) return 0;
     const at = performance.now();
     const body = new URLSearchParams();
@@ -62,13 +65,58 @@ window.__TAURI_INTERNALS__ = {
 // component unmounts. Without it every unlisten throws, and the console fills
 // with a failure the real runtime never has.
 window.__TAURI_EVENT_PLUGIN_INTERNALS__ = { unregisterListener() {} };
+// The app pushes an `index` event for each report of the pass. Here the
+// report is polled, and a change is pushed the same way, so the page sees a
+// pass in progress as the window sees it.
+{
+  let last = null;
+  setInterval(async () => {
+    const status = await fetch("/api/index_status").then((r) => r.text()).catch(() => null);
+    if (status === null || status === last) return;
+    const first = last === null;
+    last = status;
+    if (first) return;
+    for (const { event, handler } of window.__listeners ?? []) {
+      if (event === "index") window[handler]?.({ event, id: 0, payload: JSON.parse(status) });
+    }
+  }, 250);
+}
 </script>
 "#;
 
 struct Serve {
     db: Mutex<Connection>,
-    install: install::Install,
+    /// The picker switches it, as the app does.
+    install: Mutex<install::Install>,
+    data: PathBuf,
     dist: PathBuf,
+}
+
+/// Which pass is live, and the lock one writer holds, as in the app.
+static PASS: AtomicU64 = AtomicU64::new(0);
+static WRITING: Mutex<()> = Mutex::new(());
+
+/// The pass on a thread of its own, as the app runs it, so the browser can
+/// watch it fill the index. `reset` empties the index first. A new pass stops
+/// the one before it.
+fn start_index(data: &Path, install: &install::Install, reset: bool) {
+    let (data, install) = (data.to_path_buf(), install.clone());
+    let mine = PASS.fetch_add(1, Ordering::SeqCst) + 1;
+    std::thread::spawn(move || {
+        let live = || PASS.load(Ordering::SeqCst) == mine;
+        let _writing = WRITING.lock().unwrap_or_else(|e| e.into_inner());
+        if !live() {
+            return;
+        }
+        let done = match reset {
+            true => engine::db::open(&data).and_then(|db| engine::db::reset(&db)),
+            false => Ok(()),
+        }
+        .and_then(|()| index::run(&data, &install, &|_| {}, &live));
+        if let Err(reason) = done {
+            eprintln!("{reason}");
+        }
+    });
 }
 
 /// Runs until killed. `dist` is the built front-end; build it first.
@@ -77,17 +125,16 @@ pub fn run(port: u16, data: &Path, dist: PathBuf) -> Result<(), String> {
         .into_iter()
         .next()
         .ok_or("no Houdini install on this machine")?;
-    let mut connection = db::open(data)?;
-    // The browser cannot search a build that was never indexed, and this
-    // server keeps its own copy of the index. Filling it takes a couple of
-    // seconds the first time and nothing after that.
+    let connection = db::open(data)?;
+    // This server keeps its own copy of the index. A build not yet in it is
+    // filled behind the page, the way the app fills it.
     if !index::status(&connection, &install.version).done {
-        eprintln!("indexing {} for the harness...", install.version);
-        index::pass(&mut connection, &install, &|_| {})?;
+        start_index(data, &install, false);
     }
     let state = Serve {
         db: Mutex::new(connection),
-        install,
+        install: Mutex::new(install),
+        data: data.to_path_buf(),
         dist,
     };
     let listener = TcpListener::bind(("127.0.0.1", port)).map_err(|e| e.to_string())?;
@@ -151,24 +198,25 @@ fn answer(state: &Serve, mut stream: TcpStream) -> Result<(), String> {
 }
 
 fn route(state: &Serve, path: &str, query: &str) -> (u16, &'static str, Vec<u8>) {
+    let install = state.install.lock().unwrap().clone();
     if let Some(command) = path.strip_prefix("/api/") {
         return command_response(state, command, query);
     }
     if let Some(name) = path.strip_prefix("/asset/") {
-        return match help::asset_layered(&state.install.help_roots(), name) {
+        return match help::asset_layered(&install.help_roots(), name) {
             Ok(bytes) => (200, media_type(name), bytes),
             Err(reason) => (404, "text/plain", reason.into_bytes()),
         };
     }
     if let Some(name) = path.strip_prefix("/icon/") {
-        return match help::icon_layered(&state.install.root, &state.install.packages, name) {
+        return match help::icon_layered(&install.root, &install.packages, name) {
             Ok(bytes) => (200, "image/svg+xml", bytes),
             Err(reason) => (404, "text/plain", reason.into_bytes()),
         };
     }
     // The page as Markdown, the same as the app's own server answers it.
     if let Some(page) = path.strip_suffix(".md") {
-        return match read_page(&state.install, page.trim_start_matches('/')) {
+        return match read_page(&install, page.trim_start_matches('/')) {
             Ok(view) => (200, "text/markdown; charset=utf-8", view.markdown.into_bytes()),
             Err(reason) => (404, "text/plain", reason.message.into_bytes()),
         };
@@ -178,11 +226,9 @@ fn route(state: &Serve, path: &str, query: &str) -> (u16, &'static str, Vec<u8>)
 
 fn command_response(state: &Serve, command: &str, query: &str) -> (u16, &'static str, Vec<u8>) {
     let json = "application/json";
+    let install = state.install.lock().unwrap().clone();
     let value = match command {
-        // The event plugin has nothing behind it here. The front-end listens
-        // for `index` progress; the harness always drives a build that is
-        // already indexed, so there is no progress to report and a listener
-        // that never fires is the truthful answer.
+        // The event plugin is answered in the stub; see `STUB`.
         _ if command.starts_with("plugin:") => Ok("0".to_string()),
         "installs" => serde_json::to_string(&install::find(&[])).map_err(|e| e.to_string()),
         "user_name" => serde_json::to_string(&whoami()).map_err(|e| e.to_string()),
@@ -191,12 +237,12 @@ fn command_response(state: &Serve, command: &str, query: &str) -> (u16, &'static
         "clean_start" => Ok("false".to_string()),
         "index_status" => {
             let db = state.db.lock().map_err(|e| e.to_string()).unwrap();
-            serde_json::to_string(&index::status(&db, &state.install.version))
+            serde_json::to_string(&index::status(&db, &install.version))
                 .map_err(|e| e.to_string())
         }
         "titles" => {
             let db = state.db.lock().unwrap();
-            all_titles(&db, &state.install.version)
+            all_titles(&db, &install.version)
                 .and_then(|hits| serde_json::to_string(&hits).map_err(|e| e.to_string()))
         }
         "search" => {
@@ -204,7 +250,7 @@ fn command_response(state: &Serve, command: &str, query: &str) -> (u16, &'static
             let limit = param(query, "limit").and_then(|v| v.parse().ok()).unwrap_or(6);
             find(
                 &db,
-                &state.install.version,
+                &install.version,
                 &param(query, "query").unwrap_or_default(),
                 limit,
             )
@@ -212,10 +258,10 @@ fn command_response(state: &Serve, command: &str, query: &str) -> (u16, &'static
         }
         "page" => {
             let path = param(query, "path").unwrap_or_default();
-            match read_page(&state.install, &path) {
+            match read_page(&install, &path) {
                 Ok(mut page) => {
                     let db = state.db.lock().unwrap();
-                    page.node_versions = engine::versions::of(&db, &state.install.version, &path);
+                    page.node_versions = engine::versions::of(&db, &install.version, &path);
                     serde_json::to_string(&page).map_err(|e| e.to_string())
                 }
                 Err(error) => {
@@ -233,26 +279,50 @@ fn command_response(state: &Serve, command: &str, query: &str) -> (u16, &'static
                 .filter(|p| !p.is_empty())
                 .map(String::from)
                 .collect();
-            read_meta(&state.db.lock().unwrap(), &state.install, &asked)
+            read_meta(&state.db.lock().unwrap(), &install, &asked)
                 .and_then(|meta| serde_json::to_string(&meta).map_err(|e| e.to_string()))
         }
         "link_preview" => tauri::async_runtime::block_on(houdinimd_lib::preview::fetch(
             &param(query, "url").unwrap_or_default(),
         ))
         .and_then(|preview| serde_json::to_string(&preview).map_err(|e| e.to_string())),
-        // The build the app reads. The harness stands up one install, so the
-        // picker has one row and it is always the current one.
-        "current_install" => serde_json::to_string(&state.install).map_err(|e| e.to_string()),
-        "available_installs" => serde_json::to_string(&serde_json::json!([{
-            "version": state.install.version,
-            "pages": index::status(&state.db.lock().unwrap(), &state.install.version).pages,
-            "done": true,
-            "started": true,
-            "current": true,
-        }]))
-        .map_err(|e| e.to_string()),
-        // Nothing to switch to, so this is the build it already reads.
-        "select_install" => serde_json::to_string(&state.install).map_err(|e| e.to_string()),
+        // The build the app reads. The harness stands up one install and
+        // lists the others, so the picker draws a build it could index.
+        "current_install" => serde_json::to_string(&install).map_err(|e| e.to_string()),
+        "available_installs" => {
+            let db = state.db.lock().unwrap();
+            let rows: Vec<_> = install::find(&[])
+                .into_iter()
+                .map(|other| {
+                    let status = index::status(&db, &other.version);
+                    serde_json::json!({
+                        "version": other.version,
+                        "pages": status.pages,
+                        "done": status.done,
+                        "current": other.version == install.version,
+                    })
+                })
+                .collect();
+            serde_json::to_string(&rows).map_err(|e| e.to_string())
+        }
+        "reset_index" => {
+            start_index(&state.data, &install, true);
+            Ok("null".to_string())
+        }
+        "select_install" => {
+            let version = param(query, "version").unwrap_or_default();
+            match install::find(&[]).into_iter().find(|i| i.version == version) {
+                Some(chosen) => {
+                    let status = index::status(&state.db.lock().unwrap(), &chosen.version);
+                    if !status.done {
+                        start_index(&state.data, &chosen, false);
+                    }
+                    *state.install.lock().unwrap() = chosen;
+                    serde_json::to_string(&status).map_err(|e| e.to_string())
+                }
+                None => Err(format!("Houdini {version} is not on this machine")),
+            }
+        }
         // No localhost server stands behind the harness, so nothing is drawn
         // for it. Zero is what the front-end reads as "no server".
         "server_port" => Ok("0".to_string()),

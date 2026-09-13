@@ -6,8 +6,8 @@
  * session by `lib/search.ts`, so asking for the page count costs nothing after
  * the first ask.
  */
-import { useEffect, useState } from "react";
-import { invoke, listen } from "./backend";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import { invoke, inTauri, listen } from "./backend";
 import { titles, forgetTitles } from "@/lib/search";
 
 export interface Install {
@@ -59,70 +59,147 @@ function firstName(raw: string): string {
   return word.charAt(0).toUpperCase() + rest;
 }
 
-/** The last answer. The sidebar is unmounted while it is hidden, so every
-    toggle mounted the card again and drew "Reading the install…" for a frame
-    before the same build came back. */
-let lastBuild: BuildInfo = { version: null, pageCount: null };
+/** What the index pass reports. */
+export interface IndexStatus {
+  build: string;
+  /** Pages written so far. */
+  pages: number;
+  /** Pages the install holds. */
+  total: number;
+  done: boolean;
+}
+
+/**
+ * The build and the index pass, as every view sees them: the version, the
+ * pages readable now, the pass's last report, and a number that goes up each
+ * time the title list is read again. The card, the landing line and the tree
+ * all read this one value, so they never show two moments of the same pass.
+ */
+let index: { build: BuildInfo; status: IndexStatus | null; titles: number } = {
+  build: { version: null, pageCount: null },
+  status: null,
+  titles: 0,
+};
+const indexListeners = new Set<() => void>();
+
+function setIndex(next: Partial<typeof index>) {
+  index = { ...index, ...next };
+  for (const notify of indexListeners) notify();
+}
+
+/** At most this often, the title list is read again while the pass writes.
+    Each read is the whole list and a new tree, so a read per report is work
+    the reader cannot see. */
+const REREAD_MS = 500;
+let lastRead = 0;
+let pending: ReturnType<typeof setTimeout> | null = null;
+
+/** The read in flight, or 0. A report that arrives during it is held until the
+    titles land, so the count and the share never come from two moments: a
+    switch drew the old count beside the new build's share, and the last
+    report dropped the share before the last count arrived. */
+let reading = 0;
+let reads = 0;
+let held: IndexStatus | null = null;
+
+/** `status` and `version`, when given, are shown with the titles this read
+    brings. */
+function rereadTitles(status?: Promise<IndexStatus | null>, version?: Promise<string>) {
+  if (pending) clearTimeout(pending);
+  pending = null;
+  lastRead = Date.now();
+  forgetTitles();
+  if (status) held = null;
+  const mine = (reading = ++reads);
+  void Promise.all([titles(), status, version]).then(([all, read, installed]) => {
+    if (mine !== reading) return;
+    reading = 0;
+    const next = held ?? read ?? null;
+    held = null;
+    setIndex({
+      titles: index.titles + 1,
+      build: { version: installed ?? index.build.version, pageCount: all.length },
+      ...(next && { status: next }),
+    });
+  });
+}
+
+function showStatus(status: IndexStatus) {
+  if (reading) held = status;
+  else setIndex({ status });
+}
+
+/** One report from the pass. Rust sends `done` only after a pass that wrote. */
+function report(status: IndexStatus) {
+  if (status.done) return rereadTitles(Promise.resolve(status));
+  showStatus(status);
+  const wait = REREAD_MS - (Date.now() - lastRead);
+  if (wait <= 0) rereadTitles();
+  else pending ??= setTimeout(rereadTitles, wait);
+}
+
+function readStatus(): Promise<IndexStatus | null> {
+  const status = invoke<IndexStatus>("index_status").catch(() => null);
+  // Houdini's help pane gets no events at all, so it asks again each second
+  // while a pass runs.
+  void status.then((read) => {
+    if (!inTauri && read && !read.done) setTimeout(() => void readStatus().then((next) => next && report(next)), 1000);
+  });
+  return status;
+}
+
+/** The install the reader CHOSE, not the newest one on the machine. */
+function readVersion(): Promise<string> {
+  return invoke<Install | null>("current_install")
+    .catch(() => null)
+    .then((install) => install?.version ?? "");
+}
+
+let listening = false;
+
+function subscribeIndex(notify: () => void) {
+  if (!listening) {
+    listening = true;
+    if (index.build.version === null) void primeBuild();
+    // The state on mount, which the events do not repeat.
+    void readStatus().then((status) => status && showStatus(status));
+    void listen<IndexStatus>("index", (event) => report(event.payload));
+    onBuildChanged(() => rereadTitles(readStatus(), readVersion()));
+  }
+  indexListeners.add(notify);
+  return () => indexListeners.delete(notify);
+}
+
+export function useIndex() {
+  return useSyncExternalStore(subscribeIndex, () => index);
+}
+
+export function useBuild(): BuildInfo {
+  return useIndex().build;
+}
+
+/** "4,120 pages · 35% indexed" while the pass runs, "12,377 pages" once it is
+    done. The count is the pages already readable, so it climbs to the final
+    number and never jumps. */
+export function pagesLabel(count: number, status: IndexStatus | null): string {
+  const pages = `${count.toLocaleString()} pages`;
+  const share = indexedShare(status);
+  return share ? `${pages} · ${share}` : pages;
+}
+
+/** "35% indexed" while a pass runs, `null` once it is done. Never 100: the
+    last pages are ones the pass reads and does not list. */
+export function indexedShare(status: IndexStatus | null): string | null {
+  if (!status || status.done) return null;
+  const share = status.total > 0 ? Math.min(99, Math.floor((status.pages / status.total) * 100)) : 0;
+  return `${share}% indexed`;
+}
 
 /** Reads the build before the window's first draw, so the card never says
     "reading" or "no install" on the way in. */
 export async function primeBuild(): Promise<void> {
-  const [install, all] = await Promise.all([
-    invoke<Install | null>("current_install").catch(() => null),
-    titles(),
-  ]);
-  lastBuild = { version: install?.version ?? "", pageCount: all.length };
-}
-
-export function useBuild(): BuildInfo {
-  const [build, setBuild] = useState<BuildInfo>(lastBuild);
-  useEffect(() => {
-    lastBuild = build;
-  }, [build]);
-
-  useEffect(() => {
-    let live = true;
-    // The install the reader CHOSE, not the newest one on the machine. The
-    // page count below follows the chosen build, so reading the version from
-    // anywhere else makes the two lines of the card disagree.
-    const readVersion = () => {
-      void invoke<Install | null>("current_install")
-        .catch(() => null)
-        .then((install) => {
-          if (live) setBuild((current) => ({ ...current, version: install?.version ?? "" }));
-        });
-    };
-    const readCount = () => {
-      void titles().then((all) => {
-        if (live) setBuild((current) => ({ ...current, pageCount: all.length }));
-      });
-    };
-    readVersion();
-    readCount();
-    // On a fresh index the count is read before the background pass has
-    // written every page (Nodes lands last — it is the biggest zip by far).
-    // Read it again once the pass is done, so the count does not stay stuck
-    // at that first, partial read for the rest of the session.
-    const stop = listen<{ done: boolean }>("index", (event) => {
-      if (!event.payload.done) return;
-      forgetTitles();
-      readCount();
-    });
-    // The version picker switches the build this process reads; every mount
-    // of this hook reads it the same way a fresh page load would.
-    const offBuildChange = onBuildChanged(() => {
-      forgetTitles();
-      readVersion();
-      readCount();
-    });
-    return () => {
-      live = false;
-      void stop.then((off) => off());
-      offBuildChange();
-    };
-  }, []);
-
-  return build;
+  const [version, all] = await Promise.all([readVersion(), titles()]);
+  setIndex({ build: { version, pageCount: all.length } });
 }
 
 /**

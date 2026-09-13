@@ -1,17 +1,18 @@
 //! Fills `index.db` from the zips of a Houdini install.
 //!
-//! Three rules from the spec, in order of importance:
+//! Two rules from the spec, in order of importance:
 //! 1. The page the reader opens is parsed on demand, by `page()`. This pass
 //!    never stands between the reader and the first page.
-//! 2. Everything else is filled in behind them.
-//! 3. Houdini wins the core. The thread runs in background mode and the parse
-//!    pool leaves two cores alone.
+//! 2. Everything else is filled in behind them, as fast as the machine can.
+//!    The pass runs once per build and the reader watches it, so it takes
+//!    every core for a few seconds rather than a few cores for a minute.
 //!
 //! See spec: Local — SQLite FTS5 Index.
 
 use std::collections::HashMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 
 use rayon::prelude::*;
 use rusqlite::Connection;
@@ -26,30 +27,19 @@ pub struct Status {
     pub build: String,
     /// Pages written so far.
     pub pages: u32,
-    /// Pages the install holds. Equal to `pages` once the pass is done.
+    /// Pages the install holds, include targets among them.
     pub total: u32,
     pub done: bool,
-    /// Whether a pass has ever begun on this build. A build nobody has opened
-    /// has no row at all, and `pages: 0, done: false` alone cannot tell that
-    /// apart from a pass that started a moment ago.
-    pub started: bool,
 }
 
 /// Reads the state of one build out of an open connection.
 pub fn status(db: &Connection, build: &str) -> Status {
-    let row = db
-        .query_row("SELECT pages, done FROM builds WHERE build = ?1", [build], |row| {
-            Ok((row.get::<_, u32>(0)?, row.get::<_, i64>(1)? == 1))
+    let (pages, total, done) = db
+        .query_row("SELECT pages, total, done FROM builds WHERE build = ?1", [build], |row| {
+            Ok((row.get::<_, u32>(0)?, row.get::<_, u32>(1)?, row.get::<_, i64>(2)? == 1))
         })
-        .ok();
-    let (pages, done) = row.unwrap_or((0, false));
-    Status {
-        build: build.to_string(),
-        pages,
-        total: pages,
-        done,
-        started: row.is_some(),
-    }
+        .unwrap_or((0, 0, false));
+    Status { build: build.to_string(), pages, total, done }
 }
 
 /// The whole pass on a connection of its own, for a caller that has none: it
@@ -59,16 +49,29 @@ pub fn run(
     data: &Path,
     install: &crate::install::Install,
     report: &dyn Fn(Status),
+    live: &(dyn Fn() -> bool + Sync),
 ) -> Result<(), String> {
     let mut db = db::open(data)?;
-    pass(&mut db, install, report)
+    // This connection writes and is then dropped. A 64 MB page cache and no
+    // sync took the write from 2.9 s to 2.0 s; a crash mid-pass loses nothing,
+    // because an unfinished build is thrown away and read again.
+    db.pragma_update(None, "cache_size", -65536).map_err(|e| e.to_string())?;
+    db.pragma_update(None, "synchronous", "OFF").map_err(|e| e.to_string())?;
+    pass(&mut db, install, report, live)
 }
 
+/// Rows per write. Each write is a report, so this is also how often the
+/// count climbs while the biggest section goes in.
+const CHUNK: usize = 1000;
+
 /// The pass itself, with nowhere to report to but the closure it is given.
+/// `live` turning false stops it between two writes: another pass wants the
+/// database. A stopped build is left unclaimed, so it reads as never opened.
 pub fn pass(
     db: &mut Connection,
     install: &crate::install::Install,
     report: &dyn Fn(Status),
+    live: &(dyn Fn() -> bool + Sync),
 ) -> Result<(), String> {
     let build = install.version.clone();
 
@@ -80,48 +83,78 @@ pub fn pass(
     // A half-filled build is thrown away rather than resumed. Resuming would
     // need a per-zip cursor, and a whole pass takes seconds.
     clear(db, &build)?;
-    // Claim the build now. `clear` removed its row, and until the pass ends
-    // there is nothing to tell "indexing" from "nobody has opened this build".
-    db.execute(
-        "INSERT INTO builds (build, pages, done) VALUES (?1, 0, 0)",
-        [&build],
-    )
-    .map_err(|e| e.to_string())?;
 
     // A package's own help sits at `<package>/help`, shaped exactly like
     // `install.help` — one zip or loose folder per section — so it is indexed
     // by running the same per-section read against each root in turn and
     // pooling the pages found. See `packages.rs`.
     let roots = install.help_roots();
-    let sections = sections(&roots);
+    let (mut sections, menu) = rayon::join(|| sections(&roots), || crate::place::Menu::read(&roots));
+    // The biggest first, so the long parse of Nodes starts at once and ends
+    // while the writer is still busy with the small ones.
+    sections.sort_by(|a, b| b.1.cmp(&a.1));
     let total: u32 = sections.iter().map(|(_, count)| count).sum();
+    // Claim the build now. `clear` removed its row, and until the pass ends
+    // there is nothing to tell "indexing" from "nobody has opened this build".
+    db.execute("INSERT INTO builds (build, pages, total, done) VALUES (?1, 0, ?2, 0)", rusqlite::params![&build, total])
+        .map_err(|e| e.to_string())?;
     let mut pages = 0u32;
     let report = |pages: u32, done: bool| {
-        report(Status { build: build.clone(), pages, total, done, started: true });
+        report(Status { build: build.clone(), pages, total, done });
     };
     report(0, false);
 
-    let load = |path: &str| crate::help::page_layered(&roots, path).ok();
-    let pool = pool()?;
-    let menu = crate::place::Menu::read(&roots);
-    for (section, _) in &sections {
-        let sources: Vec<(String, String)> =
-            roots.iter().flat_map(|root| read_section(root, section)).collect();
-        let map = crate::place::Map::new(&roots, &sources);
-        let mut parsed: Vec<Row> =
-            pool.install(|| sources.par_iter().filter_map(|page| row(page, &load, &map, &menu)).collect());
-        let placed = crate::versions::place(parsed.iter_mut().filter_map(|row| row.mark.take()).collect());
-        crate::place::arrange(&mut parsed, |row| &row.title, |row| &mut row.place);
-        pages += write(db, &build, &parsed, &placed, pages)? as u32;
-        report(pages, false);
+    // Each included page is read and parsed once for the whole pass. Read and
+    // parsed per include, the same few shared pages cost 20 s of CPU over
+    // 13,000 reads, one at a time behind the archive lock.
+    let included: Mutex<HashMap<String, Option<Arc<Vec<wiki::Block>>>>> = Mutex::default();
+    let load = |path: &str| {
+        if let Some(found) = included.lock().ok()?.get(path) {
+            return found.clone();
+        }
+        let found = crate::help::page_layered(&roots, path).ok().map(|source| Arc::new(wiki::parse(&source).blocks));
+        included.lock().ok()?.insert(path.to_string(), found.clone());
+        found
+    };
+
+    // Every core parses; this thread writes each section as it arrives. One
+    // SQLite connection writes one row at a time, so the write is the longer
+    // half and the parse hides behind it.
+    let (send, arrive) = std::sync::mpsc::sync_channel(4);
+    std::thread::scope(|scope| -> Result<(), String> {
+        scope.spawn(|| {
+            sections.par_iter().for_each_with(send, |send, (section, _)| {
+                if !live() {
+                    return;
+                }
+                let sources: Vec<(String, String)> =
+                    roots.iter().flat_map(|root| read_section(root, section)).collect();
+                let map = crate::place::Map::new(&roots, &sources);
+                let mut parsed: Vec<Row> =
+                    sources.par_iter().filter_map(|page| row(page, &load, &map, &menu)).collect();
+                let placed = crate::versions::place(parsed.iter_mut().filter_map(|row| row.mark.take()).collect());
+                crate::place::arrange(&mut parsed, |row| &row.title, |row| &mut row.place);
+                let _ = send.send((parsed, placed));
+            });
+        });
+        for (parsed, placed) in arrive {
+            for rows in parsed.chunks(CHUNK) {
+                if !live() {
+                    return Ok(());
+                }
+                pages += write(db, &build, rows, &placed, pages)? as u32;
+                report(pages, false);
+            }
+        }
+        Ok(())
+    })?;
+    if !live() {
+        db.execute("DELETE FROM builds WHERE build = ?1", [&build]).map_err(|e| e.to_string())?;
+        return Ok(());
     }
 
-    db.execute(
-        "INSERT INTO builds (build, pages, done) VALUES (?1, ?2, 1)
-         ON CONFLICT(build) DO UPDATE SET pages = ?2, done = 1",
-        rusqlite::params![&build, pages],
-    )
-    .map_err(|e| e.to_string())?;
+    db.execute("UPDATE builds SET pages = ?2, done = 1 WHERE build = ?1", rusqlite::params![&build, pages])
+        .map_err(|e| e.to_string())?;
     report(pages, true);
     Ok(())
 }
@@ -244,6 +277,8 @@ fn write(
             }
         }
     }
+    tx.execute("UPDATE builds SET pages = ?2 WHERE build = ?1", rusqlite::params![build, first_seq + rows.len() as u32])
+        .map_err(|e| e.to_string())?;
     tx.commit().map_err(|e| e.to_string())?;
     Ok(rows.len())
 }
@@ -272,7 +307,7 @@ pub(crate) fn sections(roots: &[PathBuf]) -> Vec<(String, u32)> {
     sections.sort();
     sections.dedup();
     sections
-        .into_iter()
+        .into_par_iter()
         .map(|section| {
             let pages = roots.iter().map(|help| count(help, &section)).sum();
             (section, pages)
@@ -374,19 +409,9 @@ fn open_zip(zip: &Path) -> Result<zip::ZipArchive<std::io::BufReader<std::fs::Fi
     zip::ZipArchive::new(std::io::BufReader::new(file)).map_err(|e| e.to_string())
 }
 
-/// Two cores stay free for Houdini. On a four-core machine that is half of
-/// them, which is the point: the artist is not waiting on this pass.
-fn pool() -> Result<rayon::ThreadPool, String> {
-    let cores = std::thread::available_parallelism().map_or(1, |n| n.get());
-    rayon::ThreadPoolBuilder::new()
-        .num_threads(cores.saturating_sub(2).max(1))
-        .build()
-        .map_err(|e| e.to_string())
-}
-
 /// Background mode drops the disk priority of the thread as well as its CPU
-/// priority, which matters more here: the pass reads zips off the same disk
-/// Houdini reads.
+/// priority. The localhost server runs in it. The index pass does not: in
+/// background mode its write took four times as long.
 #[cfg(windows)]
 pub fn background_priority() {
     use windows_sys::Win32::System::Threading::{

@@ -14,7 +14,7 @@ import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { Icons } from "@/lib/ui/icons";
 import { invoke, inTauri } from "@/lib/backend";
-import { announceBuildChanged, pickInstall } from "@/lib/install";
+import { announceBuildChanged, indexedShare, pagesLabel, pickInstall, useIndex, type IndexStatus } from "@/lib/install";
 import { showToast } from "@/components/ui/toast-notification";
 
 interface VersionSelectorProps {
@@ -29,15 +29,9 @@ interface BuildRow {
   version: string;
   pages: number;
   done: boolean;
-  /** False for a build nobody has opened. Its index is empty because no pass
-      has run, not because a pass is running. */
-  started: boolean;
   current: boolean;
 }
 
-/** What the right of a row says about a build. Three states, not two: a build
-    with no pages has either never been opened or is being read right now, and
-    saying "indexing…" for the first is a lie the reader can see through. */
 /** Every row of the popover, so the folder row cannot drift from the builds. */
 const ROW =
   "flex w-full cursor-interactive items-center justify-between gap-sm rounded-md px-sm py-[7px] text-left text-[13px] " +
@@ -47,11 +41,13 @@ const ROW =
 /** Stands for the folder row in `switching`, which otherwise holds a build. */
 const PICK = "\0pick";
 
-function indexState(row: BuildRow, switching: boolean): string {
+/** What the right of a row says about a build. Only the current build can be
+    mid-pass: a switch stops the pass of the build it leaves. */
+function indexState(row: BuildRow, switching: boolean, status: IndexStatus | null): string {
   if (switching) return "Switching…";
   if (row.done) return `${row.pages.toLocaleString()} pages`;
-  if (!row.started) return "Not indexed yet";
-  return `${row.pages.toLocaleString()} pages, indexing…`;
+  if (row.current) return indexedShare(status) ?? "Indexing…";
+  return "Click to index";
 }
 
 export function VersionSelector({ version, pageCount, className }: VersionSelectorProps) {
@@ -70,6 +66,7 @@ function Card({
   onClick,
   expanded,
 }: VersionSelectorProps & { onClick?: () => void; expanded?: boolean }) {
+  const { status } = useIndex();
   return (
     <button
       type="button"
@@ -92,7 +89,7 @@ function Card({
           {version ? `Houdini ${version}` : version === null ? "Houdini" : "No Houdini install found"}
         </span>
         <span className="truncate text-caption text-neutral-500">
-          {pageCount === null ? "Reading the install…" : `${pageCount.toLocaleString()} pages`}
+          {pageCount === null ? "Reading the install…" : pagesLabel(pageCount, status)}
         </span>
       </span>
       <Icons.versionPicker className="size-ms shrink-0 text-neutral-500" />
@@ -106,6 +103,7 @@ function Picker({ version, pageCount, className }: VersionSelectorProps) {
   const [rows, setRows] = useState<BuildRow[] | null>(null);
   const [switching, setSwitching] = useState<string | null>(null);
   const wrapper = useRef<HTMLDivElement>(null);
+  const { status } = useIndex();
 
   // A rescan is the picker's own cost to pay, not every page's — see
   // spec: Local — Multiple Houdini Versions.
@@ -196,7 +194,7 @@ function Picker({ version, pageCount, className }: VersionSelectorProps) {
               >
                 <span className="truncate font-medium tracking-[-0.012em]">Houdini {row.version}</span>
                 <span className="shrink-0 text-caption text-neutral-500">
-                  {indexState(row, switching === row.version)}
+                  {indexState(row, switching === row.version, status)}
                 </span>
               </button>
             ))}
