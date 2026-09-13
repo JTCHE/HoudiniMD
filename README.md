@@ -7,6 +7,7 @@
 <br>
 <div align="center">
   <a target="_blank" href="https://houdinimd.com"><img src="public/badges/website.svg" height="42" alt="Open HoudiniMD"></a>
+  <a target="_blank" href="https://github.com/JTCHE/HoudiniMD/releases/latest"><img src="public/badges/download.svg" height="42" alt="Download for Windows"></a>
   <a target="_blank" href="https://github.com/JTCHE/houdini-mcp"><img src="public/badges/mcp.svg" height="42" alt="Houdini MCP"></a>
   <a target="_blank" href="https://github.com/sponsors/JTCHE?frequency=one-time"><img src="public/badges/sponsor.svg" height="42" alt="Sponsor on GitHub"></a>
 </div>
@@ -27,17 +28,22 @@ It follows the [llms.txt](https://llmstxt.org) standard. AI agents are automatic
 - **Houdini Integration** — After setting it as the default source, press <kbd>F1</kbd> to bring up HoudiniMD directly inside Houdini
 - **AI Native & MCP Integration** — Paired with my [Houdini MCP](https://github.com/JTCHE/houdini-mcp) fork, agents can query pure markdown directly from HoudiniMD to inform their decisions and actions inside Houdini. Accurate info, at the right time, without context bloat.
 
-## Desktop app
-
-[Download for Windows](https://github.com/JTCHE/HoudiniMD/releases/latest). Reads the docs from the Houdini build on your machine, so it works with no network. <kbd>F1</kbd> in Houdini opens the page in it.
-
+## Install
 <img src="public/help-server-benchmark.png" alt="A horizontal bar chart comparing the time from F1 to a readable page in Houdini's help pane, between Houdini's own help server and HoudiniMD, with the latter showing a median of 13.1x faster">
+HoudiniMD is also now available as a Desktop app, living locally, directly on your computer.
 
-Windows shows "Windows protected your PC" because the installer is not signed yet. Select **More info**, then **Run anyway**. A signature needs a legal entity, and it is on the list.
+[Download for Windows](https://github.com/JTCHE/HoudiniMD/releases/latest).
 
-## Price
+The desktop app reads the docs from the Houdini build on your machine, so it works with no network. <kbd>F1</kbd> in Houdini opens the page in it.
 
-Free. No account, no subscription. A doc page is public and belongs to SideFX, so no doc page is ever going behind a payment. Paid features later will be things the app makes: your own notes on a page, an index of your studio's assets, differences between two Houdini builds.
+> [!WARNING]
+> Windows shows "Windows protected your PC" because the installer is not signed yet. Select **More info**, then **Run anyway**. A signature needs a legal entity, and it is on the list.
+
+## Pricing
+
+Free. No account, no subscription. A doc page is public and belongs to SideFX, so no doc page is ever going behind a payment. 
+
+Paid features will come in a later update to support power-users and allow them to write custom notes on a page, sync their settings and bookmarks across machines in the cloud, and much more.
 
 ## Credits & license
 
@@ -45,4 +51,4 @@ Built by [John C](https://jchd.me). HoudiniMD is an unofficial, independent proj
 
 **The code in this repository** is released under the [MIT License](LICENSE).
 
-**The documentation content is not.** Every Houdini doc page is mirrored from SideFX, remains their intellectual property, and stays © SideFX. No documentation content is stored in this repository, and the MIT License above gives you no rights over it. HoudiniMD stands on the work of the SideFX documentation team; the content is theirs, only the presentation is mine.
+HoudiniMD is an unofficial, independent project, and isn't affiliated with or endorsed by SideFX.
