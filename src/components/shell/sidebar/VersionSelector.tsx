@@ -16,6 +16,7 @@ import { Icons } from "@/lib/ui/icons";
 import { invoke, inTauri } from "@/lib/backend";
 import { announceBuildChanged, indexedShare, pagesLabel, pickInstall, useIndex, type IndexStatus } from "@/lib/install";
 import { showToast } from "@/components/ui/toast-notification";
+import { TooltipBox } from "@/components/docs/Tooltip";
 
 interface VersionSelectorProps {
   /** `null` while the install is still being read. */
@@ -41,6 +42,32 @@ const ROW =
 /** Stands for the folder row in `switching`, which otherwise holds a build. */
 const PICK = "\0pick";
 
+/** A key cap, small enough to sit at the end of a row. */
+const CHIP =
+  "mr-sm inline-flex h-4 shrink-0 items-center rounded-[4px] border px-1 text-[10px] font-semibold leading-none " +
+  "transition-colors duration-(--duration-fast) motion-reduce:transition-none " +
+  "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none";
+
+/** One Houdini release series, as `houdini_releases` sees its preferences. */
+interface Release {
+  release: string;
+  external: boolean;
+  ours: boolean;
+}
+
+/** `22.0.368` is `22.0`: the hook is per preferences folder, which is per
+    series. Rust's `hook::series_of` does the same. */
+function seriesOf(version: string): string {
+  return version.split(".").slice(0, 2).join(".");
+}
+
+/** Which series F1 opens this app in. A series with no preferences folder is
+    absent: that Houdini never ran, and has no F1 to take yet. */
+async function readHooks(): Promise<Map<string, boolean>> {
+  const list = await invoke<Release[]>("houdini_releases").catch(() => []);
+  return new Map(list.map((r) => [r.release, r.external && r.ours]));
+}
+
 /** What the right of a row says about a build. Only the current build can be
     mid-pass: a switch stops the pass of the build it leaves. */
 function indexState(row: BuildRow, switching: boolean, status: IndexStatus | null): string {
@@ -52,9 +79,21 @@ function indexState(row: BuildRow, switching: boolean, status: IndexStatus | nul
 
 export function VersionSelector({ version, pageCount, className }: VersionSelectorProps) {
   if (!inTauri) {
-    return <Card version={version} pageCount={pageCount} className={className} />;
+    return (
+      <Card
+        version={version}
+        pageCount={pageCount}
+        className={className}
+      />
+    );
   }
-  return <Picker version={version} pageCount={pageCount} className={className} />;
+  return (
+    <Picker
+      version={version}
+      pageCount={pageCount}
+      className={className}
+    />
+  );
 }
 
 /** The card alone, as a label. What the help pane shows, and what the picker
@@ -97,11 +136,87 @@ function Card({
   );
 }
 
+/**
+ * The F1 key of one release series. Lit when F1 in that Houdini opens this
+ * app; a click gives F1 back, or takes it. Two builds of one series share one
+ * preferences folder, so their chips always agree.
+ */
+function F1Chip({
+  release,
+  hooked,
+  onToggle,
+}: {
+  release: string;
+  /** `undefined` when the series has no preferences folder yet. */
+  hooked: boolean | undefined;
+  onToggle: () => Promise<void>;
+}) {
+  const ref = useRef<HTMLButtonElement>(null);
+  const [hint, setHint] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const known = hooked !== undefined;
+
+  const title = `Houdini ${release} integration`;
+  const text = !known
+    ? `Start Houdini ${release} one time. Then HoudiniMD can open from its F1.`
+    : hooked
+      ? "HoudiniMD is set as the default help server for this version. Click to remove."
+      : "Click to set HoudiniMD as the default help server for this version.";
+
+  return (
+    <>
+      <button
+        ref={ref}
+        type="button"
+        // Not `disabled`: a disabled button gets no hover, and the hint is
+        // what says why it does nothing.
+        aria-disabled={!known || busy}
+        aria-pressed={known ? hooked : undefined}
+        aria-label={`${title}. ${text}`}
+        onClick={async () => {
+          if (!known || busy) return;
+          setBusy(true);
+          try {
+            await onToggle();
+          } finally {
+            setBusy(false);
+          }
+        }}
+        onMouseEnter={() => setHint(true)}
+        onMouseLeave={() => setHint(false)}
+        onFocus={() => setHint(true)}
+        onBlur={() => setHint(false)}
+        className={cn(
+          CHIP,
+          !known
+            ? "cursor-default border-hairline text-neutral-300"
+            : hooked
+              ? "cursor-interactive border-brand/40 bg-brand/10 text-brand"
+              : "cursor-interactive border-hairline text-neutral-400 pointer-hover:text-neutral-700",
+          busy && "opacity-50",
+        )}
+      >
+        F1
+      </button>
+      {hint && (
+        <TooltipBox
+          anchorRef={ref}
+          className="w-max max-w-[15rem]"
+        >
+          <span className="block font-semibold text-foreground">{title}</span>
+          <span className="mt-0.5 block text-muted-foreground">{text}</span>
+        </TooltipBox>
+      )}
+    </>
+  );
+}
+
 /** The card, plus the popover it opens: every install on the machine. */
 function Picker({ version, pageCount, className }: VersionSelectorProps) {
   const [open, setOpen] = useState(false);
   const [rows, setRows] = useState<BuildRow[] | null>(null);
   const [switching, setSwitching] = useState<string | null>(null);
+  const [hooks, setHooks] = useState<Map<string, boolean> | null>(null);
   const wrapper = useRef<HTMLDivElement>(null);
   const { status } = useIndex();
 
@@ -113,7 +228,17 @@ function Picker({ version, pageCount, className }: VersionSelectorProps) {
     void invoke<BuildRow[]>("available_installs")
       .catch(() => [])
       .then(setRows);
+    void readHooks().then(setHooks);
   }, [open]);
+
+  async function toggleF1(release: string, hooked: boolean) {
+    try {
+      await invoke(hooked ? "unhook_houdini" : "hook_houdini", { releases: [release] });
+      setHooks(await readHooks());
+    } catch (reason) {
+      showToast(String(reason), "error");
+    }
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -158,7 +283,10 @@ function Picker({ version, pageCount, className }: VersionSelectorProps) {
   }
 
   return (
-    <div ref={wrapper} className={cn("relative", className)}>
+    <div
+      ref={wrapper}
+      className={cn("relative", className)}
+    >
       <Card
         version={version}
         pageCount={pageCount}
@@ -179,25 +307,45 @@ function Picker({ version, pageCount, className }: VersionSelectorProps) {
           <p className="px-sm py-sm text-caption text-neutral-500">Looking for Houdini…</p>
         ) : (
           <>
-            {rows.length === 0 && (
-              <p className="px-sm py-sm text-caption text-neutral-500">No Houdini install found.</p>
-            )}
-            {rows.map((row) => (
-              <button
-                key={row.version}
-                type="button"
-                role="option"
-                aria-selected={row.current}
-                disabled={switching !== null}
-                onClick={() => void pick(row)}
-                className={cn(ROW, row.current ? "text-brand" : "text-neutral-800 pointer-hover:bg-neutral-100")}
-              >
-                <span className="truncate font-medium tracking-[-0.012em]">Houdini {row.version}</span>
-                <span className="shrink-0 text-caption text-neutral-500">
-                  {indexState(row, switching === row.version, status)}
-                </span>
-              </button>
-            ))}
+            {rows.length === 0 && <p className="px-sm py-sm text-caption text-neutral-500">No Houdini install found.</p>}
+            {rows.map((row) => {
+              const release = seriesOf(row.version);
+              const hooked = hooks?.get(release);
+              return (
+                <div
+                  key={row.version}
+                  className={cn("flex items-center rounded-md", !row.current && "pointer-hover:bg-neutral-100")}
+                >
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={row.current}
+                    disabled={switching !== null}
+                    onClick={() => void pick(row)}
+                    className={cn(ROW, "min-w-0 flex-1", row.current ? "text-brand" : "text-neutral-800")}
+                  >
+                    <span className="truncate font-medium tracking-[-0.012em]">Houdini {row.version}</span>
+                    <span className="shrink-0 text-caption text-neutral-500">
+                      {indexState(row, switching === row.version, status)}
+                    </span>
+                  </button>
+                  {hooks === null ? (
+                    <span
+                      aria-hidden="true"
+                      className={cn(CHIP, "invisible")}
+                    >
+                      F1
+                    </span>
+                  ) : (
+                    <F1Chip
+                      release={release}
+                      hooked={hooked}
+                      onToggle={() => toggleF1(release, hooked === true)}
+                    />
+                  )}
+                </div>
+              );
+            })}
             {/* An install outside Program Files is invisible to the scan, and a
                 studio puts its builds wherever it likes. Onboarding asks with
                 the same call — see `pickInstall`. */}

@@ -139,7 +139,7 @@ interface Anchored {
 /** The box every tooltip sits in. Fixed, so it escapes any ancestor's
     `overflow: clip` (e.g. the carousel). Over the link, or under it where the
     box does not fit above, and pushed in from the side of the window. */
-function TooltipBox({ anchorRef, hoverPosRef, className, children }: Anchored & { className: string; children: React.ReactNode }) {
+export function TooltipBox({ anchorRef, hoverPosRef, className, children }: Anchored & { className: string; children: React.ReactNode }) {
   const tooltipRef = useRef<HTMLSpanElement>(null);
   const [line, setLine] = useState<DOMRect | null>(null);
   const [place, setPlace] = useState({ x: 0, below: false });

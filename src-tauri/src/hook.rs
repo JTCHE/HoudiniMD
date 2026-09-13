@@ -138,18 +138,27 @@ pub fn apply(data: &Path, port: u16, wanted: &[String]) -> Result<Vec<String>, S
 }
 
 /// Puts back what was there before the first apply, then forgets the release.
-/// A key the reader never had is removed, not set to a default.
-pub fn revert(data: &Path) -> Result<Vec<String>, String> {
+/// A key the reader never had is removed, not set to a default. An empty
+/// `wanted` means every release this app hooked.
+pub fn revert(data: &Path, wanted: &[String]) -> Result<Vec<String>, String> {
     let mut record = load(data);
     let mut restored = Vec::new();
+    let chosen: Vec<String> = record
+        .releases
+        .keys()
+        .filter(|release| wanted.is_empty() || wanted.contains(release))
+        .cloned()
+        .collect();
+    if let Some(release) = chosen.iter().find(|release| running(release)) {
+        return Err(format!(
+            "Houdini {release} is open. Close it first, or it will write the old value back."
+        ));
+    }
 
-    for (release, previous) in std::mem::take(&mut record.releases) {
-        if running(&release) {
-            record.releases.insert(release.clone(), previous);
-            return Err(format!(
-                "Houdini {release} is open. Close it first, or it will write the old value back."
-            ));
-        }
+    for release in chosen {
+        let Some(previous) = record.releases.remove(&release) else {
+            continue;
+        };
         // Our own file, so there is nothing of the reader's to put back.
         let _ = std::fs::remove_file(previous.prefs.join("packages").join(PACKAGE));
         let file = previous.prefs.join("houdini.pref");
