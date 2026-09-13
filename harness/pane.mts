@@ -37,13 +37,13 @@
  * see agents/houdini-pane.md for the exact steps.
  */
 import { chromium, type Browser, type Page } from "playwright";
-import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { launch, recycle, type Running } from "./app.mts";
 
 const OUT = "harness/out/pane";
 const EXE = "src-tauri/target/release/houdinimd.exe";
-const FIRST_PORT = 48800;
-const PORT_TRIES = 20;
 
 /* ─────────────────────────── installs on this machine ────────────────────────── */
 
@@ -61,7 +61,7 @@ function ps(script: string): string {
 
 /** Every build the registry names, the same key `install::registry_roots`
  *  reads in `install.rs` — one value per build, keyed by its own version. */
-function detectInstalls(): Install[] {
+export function detectInstalls(): Install[] {
   const out = ps(
     `Get-Item 'HKLM:\\SOFTWARE\\Side Effects Software\\Houdini' -ErrorAction SilentlyContinue | ` +
       `ForEach-Object { $_.GetValueNames() } | ForEach-Object { ` +
@@ -82,7 +82,7 @@ function detectInstalls(): Install[] {
 
 /** The Qt WebEngine build one install ships, off the DLL's own file version —
  *  a fact read from the machine, not a guess from the Houdini version. */
-function qtWebEngineVersion(root: string): string | null {
+export function qtWebEngineVersion(root: string): string | null {
   const dll = `${root}\\bin\\Qt6WebEngineCore.dll`;
   const out = ps(
     `if (Test-Path '${dll}') { (Get-Item '${dll}').VersionInfo.FileVersionRaw.ToString() }`,
@@ -95,7 +95,7 @@ function qtWebEngineVersion(root: string): string | null {
 /** QtWebEngine version → the Chromium it carries, EACH read off a real
  *  `User-Agent` this app's server logged for that install's own F1 request.
  *  Do not add an entry from a table found online — confirm it the same way. */
-const CONFIRMED_CHROMIUM: Record<string, string> = {
+export const CONFIRMED_CHROMIUM: Record<string, string> = {
   // Houdini 21.0.729, captured 2026-09-09 — see the closed spec "Local —
   // Houdini's Help Pane Always Said No Page".
   "6.5.3": "108.0.5359.220",
@@ -138,7 +138,7 @@ const GAPS: Gap[] = [
   },
 ];
 
-function gapsFor(chromium: number): Gap[] {
+export function gapsFor(chromium: number): Gap[] {
   return GAPS.filter((gap) => chromium < gap.needsChromium);
 }
 
@@ -199,49 +199,38 @@ function downgradeCss(css: string, gaps: Gap[]): string {
   return out.replace(inline, "");
 }
 
+/** Makes a current Chromium page behave like the pane's old one: the missing
+ *  JS deleted before any page script, the CSS it cannot parse dropped. */
+export async function shimPane(page: Page, gaps: Gap[]): Promise<void> {
+  for (const gap of gaps) if (gap.js) await page.addInitScript(gap.js);
+  await page.route("**/*.css", async (route) => {
+    const response = await route.fetch();
+    const body = downgradeCss(await response.text(), gaps);
+    // Not `{ response, body }` — that keeps the ORIGINAL response's
+    // `content-length`, which is now wrong for a shorter downgraded body, and
+    // the browser truncates the stylesheet parse right where the original
+    // would have ended. Headers minus that one let Playwright compute the
+    // real length itself.
+    const headers = { ...response.headers() };
+    delete headers["content-length"];
+    await route.fulfill({ status: response.status(), headers, contentType: "text/css", body });
+  });
+}
+
 /* ────────────────────────────── the real server ───────────────────────────────── */
-
-interface Server {
-  port: number;
-  stop(): void;
-}
-
-async function waitFor(url: string, tries = 60): Promise<Response | null> {
-  for (let at = 0; at < tries; at += 1) {
-    try {
-      const response = await fetch(url);
-      if (response.ok) return response;
-    } catch {
-      /* not up yet */
-    }
-    await new Promise((done) => setTimeout(done, 500));
-  }
-  return null;
-}
 
 /** Starts the real app — `server::start`, the exact thing F1 hits — pinned to
  *  one install via `HFS` (`install::find` gives a running Houdini's own `HFS`
- *  first pick over everything else, so this does too), in its own `--clean`
- *  data directory so it never touches the reader's real bookmarks or index. */
-async function startServer(install: Install): Promise<Server | null> {
-  // `--clean` keys its own data directory off this process's own pid (see
-  // `clean_start` in `lib.rs`), so nothing here needs to name one.
-  const child = spawn(EXE, ["--clean"], {
-    env: { ...process.env, HFS: install.root },
-    stdio: "ignore",
-  });
-  for (let port = FIRST_PORT; port < FIRST_PORT + PORT_TRIES; port += 1) {
-    // A `--clean` process opens its listener right away, but the reader's
-    // first machine-cold run can take a few seconds to get there — well
-    // past what one try per port in the scan below can afford.
-    const response = await waitFor(`http://127.0.0.1:${port}/api/current_install`, port === FIRST_PORT ? 20 : 2);
-    if (!response) continue;
-    const current = (await response.json().catch(() => null)) as { root?: string } | null;
-    if (current?.root?.replace(/[\\/]+$/, "") === install.root) {
-      return { port, stop: () => child.kill("SIGKILL") };
-    }
-  }
-  child.kill("SIGKILL");
+ *  first pick over everything else, so this does too), as a `--clean` staged
+ *  copy so it never touches the reader's real bookmarks or index. */
+async function startServer(install: Install): Promise<Running | null> {
+  const running = await launch({ clean: true, env: { HFS: install.root } });
+  const current = (await fetch(`http://127.0.0.1:${running.port}/api/current_install`)
+    .then((r) => r.json())
+    .catch(() => null)) as { root?: string } | null;
+  if (current?.root?.replace(/[\\/]+$/, "") === install.root) return running;
+  console.log(`  the app reads ${JSON.stringify(current?.root ?? current)}, not ${install.root}`);
+  await running.stop();
   return null;
 }
 
@@ -371,21 +360,7 @@ async function runInstall(browser: Browser, install: Install, qtVersion: string)
         const downgrade = mode === "pane";
         const context = await browser.newContext({ viewport: { width: 1100, height: 760 } });
         const page = await context.newPage();
-        if (downgrade) {
-          for (const gap of gaps) if (gap.js) await page.addInitScript(gap.js);
-          await page.route("**/*.css", async (route) => {
-            const response = await route.fetch();
-            const body = downgradeCss(await response.text(), gaps);
-            // Not `{ response, body }` — that keeps the ORIGINAL response's
-            // `content-length`, which is now wrong for a shorter downgraded
-            // body, and the browser truncates the stylesheet parse right
-            // where the original would have ended. Headers minus that one
-            // let Playwright compute the real length itself.
-            const headers = { ...response.headers() };
-            delete headers["content-length"];
-            await route.fulfill({ status: response.status(), headers, contentType: "text/css", body });
-          });
-        }
+        if (downgrade) await shimPane(page, gaps);
         await page.goto(`http://127.0.0.1:${server.port}${scene.path}`, { waitUntil: "networkidle" });
         await page.waitForTimeout(400);
         if (downgrade) {
@@ -407,7 +382,7 @@ async function runInstall(browser: Browser, install: Install, qtVersion: string)
       }
     }
   } finally {
-    server.stop();
+    await server.stop();
   }
   return findings;
 }
@@ -423,26 +398,13 @@ async function main() {
     process.exit(2);
   }
 
-  // A reader's own already-running HoudiniMD reports the same install
-  // `root` this run's own `--clean` instance would, over the same port
-  // range — `startServer`'s port scan below cannot tell the two apart by
-  // that alone, so it would happily adopt someone else's live process,
-  // built from whatever it was built from, and call that a check of the
-  // build this run just made. There is only ever meant to be one.
-  const before = spawnSync("tasklist", ["/FI", "IMAGENAME eq houdinimd.exe"], { encoding: "utf8" }).stdout;
-  if (/houdinimd\.exe/i.test(before)) {
-    console.log("stopping an already-running HoudiniMD so this run's own build is what gets checked");
-    spawnSync("taskkill", ["/IM", "houdinimd.exe", "/F"]);
-    await new Promise((r) => setTimeout(r, 1000));
-  }
-
   const installs = detectInstalls();
   if (installs.length === 0) {
     console.log("no Houdini install found in the registry — nothing to check");
     return;
   }
 
-  if (!args.includes("--keep")) rmSync(OUT, { recursive: true, force: true });
+  if (!args.includes("--keep") && existsSync(OUT)) recycle(resolve(OUT));
   mkdirSync(OUT, { recursive: true });
 
   const browser = await chromium.launch();
@@ -478,9 +440,11 @@ async function main() {
   process.exitCode = 1;
 }
 
-if (!existsSync("harness")) {
-  console.error("run this from the repo root");
-  process.exit(2);
+// Imported by `helpbench.mts` for the shim; runs only when started itself.
+if (resolve(process.argv[1] ?? "") === resolve("harness/pane.mts")) {
+  if (!existsSync("harness")) {
+    console.error("run this from the repo root");
+    process.exit(2);
+  }
+  await main();
 }
-
-await main();

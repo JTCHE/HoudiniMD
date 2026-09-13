@@ -118,11 +118,11 @@ not — that boundary is exactly where every bug in this file was found. Add a
 gap to `GAPS` and a scene to `SCENES` the same way the two here were added:
 from something a real Houdini pane was seen to get wrong, not from a guess.
 
-It kills any running `houdinimd.exe` before it starts, first. A reader's own
-already-open app answers on the same port with the same install `root` this
-run's own `--clean` instance would — the port scan cannot tell them apart by
-that alone, so it silently adopted one once, and every check that run
-reported passed against a build from an hour earlier.
+It starts the app through `launch` in `harness/app.mts` and asks that process
+for its port (`server_port`). A scan of the ports from 48800 cannot tell a
+reader's own app, or another build, from this run's: it silently adopted one
+once, and every check that run reported passed against a build from an hour
+earlier.
 
 ## Build the app with `tauri build`, not `cargo build --release`
 

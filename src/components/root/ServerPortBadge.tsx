@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { invoke } from "@/lib/backend";
+import { inTauri, invoke } from "@/lib/backend";
 import { showToast } from "@/components/ui/toast-notification";
 
 /**
@@ -21,6 +21,9 @@ export function ServerPortBadge() {
   const [port, setPort] = useState(0);
 
   useEffect(() => {
+    // Served by that server, the page is already at the address, and `/api`
+    // has no such command: every page in Houdini's pane logged a 404.
+    if (!inTauri) return;
     let live = true;
     void invoke<number>("server_port")
       .catch(() => 0)
