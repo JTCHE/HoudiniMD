@@ -85,34 +85,35 @@ export function useActiveIndex(headings: Heading[]) {
   useEffect(() => {
     const box = scroller();
     if (!box) return;
-    let frame = 0;
-    // ponytail: rects on every rAF-throttled scroll. Fine up to a few hundred
-    // headings; if a page ever drags, cache the offsets and refresh on resize.
-    function update() {
-      frame = 0;
-      const line = box!.getBoundingClientRect().top + readingLine() + 8;
-      let current: number | undefined;
-      // A heading counts once it reaches the first readable line. Nothing is
-      // active while the reader is still above the first one.
-      headingEls().forEach((el, i) => {
-        if (el.getBoundingClientRect().top <= line) current = i;
-      });
-      setActive(current);
-    }
-    function onScroll() {
-      if (!frame) frame = requestAnimationFrame(update);
-    }
-    onScroll();
-    // The scroller fires the scroll event, not window — the window never
-    // moves, so a listener on it never runs and `active` never leaves its
-    // initial value.
-    box.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", onScroll);
-    return () => {
-      if (frame) cancelAnimationFrame(frame);
-      box.removeEventListener("scroll", onScroll);
-      window.removeEventListener("resize", onScroll);
-    };
+    const els = [...headingEls()];
+    const at = new Map<Element, number>(els.map((el, i) => [el, i]));
+    // Read a rect on every scroll and the reader feels it: the index page is
+    // ten thousand nodes, and each read made the engine lay them out again.
+    // The observer reports a heading only when it crosses the reading line,
+    // and reports the rect it had at the crossing, so nothing is measured
+    // while the page moves.
+    const passed = new Set<Element>();
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          // `rootBounds` is the band, so its top IS the reading line.
+          if (entry.boundingClientRect.top <= entry.rootBounds!.top) passed.add(entry.target);
+          else passed.delete(entry.target);
+        }
+        let current: number | undefined;
+        for (const el of passed) {
+          const index = at.get(el)!;
+          if (current === undefined || index > current) current = index;
+        }
+        setActive(current);
+      },
+      // A band from the reading line to the bottom of the scroller: a heading
+      // enters it from below and leaves it at the line, so both crossings are
+      // reported. The scroller is the root — the window never moves.
+      { root: box, rootMargin: `-${readingLine() + 8}px 0px 0px 0px`, threshold: 0 },
+    );
+    for (const el of els) observer.observe(el);
+    return () => observer.disconnect();
   }, [headings]);
 
   return active;
