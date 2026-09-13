@@ -2,7 +2,7 @@
 
 use serde::Serialize;
 
-use crate::{db, help, install, page::display_name};
+use crate::{db, help, install};
 
 /// A page in the title list, and a search hit. The front-end draws both the
 /// same way, so they are one shape.
@@ -23,6 +23,10 @@ pub struct Hit {
     /// and not about the text — see `weight` in `search.ts`. Zero for a
     /// title-list entry.
     pub score: f64,
+    /// The sidebar folders above the page, outermost first. Only the title
+    /// list carries them. See `place.rs`.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub place: Vec<String>,
 }
 
 /// One matching section of a page: the row the list nests under it.
@@ -102,6 +106,7 @@ pub fn find(
                         // front-end multiplies by a weight in 0..1, so the sign
                         // is turned here and never there.
                         score: -row.get::<_, f64>(8)?,
+                        place: Vec::new(),
                     },
                     Section {
                         heading: row.get(5)?,
@@ -135,15 +140,17 @@ pub fn find(
     Ok(hits)
 }
 
-/// Every page title in the current build.
+/// Every page title in the current build, one per node: an older version of a
+/// node is reached from the selector on its newest page.
 ///
 /// The whole list goes to the front-end once and stays in memory there, which
-/// is what makes the pick in the search field instant.
+/// is what makes the pick in the search field instant. It comes in the order
+/// the sidebar draws it, so the sidebar never sorts.
 pub fn all_titles(db: &rusqlite::Connection, build: &str) -> Result<Vec<Hit>, String> {
     let mut statement = db
         .prepare(
-            "SELECT path, title, node_type, icon, summary FROM pages
-             WHERE build = ?1 ORDER BY path",
+            "SELECT path, title, node_type, icon, summary, place FROM pages
+             WHERE build = ?1 AND rank = 0 ORDER BY seq",
         )
         .map_err(|e| e.to_string())?;
     let rows = statement
@@ -156,6 +163,12 @@ pub fn all_titles(db: &rusqlite::Connection, build: &str) -> Result<Vec<Hit>, St
                 summary: row.get(4)?,
                 headings: Vec::new(),
                 score: 0.0,
+                place: row
+                    .get::<_, String>(5)?
+                    .split('\n')
+                    .filter(|label| !label.is_empty())
+                    .map(str::to_string)
+                    .collect(),
             })
         })
         .map_err(|e| e.to_string())?;
@@ -211,7 +224,7 @@ pub fn read_meta(
         let parsed = wiki::parse(&source);
         found.push(Meta {
             path,
-            title: display_name(&parsed),
+            title: parsed.title_text.clone(),
             summary: parsed.summary.as_ref().map(|s| wiki::inline::plain(s)),
             icon: wiki::model::prop(&parsed.props, "icon").map(|icon| format!("{icon}.svg")),
         });

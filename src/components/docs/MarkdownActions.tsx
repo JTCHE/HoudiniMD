@@ -1,6 +1,7 @@
 import { Check, ChevronDown, Copy, Download, FileText, SquareArrowOutUpRight } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
+import { MENU_ICON, MENU_ITEM, MENU_PANEL, useMenu } from "@/lib/ui/menu";
 import { invoke, inTauri } from "@/lib/backend";
 import { HOUDINIMD_DOCS_ROOT } from "@/lib/houdini";
 import { showToast } from "@/components/ui/toast-notification";
@@ -23,11 +24,6 @@ function ChatGPTIcon({ className }: { className?: string }) {
   );
 }
 
-const ITEM =
-  "flex w-full cursor-interactive items-center gap-2.5 rounded-md px-sm py-[7px] text-left text-[13px] " +
-  "text-neutral-800 transition-colors duration-(--duration-fast) motion-reduce:transition-none " +
-  "pointer-hover:bg-neutral-100 focus-visible:bg-neutral-100 focus-visible:outline-none";
-const ICON = "size-3.5 shrink-0 text-neutral-500";
 
 /** Opens a web address in the reader's browser: the desktop window hands it to
     the system, Houdini's pane opens a window of its own. */
@@ -47,12 +43,9 @@ async function openWeb(url: string) {
  */
 export function MarkdownActions({ markdown, path, title }: { markdown: string; path: string; title: string }) {
   const [copied, setCopied] = useState(false);
-  const [open, setOpen] = useState(false);
+  const { open, setOpen, container, menu, trigger: arrow, onKeyDown: onMenuKey } = useMenu();
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const button = useRef<HTMLButtonElement>(null);
-  const arrow = useRef<HTMLButtonElement>(null);
-  const container = useRef<HTMLDivElement>(null);
-  const menu = useRef<HTMLDivElement>(null);
 
   const copy = useCallback(async () => {
     try {
@@ -91,43 +84,6 @@ export function MarkdownActions({ markdown, path, title }: { markdown: string; p
       else showToast("Markdown copied to clipboard");
     });
   });
-
-  // The menu opens with the focus on its first item, and closes on a click
-  // outside it or on Escape, which gives the focus back to the arrow. The
-  // focus waits one frame: the click that opened the menu focuses the arrow
-  // after this effect has run.
-  useEffect(() => {
-    if (!open) return;
-    const frame = requestAnimationFrame(() => menu.current?.querySelector<HTMLElement>("[role=menuitem]")?.focus());
-    const outside = (event: MouseEvent) => {
-      if (!container.current?.contains(event.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", outside);
-    return () => {
-      cancelAnimationFrame(frame);
-      document.removeEventListener("mousedown", outside);
-    };
-  }, [open]);
-
-  // On the whole control, not the menu, so the keys also work while the focus
-  // is still on the arrow.
-  function onMenuKey(event: React.KeyboardEvent) {
-    if (!open) return;
-    const items = [...(menu.current?.querySelectorAll<HTMLElement>("[role=menuitem]") ?? [])];
-    const at = items.indexOf(document.activeElement as HTMLElement);
-    const step = { ArrowDown: 1, ArrowUp: -1 }[event.key];
-    if (step) {
-      event.preventDefault();
-      items[(at + step + items.length) % items.length]?.focus();
-    } else if (event.key === "Escape") {
-      event.preventDefault();
-      event.stopPropagation();
-      setOpen(false);
-      arrow.current?.focus();
-    } else if (event.key === "Tab") {
-      setOpen(false);
-    }
-  }
 
   function run(name: string, action: () => Promise<unknown>) {
     setOpen(false);
@@ -182,19 +138,19 @@ export function MarkdownActions({ markdown, path, title }: { markdown: string; p
           ref={menu}
           role="menu"
           aria-label="Page actions"
-          className="absolute top-[calc(100%+4px)] right-0 z-50 w-52 origin-top-right rounded-lg border border-hairline bg-raised p-1 shadow-xl shadow-black/10 animate-[dropdown-in_120ms_cubic-bezier(0.2,0,0,1)] motion-reduce:animate-none"
+          className={cn(MENU_PANEL, "w-52")}
         >
           <button
             type="button"
             role="menuitem"
-            className={ITEM}
+            className={MENU_ITEM}
             onClick={() =>
               run("open-markdown", async () =>
                 inTauri ? invoke("open_page", { path, source: false }) : window.open(`/${path}.md`, "_blank"),
               )
             }
           >
-            <SquareArrowOutUpRight className={ICON} aria-hidden="true" />
+            <SquareArrowOutUpRight className={MENU_ICON} aria-hidden="true" />
             Open as Markdown
           </button>
           {/* Houdini's pane cannot open a file or show a save dialog. */}
@@ -203,23 +159,23 @@ export function MarkdownActions({ markdown, path, title }: { markdown: string; p
               <button
                 type="button"
                 role="menuitem"
-                className={ITEM}
+                className={MENU_ITEM}
                 onClick={() => run("open-source", () => invoke("open_page", { path, source: true }))}
               >
-                <FileText className={ICON} aria-hidden="true" />
+                <FileText className={MENU_ICON} aria-hidden="true" />
                 Open the help source
               </button>
               <button
                 type="button"
                 role="menuitem"
-                className={ITEM}
+                className={MENU_ITEM}
                 onClick={() =>
                   run("save-as", async () => {
                     if (await invoke<boolean>("save_page", { name, markdown })) showToast("Page saved");
                   })
                 }
               >
-                <Download className={ICON} aria-hidden="true" />
+                <Download className={MENU_ICON} aria-hidden="true" />
                 Save as…
               </button>
             </>
@@ -228,19 +184,19 @@ export function MarkdownActions({ markdown, path, title }: { markdown: string; p
           <button
             type="button"
             role="menuitem"
-            className={ITEM}
+            className={MENU_ITEM}
             onClick={() => ask((prompt) => `https://claude.ai/new?q=${encodeURIComponent(prompt)}`)}
           >
-            <ClaudeIcon className={ICON} />
+            <ClaudeIcon className={MENU_ICON} />
             Ask Claude
           </button>
           <button
             type="button"
             role="menuitem"
-            className={ITEM}
+            className={MENU_ITEM}
             onClick={() => ask((prompt) => `https://chatgpt.com/?q=${encodeURIComponent(prompt)}`)}
           >
-            <ChatGPTIcon className={ICON} />
+            <ChatGPTIcon className={MENU_ICON} />
             Ask ChatGPT
           </button>
         </div>

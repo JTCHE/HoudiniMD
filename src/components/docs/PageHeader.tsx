@@ -2,6 +2,8 @@ import { MarkdownActions } from "@/components/docs/MarkdownActions";
 import { BookmarkButton } from "@/components/docs/BookmarkButton";
 import type { LibraryEntry } from "@/lib/store/library";
 import { PageTitle } from "@/components/docs/PageTitle";
+import { NodeVersionSelector } from "@/components/docs/NodeVersionSelector";
+import type { NodeVersion } from "@/lib/pages";
 
 interface PageHeaderProps {
   /** Page name, left exactly as written in the help source. */
@@ -16,11 +18,13 @@ interface PageHeaderProps {
   markdown: string;
   /** The page itself, for the bookmark control. */
   entry: Omit<LibraryEntry, "at">;
+  /** Every version of this node, newest first. */
+  versions: NodeVersion[];
 }
 
 /** Single source of truth for a docs page's header row: icon, name + type,
  *  the "Since" badge, the copy-as-markdown action, and the summary caption. */
-export function PageHeader({ name, nodeType, icon, since, summary, markdown, entry }: PageHeaderProps) {
+export function PageHeader({ name, nodeType, icon, since, summary, markdown, entry, versions }: PageHeaderProps) {
   return (
     <header className="not-prose border-b border-border pb-3 mb-6">
       {/* The actions hold the right of the title line at every width. What
@@ -33,17 +37,21 @@ export function PageHeader({ name, nodeType, icon, since, summary, markdown, ent
           <BookmarkButton entry={entry} />
           <MarkdownActions markdown={markdown} path={entry.path} title={name} />
         </div>
-        {/* The summary and the Since pill share one row, which the pill would
-            otherwise take for itself under the title. The pill keeps the right
-            of the row and goes under a summary too long to leave it room. */}
-        {(summary || since) && (
+        {/* The summary and the pills share one row, which the pills would
+            otherwise take for themselves under the title. The pills keep the
+            right of the row and go under a summary too long to leave them
+            room. The version sits beside Since: both say which node this is. */}
+        {(summary || since || versions.length > 1) && (
           <div className="flex w-full basis-full flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
             {summary && <p className="m-0 min-w-0 flex-1 text-sm italic text-muted-foreground">{summary}</p>}
-            {since && (
-              <span className="inline-flex shrink-0 items-center rounded-md border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                Since {since}
-              </span>
-            )}
+            <div className="flex shrink-0 items-center gap-2">
+              <NodeVersionSelector versions={versions} path={entry.path} />
+              {since && (
+                <span className="inline-flex shrink-0 items-center rounded-md border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                  Since {since}
+                </span>
+              )}
+            </div>
           </div>
         )}
       </div>

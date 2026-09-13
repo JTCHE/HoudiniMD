@@ -49,7 +49,8 @@ function nameOf(view: PageView, path: string): string {
 export default function Page() {
   const location = useLocation();
   const path = location.pathname.replace(/^\/+/, "");
-  const [page, setPage] = useState<PageView | null>(null);
+  // A page already read draws on the first render, not one render later.
+  const [page, setPage] = useState<PageView | null>(() => known(path) ?? null);
   const [error, setError] = useState<PageError | null>(null);
 
   // The page on screen is NOT cleared while the next one is read. Clearing it
@@ -350,6 +351,7 @@ export default function Page() {
                     since={page.since}
                     summary={page.summary}
                     markdown={page.markdown}
+                    versions={page.nodeVersions}
                   />
                   {/* Keyed on the page: a pill left floating by the last page
                       stood over the top of the next one until the observer

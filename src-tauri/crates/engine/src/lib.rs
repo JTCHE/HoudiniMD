@@ -19,12 +19,14 @@ pub mod install;
 pub mod listing;
 pub mod packages;
 pub mod page;
+pub mod place;
 pub mod search;
 pub mod sections;
+pub mod versions;
 
 /// The database type every call here takes, so a caller needs no version of
 /// its own.
 pub use rusqlite;
 
-pub use page::{PageError, PageView, display_name, node_type, read as read_page};
+pub use page::{PageError, PageView, node_type, read as read_page};
 pub use search::{Hit, Meta, Section, all_titles, find, read_meta};

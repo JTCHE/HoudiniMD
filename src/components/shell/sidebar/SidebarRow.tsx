@@ -55,6 +55,8 @@ export interface SidebarRowProps {
       not a button, so it drags, opens in place, and reads as a destination. */
   to?: string;
   className?: string;
+  /** For the one thing a class cannot state: an indent worked out from depth. */
+  style?: React.CSSProperties;
 }
 
 export function SidebarRow({
@@ -71,6 +73,7 @@ export function SidebarRow({
   onClick,
   to,
   className,
+  style,
 }: SidebarRowProps) {
   const Disclosure =
     disclosure === "expanded" ? Icons.expanded : disclosure === "back" ? Icons.back : Icons.collapsed;
@@ -86,6 +89,7 @@ export function SidebarRow({
     "aria-expanded":
       disclosure === "expanded" || disclosure === "collapsed" ? disclosure === "expanded" : undefined,
     "aria-current": selected ? ("page" as const) : undefined,
+    style,
     className: cn(
       // shrink-0: a row sits in flex lists of both kinds — the windowed tree,
       // and a plain flex column (Recents) that can hold more rows than its own
@@ -139,6 +143,9 @@ export function SidebarRow({
                 src={icon}
                 alt=""
                 className="size-[15px]"
+                // The list only mounts the rows on screen, so a lazy load only
+                // adds a frame between a row and its icon.
+                priority
                 // The install ships a few pages whose icon file is not in it.
                 // A blank where every neighbour has a mark reads as a fault;
                 // the page glyph reads as a page.

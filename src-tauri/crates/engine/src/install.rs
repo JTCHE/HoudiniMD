@@ -118,6 +118,8 @@ pub fn find(picked: &[PathBuf]) -> Vec<Install> {
     if let Some(install) = std::env::var_os("HFS").map(PathBuf::from).and_then(read) {
         found.push(install);
     }
+    // The sort below orders the rest, not the build HFS named.
+    let pinned = found.len();
 
     for root in picked {
         if let Some(install) = read(root.clone())
@@ -148,7 +150,7 @@ pub fn find(picked: &[PathBuf]) -> Vec<Install> {
         }
     }
 
-    found.sort_by(|a, b| parts(&b.version).cmp(&parts(&a.version)));
+    found[pinned..].sort_by(|a, b| parts(&b.version).cmp(&parts(&a.version)));
     found
 }
 

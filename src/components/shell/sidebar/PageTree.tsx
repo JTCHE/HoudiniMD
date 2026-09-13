@@ -1,42 +1,51 @@
 /**
  * The documentation, as one list.
  *
- * Everything opens IN PLACE. A group opens onto its branches, a branch opens
- * onto its contents, a family opens onto its pages, and none of it replaces
- * what is above it — the reader never loses the path they came in by, and one
- * scrollbar covers the whole tree. An earlier version swapped the panel's
- * contents for the branch you picked and gave you a back arrow to undo it;
- * that turned every look sideways into two clicks and a lost position.
+ * Everything opens IN PLACE. A group opens onto its branches, a branch onto its
+ * folders, a folder onto the folders and pages inside it, and none of it
+ * replaces what is above it — the reader never loses the path they came in by,
+ * and one scrollbar covers the whole tree. An earlier version swapped the
+ * panel's contents for the branch you picked and gave you a back arrow to undo
+ * it; that turned every look sideways into two clicks and a lost position.
  *
- * One at a time at every level. Two groups open at once, or two branches, puts
+ * One at a time at every level. Two groups open at once, or two folders, puts
  * two lists of near-identical node names on screen and the indent is the only
  * thing telling them apart.
  *
- * Inside a branch the pages are gathered into families by their first word —
- * see `familiesOf`. The website groups them under a taxonomy the local help
- * does not carry: `#tags` are missing from 429 of the 1,203 SOP pages and
- * spell the same idea three ways, so the names are the only honest source.
+ * The folders inside a branch are the index's, worked out when the build is
+ * read — see `place.rs`. This file draws them and decides nothing about them.
  *
  * The list is windowed. A branch of twelve hundred rows costs a second of
  * layout on the click that opens it, and pays that cost again on every scroll,
- * if all of it is in the DOM. Windowing is also why the two headers that must
- * stay on screen — the open group and the open branch — are drawn OVER the
- * list rather than stuck to it: a windowed row rides on a transform, and a
- * transform is what `position: sticky` measures against, so a sticky row
- * inside the window sticks to the wrong box.
+ * if all of it is in the DOM. Windowing is also why the headers that must stay
+ * on screen — every open row above the reader — are drawn OVER the list rather
+ * than stuck to it: a windowed row rides on a transform, and a transform is
+ * what `position: sticky` measures against, so a sticky row inside the window
+ * sticks to the wrong box.
  */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { cn } from "@/lib/utils";
 import { groupIcon } from "@/lib/ui/icons";
 import { VirtualList } from "@/components/ui/VirtualList";
-import { familiesOf, type TreeBranch } from "@/lib/landing/tree";
+import type { TreeBranch } from "@/lib/landing/tree";
 import type { Hit } from "@/lib/search";
 import { SidebarRow } from "./SidebarRow";
 
 /** Every row in the panel is this tall. `--spacing-row` states it in CSS; the
     windowing needs the same number in JavaScript. */
 const ROW = 30;
+
+/** A branch sits this far in from its group, and every level below it one step
+    further: the step that puts a row's mark under the name of the row above. */
+const BRANCH_INDENT = 19;
+const STEP = 23;
+
+function indent(depth: number): React.CSSProperties | undefined {
+  if (depth === 0) return undefined;
+  const left = BRANCH_INDENT + STEP * (depth - 1);
+  return { marginLeft: left, width: `calc(100% - ${left}px)` };
+}
 
 interface PageTreeProps {
   groups: TreeBranch[];
@@ -50,70 +59,56 @@ interface PageTreeProps {
   className?: string;
 }
 
-/** One drawn line of the tree, at whatever depth it sits. */
+/** One drawn line of the tree. Depth 0 is a group, 1 a branch, and below that
+    the folders; a page is one deeper than the row it sits in. */
 type Line =
-  | { kind: "group"; group: TreeBranch; open: boolean }
-  | { kind: "branch"; branch: TreeBranch; group: TreeBranch; open: boolean }
-  | { kind: "family"; label: string; count: number; open: boolean }
-  | { kind: "page"; page: Hit; nested: boolean };
+  | { kind: "folder"; folder: TreeBranch; depth: number; open: boolean }
+  | { kind: "page"; page: Hit; depth: number };
 
-/** What is open, by id. `null` at a level means nothing open at that level. */
-interface Open {
-  group: string | null;
-  branch: string | null;
-  family: string | null;
-}
+/** What is open: one id per depth, outermost first. */
+type Open = string[];
 
-function linesOf(groups: TreeBranch[], open: Open): Line[] {
-  const lines: Line[] = [];
-  for (const group of groups) {
-    const groupOpen = group.id === open.group;
-    lines.push({ kind: "group", group, open: groupOpen });
-    if (!groupOpen) continue;
-
-    for (const branch of group.branches) {
-      const branchOpen = branch.id === open.branch;
-      lines.push({ kind: "branch", branch, group, open: branchOpen });
-      if (!branchOpen) continue;
-
-      const { families, loose } = familiesOf(branch.pages);
-      for (const family of families) {
-        const familyOpen = family.label === open.family;
-        lines.push({
-          kind: "family",
-          label: family.label,
-          count: family.pages.length,
-          open: familyOpen,
-        });
-        if (familyOpen) {
-          for (const page of family.pages) lines.push({ kind: "page", page, nested: true });
-        }
-      }
-      for (const page of loose) lines.push({ kind: "page", page, nested: false });
-    }
+function linesOf(folders: TreeBranch[], open: Open, depth = 0, lines: Line[] = []): Line[] {
+  for (const folder of folders) {
+    const isOpen = open[depth] === folder.id;
+    lines.push({ kind: "folder", folder, depth, open: isOpen });
+    if (!isOpen) continue;
+    linesOf(folder.branches, open, depth + 1, lines);
+    for (const page of folder.pages) lines.push({ kind: "page", page, depth: depth + 1 });
   }
   return lines;
 }
 
-/** Names a header line across renders. A page line is never toggled. */
-function keyOf(line: Line): string | null {
-  if (line.kind === "group") return `group:${line.group.id}`;
-  if (line.kind === "branch") return `branch:${line.branch.id}`;
-  if (line.kind === "family") return `family:${line.label}`;
+/** The ids of the folders around a page, outermost first, or null. */
+function pathTo(folders: TreeBranch[], path: string): Open | null {
+  for (const folder of folders) {
+    if (folder.pages.some((page) => page.path === path)) return [folder.id];
+    const inner = pathTo(folder.branches, path);
+    if (inner) return [folder.id, ...inner];
+  }
   return null;
+}
+
+/** Every page under a folder, in the order the panel draws them. */
+function pagesUnder(folder: TreeBranch): Hit[] {
+  return [...folder.branches.flatMap(pagesUnder), ...folder.pages];
 }
 
 /* What the tree has open, kept outside it: the panel unmounts when it is
    hidden, and showing it again must show what the reader left, not a fresh
    tree. Nothing opens by itself. The tree starts closed, and it opens only
    for the reader's click or to show the page the reader is on. */
-let kept: Open = { group: null, branch: null, family: null };
+let kept: Open = [];
 /** The last page the tree opened itself to show, so showing the panel again
     on the same page does not open again what the reader has closed. */
 let followed: string | undefined;
 
 export function PageTree({ groups, reading, currentPath, bookmarked, className }: PageTreeProps) {
-  const [open, setOpen] = useState<Open>(kept);
+  // Open onto a new page from the first render: opened from the effect below,
+  // the panel drew its closed groups for a frame first.
+  const [open, setOpen] = useState<Open>(() =>
+    currentPath && currentPath !== followed ? (pathTo(groups, currentPath) ?? kept) : kept,
+  );
   useEffect(() => {
     kept = open;
   }, [open]);
@@ -124,77 +119,62 @@ export function PageTree({ groups, reading, currentPath, bookmarked, className }
   /* The panel follows the reader. A page reached from anywhere but this panel
      — the search overlay, a link in the text, the history arrows — leaves the
      panel showing wherever it was left, which is the wrong place by definition.
-     Opening the group, the branch and the family the page sits in makes the
-     panel say where the reader IS, not where they last clicked. */
-  useEffect(() => {
+     Opening every folder the page sits in makes the panel say where the reader
+     IS, not where they last clicked. Before the paint, so the list is never
+     drawn with the new page and the old folders. */
+  useLayoutEffect(() => {
     if (!currentPath || currentPath === followed || groups.length === 0) return;
     // Once for a page, found or not. A category that lands late must not open
     // itself under the reader's hands.
     followed = currentPath;
-    for (const group of groups) {
-      for (const branch of group.branches) {
-        if (!branch.pages.some((page) => page.path === currentPath)) continue;
-        const { families } = familiesOf(branch.pages);
-        setOpen({
-          group: group.id,
-          branch: branch.id,
-          family:
-            families.find((one) => one.pages.some((page) => page.path === currentPath))?.label ??
-            null,
-        });
-        return;
-      }
-    }
+    const path = pathTo(groups, currentPath);
+    if (path) setOpen(path);
   }, [currentPath, groups]);
 
   /* Where that page sits in the list, so the list can scroll to it — ONCE,
-     on arriving. Opening a family further down moves that row, and a list
+     on arriving. Opening a folder further down moves that row, and a list
      that chased it would throw the reader back to a page they opened minutes
      ago every time they open something. */
   const revealed = useRef<string | undefined>(undefined);
-  const wants = currentPath !== revealed.current;
+  // Only once the folders are the new page's. The render before that still has
+  // the old ones open, and a page found among them was scrolled to, then moved
+  // by the folders closing above it, and left off screen.
+  const wants = currentPath !== revealed.current && currentPath === followed;
   const at = useMemo(
     () => lines.findIndex((line) => line.kind === "page" && line.page.path === currentPath),
     [lines, currentPath],
   );
+  const reveal = wants ? at : -1;
   // Marked only once the row is actually in the list: the tree arrives after
   // the first paint, and marking a page revealed before its row exists is a
   // reveal that never happens.
   useEffect(() => {
-    if (at >= 0) revealed.current = currentPath;
+    if (reveal >= 0) revealed.current = currentPath;
   });
-  const reveal = wants ? at : -1;
 
-  /* The rows that must not leave: every open row above the reader. The group,
-     the branch inside it and the family inside that are the path to whatever
-     page is under the pointer, and a list that scrolls that path away stops
-     saying where the reader is.
+  /* The rows that must not leave: every open row above the reader. They are
+     the path to whatever page is under the pointer, and a list that scrolls
+     that path away stops saying where the reader is.
 
      A row is pinned once it would go under the rows already pinned above it —
-     `slot` is how many of those there are — so the pinned copy takes over at
-     the moment the real row reaches that place, and a row passing behind it
-     reads as scrolling under a header rather than as a row drawn twice. */
-  const groupAt = lines.findIndex((line) => line.kind === "group" && line.open);
-  const branchAt = lines.findIndex((line) => line.kind === "branch" && line.open);
-  const familyAt = lines.findIndex((line) => line.kind === "family" && line.open);
-  /* Where a section ends: the last line under it. A header holds its place
-     only while there is still something of its own below it — once the last
-     page of the family has gone by, the family's name is naming nothing and
-     scrolls away with it. */
-  const endOf = (from: number, ranks: Line["kind"][]) => {
-    if (from < 0) return -1;
+     its depth is how many of those there are — so the pinned copy takes over
+     at the moment the real row reaches that place, and a row passing behind
+     it reads as scrolling under a header rather than as a row drawn twice.
+
+     A header holds its place only while there is still something of its own
+     below it — once the last row under it has gone by, its name is naming
+     nothing and it scrolls away with it. */
+  const pinned: Array<Extract<Line, { kind: "folder" }>> = [];
+  lines.forEach((line, from) => {
+    if (line.kind !== "folder" || !line.open) return;
     let end = from;
-    while (end + 1 < lines.length && !ranks.includes(lines[end + 1].kind)) end += 1;
-    return end;
-  };
-  const groupEnd = endOf(groupAt, ["group"]);
-  const branchEnd = endOf(branchAt, ["group", "branch"]);
-  const familyEnd = endOf(familyAt, ["group", "branch", "family"]);
-  const holds = (from: number, end: number, slot: number) =>
-    from >= 0 && top > (from - slot) * ROW && top < (end - slot) * ROW;
-  const pinGroup = holds(groupAt, groupEnd, 0);
-  const pinBranch = holds(branchAt, branchEnd, 1);
-  const pinFamily = holds(familyAt, familyEnd, 2);
+    while (end + 1 < lines.length) {
+      const next = lines[end + 1];
+      if (next.kind === "folder" && next.depth <= line.depth) break;
+      end += 1;
+    }
+    if (top > (from - line.depth) * ROW && top < (end - line.depth) * ROW) pinned.push(line);
+  });
 
   /* The pinned rows are drawn over the list, not in it, so they do not get
      the scrollbar's reserved gutter that every row inside the list gets. Left
@@ -212,21 +192,16 @@ export function PageTree({ groups, reading, currentPath, bookmarked, className }
     return () => observer.disconnect();
   }, []);
 
-  const openGroup = groups.find((group) => group.id === open.group);
-  const openBranch = openGroup?.branches.find((branch) => branch.id === open.branch);
-  const openFamily = familyAt >= 0 ? (lines[familyAt] as Extract<Line, { kind: "family" }>) : null;
-  const GroupMark = openGroup ? groupIcon(openGroup.id) : null;
-
   /* Ctrl and the wheel over the panel step through the pages of the open
      branch, in the order the panel draws them: a quick way to look through a
      family of nodes. One notch is one page; the many small steps of a touchpad
      add up to one. Without the cancel, Ctrl and the wheel zoom the window. */
+  const openBranch = groups.find((one) => one.id === open[0])?.branches.find((one) => one.id === open[1]);
   const navigate = useNavigate();
   useEffect(() => {
     const panel = nav.current;
     if (!panel || !openBranch) return;
-    const { families, loose } = familiesOf(openBranch.pages);
-    const pages = [...families.flatMap((family) => family.pages), ...loose];
+    const pages = pagesUnder(openBranch);
     let sum = 0;
     const onWheel = (event: WheelEvent) => {
       if (!event.ctrlKey) return;
@@ -243,38 +218,69 @@ export function PageTree({ groups, reading, currentPath, bookmarked, className }
   }, [openBranch, currentPath, navigate]);
 
   /* A row that is opened or closed stays where the reader clicked it. Closing
-     a section shrinks the list, and the browser takes the lost length off the
+     a folder shrinks the list, and the browser takes the lost length off the
      scroll: the reader was thrown up the list, past the row they closed. A row
      clicked in its pinned copy goes back to the place that copy held. */
-  const held = useRef<{ key: string; offset: number } | null>(null);
-  const hold = (key: string, slot: number) => {
+  const held = useRef<{ id: string; offset: number } | null>(null);
+  const toggle = (id: string, depth: number) => {
     const list = nav.current?.querySelector<HTMLElement>("[data-list]");
-    const at = lines.findIndex((line) => keyOf(line) === key);
-    if (list && at >= 0) held.current = { key, offset: Math.max(slot * ROW, at * ROW - list.scrollTop) };
+    const at = lines.findIndex((line) => line.kind === "folder" && line.folder.id === id);
+    if (list && at >= 0) held.current = { id, offset: Math.max(depth * ROW, at * ROW - list.scrollTop) };
+    setOpen((now) => (now[depth] === id ? now.slice(0, depth) : [...now.slice(0, depth), id]));
   };
   useLayoutEffect(() => {
     const want = held.current;
     held.current = null;
     const list = nav.current?.querySelector<HTMLElement>("[data-list]");
-    const at = want ? lines.findIndex((line) => keyOf(line) === want.key) : -1;
+    const at = want ? lines.findIndex((line) => line.kind === "folder" && line.folder.id === want.id) : -1;
     if (list && want && at >= 0) list.scrollTop = at * ROW - want.offset;
   }, [lines]);
 
-  const toggleGroup = (id: string) => {
-    hold(`group:${id}`, 0);
-    setOpen((now) =>
-      now.group === id
-        ? { group: null, branch: null, family: null }
-        : { group: id, branch: null, family: null },
-    );
-  };
-  const toggleBranch = (id: string) => {
-    hold(`branch:${id}`, 1);
-    setOpen((now) => ({ ...now, branch: now.branch === id ? null : id, family: null }));
-  };
-  const toggleFamily = (label: string) => {
-    hold(`family:${label}`, 2);
-    setOpen((now) => ({ ...now, family: now.family === label ? null : label }));
+  const folderRow = (line: Extract<Line, { kind: "folder" }>, pinnedCopy = false) => {
+    const { folder, depth, open: isOpen } = line;
+    const shared = {
+      label: folder.label,
+      count: folder.count,
+      disclosure: isOpen ? ("expanded" as const) : ("collapsed" as const),
+      onClick: () => toggle(folder.id, depth),
+      style: indent(depth),
+      className: pinnedCopy ? "pointer-events-auto" : undefined,
+    };
+    if (depth === 0) {
+      const Mark = groupIcon(folder.id);
+      return (
+        <SidebarRow
+          key={folder.id}
+          {...shared}
+          header
+          // No chip, open or shut. The chip means "the row you are on", and it
+          // is the page row's alone — a lit group and a lit page on screen
+          // together read as two selections.
+          mark={
+            Mark ? (
+              <Mark className={cn("size-[15px]", isOpen ? "text-brand" : "text-neutral-500")} />
+            ) : undefined
+          }
+        />
+      );
+    }
+    if (depth === 1) {
+      return (
+        <SidebarRow
+          key={folder.id}
+          {...shared}
+          // `null`, not `undefined`: a branch the install ships no icon for
+          // still holds the mark's column open, so the names under one group
+          // stay on one axis.
+          icon={folder.icon ?? null}
+          quietDisclosure={!isOpen}
+        />
+      );
+    }
+    // No mark at all. A folder is a place inside the branch, not a page, and
+    // the page glyph said the opposite. Leaving the slot out is also what puts
+    // the folder NAME on the axis the pages under it put their ICONS on.
+    return <SidebarRow key={folder.id} {...shared} />;
   };
 
   return (
@@ -282,42 +288,13 @@ export function PageTree({ groups, reading, currentPath, bookmarked, className }
       {/* Drawn over the list, not inside it — see the note at the top of the
           file. `pointer-events-none` on the box and back on the rows, so the
           gap beside a pinned header still scrolls the list under it. */}
-      {(pinGroup || pinBranch || pinFamily) && (
+      {pinned.length > 0 && (
         <div
           style={{ paddingRight: gutter }}
           className="pointer-events-none absolute inset-x-0 top-0 z-20 bg-neutral-100"
           data-pinned=""
         >
-          {pinGroup && openGroup && (
-            <SidebarRow
-              label={openGroup.label}
-              header
-              mark={GroupMark ? <GroupMark className="size-[15px] text-brand" /> : undefined}
-              disclosure="expanded"
-              count={openGroup.count}
-              onClick={() => toggleGroup(openGroup.id)}
-              className="pointer-events-auto"
-            />
-          )}
-          {pinBranch && openBranch && (
-            <SidebarRow
-              label={openBranch.label}
-              icon={openBranch.icon ?? null}
-              count={openBranch.count}
-              disclosure="expanded"
-              onClick={() => toggleBranch(openBranch.id)}
-              className="pointer-events-auto ml-[19px] w-[calc(100%-19px)]"
-            />
-          )}
-          {pinFamily && openFamily && (
-            <SidebarRow
-              label={openFamily.label}
-              count={openFamily.count}
-              disclosure="expanded"
-              onClick={() => toggleFamily(openFamily.label)}
-              className="pointer-events-auto ml-[42px] w-[calc(100%-42px)]"
-            />
-          )}
+          {pinned.map((line) => folderRow(line, true))}
         </div>
       )}
 
@@ -334,71 +311,10 @@ export function PageTree({ groups, reading, currentPath, bookmarked, className }
         // does not step its own rows sideways.
         className="-ml-slack flex-1 pl-slack"
       >
-        {(line) => {
-          if (line.kind === "group") {
-            const Mark = groupIcon(line.group.id);
-            return (
-              <SidebarRow
-                key={`group:${line.group.id}`}
-                label={line.group.label}
-                header
-                // No chip, open or shut. The chip means "the row you are on",
-                // and it is the page row's alone — a lit group and a lit page
-                // on screen together read as two selections.
-                mark={
-                  Mark ? (
-                    <Mark
-                      className={cn("size-[15px]", line.open ? "text-brand" : "text-neutral-500")}
-                    />
-                  ) : undefined
-                }
-                disclosure={line.open ? "expanded" : "collapsed"}
-                count={line.group.count}
-                onClick={() => toggleGroup(line.group.id)}
-              />
-            );
-          }
-
-          if (line.kind === "branch") {
-            return (
-              <SidebarRow
-                key={`branch:${line.branch.id}`}
-                label={line.branch.label}
-                // `null`, not `undefined`: a branch the install ships no icon
-                // for still holds the mark's column open, so the names under
-                // one group stay on one axis.
-                icon={line.branch.icon ?? null}
-                count={line.branch.count}
-                // No chip when it is open. The chip means "the row you are on",
-                // and a branch you are inside is not that — its own arrow
-                // already says it is open, and two chips lit at once read as
-                // two selections.
-                disclosure={line.open ? "expanded" : "collapsed"}
-                quietDisclosure={!line.open}
-                onClick={() => toggleBranch(line.branch.id)}
-                className="ml-[19px] w-[calc(100%-19px)]"
-              />
-            );
-          }
-
-          if (line.kind === "family") {
-            return (
-              <SidebarRow
-                key={`family:${line.label}`}
-                // No mark at all. A family is a place inside the branch, not a
-                // page, and the page glyph said the opposite. Leaving the slot
-                // out is also what puts the family NAME on the axis the pages
-                // under it put their ICONS on.
-                label={line.label}
-                count={line.count}
-                disclosure={line.open ? "expanded" : "collapsed"}
-                onClick={() => toggleFamily(line.label)}
-                className="ml-[42px] w-[calc(100%-42px)]"
-              />
-            );
-          }
-
-          return (
+        {(line) =>
+          line.kind === "folder" ? (
+            folderRow(line)
+          ) : (
             <SidebarRow
               key={line.page.path}
               label={line.page.title}
@@ -406,13 +322,13 @@ export function PageTree({ groups, reading, currentPath, bookmarked, className }
               to={`/${line.page.path}`}
               selected={line.page.path === currentPath}
               kept={bookmarked?.has(line.page.path)}
-              // A page under a family starts its ICON where that family's NAME
-              // starts, which is what makes it read as contents of the family
+              // A page starts its ICON where the folder above it starts its
+              // NAME, which is what makes it read as contents of the folder
               // rather than as its neighbour.
-              className={line.nested ? "ml-[65px] w-[calc(100%-65px)]" : "ml-[42px] w-[calc(100%-42px)]"}
+              style={indent(line.depth)}
             />
-          );
-        }}
+          )
+        }
       </VirtualList>
       {reading && (
         <p className="px-sm py-xs text-meta text-neutral-400" role="status">

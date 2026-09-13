@@ -9,6 +9,7 @@
 //!
 //! See spec: Local — SQLite FTS5 Index.
 
+use std::collections::HashMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
@@ -102,12 +103,16 @@ pub fn pass(
 
     let load = |path: &str| crate::help::page_layered(&roots, path).ok();
     let pool = pool()?;
+    let menu = crate::place::Menu::read(&roots);
     for (section, _) in &sections {
         let sources: Vec<(String, String)> =
             roots.iter().flat_map(|root| read_section(root, section)).collect();
-        let parsed: Vec<Row> =
-            pool.install(|| sources.par_iter().filter_map(|page| row(page, &load)).collect());
-        pages += write(db, &build, &parsed)? as u32;
+        let map = crate::place::Map::new(&roots, &sources);
+        let mut parsed: Vec<Row> =
+            pool.install(|| sources.par_iter().filter_map(|page| row(page, &load, &map, &menu)).collect());
+        let placed = crate::versions::place(parsed.iter_mut().filter_map(|row| row.mark.take()).collect());
+        crate::place::arrange(&mut parsed, |row| &row.title, |row| &mut row.place);
+        pages += write(db, &build, &parsed, &placed, pages)? as u32;
         report(pages, false);
     }
 
@@ -130,9 +135,19 @@ struct Row {
     summary: Option<String>,
     /// The body, cut at its headings. See `sections.rs`.
     sections: Vec<crate::sections::Section>,
+    /// Taken before the write, once the whole section is read and the other
+    /// versions of the node are known.
+    mark: Option<crate::versions::Mark>,
+    /// Where the sidebar draws it. See `place.rs`.
+    place: crate::place::Place,
 }
 
-fn row((path, source): &(String, String), load: &wiki::include::Load) -> Option<Row> {
+fn row(
+    (path, source): &(String, String),
+    load: &wiki::include::Load,
+    map: &crate::place::Map,
+    menu: &crate::place::Menu,
+) -> Option<Row> {
     let mut parsed = wiki::parse(source);
     if is_include_target(path, &parsed.props) {
         return None;
@@ -141,11 +156,13 @@ fn row((path, source): &(String, String), load: &wiki::include::Load) -> Option<
     let markdown = wiki::markdown::blocks(&parsed.blocks, 1);
     Some(Row {
         path: path.clone(),
-        title: crate::page::display_name(&parsed),
+        title: parsed.title_text.clone(),
         node_type: crate::page::node_type(&parsed.props),
         icon: wiki::model::prop(&parsed.props, "icon").map(|icon| format!("{icon}.svg")),
         summary: parsed.summary.as_ref().map(|s| wiki::inline::plain(s)),
         sections: crate::sections::split(&markdown),
+        mark: crate::versions::mark(path, &parsed.props),
+        place: map.place(path, &parsed.props, menu),
     })
 }
 
@@ -165,13 +182,19 @@ fn is_include_target(path: &str, props: &wiki::Props) -> bool {
     name.starts_with('_') && !name.starts_with("__")
 }
 
-fn write(db: &mut Connection, build: &str, rows: &[Row]) -> Result<usize, String> {
+fn write(
+    db: &mut Connection,
+    build: &str,
+    rows: &[Row],
+    placed: &HashMap<String, crate::versions::Place>,
+    first_seq: u32,
+) -> Result<usize, String> {
     let tx = db.transaction().map_err(|e| e.to_string())?;
     {
         let mut page = tx
             .prepare(
-                "INSERT OR REPLACE INTO pages (build, path, title, node_type, icon, summary)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                "INSERT OR REPLACE INTO pages (build, path, title, node_type, icon, summary, family, label, rank, place, seq)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
             )
             .map_err(|e| e.to_string())?;
         let mut text = tx
@@ -180,16 +203,28 @@ fn write(db: &mut Connection, build: &str, rows: &[Row]) -> Result<usize, String
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             )
             .map_err(|e| e.to_string())?;
-        for row in rows {
+        for (seq, row) in (first_seq..).zip(rows) {
+            let folders: Vec<&str> = row.place.folders.iter().map(|f| f.label.as_str()).collect();
+            let place = placed.get(&row.path);
             page.execute(rusqlite::params![
                 build,
                 &row.path,
                 &row.title,
                 &row.node_type,
                 &row.icon,
-                &row.summary
+                &row.summary,
+                place.map(|p| &p.family),
+                place.map(|p| &p.label),
+                place.map_or(0, |p| p.rank),
+                folders.join("\n"),
+                seq
             ])
             .map_err(|e| e.to_string())?;
+            // An older version stays out of the search, so a search for one
+            // node spends one result on it and never opens the wrong version.
+            if place.is_some_and(|p| p.rank > 0) {
+                continue;
+            }
             // The title rides the FIRST section only. On every section it would
             // count once per heading, and a long page would outrank the page
             // actually named for the words.
@@ -276,6 +311,14 @@ fn count(help: &Path, section: &str) -> u32 {
 /// `help::page` takes back. A loose folder answers to the same paths.
 pub(crate) fn read_section(help: &Path, section: &str) -> Vec<(String, String)> {
     let mut pages = Vec::new();
+    each_page(help, section, |path, source| pages.push((path.to_string(), source.to_string())));
+    pages
+}
+
+/// The pages of `read_section`, one at a time through one buffer, for a caller
+/// that keeps a little of each page and not the page.
+pub(crate) fn each_page(help: &Path, section: &str, mut visit: impl FnMut(&str, &str)) {
+    let mut source = String::new();
     if let Ok(mut archive) = open_zip(&help.join(format!("{section}.zip"))) {
         let names: Vec<String> = archive
             .file_names()
@@ -286,11 +329,11 @@ pub(crate) fn read_section(help: &Path, section: &str) -> Vec<(String, String)> 
             let Ok(mut entry) = archive.by_name(&name) else {
                 continue;
             };
-            let mut source = String::new();
+            source.clear();
             if entry.read_to_string(&mut source).is_err() {
                 continue;
             }
-            pages.push((format!("{section}/{}", name.trim_end_matches(".txt")), source));
+            visit(&format!("{section}/{}", name.trim_end_matches(".txt")), &source);
         }
     }
     let folder = help.join(section);
@@ -305,9 +348,8 @@ pub(crate) fn read_section(help: &Path, section: &str) -> Vec<(String, String)> 
             continue;
         };
         let name = name.replace('\\', "/");
-        pages.push((format!("{section}/{}", name.trim_end_matches(".txt")), source));
+        visit(&format!("{section}/{}", name.trim_end_matches(".txt")), &source);
     }
-    pages
 }
 
 /// Every `.txt` under a loose section folder, at any depth.
