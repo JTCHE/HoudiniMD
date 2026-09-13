@@ -8,11 +8,10 @@
 //! `#` properties — read once per install and kept, the way `family.rs` keeps
 //! `vex.zip`. Not in the `wiki` crate: this reads every page of the install.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{Arc, LazyLock, Mutex};
 
-use rayon::prelude::*;
 use wiki::model::{ListItem, Title};
 use wiki::{Block, Inline, LinkTarget, Props};
 
@@ -43,27 +42,65 @@ pub fn warm(roots: &[PathBuf]) {
     catalog(roots);
 }
 
-/// Parsing only the head of each page keeps the whole install to a second.
+/// One page at a time, through one buffer, on the thread that asks. The
+/// catalog is kept for the life of the app, and so is the heap its build
+/// peaks at: the whole install read at once, in parallel, left more memory
+/// behind than the catalog holds, and a thread per core.
 fn build(roots: &[PathBuf]) -> Vec<Card> {
-    let sections = crate::index::sections(roots);
-    sections
-        .par_iter()
-        .flat_map_iter(|(section, _)| roots.iter().flat_map(|root| crate::index::read_section(root, section)))
-        .map(|(path, source)| {
-            let page = head(&source);
-            // A few pages carry no title line; the reader still needs a name.
-            let title = match page.title_text.is_empty() {
-                true => path.rsplit('/').next().unwrap_or(&path).to_string(),
-                false => page.title_text,
-            };
-            Card {
-                path: format!("/{path}"),
-                title,
-                summary: page.summary.map(|s| wiki::inline::plain(&s)),
-                props: page.props,
-            }
-        })
-        .collect()
+    let mut cards = Vec::new();
+    let mut read = HashSet::new();
+    for (section, _) in crate::index::sections(roots) {
+        for root in roots {
+            crate::index::each_page(root, &section, |path, source| {
+                cards.push(card(path, source));
+                read.extend(fields(source));
+            });
+        }
+    }
+    // Most properties (`#icon:`, `#since:`, `#cppname:`) no query reads.
+    for card in &mut cards {
+        card.props.retain(|(name, _)| read.contains(name));
+        card.props.shrink_to_fit();
+    }
+    cards
+}
+
+fn card(path: &str, source: &str) -> Card {
+    let page = head(source);
+    // A few pages carry no title line; the reader still needs a name.
+    let title = match page.title_text.is_empty() {
+        true => path.rsplit('/').next().unwrap_or(path).to_string(),
+        false => page.title_text,
+    };
+    Card {
+        path: format!("/{path}"),
+        title,
+        summary: page.summary.map(|s| wiki::inline::plain(&s)),
+        props: page.props,
+    }
+}
+
+/// The fields the lists on one page read: each name in `#query: type:node
+/// context:sop`, and the field of `#groupedby:` and `#sortedby:`.
+fn fields(source: &str) -> Vec<String> {
+    let mut names = Vec::new();
+    for line in source.lines() {
+        let Some((key, value)) = line.trim_start().strip_prefix('#').and_then(|rest| rest.split_once(':')) else {
+            continue;
+        };
+        match key {
+            "query" => names.extend(
+                value
+                    .replace(['(', ')'], " ")
+                    .split_whitespace()
+                    .filter_map(|term| term.split_once(':'))
+                    .map(|(name, _)| name.to_lowercase()),
+            ),
+            "groupedby" | "sortedby" => names.push(value.trim().to_lowercase()),
+            _ => {}
+        }
+    }
+    names
 }
 
 /// The head of a page: the title line, the properties and the summary, which
@@ -163,7 +200,7 @@ fn bullets(cards: &[&Card]) -> Block {
 }
 
 /// `_groups_en.ini` beside the page: `key=Label` lines under `[Labels]`.
-fn labels(roots: &[PathBuf], page: &str, file: &str) -> HashMap<String, String> {
+pub(crate) fn labels(roots: &[PathBuf], page: &str, file: &str) -> HashMap<String, String> {
     let (section, rest) = page.split_once('/').unwrap_or((page, ""));
     let dir = rest.rsplit_once('/').map(|(dir, _)| format!("{dir}/")).unwrap_or_default();
     let text = roots
@@ -310,6 +347,12 @@ mod tests {
         let q = Query::parse("(type:pyclass OR type:pyfunction) AND py_parent:pdgd ANDNOT tags:internal").unwrap();
         assert!(q.matches(&card("/tops/pdgd/A", "pdgd.A", &[("type", "pyclass")])));
         assert!(!q.matches(&card("/tops/pdgd/B", "pdgd.B", &[("type", "pyclass"), ("tags", "message internal")])));
+    }
+
+    #[test]
+    fn a_page_names_the_fields_its_lists_read() {
+        let source = ":list:\n    #query: (type:vex OR Type:vexstatement) ANDNOT sortkey:__*\n    #groupedby: group\n#icon: SOP/box";
+        assert_eq!(fields(source), ["type", "type", "sortkey", "group"]);
     }
 
     #[test]

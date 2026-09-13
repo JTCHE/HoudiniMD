@@ -1,21 +1,44 @@
 //! Reads help pages and icons out of the zips in a Houdini install.
 //! Nothing is extracted to disk. See spec: Local — Image and Asset Serving.
 
-use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufReader, Read};
 use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex};
 
-/// The archives this process has opened, kept open.
+type Archive = zip::ZipArchive<BufReader<File>>;
+
+/// The archives this process has opened, kept open, the most recent last.
 ///
 /// `icons.zip` holds about ten thousand entries. Opening it means reading and
 /// parsing that whole central directory, and the sidebar asks for a dozen
 /// icons in the time it takes to draw one list — so the first row of a list
 /// used to cost as much as all the rest of it together. The archive is parsed
 /// once and every later read seeks inside it.
-static ARCHIVES: LazyLock<Mutex<HashMap<PathBuf, zip::ZipArchive<BufReader<File>>>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
+///
+/// A parsed directory is memory for as long as it is kept: the icons, the
+/// images and the nodes each hold megabytes. `KEEP` covers those and the
+/// section being read; one more section drops the one read longest ago.
+static ARCHIVES: LazyLock<Mutex<Vec<(PathBuf, Archive)>>> = LazyLock::new(|| Mutex::new(Vec::new()));
+const KEEP: usize = 4;
+
+/// Runs `use_it` on the archive at `zip`, opened once and kept.
+fn with_archive<T>(zip: &Path, use_it: impl FnOnce(&mut Archive) -> T) -> Result<T, String> {
+    let mut open = ARCHIVES.lock().map_err(|e| e.to_string())?;
+    let archive = match open.iter().position(|(path, _)| path == zip) {
+        Some(at) => open.remove(at).1,
+        None => {
+            let file = File::open(zip).map_err(|e| format!("{}: {e}", zip.display()))?;
+            let archive = zip::ZipArchive::new(BufReader::new(file)).map_err(|e| e.to_string())?;
+            if open.len() == KEEP {
+                open.remove(0);
+            }
+            archive
+        }
+    };
+    open.push((zip.to_path_buf(), archive));
+    Ok(use_it(&mut open.last_mut().expect("just pushed").1))
+}
 
 /// Why a page could not be read. `Missing` is the reader's problem — this build
 /// holds no such page — and the front-end draws the not-found page for it.
@@ -175,26 +198,14 @@ fn found(read: Result<Option<Vec<u8>>, String>, absent: &str) -> Result<Vec<u8>,
 /// to list a whole family of pages, such as every VEX function, rather than
 /// read one page by its own path.
 pub fn entries(zip: &Path, prefix: &str) -> Vec<String> {
-    let Ok(mut open) = ARCHIVES.lock() else {
-        return Vec::new();
-    };
-    if !open.contains_key(zip) {
-        let Ok(file) = File::open(zip) else {
-            return Vec::new();
-        };
-        let Ok(archive) = zip::ZipArchive::new(BufReader::new(file)) else {
-            return Vec::new();
-        };
-        open.insert(zip.to_path_buf(), archive);
-    }
-    let Some(archive) = open.get(zip) else {
-        return Vec::new();
-    };
-    archive
-        .file_names()
-        .filter(|name| name.starts_with(prefix) && name.ends_with(".txt"))
-        .map(str::to_string)
-        .collect()
+    with_archive(zip, |archive| {
+        archive
+            .file_names()
+            .filter(|name| name.starts_with(prefix) && name.ends_with(".txt"))
+            .map(str::to_string)
+            .collect()
+    })
+    .unwrap_or_default()
 }
 
 /// The text of one entry, read the same way `page` reads a `.txt`.
@@ -209,17 +220,12 @@ fn read(zip: &Path, name: &str) -> Result<Option<Vec<u8>>, String> {
     if name.contains("..") {
         return Err("a path cannot leave its archive".into());
     }
-    let mut open = ARCHIVES.lock().map_err(|e| e.to_string())?;
-    if !open.contains_key(zip) {
-        let file = File::open(zip).map_err(|e| format!("{}: {e}", zip.display()))?;
-        let archive = zip::ZipArchive::new(BufReader::new(file)).map_err(|e| e.to_string())?;
-        open.insert(zip.to_path_buf(), archive);
-    }
-    let archive = open.get_mut(zip).expect("just inserted");
-    let Ok(mut entry) = archive.by_name(name) else {
-        return Ok(None);
-    };
-    let mut bytes = Vec::with_capacity(entry.size() as usize);
-    entry.read_to_end(&mut bytes).map_err(|e| e.to_string())?;
-    Ok(Some(bytes))
+    with_archive(zip, |archive| {
+        let Ok(mut entry) = archive.by_name(name) else {
+            return Ok(None);
+        };
+        let mut bytes = Vec::with_capacity(entry.size() as usize);
+        entry.read_to_end(&mut bytes).map_err(|e| e.to_string())?;
+        Ok(Some(bytes))
+    })?
 }

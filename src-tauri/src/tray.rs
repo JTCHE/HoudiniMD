@@ -18,6 +18,7 @@ pub fn in_background() -> bool {
 
 pub fn show(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
+        memory(&window, false);
         let _ = window.unminimize();
         let _ = window.show();
         let _ = window.set_focus();
@@ -65,5 +66,32 @@ pub fn on_window_event(window: &Window, event: &WindowEvent) {
     if let WindowEvent::CloseRequested { api, .. } = event {
         api.prevent_close();
         let _ = window.hide();
+        rest(window.app_handle());
     }
+}
+
+/// The main window is hidden: its webview gives memory back.
+pub fn rest(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        memory(&window, true);
+    }
+}
+
+/// Scripts keep running at the low level (unlike `TrySuspend`), so the index
+/// progress and the page F1 opens still reach a hidden window. WebView2 does
+/// not set the level back by itself; `show` does.
+fn memory(window: &tauri::WebviewWindow, low: bool) {
+    #[cfg(windows)]
+    let _ = window.with_webview(move |webview| unsafe {
+        use webview2_com::Microsoft::Web::WebView2::Win32::*;
+        use windows_core::Interface;
+        let level = if low {
+            COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_LOW
+        } else {
+            COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_NORMAL
+        };
+        if let Ok(core) = webview.controller().CoreWebView2().and_then(|core| core.cast::<ICoreWebView2_19>()) {
+            let _ = core.SetMemoryUsageTargetLevel(level);
+        }
+    });
 }
