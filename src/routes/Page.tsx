@@ -233,7 +233,10 @@ export default function Page() {
     void (inTauri ? invoke<number>("server_port").catch(() => 0) : Promise.resolve(Number(window.location.port)))
       .then((port) => {
         if (!port) throw new Error("The local server is not running");
-        return navigator.clipboard.writeText(`http://localhost:${port}/${path}.md`);
+        // The page the app actually reads, not the address bar: a folder
+        // address (`nodes/sop/`) is the index page in it, and `nodes/sop/.md`
+        // is not a file anyone can open.
+        return navigator.clipboard.writeText(`http://localhost:${port}/${page?.path ?? path}.md`);
       })
       .then(() => showToast("Copied the page path"))
       .catch((reason: Error) => showToast(reason.message || "Could not copy the page path", "error"));

@@ -110,7 +110,10 @@ export function TableOfContents({ headings }: { headings: Heading[] }) {
       <div className="not-prose print:hidden hidden @min-[780px]:block absolute top-0 left-full ml-lg h-full w-44">
         <nav
           aria-label="On this page"
-          className="sticky top-0 flex max-h-[calc(100dvh-var(--spacing-titlebar)-var(--spacing-statusbar))] flex-col"
+          // The background is not decoration: the webview left the last page's
+          // rows painted under the new ones, so two lists of headings stood on
+          // top of each other. A box that paints its own ground clears them.
+          className="sticky top-0 flex max-h-[calc(100dvh-var(--spacing-titlebar)-var(--spacing-statusbar))] flex-col bg-background"
         >
           <p className="flex h-(--page-bar-h) shrink-0 items-center text-sm font-medium text-foreground">On this page</p>
           <div

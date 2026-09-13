@@ -41,7 +41,13 @@ pub struct PageError {
 
 /// Reads and parses one page, such as `nodes/sop/copytopoints`.
 pub fn read(install: &install::Install, path: &str) -> Result<PageView, PageError> {
-    let path = path.to_string();
+    // A folder address names the index page inside it. The view has to say
+    // which page it holds: the copy-path keys hand out `<page>.md`, and
+    // `nodes/sop/.md` names no page.
+    let path = match path.strip_suffix('/') {
+        Some(folder) => format!("{folder}/index"),
+        None => path.to_string(),
+    };
     let roots = install.help_roots();
     let source = help::page_layered(&roots, &path).map_err(|reason| match reason {
         help::PageError::Missing => PageError {
