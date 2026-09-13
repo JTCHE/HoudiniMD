@@ -53,6 +53,10 @@ A release note is about one version, not about the project.
 Write what changed in this version, as a list. Nothing else. For the first
 release, say "first release" and list what it ships.
 
+Put the list under two headings: `## Features` for what the reader can now do,
+and `## Fixes` for what now works as it should. A speed or memory gain is a
+fix. Leave out a heading that has no items.
+
 Keep these out. They are project facts, and they belong in the README:
 
 - What the product is, and what it is for.
