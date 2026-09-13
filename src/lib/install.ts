@@ -64,6 +64,16 @@ function firstName(raw: string): string {
     before the same build came back. */
 let lastBuild: BuildInfo = { version: null, pageCount: null };
 
+/** Reads the build before the window's first draw, so the card never says
+    "reading" or "no install" on the way in. */
+export async function primeBuild(): Promise<void> {
+  const [install, all] = await Promise.all([
+    invoke<Install | null>("current_install").catch(() => null),
+    titles(),
+  ]);
+  lastBuild = { version: install?.version ?? "", pageCount: all.length };
+}
+
 export function useBuild(): BuildInfo {
   const [build, setBuild] = useState<BuildInfo>(lastBuild);
   useEffect(() => {

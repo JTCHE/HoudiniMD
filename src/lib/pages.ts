@@ -15,6 +15,9 @@
  * button goes down, is what makes the page look like it was already open.
  */
 import { invoke } from "./backend";
+import { warmRows } from "./landing/tree";
+import { warmIcons } from "./icons";
+import { hitOf } from "./search";
 
 export interface PageView {
   path: string;
@@ -25,6 +28,14 @@ export interface PageView {
   summary?: string;
   markdown: string;
   version: string;
+  /** Every version of this node, newest first. Empty for a page with no
+      other version. See `versions.rs`. */
+  nodeVersions: NodeVersion[];
+}
+
+export interface NodeVersion {
+  path: string;
+  label: string;
 }
 
 export interface PageError {
@@ -34,6 +45,9 @@ export interface PageError {
 
 const READ = new Map<string, PageView>();
 const KEEP = 30;
+/** How long a page waits for its panel icons. An icon loads in about 7ms on an
+    idle window; this is room for a busy one, and no more. */
+const ICON_WAIT = 80;
 /** Reads under way, so a pointer that wanders over a row twice reads once. */
 const READING = new Map<string, Promise<PageView>>();
 
@@ -49,7 +63,18 @@ function remember(path: string, page: PageView) {
 export function read(path: string): Promise<PageView> {
   const held = READING.get(path);
   if (held) return held;
+  // The panel's icons for this page load while the page does, and the page
+  // waits for them and for the icons of its own links, up to a cap. A page
+  // that came back first was drawn first: the webview put the icons behind
+  // that render, and the rows and the links drew empty.
+  const rows = warmRows(path);
   const reading = invoke<PageView>("page", { path })
+    .then((view) =>
+      Promise.race([
+        Promise.all([rows, warmIcons(linkIcons(view.markdown))]),
+        new Promise((done) => setTimeout(done, ICON_WAIT)),
+      ]).then(() => view),
+    )
     .then((view) => {
       remember(path, view);
       return view;
@@ -59,6 +84,18 @@ export function read(path: string): Promise<PageView> {
     });
   READING.set(path, reading);
   return reading;
+}
+
+/** The icons of the first pages a page links to: the links on screen when it
+    opens. Not all of them — a list of functions links to hundreds. */
+function linkIcons(markdown: string): string[] {
+  const icons = new Set<string>();
+  for (const [, to] of markdown.matchAll(/\]\(\/([^)#\s]+)/g)) {
+    const icon = hitOf(to)?.icon;
+    if (icon) icons.add(icon);
+    if (icons.size === 40) break;
+  }
+  return [...icons];
 }
 
 /** Drops every page held here. The cache is keyed by path alone, because a

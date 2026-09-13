@@ -2,6 +2,7 @@ pub mod db;
 pub mod hook;
 pub mod library;
 pub mod mcp;
+pub mod preview;
 pub mod server;
 pub mod telemetry;
 pub mod tray;
@@ -34,7 +35,7 @@ struct DataDir(std::path::PathBuf);
 /// The installs found on this machine, newest build first. Cached: a scan
 /// happens once and again only when `refresh` is asked for, which is what the
 /// version picker does when the reader opens it.
-#[tauri::command]
+#[tauri::command(async)]
 fn installs(cache: State<Arc<install::Cache>>, refresh: Option<bool>) -> Vec<install::Install> {
     if refresh.unwrap_or(false) { cache.refresh() } else { cache.get() }
 }
@@ -66,7 +67,7 @@ pub struct BuildRow {
 
 /// Every install on the machine, with its page count, for the version picker.
 /// Rescans first — the picker is the one place a scan is worth its cost.
-#[tauri::command]
+#[tauri::command(async)]
 fn available_installs(
     state: State<Db>,
     chosen: State<Arc<install::Chosen>>,
@@ -180,7 +181,7 @@ pub fn user_name_of_this_machine() -> String {
 ///
 /// This never waits on the index. The first page a reader opens is parsed here
 /// even if the background pass has not reached it yet.
-#[tauri::command]
+#[tauri::command(async)]
 fn page(
     app: tauri::AppHandle,
     state: State<Db>,
@@ -192,12 +193,12 @@ fn page(
     let db = state.0.lock().map_err(|e| PageError { missing: false, message: e.to_string() })?;
     let install = current(&db, &chosen, &cache)
         .map_err(|message| PageError { missing: false, message })?;
+    let node_versions = engine::versions::of(&db, &install.version, &path);
     drop(db);
-    let view = read_page(&install, &path);
-    if view.is_ok() {
-        telemetry::page_opened(&app, started.elapsed().as_secs_f64() * 1000.0);
-    }
-    view
+    let mut view = read_page(&install, &path)?;
+    view.node_versions = node_versions;
+    telemetry::page_opened(&app, started.elapsed().as_secs_f64() * 1000.0);
+    Ok(view)
 }
 
 /// An error the front end did not catch, for the telemetry. Sends nothing when
@@ -335,7 +336,7 @@ fn close_window(window: tauri::Window) -> Result<(), String> {
 ///
 /// The whole list goes to the front-end once and stays in memory there, which
 /// is what makes the pick in the search field instant. 10,450 titles are small.
-#[tauri::command]
+#[tauri::command(async)]
 fn titles(state: State<Db>, chosen: State<Arc<install::Chosen>>, cache: State<Arc<install::Cache>>) -> Result<Vec<Hit>, String> {
     let db = state.0.lock().map_err(|e| e.to_string())?;
     let build = current(&db, &chosen, &cache)?.version;
@@ -348,24 +349,30 @@ fn titles(state: State<Db>, chosen: State<Arc<install::Chosen>>, cache: State<Ar
 /// read and parsed here instead, so a tooltip on a fresh install says the same
 /// thing it will say later — the front-end batches, so this is a handful of
 /// pages at a time, not the whole viewport one at a time.
-#[tauri::command]
+#[tauri::command(async)]
 fn meta(state: State<Db>, chosen: State<Arc<install::Chosen>>, cache: State<Arc<install::Cache>>, paths: Vec<String>) -> Result<Vec<Meta>, String> {
     let db = state.0.lock().map_err(|e| e.to_string())?;
     let install = current(&db, &chosen, &cache)?;
     read_meta(&db, &install, &paths)
 }
 
+/// The share card of a link that leaves the help, for its tooltip.
+#[tauri::command]
+async fn link_preview(url: String) -> Result<preview::Preview, String> {
+    preview::fetch(&url).await
+}
+
 /// The reader's own data: bookmarks, recents, settings. One connection, one
 /// module (`library.rs`), so the window and Houdini's help pane read and
 /// write the same rows — see spec: Local — User config shared between the
 /// window and the help pane.
-#[tauri::command]
+#[tauri::command(async)]
 fn recents(state: State<Db>) -> Result<Vec<library::Entry>, String> {
     let db = state.0.lock().map_err(|e| e.to_string())?;
     library::recents(&db)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn bookmarks(state: State<Db>) -> Result<Vec<library::Entry>, String> {
     let db = state.0.lock().map_err(|e| e.to_string())?;
     library::bookmarks(&db)
@@ -414,7 +421,7 @@ fn set_setting(state: State<Db>, key: String, value: String) -> Result<(), Strin
 ///
 /// The title and heading columns are weighted above the body, so a page named
 /// for the words beats a page that only mentions them.
-#[tauri::command]
+#[tauri::command(async)]
 fn search(state: State<Db>, chosen: State<Arc<install::Chosen>>, cache: State<Arc<install::Cache>>, query: String, limit: u32) -> Result<Vec<Hit>, String> {
     let db = state.0.lock().map_err(|e| e.to_string())?;
     let build = current(&db, &chosen, &cache)?.version;
@@ -423,7 +430,7 @@ fn search(state: State<Db>, chosen: State<Arc<install::Chosen>>, cache: State<Ar
 
 /// How far the background pass has got. The front-end also gets this as an
 /// `index` event, so this call is only for what it missed before it mounted.
-#[tauri::command]
+#[tauri::command(async)]
 fn index_status(state: State<Db>, chosen: State<Arc<install::Chosen>>, cache: State<Arc<install::Cache>>) -> Result<index::Status, String> {
     let db = state.0.lock().map_err(|e| e.to_string())?;
     let build = current(&db, &chosen, &cache)?.version;
@@ -519,7 +526,7 @@ fn asset_response(app: &tauri::AppHandle, request: Request<Vec<u8>>) -> Response
 /// `None` for no header, for a form this app does not serve, and for a range
 /// that starts past the end — the last of which is a 416 the player recovers
 /// from by asking again, so answering with the whole file is the kinder reply.
-fn range(header: Option<&str>, len: usize) -> Option<(usize, usize)> {
+pub fn range(header: Option<&str>, len: usize) -> Option<(usize, usize)> {
     let (first, last) = header?.trim().strip_prefix("bytes=")?.split_once('-')?;
     let first: usize = first.trim().parse().ok()?;
     let last = match last.trim() {
@@ -566,6 +573,19 @@ fn icon_response(app: &tauri::AppHandle, request: Request<Vec<u8>>) -> Response<
             .body(reason.into_bytes())
             .unwrap(),
     }
+}
+
+/// Answers a scheme request off the main thread. A synchronous handler runs on
+/// the thread that draws the window, so every icon in a list waited behind the
+/// page read in front of it, and the rows drew empty.
+fn off_main(
+    app: &tauri::AppHandle,
+    request: Request<Vec<u8>>,
+    responder: tauri::UriSchemeResponder,
+    answer: fn(&tauri::AppHandle, Request<Vec<u8>>) -> Response<Vec<u8>>,
+) {
+    let app = app.clone();
+    tauri::async_runtime::spawn_blocking(move || responder.respond(answer(&app, request)));
 }
 
 /// A help icon name can carry a space, so the webview sends it percent-encoded.
@@ -741,8 +761,8 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(update::plugin())
-        .register_uri_scheme_protocol("hicon", |ctx, request| icon_response(ctx.app_handle(), request))
-        .register_uri_scheme_protocol("himage", |ctx, request| asset_response(ctx.app_handle(), request))
+        .register_asynchronous_uri_scheme_protocol("hicon", |ctx, request, responder| off_main(ctx.app_handle(), request, responder, icon_response))
+        .register_asynchronous_uri_scheme_protocol("himage", |ctx, request, responder| off_main(ctx.app_handle(), request, responder, asset_response))
         .setup(|app| {
             // `--clean` runs the app as a machine that has never run it: its
             // own data directory beside the real one, which is left untouched.
@@ -798,6 +818,7 @@ pub fn run() {
             clean_start,
             page,
             meta,
+            link_preview,
             titles,
             search,
             index_status,

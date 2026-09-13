@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { cn } from "@/lib/utils";
 import { FADE_BOTH, FADE_OUT } from "@/lib/ui/overflow";
 
@@ -56,19 +57,27 @@ export function VirtualList<T>({
   }, []);
 
   // The list is re-windowed on the frame, not on the event: a fast wheel
-  // fires scroll far more often than the screen refreshes.
+  // fires scroll far more often than the screen refreshes. And drawn in that
+  // same frame: a state update from outside a React event waits for a later
+  // task, and the frame between paints the new scroll over the old rows — a
+  // strip of empty list.
   const frame = useRef(0);
   const onScroll = useCallback(() => {
     if (frame.current) return;
     frame.current = requestAnimationFrame(() => {
       frame.current = 0;
       const at = node.current?.scrollTop ?? 0;
-      setTop(at);
-      onTop?.(at);
+      flushSync(() => {
+        setTop(at);
+        onTop?.(at);
+      });
     });
   }, []);
 
-  useEffect(() => {
+  // Before the paint, so the list is never seen at its old place with the
+  // new rows, and re-windowed with it, so it is never seen at its new place
+  // with the old ones.
+  useLayoutEffect(() => {
     const element = node.current;
     if (!element || reveal === undefined || reveal < 0) return;
     const top = reveal * rowHeight;
@@ -77,6 +86,8 @@ export function VirtualList<T>({
     // Centred, not flush against an edge: the rows around it are what say
     // where in the list the reader landed.
     element.scrollTop = Math.max(0, top - box / 2 + rowHeight / 2);
+    setTop(element.scrollTop);
+    onTop?.(element.scrollTop);
   }, [reveal, rowHeight]);
 
   const total = items.length * rowHeight;
