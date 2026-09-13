@@ -11,11 +11,10 @@
  * list nobody widened on purpose.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { invoke, listen } from "../../lib/backend";
 import { cn } from "@/lib/utils";
-import { titles, forgetTitles, type Hit } from "@/lib/search";
-import { buildTree, built, type TreeBranch } from "@/lib/landing/tree";
-import { useBuild } from "@/lib/install";
+import { titles } from "@/lib/search";
+import { built, treeOf, type TreeBranch } from "@/lib/landing/tree";
+import { useBuild, useIndex } from "@/lib/install";
 import { useLibrary } from "@/lib/store/library";
 import { VersionSelector } from "./sidebar/VersionSelector";
 import { BookmarkStrip } from "./sidebar/BookmarkStrip";
@@ -25,42 +24,24 @@ import { SidebarRow } from "./sidebar/SidebarRow";
 import { FadeList } from "@/components/ui/FadeList";
 
 /** The tree is derived from every title, which is fast but not free — so it is
-    built once and every panel that mounts afterwards reads the same tree.
-    On a fresh index the background pass writes Nodes last (it is by far the
-    biggest zip), so the first build can land before Nodes exists. Rebuild
-    once the pass finishes so the tree does not stay stuck on that first,
-    partial read for the rest of the session. */
-function useTree(): { tree: TreeBranch[]; reading: boolean } {
+    built once per title list and every panel that mounts reads the same tree.
+    While the first pass writes, the list is read again as it grows, so the
+    groups fill in and their counts climb in front of the reader. */
+function useTree(): TreeBranch[] {
   const [tree, setTree] = useState<TreeBranch[]>(built.tree ?? []);
-  const [reading, setReading] = useState(false);
+  const { titles: read } = useIndex();
 
   useEffect(() => {
     let live = true;
-    const load = () => {
-      void titles().then((all: Hit[]) => {
-        const next = (built.tree = buildTree(all));
-        if (live) setTree(next);
-      });
-    };
-    if (!built.tree) load();
-    // Houdini's help pane gets no events, so the state is read once as well.
-    void invoke<{ done: boolean }>("index_status")
-      .then((status) => live && setReading(!status.done))
-      .catch(() => {});
-    const stop = listen<{ done: boolean }>("index", (event) => {
-      setReading(!event.payload.done);
-      if (!event.payload.done) return;
-      forgetTitles();
-      built.tree = null;
-      load();
+    void titles().then((all) => {
+      if (live) setTree(treeOf(all));
     });
     return () => {
       live = false;
-      void stop.then((off) => off());
     };
-  }, []);
+  }, [read]);
 
-  return { tree, reading };
+  return tree;
 }
 
 const WIDTH_KEY = "houdinimd.sidebar-width";
@@ -91,7 +72,7 @@ export function Sidebar({
   className?: string;
 }) {
   const { version, pageCount } = useBuild();
-  const { tree, reading } = useTree();
+  const tree = useTree();
   const { recents, bookmarks } = useLibrary();
   const [recentsOpen, setRecentsOpen] = useState(false);
   const [width, setWidth] = useState(storedWidth);
@@ -155,7 +136,6 @@ export function Sidebar({
           below, and scrolls inside that — the footer never leaves the bottom
           of the window. */}
       <PageTree
-        reading={reading}
         groups={tree}
         currentPath={currentPath}
         bookmarked={new Set(bookmarks.map((entry) => entry.path))}

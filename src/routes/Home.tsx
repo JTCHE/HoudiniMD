@@ -1,7 +1,7 @@
 import { AsciiBackground } from "@/components/root/AsciiBackground";
 import { SearchField } from "@/components/root/search-field/SearchField";
 import { LibraryPanel } from "@/components/root/LibraryPanel";
-import { useBuild } from "@/lib/install";
+import { pagesLabel, useBuild, useIndex } from "@/lib/install";
 import { DISPLAY_TITLE } from "@/lib/ui/type";
 
 /**
@@ -16,6 +16,7 @@ import { DISPLAY_TITLE } from "@/lib/ui/type";
  */
 export default function Home() {
   const { version, pageCount } = useBuild();
+  const { status } = useIndex();
 
   return (
     <main className="relative flex min-h-0 flex-1 flex-col overflow-hidden pb-statusbar @container">
@@ -41,7 +42,7 @@ export default function Home() {
                   <>
                     <span>Houdini {version}</span>
                     <span className="before:content-['·'] before:mr-sm @max-xs:before:content-none @max-xs:before:mr-0">
-                      {pageCount === null ? "counting pages…" : `${pageCount.toLocaleString()} pages`}
+                      {pageCount === null ? "counting pages…" : pagesLabel(pageCount, status)}
                     </span>
                   </>
                 ) : (

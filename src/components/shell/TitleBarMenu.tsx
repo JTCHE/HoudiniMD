@@ -10,7 +10,6 @@
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { invoke } from "@/lib/backend";
-import { announceBuildChanged } from "@/lib/install";
 import { showToast } from "@/components/ui/toast-notification";
 import { TELEMETRY } from "@/components/onboarding/Onboarding";
 import { Icons } from "@/lib/ui/icons";
@@ -51,20 +50,12 @@ export function TitleBarMenu({ at, onClose }: { at: { x: number; y: number }; on
     };
   }, [onClose]);
 
-  async function resetIndex() {
-    setBusy(true);
-    try {
-      await invoke("reset_index");
-      // The page count is what a reader watches, so tell every view to read it
-      // again: the count falls to nothing and climbs back as the pass runs.
-      announceBuildChanged();
-      showToast("Index cleared. Reading the install again…");
-      onClose();
-    } catch (reason) {
-      showToast(String(reason), "error");
-    } finally {
-      setBusy(false);
-    }
+  /** Answered on the click, not after the backend: the pass reports its own
+      progress, and every count falls to nothing and climbs back with it. */
+  function resetIndex() {
+    showToast("Index cleared. Reading the install again…");
+    onClose();
+    invoke("reset_index").catch((reason) => showToast(String(reason), "error"));
   }
 
   /** Bookmarks, recents and settings are the reader's own work and nothing
@@ -126,7 +117,7 @@ export function TitleBarMenu({ at, onClose }: { at: { x: number; y: number }; on
         See what is sent
       </button>
       <div role="separator" className="mx-sm my-1 h-px bg-hairline" />
-      <button type="button" role="menuitem" disabled={busy} className={ITEM} onClick={() => void resetIndex()}>
+      <button type="button" role="menuitem" disabled={busy} className={ITEM} onClick={resetIndex}>
         Reset index
       </button>
       <button

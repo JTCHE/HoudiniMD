@@ -92,11 +92,25 @@ fn main() {
         return;
     }
 
-    let Some(install) = install::find(&[]).into_iter().next() else {
-        eprintln!("no Houdini install on this machine — nothing to measure");
+    // `--build 21.0.829` measures that install; the newest is the default.
+    let build = flag(&args, "--build");
+    let Some(install) = install::find(&[])
+        .into_iter()
+        .find(|i| build.as_ref().is_none_or(|b| &i.version == b))
+    else {
+        eprintln!("no such Houdini install on this machine — nothing to measure");
         std::process::exit(2);
     };
     eprintln!("Houdini {}, {} run(s)", install.version, runs);
+
+    // `--index` times the first index pass alone, with the time of every
+    // report it sends.
+    if args.iter().any(|a| a == "--index") {
+        let runs: Vec<f64> = (0..runs).map(|_| index_once(&work, &install, true)).collect();
+        let metric = measured("index.first_pass", "ms", &runs, install.version.clone());
+        println!("{}", serde_json::to_string_pretty(&metric).expect("json"));
+        return;
+    }
 
     let mut metrics: Vec<Metric> = Vec::new();
 
@@ -106,7 +120,7 @@ fn main() {
     let mut cold = Vec::new();
     let mut warm = Vec::new();
     for run in 0..runs {
-        let ms = index_once(&work, &install);
+        let ms = index_once(&work, &install, false);
         if run == 0 {
             cold.push(ms);
         } else {
@@ -139,7 +153,7 @@ fn main() {
     for _ in 0..runs {
         let mut db = db::open(&work).expect("open");
         let at = Instant::now();
-        index::pass(&mut db, &install, &|_| {}).expect("pass");
+        index::pass(&mut db, &install, &|_| {}, &|| true).expect("pass");
         skip.push(us(at));
     }
     metrics.push(measured(
@@ -291,18 +305,37 @@ fn main() {
     println!("{json}");
 }
 
-/// One full index pass into an empty database, timed.
-fn index_once(work: &Path, install: &install::Install) -> f64 {
+/// One full index pass into an empty database, timed, the way the app runs
+/// it: `index::run` on a thread of its own. `timeline` prints the time of
+/// every report the pass sends, which is what the reader watches the count do.
+fn index_once(work: &Path, install: &install::Install, timeline: bool) -> f64 {
     // Loudly. A database that survives this call is a database the pass then
     // returns from in a tenth of a millisecond, and the run reports a full
     // index as free. That happened, and it was silent. Emptied the way
     // `reset_index` empties it; the file stays.
-    let mut db = db::open(work).expect("open");
-    db.execute_batch("DELETE FROM pages; DELETE FROM pages_fts; DELETE FROM builds;")
+    db::open(work)
+        .and_then(|db| engine::db::reset(&db))
         .expect("the probe's own database is in use by something else");
+    let (work, install) = (work.to_path_buf(), install.clone());
     let at = Instant::now();
-    index::pass(&mut db, install, &|_| {}).expect("pass");
-    at.elapsed().as_secs_f64() * 1000.0
+    let reports = std::thread::spawn(move || {
+        let seen = std::sync::Mutex::new(Vec::new());
+        index::run(&work, &install, &|s| seen.lock().unwrap().push((us(at) / 1000.0, s.pages, s.total)), &|| true)
+            .expect("pass");
+        seen.into_inner().unwrap()
+    })
+    .join()
+    .expect("the pass panicked");
+    let total = us(at) / 1000.0;
+    if timeline {
+        eprintln!("{total:.0} ms, {} reports", reports.len());
+        let mut last = 0.0;
+        for (ms, pages, of) in &reports {
+            eprintln!("  {ms:>8.0} ms  (+{:>5.0})  {pages:>6} / {of}", ms - last);
+            last = *ms;
+        }
+    }
+    total
 }
 
 /// Page paths spread evenly across the corpus in path order. Taking the first

@@ -1,19 +1,17 @@
 /**
- * The strip along the bottom: the three keys worth knowing, and whatever the
- * app is doing in the background.
+ * The strip along the bottom: the three keys worth knowing, and the address
+ * Houdini reaches the app on.
  *
  * The keys are stated rather than discovered. A desktop reader who learns
  * ⌘K once never opens the search field with the pointer again, and the row
  * costs nothing — it is the space under the content, which is empty anyway.
  *
- * The right-hand slot is for a running job. It holds the index pass, which is
- * the only thing the app does that the reader did not ask for, and it says
- * nothing once that pass is done.
+ * The index pass is not here. It shows on the build card, beside the counts
+ * it changes, where the reader already looks.
  */
 import { cn } from "@/lib/utils";
 import { COMMAND_KEY } from "@/lib/hotkeys";
 import { Keycap, SMALL_KEY } from "@/components/ui/Keycap";
-import { IndexProgress } from "@/components/root/IndexProgress";
 import { ServerPortBadge } from "@/components/root/ServerPortBadge";
 
 const HINTS: Array<{ keys: string[]; label: string }> = [
@@ -56,10 +54,8 @@ export function StatusBar({ className }: { className?: string }) {
       </div>
 
       {/* The right of the strip states what the app is, not what the reader
-          can do: the pass it is running, then the address Houdini reaches it
-          on. Both are facts about the window rather than about the page. */}
+          can do: the address Houdini reaches it on. */}
       <div className="ml-auto flex shrink-0 items-center gap-md text-meta text-neutral-500">
-        <IndexProgress />
         <ServerPortBadge />
       </div>
     </footer>

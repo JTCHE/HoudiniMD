@@ -49,9 +49,6 @@ function indent(depth: number): React.CSSProperties | undefined {
 
 interface PageTreeProps {
   groups: TreeBranch[];
-  /** The first pass is still reading, so a category the reader expects can be
-      missing from the list. Says so, instead of leaving a hole. */
-  reading?: boolean;
   /** The page on screen, so the panel can mark it. */
   currentPath?: string;
   /** The pages the reader keeps, marked in the list they are read from. */
@@ -103,7 +100,7 @@ let kept: Open = [];
     on the same page does not open again what the reader has closed. */
 let followed: string | undefined;
 
-export function PageTree({ groups, reading, currentPath, bookmarked, className }: PageTreeProps) {
+export function PageTree({ groups, currentPath, bookmarked, className }: PageTreeProps) {
   // Open onto a new page from the first render: opened from the effect below,
   // the panel drew its closed groups for a frame first.
   const [open, setOpen] = useState<Open>(() =>
@@ -330,11 +327,6 @@ export function PageTree({ groups, reading, currentPath, bookmarked, className }
           )
         }
       </VirtualList>
-      {reading && (
-        <p className="px-sm py-xs text-meta text-neutral-400" role="status">
-          Still reading the docs. More categories are on the way.
-        </p>
-      )}
     </nav>
   );
 }

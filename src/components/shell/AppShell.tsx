@@ -16,7 +16,7 @@ import { invoke, inTauri } from "@/lib/backend";
 import { known, read } from "@/lib/pages";
 import { primeBuild } from "@/lib/install";
 import { titles, warmTitleIndex } from "@/lib/search";
-import { buildTree, built } from "@/lib/landing/tree";
+import { treeOf } from "@/lib/landing/tree";
 import { bookmarks, libraryLoaded } from "@/lib/store/library";
 import { warmIcons } from "@/lib/icons";
 import { isCommand, isTyping, useHotkey } from "@/lib/hotkeys";
@@ -78,7 +78,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
   useEffect(() => {
     const tree = titles().then((all) => {
-      built.tree ??= buildTree(all);
+      treeOf(all);
       // After the tree, so the read can load the panel's icons with it.
       if (path) return read(path).then(() => {});
     });

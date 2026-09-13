@@ -204,7 +204,7 @@ export function buildTree(all: Hit[]): TreeBranch[] {
     if (group.id === "nodes") return tier(group.id, group.label, nodeBranches(inGroup));
     if (group.id === "languages") return tier(group.id, group.label, languageBranches(inGroup));
     return tier(group.id, group.label, sectionBranches(inGroup, titleOf));
-  }).filter((group) => group.count > 0);
+  });
 }
 
 /** A group: its branches, and no pages of its own. */
@@ -213,8 +213,17 @@ function tier(id: string, label: string, branches: TreeBranch[]): TreeBranch {
   return { id, label, count, branches, pages: [] };
 }
 
-/** The tree the panel draws, built once for every panel that mounts. */
-export const built: { tree: TreeBranch[] | null } = { tree: null };
+/** The tree the panel draws, built once per title list for every panel that
+    mounts. */
+export const built: { tree: TreeBranch[] | null; from: Hit[] | null } = { tree: null, from: null };
+
+export function treeOf(all: Hit[]): TreeBranch[] {
+  if (built.from !== all || !built.tree) {
+    built.tree = buildTree(all);
+    built.from = all;
+  }
+  return built.tree;
+}
 
 /** Loads the icons of the rows the panel shows when it opens on `path`: the
     page and its neighbours, about half a tall panel each way plus the list's

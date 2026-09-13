@@ -59,9 +59,6 @@ pub struct BuildRow {
     pub version: String,
     pub pages: u32,
     pub done: bool,
-    /// False for a build that has never been opened. The picker says "not
-    /// indexed yet" for those, rather than claiming a pass is running.
-    pub started: bool,
     pub current: bool,
 }
 
@@ -88,7 +85,6 @@ fn available_installs(
                 version: install.version,
                 pages: status.pages,
                 done: status.done,
-                started: status.started,
             }
         })
         .collect())
@@ -145,14 +141,13 @@ fn switch(
     install::set_chosen(chosen, install.clone())?;
     let status = index::status(db, &install.version);
     if !status.done {
-        start_index(app, data.0.clone(), install.clone());
+        start_index(app, data.0.clone(), install.clone(), false);
     }
     Ok(BuildRow {
         current: true,
         version: install.version,
         pages: status.pages,
         done: status.done,
-        started: status.started,
     })
 }
 
@@ -465,11 +460,29 @@ pub fn current(
     Ok(picked)
 }
 
-/// Starts the background index pass for one build, reporting to the front-end
-/// as it goes. The pass itself is `engine::index`; the events are this app's.
-pub fn start_index(app: tauri::AppHandle, data: std::path::PathBuf, install: install::Install) {
+/// The newest pass asked for, by number. An older pass that sees a newer
+/// number stops at its next write, so a build switch or a reset never waits
+/// for a pass the reader has left.
+static PASS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+/// Held for the length of a pass: two passes never write at once.
+static WRITING: Mutex<()> = Mutex::new(());
+
+/// Starts the index pass for one build, reporting to the front-end as it
+/// goes. `reset` empties the whole index first. The pass itself is
+/// `engine::index`; the events are this app's.
+pub fn start_index(app: tauri::AppHandle, data: std::path::PathBuf, install: install::Install, reset: bool) {
+    use std::sync::atomic::Ordering::SeqCst;
+    let mine = PASS.fetch_add(1, SeqCst) + 1;
     std::thread::spawn(move || {
-        index::background_priority();
+        let live = || PASS.load(SeqCst) == mine;
+        let writing = WRITING.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        if !live() {
+            return;
+        }
+        if reset && let Err(message) = engine::db::open(&data).and_then(|db| engine::db::reset(&db)) {
+            let _ = app.emit("index-failed", message);
+            return;
+        }
         let started = std::time::Instant::now();
         // A build already indexed reports `done` at once; only a pass that
         // reported progress first did any work worth timing.
@@ -479,13 +492,22 @@ pub fn start_index(app: tauri::AppHandle, data: std::path::PathBuf, install: ins
                 worked.store(true, std::sync::atomic::Ordering::Relaxed);
             } else if worked.load(std::sync::atomic::Ordering::Relaxed) {
                 telemetry::index_done(&app, started.elapsed().as_secs_f64(), status.pages);
+            } else {
+                // Nothing was written, so nothing on screen is out of date.
+                return;
             }
-            let _ = app.emit("index", status);
+            if live() {
+                let _ = app.emit("index", status);
+            }
         };
-        if let Err(message) = index::run(&data, &install, &report) {
+        if let Err(message) = index::run(&data, &install, &report, &live) {
             let _ = app.emit("index-failed", message);
         }
-        engine::listing::warm(&install.help_roots());
+        // Outside the lock: a reset asked for now must not wait for this.
+        drop(writing);
+        if live() {
+            engine::listing::warm(&install.help_roots());
+        }
     });
 }
 
@@ -634,8 +656,9 @@ fn clean_start() -> bool {
 
 /// Throws away everything derived from the Houdini install and reads it again.
 /// Nothing of the reader's is in these tables — see `db.rs` — so this costs a
-/// background pass and no more.
-#[tauri::command]
+/// pass and no more. Returns at once: the emptying is the pass's first step,
+/// on the pass's thread, so the click is answered before the work begins.
+#[tauri::command(async)]
 fn reset_index(
     app: tauri::AppHandle,
     data: State<DataDir>,
@@ -645,11 +668,9 @@ fn reset_index(
 ) -> Result<(), String> {
     let install = {
         let db = state.0.lock().map_err(|e| e.to_string())?;
-        db.execute_batch("DELETE FROM pages; DELETE FROM pages_fts; DELETE FROM builds;")
-            .map_err(|e| e.to_string())?;
         current(&db, &chosen, &cache)?
     };
-    start_index(app, data.0.clone(), install);
+    start_index(app, data.0.clone(), install, true);
     Ok(())
 }
 
@@ -807,7 +828,7 @@ pub fn run() {
             app.manage(Port(port));
             hook_from_the_command_line(&data, port);
             if let Ok(install) = current_for(&app.handle().clone()) {
-                start_index(app.handle().clone(), data, install);
+                start_index(app.handle().clone(), data, install, false);
             }
             tray::build(app)?;
             telemetry::start(app.handle());

@@ -6,6 +6,8 @@
 //!
 //! See spec: Local — Include directives are never resolved.
 
+use std::sync::Arc;
+
 use crate::model::{Block, Inline, LinkTarget, prop};
 
 /// How deep one include may reach through other includes. Four is past
@@ -13,9 +15,11 @@ use crate::model::{Block, Inline, LinkTarget, prop};
 /// this pass has not seen yet.
 const DEPTH: usize = 4;
 
-/// Reads the source of a page by path, such as `nodes/sop/box`. `None` where
-/// this build holds no such page.
-pub type Load<'a> = dyn Fn(&str) -> Option<String> + 'a;
+/// Reads a page by path, such as `nodes/sop/box`, parsed. `None` where this
+/// build holds no such page. Parsed, not source, so a caller that reads many
+/// pages can parse each included page once: the index pass includes the same
+/// few pages thirteen thousand times.
+pub type Load<'a> = dyn Fn(&str) -> Option<Arc<Vec<Block>>> + 'a;
 
 /// Replaces every include in `blocks` with the content it points at. `page` is
 /// the path the blocks were read from, which relative include paths stand on.
@@ -64,12 +68,11 @@ fn expand(blocks: &mut Vec<Block>, from: &str, load: &Load, open: &mut Vec<Strin
 
 /// The blocks of `target`, or the one block named by `id` inside it.
 fn pull(target: &str, id: Option<&str>, contents_only: bool, load: &Load) -> Option<Vec<Block>> {
-    let source = load(target)?;
-    let mut page = crate::parse(&source);
+    let mut blocks = Vec::clone(&*load(target)?);
     let Some(id) = id else {
-        return Some(page.blocks);
+        return Some(blocks);
     };
-    let mut block = find(&mut page.blocks, id)?;
+    let mut block = find(&mut blocks, id)?;
     if !contents_only {
         return Some(vec![block]);
     }
@@ -238,7 +241,11 @@ fn at(dir: &str, src: &str) -> String {
 mod tests {
     use super::*;
 
-    fn load(path: &str) -> Option<String> {
+    fn load(path: &str) -> Option<Arc<Vec<Block>>> {
+        source(path).map(|source| Arc::new(crate::parse(&source).blocks))
+    }
+
+    fn source(path: &str) -> Option<String> {
         match path {
             "nodes/sop/_common" => Some(
                 "#type: include\n\n\
