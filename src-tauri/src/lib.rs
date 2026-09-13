@@ -750,27 +750,22 @@ async fn install_houdini_mcp(
         .map_err(|e| e.to_string())?
 }
 
-/// Puts back what F1 pointed at before this app touched it.
+/// Puts back what F1 pointed at before this app touched it, for the named
+/// releases.
 #[tauri::command]
-fn unhook_houdini(data: State<DataDir>) -> Result<Vec<String>, String> {
-    hook::revert(&data.0)
+fn unhook_houdini(data: State<DataDir>, releases: Vec<String>) -> Result<Vec<String>, String> {
+    hook::revert(&data.0, &releases)
 }
 
-/// Runs the hook off the command line, the way an installer would: `--hook`
-/// turns F1 towards this app for every release series on the machine, and
-/// `--unhook` puts back what was there. Both take the port the server just
-/// took, so the app is already serving when the preference names it.
+/// `--hook` turns F1 towards this app for every release series on the
+/// machine. It takes the port the server just took, so the app is already
+/// serving when the preference names it. `--unhook` is in `run`.
 fn hook_from_the_command_line(data: &std::path::Path, port: u16) {
-    let asked = |flag: &str| std::env::args().any(|argument| argument == flag);
-    let done = if asked("--unhook") {
-        hook::revert(data)
-    } else if asked("--hook") {
-        let all: Vec<String> = hook::releases(port).into_iter().map(|r| r.release).collect();
-        hook::apply(data, port, &all)
-    } else {
+    if !std::env::args().any(|argument| argument == "--hook") {
         return;
-    };
-    match done {
+    }
+    let all: Vec<String> = hook::releases(port).into_iter().map(|r| r.release).collect();
+    match hook::apply(data, port, &all) {
         Ok(releases) => println!("houdini {}", releases.join(", ")),
         Err(reason) => eprintln!("{reason}"),
     }
@@ -781,6 +776,16 @@ fn hook_from_the_command_line(data: &std::path::Path, port: u16) {
 struct Port(u16);
 
 pub fn run() {
+    let context = tauri::generate_context!();
+    // The uninstaller asks for this, and the app can still be open then. So it
+    // runs before the single-instance plugin can hand it to that app, and it
+    // opens no window. The exit code tells the uninstaller to ask again.
+    if std::env::args().any(|argument| argument == "--unhook") {
+        let done = update::data_dir_before_launch(&context.config().identifier)
+            .map_err(|e| e.to_string())
+            .and_then(|data| hook::revert(&data, &[]));
+        std::process::exit(if done.is_ok() { 0 } else { 1 });
+    }
     let builder = tauri::Builder::default();
     // One process owns the port Houdini's F1 points at, so a second launch
     // hands over to the first. It must be the first plugin. A debug build
@@ -878,7 +883,7 @@ pub fn run() {
             close_window,
             open_devtools
         ])
-        .run(tauri::generate_context!())
+        .run(context)
         .expect("error while running the application");
 }
 

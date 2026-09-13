@@ -24,8 +24,8 @@ const PORTABLE_MARKER: &str = ".portable";
 /// sits there, and opening it for append proves the folder still accepts
 /// writes (an install under `Program Files` never does, so a copied marker
 /// left there by mistake is harmless). Anything else — the per-user or
-/// all-users install — uses `app_data_dir()`, which Tauri already resolves
-/// to `%LOCALAPPDATA%\HoudiniMD`.
+/// all-users install — uses `app_data_dir()`, which Tauri resolves to
+/// `%APPDATA%\<identifier>`.
 ///
 /// Same `Result<PathBuf, _>` shape as `app.path().app_data_dir()`, so the
 /// call site is a one-line swap.
@@ -36,6 +36,16 @@ pub fn data_dir<R: Runtime>(app: &impl Manager<R>) -> io::Result<PathBuf> {
     app.path()
         .app_data_dir()
         .map_err(|e| io::Error::other(e.to_string()))
+}
+
+/// `data_dir` for a process that exits before Tauri starts: the uninstaller's
+/// `--unhook`. It must find the same record the app wrote.
+pub fn data_dir_before_launch(identifier: &str) -> io::Result<PathBuf> {
+    if let Some(dir) = portable_dir()? {
+        return Ok(dir);
+    }
+    let roaming = std::env::var_os("APPDATA").ok_or_else(|| io::Error::other("APPDATA is not set"))?;
+    Ok(PathBuf::from(roaming).join(identifier))
 }
 
 fn portable_dir() -> io::Result<Option<PathBuf>> {
