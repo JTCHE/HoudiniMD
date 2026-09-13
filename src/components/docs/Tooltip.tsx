@@ -1,6 +1,9 @@
 import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
+import { ArrowUpRight } from "lucide-react";
 import { invoke } from "../../lib/backend";
+import { cn } from "@/lib/utils";
+import { hitOf } from "@/lib/search";
 
 interface MetaEntry {
   title: string;
@@ -99,7 +102,13 @@ export function registerSlug(slug: string) {
     Null until then, so a link shows what the help wrote and swaps to the page's
     own name when the answer arrives. */
 export function usePageMark(slug: string | null): MetaEntry | null {
-  const [mark, setMark] = useState<MetaEntry | null>(() => (slug ? (metaCache.get(slug) ?? null) : null));
+  // The title list in memory already names the page's icon, so a link draws
+  // its own mark at once instead of the page glyph, then the icon.
+  const [mark, setMark] = useState<MetaEntry | null>(() => {
+    if (!slug) return null;
+    const hit = hitOf(slug);
+    return metaCache.get(slug) ?? (hit ? { title: hit.title, summary: hit.summary ?? "", icon: hit.icon ?? null } : null);
+  });
   useEffect(() => {
     if (!slug) return;
     let live = true;
@@ -117,24 +126,18 @@ export function usePageMark(slug: string | null): MetaEntry | null {
   return mark;
 }
 
-export function DocTooltip({
-  slug,
-  anchorRef,
-  hoverPosRef,
-}: {
-  slug: string;
-  anchor?: string | null;
+interface Anchored {
   anchorRef: React.RefObject<HTMLElement | null>;
   hoverPosRef?: React.RefObject<{ x: number; y: number } | null>;
-}) {
-  const [meta, setMeta] = useState<MetaEntry | null>(() => metaCache.get(slug) ?? null);
-  const [error, setError] = useState(metaCache.get(slug) === null);
-  const mountedRef = useRef(true);
+}
+
+/** The box every tooltip sits in. Fixed, so it escapes any ancestor's
+    `overflow: clip` (e.g. the carousel). Over the link, or under it where the
+    box does not fit above, and pushed in from the side of the window. */
+function TooltipBox({ anchorRef, hoverPosRef, className, children }: Anchored & { className: string; children: React.ReactNode }) {
   const tooltipRef = useRef<HTMLSpanElement>(null);
-  const [clampX, setClampX] = useState(0);
-  // Fixed-position coordinates anchored off the link, computed each mount so
-  // the tooltip escapes any ancestor's `overflow: clip` (e.g. the carousel).
-  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
+  const [line, setLine] = useState<DOMRect | null>(null);
+  const [place, setPlace] = useState({ x: 0, below: false });
 
   useLayoutEffect(() => {
     const anchorEl = anchorRef.current;
@@ -145,8 +148,7 @@ export function DocTooltip({
     // from the visually-clickable card, so anchor to the card instead.
     const card = anchorEl.closest<HTMLElement>(".shelf-grid li");
     if (card) {
-      const rect = card.getBoundingClientRect();
-      setPosition({ top: rect.top - 4, left: rect.left + rect.width / 2 });
+      setLine(card.getBoundingClientRect());
       return;
     }
     // getBoundingClientRect() on a wrapped link returns the union of every
@@ -164,19 +166,49 @@ export function DocTooltip({
         }
       }
     }
-    setPosition({ top: rect.top - 4, left: rect.left + rect.width / 2 });
+    setLine(rect);
   }, [anchorRef, hoverPosRef]);
 
+  // After every render, because the content grows when its answer arrives.
+  // An unchanged place returns the same object, so this settles in one pass.
   useLayoutEffect(() => {
     const el = tooltipRef.current;
-    if (!el || !position) return;
-    const rect = el.getBoundingClientRect();
+    if (!el || !line) return;
+    const { width, height } = el.getBoundingClientRect();
     const margin = 8;
-    let offset = 0;
-    if (rect.left < margin) offset = margin - rect.left;
-    else if (rect.right > window.innerWidth - margin) offset = window.innerWidth - margin - rect.right;
-    setClampX(offset);
-  }, [meta, position]);
+    const left = line.left + line.width / 2 - width / 2;
+    const x =
+      left < margin ? margin - left : left + width > window.innerWidth - margin ? window.innerWidth - margin - (left + width) : 0;
+    const below = line.top - 4 - height < margin && line.bottom + 4 + height <= window.innerHeight - margin;
+    setPlace((p) => (p.x === x && p.below === below ? p : { x, below }));
+  });
+
+  if (!line) return null;
+
+  return createPortal(
+    <span
+      ref={tooltipRef}
+      style={{
+        top: place.below ? line.bottom + 4 : line.top - 4,
+        left: line.left + line.width / 2,
+        transform: `translate(calc(-50% + ${place.x}px), ${place.below ? "0" : "-100%"})`,
+      }}
+      className={cn(
+        "[@media(hover:none)]:hidden rounded-lg fixed z-50 bg-background border border-border shadow-lg p-2 text-xs pointer-events-none whitespace-normal",
+        className,
+      )}
+    >
+      {children}
+    </span>,
+    document.body,
+  );
+}
+
+/** What a page in the help is called and what it is about. */
+export function DocTooltip({ slug, ...anchored }: Anchored & { slug: string }) {
+  const [meta, setMeta] = useState<MetaEntry | null>(() => metaCache.get(slug) ?? null);
+  const [error, setError] = useState(metaCache.get(slug) === null);
+  const mountedRef = useRef(true);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -197,28 +229,157 @@ export function DocTooltip({
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (error || !position) return null;
+  if (error) return null;
 
   const summary = meta?.summary;
 
-  return createPortal(
-    <span
-      ref={tooltipRef}
-      style={{ top: position.top, left: position.left, transform: `translate(calc(-50% + ${clampX}px), -100%)` }}
-      className="[@media(hover:none)]:hidden rounded-lg fixed z-50 w-max max-w-[16rem] bg-background border border-border shadow-lg p-2 text-xs pointer-events-none whitespace-normal"
-    >
+  return (
+    <TooltipBox {...anchored} className="w-max max-w-[16rem]">
       {meta ? (
         <>
           <span className="block font-semibold text-foreground">{meta.title}</span>
-          {summary && <span className="block text-muted-foreground mt-0.5 line-clamp-2">{summary}</span>}
+          {summary && <span className="text-muted-foreground mt-0.5 line-clamp-2">{summary}</span>}
         </>
       ) : (
+        <Skeleton />
+      )}
+    </TooltipBox>
+  );
+}
+
+function Skeleton() {
+  return (
+    <>
+      <span className="sk block h-3 w-28 rounded-lg bg-muted" />
+      <span className="sk block h-2.5 w-40 rounded-lg bg-muted mt-1.5" />
+    </>
+  );
+}
+
+interface LinkPreview {
+  title?: string | null;
+  description?: string | null;
+  image?: string | null;
+}
+
+// One ask per address for the whole session. A failure is kept as null, so an
+// address that does not answer is not asked again on every hover.
+const previews = new Map<string, Promise<LinkPreview | null>>();
+
+function preview(url: string) {
+  let asked = previews.get(url);
+  if (!asked) {
+    asked = invoke<LinkPreview>("link_preview", { url }).catch(() => null);
+    previews.set(url, asked);
+  }
+  return asked;
+}
+
+/** "sidefx.com/docs/houdini", not the whole address: the reader wants to
+    know where the link goes, and the scheme and the query say little. */
+function where(url: string) {
+  try {
+    const { hostname, pathname } = new URL(url);
+    return hostname.replace(/^www\./, "") + pathname.replace(/\/$/, "");
+  } catch {
+    return url;
+  }
+}
+
+/** The share card of a link that leaves the help: its picture, title and
+    description, and where it goes. With no network, or a site that gives no
+    card, it is the address alone — still more than the link text says. */
+export function LinkTooltip({ url, ...anchored }: Anchored & { url: string }) {
+  // undefined while the answer is on its way.
+  const [card, setCard] = useState<LinkPreview | null | undefined>(undefined);
+  const [broken, setBroken] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    // The same 75ms as a page link: a cursor crossing a line of links must not
+    // ask about every one of them on the way past.
+    const debounce = setTimeout(() => {
+      void preview(url).then((answer) => {
+        if (live) setCard(answer);
+      });
+    }, 75);
+    return () => {
+      live = false;
+      clearTimeout(debounce);
+    };
+  }, [url]);
+
+  const image = card?.image && !broken ? card.image : null;
+
+  return (
+    <TooltipBox {...anchored} className="w-72">
+      {card === undefined ? (
+        <Skeleton />
+      ) : (
         <>
-          <span className="sk block h-3 w-28 rounded-lg bg-muted" />
-          <span className="sk block h-2.5 w-40 rounded-lg bg-muted mt-1.5" />
+          {/* The share-card ratio, held before the picture arrives, so the
+              box does not grow under the reader when it loads. Contained,
+              not cropped: many sites give a square logo, not a banner. */}
+          {image && (
+            <img
+              src={image}
+              alt=""
+              referrerPolicy="no-referrer"
+              onError={() => setBroken(true)}
+              className="mb-2 block aspect-[1.91/1] w-full rounded-md bg-muted object-contain"
+            />
+          )}
+          {card?.title && <span className="font-semibold text-foreground line-clamp-2">{card.title}</span>}
+          {card?.description && (
+            <span className="text-muted-foreground mt-0.5 line-clamp-3">{card.description}</span>
+          )}
         </>
       )}
-    </span>,
-    document.body,
+      <span className={cn("flex items-center gap-1 text-muted-foreground", card?.title && "mt-1.5")}>
+        <ArrowUpRight className="size-3 shrink-0" aria-hidden="true" />
+        <span className="truncate">{where(url)}</span>
+      </span>
+    </TooltipBox>
+  );
+}
+
+const HEADING = /^H([1-6])$/;
+
+/** The words of the section an anchor lands on, read off the page on screen.
+    A heading owns what follows it down to the next heading of its rank or
+    above; a parameter row owns its own cells. */
+function section(id: string): { title: string; text: string } | null {
+  const target = document.getElementById(id);
+  if (!target) return null;
+  const words = (el: Element) => (el.textContent ?? "").replace(/\s+/g, " ").trim();
+  const block = target.closest<HTMLElement>("h1,h2,h3,h4,h5,h6,dt,tr,li,p") ?? target;
+  if (block.tagName === "TR") {
+    const [head, ...rest] = [...block.children];
+    return { title: words(head), text: rest.map(words).join(" ") };
+  }
+  const level = Number(HEADING.exec(block.tagName)?.[1] ?? 0);
+  let text = "";
+  if (level || block.tagName === "DT") {
+    for (let el = block.nextElementSibling; el && text.length < 400; el = el.nextElementSibling) {
+      const rank = Number(HEADING.exec(el.tagName)?.[1] ?? 7);
+      if (rank <= (level || 6) || (block.tagName === "DT" && el.tagName === "DT")) break;
+      text += ` ${words(el)}`;
+    }
+  }
+  const title = words(block);
+  return title || text ? { title, text: text.trim() } : null;
+}
+
+/** What is at an anchor on the open page, so the reader need not jump there
+    and back to find out. */
+export function SectionTooltip({ id, ...anchored }: Anchored & { id: string }) {
+  // Read once, when the pointer arrives: the page does not change under it.
+  const [found] = useState(() => section(id));
+  if (!found) return null;
+  return (
+    <TooltipBox {...anchored} className="w-max max-w-[20rem]">
+      {found.title && <span className="font-semibold text-foreground line-clamp-2">{found.title}</span>}
+      {found.text && <span className="text-muted-foreground mt-0.5 line-clamp-4">{found.text}</span>}
+    </TooltipBox>
   );
 }
