@@ -44,9 +44,16 @@ The draft step stays, because it is where the notes are written.
 ## Release notes
 
 Write them in the vault, under `side projects/Houdini/HoudiniMD/releases/`, one
-file per version. CI cannot read the vault — it is in iCloud — so the file is
+file per version: `releases/Open/` while the version is not out, `releases/Closed/`
+once it is published. CI cannot read the vault — it is in iCloud — so the file is
 the source and the GitHub release body is a copy. Paste it into the draft
 before publishing.
+
+The note carries `Type: Release`, `Version`, `Date` and `Status` in its
+frontmatter. The note mover plugin reads those two last: it files the note under
+`releases/<Status>`, so changing `Status` to `Closed` moves it. A note without
+them is moved to the specs tree instead, which is where the first ones went
+missing.
 
 A release note is about one version, not about the project.
 
