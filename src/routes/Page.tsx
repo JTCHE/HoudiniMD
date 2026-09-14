@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { LucideArrowUpRight } from "lucide-react";
-import { useLocation } from "react-router";
+import { useLocation, useNavigationType } from "react-router";
 import type { Components } from "react-markdown";
 import { cn } from "@/lib/utils";
 import { Breadcrumbs } from "@/components/docs/Breadcrumbs";
@@ -24,6 +24,14 @@ import { flashText } from "@/lib/ui/flash-text";
 import { findAnchor, jumpTo } from "@/components/docs/toc/measure";
 
 /**
+ * Where the reader left each page, by history entry. The map lives outside
+ * the component because the reading view is remounted on every move, and
+ * `location.key` names the entry the offset belongs to — the same path
+ * visited twice is two entries, each with its own place.
+ */
+const offsets = new Map<string, number>();
+
+/**
  * What to call a page whose help file gives no title.
  *
  * A handful of pages in every build carry no `= Title =` line. The reading
@@ -43,6 +51,7 @@ function nameOf(view: PageView, path: string): string {
     same component map the site uses. */
 export default function Page() {
   const location = useLocation();
+  const navigationType = useNavigationType();
   const path = location.pathname.replace(/^\/+/, "");
   // A page already read draws on the first render, not one render later.
   const [page, setPage] = useState<PageView | null>(() => known(path) ?? null);
@@ -102,12 +111,52 @@ export default function Page() {
     });
   }, [path]);
 
+  // Where the reader is in the page, kept against the entry they are on, so
+  // the back arrow can put them there again.
+  useEffect(() => {
+    const box = scroller.current;
+    if (!box) return;
+    const key = location.key;
+    const save = () => offsets.set(key, box.scrollTop);
+    box.addEventListener("scroll", save, { passive: true });
+    return () => {
+      save();
+      box.removeEventListener("scroll", save);
+    };
+  }, [location.key]);
+
   // A page kept on screen keeps its scroll offset with it, so a new page that
   // names no section has to be put back at the top by hand. The window itself
   // never scrolls under the shell — this column does.
+  //
+  // Back and forward are the exception: the reader is returning to a page they
+  // already read, and the top of it is not where they left. The body draws a
+  // slice at a time, so the length that offset needs is not there on the first
+  // frame — the aim is held while the page grows, and the reader ends it.
   useEffect(() => {
-    if (page?.path === path && !location.hash) scroller.current?.scrollTo(0, 0);
-  }, [page, path, location.hash]);
+    const box = scroller.current;
+    if (!box || page?.path !== path || location.hash) return;
+    const want = navigationType === "POP" ? offsets.get(location.key) : undefined;
+    if (!want) {
+      box.scrollTo(0, 0);
+      return;
+    }
+    const aimAtIt = () => box.scrollTo({ top: want });
+    aimAtIt();
+    const watch = new ResizeObserver(aimAtIt);
+    const article = box.querySelector("article");
+    if (article) watch.observe(article);
+    const stop = () => {
+      watch.disconnect();
+      box.removeEventListener("wheel", stop);
+      box.removeEventListener("touchstart", stop);
+      clearTimeout(timer);
+    };
+    box.addEventListener("wheel", stop, { passive: true });
+    box.addEventListener("touchstart", stop, { passive: true });
+    const timer = setTimeout(stop, 3000);
+    return stop;
+  }, [page, path, location.hash, location.key, navigationType]);
 
   // What fills the Recents list. It is written when the page is on screen, so
   // a path that fails to read never enters the list.
