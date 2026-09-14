@@ -7,7 +7,7 @@
 <br>
 <div align="center">
   <a target="_blank" href="https://houdinimd.com"><img src="public/badges/website.svg" height="42" alt="Open HoudiniMD"></a>
-  <a target="_blank" href="https://github.com/JTCHE/HoudiniMD/releases/latest"><img src="public/badges/download.svg" height="42" alt="Download for Windows"></a>
+  <a target="_blank" href="https://houdinimd.com/download"><img src="public/badges/download.svg" height="42" alt="Download for Windows"></a>
   <a target="_blank" href="https://github.com/JTCHE/houdini-mcp"><img src="public/badges/mcp.svg" height="42" alt="Houdini MCP"></a>
   <a target="_blank" href="https://github.com/sponsors/JTCHE?frequency=one-time"><img src="public/badges/sponsor.svg" height="42" alt="Sponsor on GitHub"></a>
 </div>
@@ -32,7 +32,7 @@ It follows the [llms.txt](https://llmstxt.org) standard. AI agents are automatic
 <img src="public/help-server-benchmark.png" alt="A horizontal bar chart comparing the time from F1 to a readable page in Houdini's help pane, between Houdini's own help server and HoudiniMD, with the latter showing a median of 13.1x faster">
 HoudiniMD is also now available as a Desktop app, living locally, directly on your computer.
 
-[Download for Windows](https://github.com/JTCHE/HoudiniMD/releases/latest).
+[Download for Windows](https://houdinimd.com/download).
 
 The desktop app reads the docs from the Houdini build on your machine, so it works with no network. <kbd>F1</kbd> in Houdini opens the page in it.
 
