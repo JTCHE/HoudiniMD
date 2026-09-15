@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,9 @@ import { ControlButton } from "@/components/ui/control-button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { DOC_LINK_CLASS_NAME } from "@/components/docs/DocLink";
-import { NOTICE, NOTICE_KIND, NOTICE_STATE_KEY } from "@/lib/notice";
+import { NOTICE_STATE_KEY } from "@/lib/notice";
+import { BRANCH, COPY_SCRIPT_ID, SLOT } from "@/lib/notice-rewrite";
+import { NOTICE_COPY, NOTICE_KIND, type NoticeCopy, type NoticeKind } from "@/lib/notice-copy";
 
 type State = "idle" | "sending" | "done" | "error";
 
@@ -20,6 +22,48 @@ type State = "idle" | "sending" | "done" | "error";
  * on a page the reader already closed it on.
  */
 let hiddenForTab = false;
+
+/** The empty shape the prerender draws. `worker.ts` writes the words in. */
+const NO_COPY = {} as Partial<NoticeCopy>;
+
+let copyCache: Partial<NoticeCopy> | null = null;
+
+/**
+ * The copy, for the renders that the Worker cannot reach.
+ *
+ * The first paint is finished HTML: the Worker filled the slots below as the
+ * page streamed. A click inside the site renders this component again, from a
+ * chunk that carries no copy, so it reads the same words back out of the JSON
+ * the Worker hung in the head. Nothing is fetched and nothing arrives late.
+ *
+ * `next dev` has no Worker in front of it, so development reads the file the
+ * Worker would have read. The branch folds away in a production build, which
+ * is what keeps the copy out of the chunk.
+ */
+function copy(): Partial<NoticeCopy> {
+  if (copyCache) return copyCache;
+  if (typeof document !== "undefined") {
+    const raw = document.getElementById(COPY_SCRIPT_ID)?.textContent;
+    if (raw) {
+      try {
+        copyCache = JSON.parse(raw) as NoticeCopy;
+        return copyCache;
+      } catch {
+        // Nothing to do. An empty card is better than a thrown render.
+      }
+    }
+  }
+  return process.env.NODE_ENV === "development" ? NOTICE_COPY : NO_COPY;
+}
+
+/** Which notice is live. The Worker stamps it on the `html` tag. */
+function kind(): NoticeKind | undefined {
+  if (typeof document !== "undefined") {
+    const stamped = document.documentElement.dataset.noticeKind;
+    if (stamped === "waitlist" || stamped === "download") return stamped;
+  }
+  return process.env.NODE_ENV === "development" ? NOTICE_KIND : undefined;
+}
 
 /** Windows. Not in lucide, which carries no brand marks. */
 function WindowsMark({ className }: { className?: string }) {
@@ -48,6 +92,16 @@ function GitHubMark({ className }: { className?: string }) {
   );
 }
 
+/** The platform does not change while the page is open, so nothing to watch. */
+function subscribeNothing() {
+  return () => {};
+}
+
+function readWindows() {
+  const data = (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData;
+  return /win/i.test(data?.platform ?? navigator.userAgent);
+}
+
 function saveState(next: { dismissed?: string; signed?: boolean }) {
   try {
     const saved = JSON.parse(localStorage.getItem(NOTICE_STATE_KEY) ?? "{}") as Record<string, unknown>;
@@ -61,9 +115,11 @@ function saveState(next: { dismissed?: string; signed?: boolean }) {
  * The wind-down notice and the call to action are one component on purpose: a
  * reader learns the site closes and can act on it without moving.
  *
- * The copy is prerendered into every page — lib/notice.ts says what that costs
- * and why it is worth it. Nothing here waits for a request, so the card is
- * complete in the first paint and no page moves under the reader.
+ * What is drawn here is the SHAPE. The words belong to `worker.ts`, which
+ * writes them into the response as it streams — lib/notice-copy.ts says why.
+ * The build prerenders both calls to action and the Worker drops the one the
+ * notice is not using, so the switch at the announcement is one word in a file
+ * the cached pages do not carry.
  *
  * The negative inline margin matches the horizontal padding exactly, so the
  * copy sits on the same vertical axis as the page title and everything under
@@ -78,19 +134,22 @@ export function WindDown({ variant = "banner" }: { variant?: "banner" | "bar" })
   const [state, setState] = useState<State>("idle");
   const [message, setMessage] = useState("");
   // Windows is the prerendered answer, because the installer is the point of
-  // the notice and most readers are on Windows. Everybody else is corrected
-  // after hydration. Only the label moves, and only for them.
-  const [windows, setWindows] = useState(true);
+  // the notice and most readers are on Windows. Everybody else is corrected at
+  // hydration: `useSyncExternalStore` takes the server answer and the client
+  // answer as two snapshots, which is how React allows the two to differ.
+  const windows = useSyncExternalStore(subscribeNothing, readWindows, () => true);
 
-  useEffect(() => {
-    const data = (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData;
-    setWindows(/win/i.test(data?.platform ?? navigator.userAgent));
-  }, []);
+  const live = kind();
+  const text = copy();
+  // No answer means this is the build's own render, and the build must draw
+  // both: the Worker is what picks, and it can only pick from what is there.
+  const showWaitlist = live === undefined || live === "waitlist";
+  const showDownload = live === undefined || live === "download";
 
   function dismiss() {
     hiddenForTab = true;
     setClosed(true);
-    saveState({ dismissed: NOTICE_KIND });
+    saveState({ dismissed: live });
     // The head script sets this on the next visit. Set it here as well, so the
     // card stays gone through the navigations of this one.
     document.documentElement.dataset.notice = "dismissed";
@@ -130,11 +189,8 @@ export function WindDown({ variant = "banner" }: { variant?: "banner" | "bar" })
 
   if (closed) return null;
 
-  const copy = NOTICE[NOTICE_KIND];
-  const waitlist = NOTICE_KIND === "waitlist" ? NOTICE.waitlist : null;
-  const download = NOTICE_KIND === "download" ? NOTICE.download : null;
-  const ctaHref = windows ? download?.ctaHref : download?.altHref;
-  const ctaLabel = windows ? download?.ctaLabel : download?.altLabel;
+  const ctaLabel = windows ? text.ctaLabel : text.altLabel;
+  const ctaHref = windows ? text.ctaHref : text.altHref;
 
   const card = (
     <aside
@@ -160,100 +216,120 @@ export function WindDown({ variant = "banner" }: { variant?: "banner" | "bar" })
       <div className="flex flex-col gap-md md:flex-row md:items-center md:justify-between md:gap-xl">
         <div className={cn("min-w-0", variant === "bar" && "pr-2xl md:pr-0")}>
           <p className="text-label text-foreground space-x-sm">
-            <strong className="font-medium">{copy.title}</strong>
+            <strong
+              className="font-medium"
+              {...{ [SLOT]: "title" }}
+            >
+              {text.title}
+            </strong>
             <strong className="font-medium">
               <a
                 className={DOC_LINK_CLASS_NAME + " text-neutral-500 hover:text-neutral-800 transition"}
-                href={copy.linkHref}
+                href={text.linkHref}
+                {...{ [SLOT]: "linkLabel" }}
               >
-                {copy.linkLabel}
+                {text.linkLabel}
               </a>
             </strong>
           </p>
-          <p className="text-meta text-muted-foreground whitespace-pre-line">{copy.body}</p>
+          <p
+            className="text-meta text-muted-foreground whitespace-pre-line"
+            {...{ [SLOT]: "body" }}
+          >
+            {text.body}
+          </p>
         </div>
 
         {/* The key and the cross are one group, not two flex children. Under
             `justify-between` two children split the leftover width twice and
             leave a hole between them. */}
         <div className="flex w-full shrink-0 items-center gap-sm md:w-auto">
-          {waitlist && state !== "done" && (
-            <form
-              onSubmit={submit}
-              className="flex w-full shrink-0 flex-col gap-2xs md:w-auto"
+          {showWaitlist && (
+            <div
+              className="flex w-full shrink-0 md:w-auto"
+              {...{ [BRANCH]: "waitlist" }}
             >
-              <div className="flex w-full items-stretch gap-sm">
-                <label
-                  htmlFor={`waitlist-${variant}`}
-                  className="sr-only"
+              {state !== "done" ? (
+                <form
+                  onSubmit={submit}
+                  className="flex w-full shrink-0 flex-col gap-2xs md:w-auto"
                 >
-                  Email address
-                </label>
-                <Input
-                  id={`waitlist-${variant}`}
-                  type="email"
-                  name="email"
-                  required
-                  autoComplete="email"
-                  placeholder={waitlist.placeholder}
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  aria-invalid={state === "error"}
-                  // No height of its own: the key sets the row's height and the
-                  // field takes it, so the two controls are one line.
-                  className="h-auto min-w-0 flex-1 px-ms md:w-52 md:flex-none"
-                />
-                {/* Honeypot. Hidden from people and from screen readers, filled by bots. */}
-                <input
-                  type="text"
-                  name="website"
-                  tabIndex={-1}
-                  autoComplete="off"
-                  aria-hidden="true"
-                  className="absolute left-[-9999px] h-px w-px opacity-0"
-                />
-                <ControlButton
-                  type="submit"
-                  disabled={state === "sending"}
-                  className="px-md py-sm leading-none"
-                >
-                  {state === "sending" ? "Sending" : waitlist.submitLabel}
-                </ControlButton>
-              </div>
-              {/* A failure speaks beside the control that caused it, so the
-                  notice copy above never moves.
-                  Not cn(): tailwind-merge does not know the custom `text-caption`
-                  size, reads it as a colour, and lets a colour class evict it. */}
-              {state === "error" && (
+                  <div className="flex w-full items-stretch gap-sm">
+                    <label
+                      htmlFor={`waitlist-${variant}`}
+                      className="sr-only"
+                    >
+                      Email address
+                    </label>
+                    <Input
+                      id={`waitlist-${variant}`}
+                      type="email"
+                      name="email"
+                      required
+                      autoComplete="email"
+                      placeholder={text.placeholder}
+                      value={email}
+                      onChange={(event) => setEmail(event.target.value)}
+                      aria-invalid={state === "error"}
+                      // No height of its own: the key sets the row's height and
+                      // the field takes it, so the two controls are one line.
+                      className="h-auto min-w-0 flex-1 px-ms md:w-52 md:flex-none"
+                      {...{ [SLOT]: "placeholder" }}
+                    />
+                    {/* Honeypot. Hidden from people and from screen readers, filled by bots. */}
+                    <input
+                      type="text"
+                      name="website"
+                      tabIndex={-1}
+                      autoComplete="off"
+                      aria-hidden="true"
+                      className="absolute left-[-9999px] h-px w-px opacity-0"
+                    />
+                    <ControlButton
+                      type="submit"
+                      disabled={state === "sending"}
+                      className="px-md py-sm leading-none"
+                    >
+                      <span {...{ [SLOT]: "submitLabel" }}>{state === "sending" ? "Sending" : text.submitLabel}</span>
+                    </ControlButton>
+                  </div>
+                  {/* A failure speaks beside the control that caused it, so the
+                      notice copy above never moves.
+                      Not cn(): tailwind-merge does not know the custom
+                      `text-caption` size, reads it as a colour, and lets a
+                      colour class evict it. */}
+                  {state === "error" && (
+                    <p
+                      role="status"
+                      className="text-caption text-destructive"
+                    >
+                      {message}
+                    </p>
+                  )}
+                </form>
+              ) : (
                 <p
                   role="status"
-                  className="text-caption text-destructive"
+                  className="text-label shrink-0 text-foreground"
+                  {...{ [SLOT]: "signedLabel" }}
                 >
-                  {message}
+                  {text.signedLabel}
                 </p>
               )}
-            </form>
+            </div>
           )}
 
-          {waitlist && state === "done" && (
-            <p
-              role="status"
-              className="text-label shrink-0 text-foreground"
-            >
-              {waitlist.signedLabel}
-            </p>
-          )}
-
-          {download && ctaHref && ctaLabel && (
+          {showDownload && (
             <ControlButton
-              href={ctaHref}
+              href={ctaHref ?? "/download"}
               icon={windows ? <WindowsMark className="size-4" /> : <GitHubMark className="size-4" />}
               // `leading-none` stops the label's line box, which is taller than
               // its glyphs, from adding half-leading at the top and the bottom
               // only.
               className="w-full justify-center px-md py-sm leading-none md:w-auto"
+              {...{ [BRANCH]: "download", [SLOT]: "ctaHref" }}
             >
-              {ctaLabel}
+              <span {...{ [SLOT]: "ctaLabel" }}>{ctaLabel}</span>
             </ControlButton>
           )}
 

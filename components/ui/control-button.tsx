@@ -27,7 +27,9 @@ export function ControlButton({
   disabled?: boolean;
   onClick?: () => void;
   className?: string;
-} & Pick<React.AnchorHTMLAttributes<HTMLAnchorElement>, "target" | "rel">) {
+  /** Whatever the caller hangs on the element: `data-*`, `target`, `rel`. */
+} & Pick<React.AnchorHTMLAttributes<HTMLAnchorElement>, "target" | "rel"> &
+  Record<`data-${string}`, string | undefined>) {
   const look = cn(
     "relative inline-flex shrink-0 cursor-pointer items-center gap-sm select-none rounded-lg border border-control-edge",
     "bg-linear-to-b from-control-top to-control-bottom",
@@ -53,7 +55,7 @@ export function ControlButton({
     );
 
   return (
-    <button type={type} onClick={onClick} disabled={disabled} className={look}>
+    <button type={type} onClick={onClick} disabled={disabled} className={look} {...rest}>
       {icon}
       {children}
     </button>

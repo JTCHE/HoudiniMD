@@ -22,10 +22,13 @@
  * page says so.
  *
  * The key carries a build stamp, so a deploy is not waited out: the new build
- * reads new keys and the old entries expire unseen.
+ * reads new keys and the old entries expire unseen. It carries the notice
+ * version for the same reason: the Worker writes the notice into the answer
+ * before it is stored, so new wording needs keys the old entries do not hold.
  */
 import { wantsMarkdown } from "./wants-markdown";
 import { BUILD_STAMP } from "./build-stamp";
+import { NOTICE_VERSION } from "./notice-copy";
 
 /** How long an entry lives. A deploy makes it unreachable before this. */
 const TTL_SECONDS = 3600;
@@ -102,7 +105,7 @@ export function cacheKey(request: Request, url: URL): Request | null {
   }
   if (variant.length > MAX_VARIANT) return null;
 
-  return new Request(`https://edge.houdinimd/${BUILD_STAMP}/${encodeURIComponent(variant)}/${query}${url.pathname}`);
+  return new Request(`https://edge.houdinimd/${BUILD_STAMP}.${NOTICE_VERSION}/${encodeURIComponent(variant)}/${query}${url.pathname}`);
 }
 
 /** The stored answer, with the reader-facing headers put back. */
