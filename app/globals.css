@@ -1304,3 +1304,16 @@ span.doc-icon > img {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
+
+/* The wind-down notice holds its space from the first paint. These two
+   states are set by the inline script in the head, from what the last visit
+   saw, so a closed bar costs no jump: `off` is a notice that is switched
+   off, `dismissed` is one this reader closed. */
+[data-notice="off"] .wind-down {
+  display: none;
+}
+
+[data-notice="dismissed"] .wind-down-bar {
+  display: none;
+}
+

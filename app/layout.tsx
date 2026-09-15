@@ -113,6 +113,19 @@ export default function RootLayout({
             }}
           />
         )}
+        {/* Before the first paint, so a notice this reader already closed, or a
+            notice that is off, never draws and never moves the page under them.
+            It reads only what the last visit wrote; a first visit reserves the
+            space, which is what the notice needs anyway. Inline because a
+            module loads too late to beat the paint. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "try{var s=JSON.parse(localStorage.getItem('houdinimd:notice')||'{}');" +
+              "if(s.show===false)document.documentElement.dataset.notice='off';" +
+              "else if(s.dismissed&&s.dismissed===s.kind)document.documentElement.dataset.notice='dismissed'}catch(e){}",
+          }}
+        />
       </head>
       <body>
         <ServiceWorkerRegistration />
