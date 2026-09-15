@@ -25,11 +25,10 @@ export function DocsPageContent({ breadcrumbs, sourceUrl, children }: DocsPageCo
           in from DocsLayout) so they persist untouched across a page.tsx
           remount instead of flashing on every navigation. */}
       {/* Above the breadcrumbs, and carrying its own page container, so that
-          a dismissed notice leaves NO markup behind. Wrapping it in a div here
-          would put an empty div in every prerendered doc page, change 21k
-          cached HTML outputs, and make every deploy rewrite the whole R2
-          cache. It renders nothing on the server, so the prerendered HTML is
-          byte-identical to before. */}
+          an absent notice leaves NO markup behind. It renders nothing on the
+          server and reads its copy from `public/notice.json` after, so the
+          prerendered HTML of all 21k pages is byte-identical whatever the
+          notice says. */}
       <WindDown variant="bar" />
       <div className="@container mx-auto w-full max-w-page px-page-x pt-5">{breadcrumbs}</div>
       <div className="flex-1 flex min-w-0 flex-col">{children}</div>

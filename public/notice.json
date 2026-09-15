@@ -1,0 +1,14 @@
+{
+  "show": true,
+  "kind": "waitlist",
+  "title": "HoudiniMD is now a free, offline & open-source app.",
+  "body": "A blazing fast interface combined with smart search features. This site will close on Jan 1st, 2027.",
+  "linkLabel": "Learn More",
+  "linkHref": "https://github.com/JTCHE/HoudiniMD",
+  "promise": "",
+  "placeholder": "you@studio.com",
+  "submitLabel": "Notify me",
+  "signedLabel": "You are on the list. One email at release.",
+  "ctaLabel": "Download for Windows",
+  "ctaHref": "/download"
+}
