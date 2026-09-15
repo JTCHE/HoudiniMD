@@ -62,8 +62,31 @@ type State = "idle" | "sending" | "done" | "error";
 /** Set once an address is accepted. A reader who signed up is done with the
     field on every page, not only the one they typed on. */
 const SIGNED_KEY = "houdinimd:wind-down-signed";
-/** A doc page reader can close the bar. The landing page keeps its notice. */
-const DISMISS_KEY = "houdinimd:wind-down-dismissed";
+
+/**
+ * What the LAST visit saw. The inline script in the document head reads this
+ * before the first paint and hides the notice when this reader closed it, so a
+ * closed bar is never drawn and the page does not jump.
+ *
+ * `dismissed` holds the KIND that was closed, not a flag. A reader who closed
+ * the waitlist has not closed the download, so the release notice comes back
+ * one time for everybody.
+ */
+const STATE_KEY = "houdinimd:notice";
+
+interface Saved {
+  kind?: string;
+  show?: boolean;
+  dismissed?: string;
+}
+
+function readState(): Saved {
+  try {
+    return JSON.parse(localStorage.getItem(STATE_KEY) ?? "{}") as Saved;
+  } catch {
+    return {};
+  }
+}
 
 /** The app runs on Windows only. Every other reader gets the source. */
 function onWindows() {
@@ -130,8 +153,13 @@ export function WindDown({ variant = "banner" }: { variant?: "banner" | "bar" })
         // Read here, not in the effect body: the answer arrives asynchronously
         // anyway, and a synchronous setState in an effect cascades a render.
         try {
+          const saved = readState();
           if (localStorage.getItem(SIGNED_KEY) === "1") setSigned(true);
-          if (variant === "bar" && localStorage.getItem(DISMISS_KEY) === "1") setClosed(true);
+          if (variant === "bar" && saved.dismissed && saved.dismissed === body?.kind) setClosed(true);
+          localStorage.setItem(
+            STATE_KEY,
+            JSON.stringify({ kind: body?.kind, show: body?.show, dismissed: saved.dismissed }),
+          );
         } catch {
           // Private mode. The notice comes back next visit, which is acceptable.
         }
@@ -146,7 +174,7 @@ export function WindDown({ variant = "banner" }: { variant?: "banner" | "bar" })
   function dismiss() {
     setClosed(true);
     try {
-      localStorage.setItem(DISMISS_KEY, "1");
+      localStorage.setItem(STATE_KEY, JSON.stringify({ ...readState(), dismissed: notice?.kind }));
     } catch {}
   }
 
@@ -181,11 +209,18 @@ export function WindDown({ variant = "banner" }: { variant?: "banner" | "bar" })
     }
   }
 
-  // Nothing on the server and nothing until the answer arrives, so the
-  // prerendered HTML of every page stays byte-identical whatever the JSON says.
-  if (!notice?.show || closed) return null;
+  // The CARD is drawn from the first paint, empty; only the words wait for the
+  // JSON. A notice that appeared late pushed every page down after it loaded,
+  // and the reader lost their place. The shell holds the space instead, and it
+  // carries no copy, so the prerendered HTML says nothing about the notice.
+  //
+  // A reader who closed the bar, or a notice that is off, still has to leave no
+  // gap. The inline script in the head reads the last visit's answer from
+  // localStorage and hides the shell before the first paint; this return then
+  // removes it once the JSON confirms.
+  if (closed || (notice && !notice.show)) return null;
 
-  const copy: Copy = (notice.kind === "download" ? notice.download : notice.waitlist) ?? {};
+  const copy: Copy = (notice?.kind === "download" ? notice?.download : notice?.waitlist) ?? {};
   const done = state === "done" || (signed && state === "idle");
   // The key sends a Windows reader to the installer and everyone else to the
   // source, so no reader downloads a build their machine cannot run.
@@ -206,7 +241,8 @@ export function WindDown({ variant = "banner" }: { variant?: "banner" | "bar" })
         // The corners follow from that inset. `rounded-4xl` is 24px: the key's
         // own 8 plus the 16 around it. The field obeys the same rule at its own
         // size, 12 = 8 + 4.
-        "relative -mx-md rounded-4xl border border-hairline bg-surface p-md",
+        "wind-down relative -mx-md rounded-4xl border border-hairline bg-surface p-md",
+        variant === "bar" && "wind-down-bar",
         // The two edge lines the field carries. Below the dark page there is
         // only black, so the lit lip takes the next step up the ramp.
         "dark:border-black",
@@ -215,7 +251,7 @@ export function WindDown({ variant = "banner" }: { variant?: "banner" | "bar" })
     >
       <div className="flex flex-col gap-md md:flex-row md:items-center md:justify-between md:gap-xl">
         <div className={cn("min-w-0", variant === "bar" && "pr-2xl md:pr-0")}>
-          <p className="text-label text-foreground space-x-sm">
+          <p className="text-label text-foreground space-x-sm line-clamp-2 min-h-[2lh] md:line-clamp-1 md:min-h-[1lh]">
             <strong className="font-medium">{copy.title}</strong>
             {copy.linkHref && copy.linkLabel && (
               <strong className="font-medium">
@@ -228,14 +264,16 @@ export function WindDown({ variant = "banner" }: { variant?: "banner" | "bar" })
               </strong>
             )}
           </p>
-          <p className="text-meta text-muted-foreground whitespace-pre-line">{copy.body}</p>
+          <p className="text-meta text-muted-foreground whitespace-pre-line line-clamp-2 min-h-[2lh] md:line-clamp-1 md:min-h-[1lh]">
+            {copy.body}
+          </p>
         </div>
 
         {/* The key and the cross are one group, not two flex children. Under
             `justify-between` two children split the leftover width twice and
             leave a hole between them. */}
-        <div className="flex w-full shrink-0 items-center gap-sm md:w-auto">
-          {notice.kind === "waitlist" && !done && (
+        <div className="flex min-h-12 w-full shrink-0 items-center gap-sm md:w-auto">
+          {notice?.kind === "waitlist" && !done && (
             <form
               onSubmit={submit}
               className="flex w-full shrink-0 flex-col gap-2xs md:w-auto"
@@ -298,7 +336,7 @@ export function WindDown({ variant = "banner" }: { variant?: "banner" | "bar" })
             </form>
           )}
 
-          {notice.kind === "waitlist" && done && (
+          {notice?.kind === "waitlist" && done && (
             <p
               role="status"
               className="text-label shrink-0 text-foreground"
@@ -306,7 +344,7 @@ export function WindDown({ variant = "banner" }: { variant?: "banner" | "bar" })
               {copy.signedLabel}
             </p>
           )}
-          {notice.kind === "download" && ctaHref && ctaLabel && (
+          {notice?.kind === "download" && ctaHref && ctaLabel && (
             <ControlButton
               href={ctaHref}
               icon={windows ? <WindowsMark className="size-4" /> : <GitHubMark className="size-4" />}
@@ -346,5 +384,9 @@ export function WindDown({ variant = "banner" }: { variant?: "banner" | "bar" })
     </aside>
   );
 
-  return variant === "bar" ? <div className="@container mx-auto w-full max-w-page px-page-x pt-5">{card}</div> : card;
+  return variant === "bar" ? (
+    <div className="wind-down wind-down-bar @container mx-auto w-full max-w-page px-page-x pt-5">{card}</div>
+  ) : (
+    card
+  );
 }
