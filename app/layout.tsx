@@ -81,6 +81,10 @@ export default function RootLayout({
     <html
       lang="en"
       className={geist.className}
+      // The head script below writes `data-notice` here before React hydrates.
+      // React compares the attribute it rendered with the one in the document
+      // and reports the difference; the difference is the point.
+      suppressHydrationWarning
     >
       <head>
         <link

@@ -4,6 +4,7 @@ import { pruneAnalytics } from "./telemetry/prune";
 import type { D1Database } from "./telemetry/types";
 import { iconNeedsRefresh, iconResponse, refreshIcon, validIconPath, type IconBucket } from "./lib/icon-cache";
 import { cacheKey, fromCache, keep } from "./lib/edge-cache";
+import { rewriteNotice } from "./lib/notice-rewrite";
 
 // DOQueueHandler is not exported: its class is deleted while the routes are
 // frozen, and a deleted class must not stay exported. See wrangler.jsonc.
@@ -91,7 +92,11 @@ const worker = {
       }
     }
 
-    const response = await handler.fetch(request, env, ctx);
+    // The notice copy is written in here, not in the page, so changing it
+    // costs one Worker script instead of a rewrite of 21k cached pages. See
+    // lib/notice-copy.ts. It runs before `keep`, so what the edge cache holds
+    // is the finished answer, and before the reader sees any byte of it.
+    const response = rewriteNotice(await handler.fetch(request, env, ctx));
     recordPageView(request, url, response, env, ctx);
     recordApiSearch(request, url, response, env, ctx);
 
