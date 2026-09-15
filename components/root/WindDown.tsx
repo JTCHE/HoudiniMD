@@ -32,9 +32,9 @@ import { DOC_LINK_CLASS_NAME } from "@/components/docs/DocLink";
  */
 const NOTICE_URL = "/notice.json";
 
-interface Notice {
-  show?: boolean;
-  kind?: "waitlist" | "download";
+/** One block per kind. The handoff is a one-word edit to `kind`, and each
+    kind keeps its own wording: a waitlist asks, a release tells. */
+interface Copy {
   title?: string;
   body?: string;
   promise?: string;
@@ -45,6 +45,16 @@ interface Notice {
   linkHref?: string;
   ctaLabel?: string;
   ctaHref?: string;
+  /** Where a reader who is not on Windows goes instead. */
+  altLabel?: string;
+  altHref?: string;
+}
+
+interface Notice {
+  show?: boolean;
+  kind?: "waitlist" | "download";
+  waitlist?: Copy;
+  download?: Copy;
 }
 
 type State = "idle" | "sending" | "done" | "error";
@@ -55,7 +65,27 @@ const SIGNED_KEY = "houdinimd:wind-down-signed";
 /** A doc page reader can close the bar. The landing page keeps its notice. */
 const DISMISS_KEY = "houdinimd:wind-down-dismissed";
 
+/** The app runs on Windows only. Every other reader gets the source. */
+function onWindows() {
+  if (typeof navigator === "undefined") return false;
+  const data = (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData;
+  return /win/i.test(data?.platform ?? navigator.userAgent);
+}
+
 /** Windows. Not in lucide, which carries no brand marks. */
+function GitHubMark({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+      className={className}
+    >
+      <path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.61.07-.61 1 .07 1.53 1.03 1.53 1.03.9 1.53 2.36 1.09 2.93.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02a9.5 9.5 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0 0 12 2Z" />
+    </svg>
+  );
+}
+
 function WindowsMark({ className }: { className?: string }) {
   return (
     <svg
@@ -155,7 +185,13 @@ export function WindDown({ variant = "banner" }: { variant?: "banner" | "bar" })
   // prerendered HTML of every page stays byte-identical whatever the JSON says.
   if (!notice?.show || closed) return null;
 
+  const copy: Copy = (notice.kind === "download" ? notice.download : notice.waitlist) ?? {};
   const done = state === "done" || (signed && state === "idle");
+  // The key sends a Windows reader to the installer and everyone else to the
+  // source, so no reader downloads a build their machine cannot run.
+  const windows = onWindows();
+  const ctaHref = windows ? copy.ctaHref : copy.altHref;
+  const ctaLabel = windows ? copy.ctaLabel : copy.altLabel;
 
   const card = (
     <aside
@@ -180,19 +216,19 @@ export function WindDown({ variant = "banner" }: { variant?: "banner" | "bar" })
       <div className="flex flex-col gap-md md:flex-row md:items-center md:justify-between md:gap-xl">
         <div className={cn("min-w-0", variant === "bar" && "pr-2xl md:pr-0")}>
           <p className="text-label text-foreground space-x-sm">
-            <strong className="font-medium">{notice.title}</strong>
-            {notice.linkHref && notice.linkLabel && (
+            <strong className="font-medium">{copy.title}</strong>
+            {copy.linkHref && copy.linkLabel && (
               <strong className="font-medium">
                 <a
                   className={DOC_LINK_CLASS_NAME + " text-neutral-500 hover:text-neutral-800 transition"}
-                  href={notice.linkHref}
+                  href={copy.linkHref}
                 >
-                  {notice.linkLabel}
+                  {copy.linkLabel}
                 </a>
               </strong>
             )}
           </p>
-          <p className="text-meta text-muted-foreground whitespace-pre-line">{notice.body}</p>
+          <p className="text-meta text-muted-foreground whitespace-pre-line">{copy.body}</p>
         </div>
 
         {/* The key and the cross are one group, not two flex children. Under
@@ -217,7 +253,7 @@ export function WindDown({ variant = "banner" }: { variant?: "banner" | "bar" })
                   name="email"
                   required
                   autoComplete="email"
-                  placeholder={notice.placeholder}
+                  placeholder={copy.placeholder}
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   aria-invalid={state === "error"}
@@ -241,7 +277,7 @@ export function WindDown({ variant = "banner" }: { variant?: "banner" | "bar" })
                   // call to action the notice carries.
                   className="p-md leading-none"
                 >
-                  {state === "sending" ? "Sending" : notice.submitLabel}
+                  {state === "sending" ? "Sending" : copy.submitLabel}
                 </ControlButton>
               </div>
               {/* Under the field, where the reader looks last before they type.
@@ -251,12 +287,12 @@ export function WindDown({ variant = "banner" }: { variant?: "banner" | "bar" })
                   caused it, so the notice copy above never moves. */}
               {/* Not cn(): tailwind-merge does not know the custom `text-caption` size,
                   reads it as a colour, and lets `text-muted-foreground` evict it. */}
-              {(state === "error" || notice.promise) && (
+              {(state === "error" || copy.promise) && (
                 <p
                   role="status"
                   className={`text-caption ${state === "error" ? "text-destructive" : "text-muted-foreground"}`}
                 >
-                  {state === "error" ? message : notice.promise}
+                  {state === "error" ? message : copy.promise}
                 </p>
               )}
             </form>
@@ -267,13 +303,13 @@ export function WindDown({ variant = "banner" }: { variant?: "banner" | "bar" })
               role="status"
               className="text-label shrink-0 text-foreground"
             >
-              {notice.signedLabel}
+              {copy.signedLabel}
             </p>
           )}
-          {notice.kind === "download" && notice.ctaHref && notice.ctaLabel && (
+          {notice.kind === "download" && ctaHref && ctaLabel && (
             <ControlButton
-              href={notice.ctaHref}
-              icon={<WindowsMark className="size-4" />}
+              href={ctaHref}
+              icon={windows ? <WindowsMark className="size-4" /> : <GitHubMark className="size-4" />}
               // `p-md` overrides the key's own 16/8: one number, 16, on all
               // four sides, so the key is inset from the card by the same
               // amount everywhere. The card's radius follows from it, 24 = the
@@ -282,9 +318,9 @@ export function WindDown({ variant = "banner" }: { variant?: "banner" | "bar" })
               // `leading-none` stops the label's line box, which is taller
               // than its glyphs, from adding half-leading at the top and the
               // bottom only.
-              className="w-full justify-center p-md leading-none md:w-auto"
+              className="w-full justify-center px-md py-sm leading-none md:w-auto"
             >
-              {notice.ctaLabel}
+              {ctaLabel}
             </ControlButton>
           )}
 
