@@ -62,4 +62,9 @@ const DOWNLOAD: NoticeCopy = {
   body: "A blazing fast interface combined with smart search features. This site will close on Jan 1st, 2027.",
 };
 
-export const NOTICE_COPY: NoticeCopy = NOTICE_KIND === "waitlist" ? WAITLIST : DOWNLOAD;
+// A lookup, not a comparison. TypeScript narrows a `const` to the literal it
+// holds, so `NOTICE_KIND === "waitlist"` stops type checking the day the
+// switch is flipped, and the build fails in CI.
+const BY_KIND: Record<NoticeKind, NoticeCopy> = { waitlist: WAITLIST, download: DOWNLOAD };
+
+export const NOTICE_COPY: NoticeCopy = BY_KIND[NOTICE_KIND];
