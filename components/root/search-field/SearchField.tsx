@@ -6,7 +6,7 @@ import { useSearchField } from "@/lib/search/useSearchField";
 import { SEARCH_DROPDOWN_CLASS, SearchResultList } from "@/components/search/SearchResultList";
 import ProgressLogEntry from "@/components/root/progress-log-entry/ProgressLogEntry";
 import { AnimatedPlaceholder } from "./AnimatedPlaceholder";
-import { PasteSearchButton } from "./PasteSearchButton";
+import { ControlButton } from "@/components/ui/control-button";
 
 /**
  * The search field: one input, one key, and a predictive list.
@@ -152,12 +152,16 @@ export function SearchField({
           {!field.query && <AnimatedPlaceholder />}
         </div>
 
-        <PasteSearchButton
-          mode={mode}
-          label={buttonLabel}
+        {/* In "paste" mode it fills the field from the clipboard; in "search"
+            mode it submits and the form does the rest. */}
+        <ControlButton
+          type={mode === "paste" ? "button" : "submit"}
+          onClick={mode === "paste" ? field.pasteAndSearch : undefined}
           disabled={field.isProcessing}
-          onPaste={field.pasteAndSearch}
-        />
+          className="px-md py-sm"
+        >
+          {buttonLabel}
+        </ControlButton>
       </form>
 
       {field.dropdownOpen && (

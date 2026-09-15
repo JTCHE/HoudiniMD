@@ -1,75 +1,123 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ControlButton } from "@/components/ui/control-button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { DOC_LINK_CLASS_NAME } from "@/components/docs/DocLink";
 
-/** 1 Jan 2027. Agreed with SideFX — see the Site Wind Down spec. */
-const CLOSURE_DATE = "Jan 1st, 2027";
-const DISMISS_KEY = "houdinimd:wind-down-dismissed";
-/** Set once an address is accepted. A reader who signed up is done with the
-    notice on every page, not only the one they typed on. */
-const SIGNED_KEY = "houdinimd:wind-down-signed";
+/**
+ * The notice lives in `public/notice.json`, NOT in this file.
+ *
+ * Every doc page's HTML is an object in the R2 incremental cache, ~21k of
+ * them. Copy written here would reach them one of two ways, and both cost a
+ * full rewrite of the cache: rendered on the server it lands in the HTML
+ * itself, and rendered on the client it lands in a chunk whose content-hashed
+ * name the HTML carries in a script tag.
+ *
+ * A file in `public/` is neither. It is a static asset, served by the asset
+ * server without touching the Worker, and it is in no chunk. Change the copy,
+ * or set `show` to false, and the next deploy rewrites that one file and no
+ * cache object at all.
+ *
+ * `kind` is in the JSON for the same reason. The notice has to carry the email
+ * field until the release mail goes out, then the download. Both forms ship
+ * here once, and the switch between them is a one-word edit to a static file.
+ *
+ * The price is that the code below must not change either — an edit here moves
+ * the chunk hash and the 21k rewrite comes back.
+ */
+const NOTICE_URL = "/notice.json";
+
+interface Notice {
+  show?: boolean;
+  kind?: "waitlist" | "download";
+  title?: string;
+  body?: string;
+  promise?: string;
+  placeholder?: string;
+  submitLabel?: string;
+  signedLabel?: string;
+  linkLabel?: string;
+  linkHref?: string;
+  ctaLabel?: string;
+  ctaHref?: string;
+}
 
 type State = "idle" | "sending" | "done" | "error";
 
-const subscribeToStorage = (onChange: () => void) => {
-  window.addEventListener("storage", onChange);
-  return () => window.removeEventListener("storage", onChange);
-};
+/** Set once an address is accepted. A reader who signed up is done with the
+    field on every page, not only the one they typed on. */
+const SIGNED_KEY = "houdinimd:wind-down-signed";
+/** A doc page reader can close the bar. The landing page keeps its notice. */
+const DISMISS_KEY = "houdinimd:wind-down-dismissed";
 
-/** One string, not an object: useSyncExternalStore compares snapshots by
-    identity and a fresh object every read loops forever. */
-const readFlag = (): "none" | "dismissed" | "signed" => {
-  try {
-    if (localStorage.getItem(SIGNED_KEY) === "1") return "signed";
-    if (localStorage.getItem(DISMISS_KEY) === "1") return "dismissed";
-    return "none";
-  } catch {
-    return "none";
-  }
-};
+/** Windows. Not in lucide, which carries no brand marks. */
+function WindowsMark({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+      className={className}
+    >
+      <path d="M3 5.6 10.4 4.6V11.4H3V5.6ZM11.6 4.4 21 3v8.4h-9.4V4.4ZM3 12.6h7.4v6.8L3 18.4v-5.8ZM11.6 12.6H21V21l-9.4-1.4v-7Z" />
+    </svg>
+  );
+}
 
 /**
- * The wind-down notice and the waitlist field are one component on purpose: a
+ * The wind-down notice and the call to action are one component on purpose: a
  * reader learns the site closes and can act on it without moving.
  *
  * The negative inline margin matches the horizontal padding exactly, so the
  * copy sits on the same vertical axis as the page title and everything under
  * it. Without it the box reads as indented against every neighbour.
  *
- * "bar" is the dismissable form on a doc page, where the notice must stay out
- * of the reader's way.
+ * "bar" is the form on a doc page, which carries its own page container.
  */
 export function WindDown({ variant = "banner" }: { variant?: "banner" | "bar" }) {
   const pathname = usePathname();
-  // Read through useSyncExternalStore, not an effect: the server has no
-  // localStorage, so the server snapshot says "dismissed" and the bar never
-  // flashes at a reader who already closed it. `closed` covers this tab's own
-  // click and its own signup, neither of which fires a storage event.
-  const stored = useSyncExternalStore(subscribeToStorage, readFlag, () => "dismissed" as const);
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const [signed, setSigned] = useState(false);
   const [closed, setClosed] = useState(false);
-  // Separate from `closed`: the bar hides itself after a signup, but only
-  // once the confirmation has had time to be read.
-  const [hidden, setHidden] = useState(false);
   const [email, setEmail] = useState("");
   const [state, setState] = useState<State>("idle");
   const [message, setMessage] = useState("");
 
-  function remember(key: string) {
-    try {
-      localStorage.setItem(key, "1");
-    } catch {
-      // Private mode. The notice comes back next visit, which is acceptable.
-    }
-  }
+  useEffect(() => {
+    let live = true;
+    // A static asset, so the browser and the service worker both cache it and
+    // a second page costs no request. A failure leaves the notice absent,
+    // which is the safe way for it to fail.
+    fetch(NOTICE_URL)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body: Notice | null) => {
+        if (!live) return;
+        // Read here, not in the effect body: the answer arrives asynchronously
+        // anyway, and a synchronous setState in an effect cascades a render.
+        try {
+          if (localStorage.getItem(SIGNED_KEY) === "1") setSigned(true);
+          if (variant === "bar" && localStorage.getItem(DISMISS_KEY) === "1") setClosed(true);
+        } catch {
+          // Private mode. The notice comes back next visit, which is acceptable.
+        }
+        setNotice(body);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [variant]);
 
   function dismiss() {
     setClosed(true);
-    remember(DISMISS_KEY);
+    try {
+      localStorage.setItem(DISMISS_KEY, "1");
+    } catch {}
   }
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
@@ -90,147 +138,177 @@ export function WindDown({ variant = "banner" }: { variant?: "banner" | "bar" })
         setState("error");
         // The status is the reliable part. A 429 from the edge, rather than
         // from the worker, carries an HTML body and no `error` to read.
-        setMessage(
-          body.error ??
-            (response.status === 429
-              ? "Too many tries. Wait a minute."
-              : "That did not work. Try again."),
-        );
+        setMessage(body.error ?? (response.status === 429 ? "Too many tries. Wait a minute." : "That did not work. Try again."));
         return;
       }
       setState("done");
-      remember(SIGNED_KEY);
-      // The confirmation is worth reading, so the bar stays a moment before it
-      // goes. It does not come back: SIGNED_KEY is already written.
-      if (variant === "bar") setTimeout(() => setHidden(true), 4000);
+      try {
+        localStorage.setItem(SIGNED_KEY, "1");
+      } catch {}
     } catch {
       setState("error");
       setMessage("No connection. Try again.");
     }
   }
 
-  // `stored` is re-read on every render, so it turns "signed" the moment the
-  // address lands. Hiding on it alone would swallow the confirmation, hence
-  // the `state === "idle"` guard: a stored answer only hides a bar that has
-  // nothing to say right now.
-  if (variant === "bar" && (hidden || closed || (stored !== "none" && state === "idle")))
-    return null;
-  // Someone who already signed up still needs the closure date on the landing
-  // page, but not the field again.
-  const signedEarlier = stored === "signed" && state === "idle";
+  // Nothing on the server and nothing until the answer arrives, so the
+  // prerendered HTML of every page stays byte-identical whatever the JSON says.
+  if (!notice?.show || closed) return null;
+
+  const done = state === "done" || (signed && state === "idle");
 
   const card = (
     <aside
       className={cn(
-        // Even padding all round, on every side, at every width.
-        "relative -mx-md rounded-lg border border-hairline bg-surface p-md",
+        // One inset, `md`, on all four sides: the prose starts 16px from the
+        // left edge and the control ends 16px from the right. The search field
+        // gets away with 16 left and 4 right because its key fills the well
+        // top to bottom, so that 4 wraps three sides of it at once. This key is
+        // centred against taller prose and shares no corner with the card, so
+        // the same trick reads as a button shoved against the wall.
+        //
+        // The corners follow from that inset. `rounded-4xl` is 24px: the key's
+        // own 8 plus the 16 around it. The field obeys the same rule at its own
+        // size, 12 = 8 + 4.
+        "relative -mx-md rounded-4xl border border-hairline bg-surface p-md",
+        // The two edge lines the field carries. Below the dark page there is
+        // only black, so the lit lip takes the next step up the ramp.
+        "dark:border-black",
+        "ring-1 ring-inset ring-neutral-0 dark:ring-neutral-100",
       )}
     >
-      <div className="flex flex-col gap-md md:gap-xl md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col gap-md md:flex-row md:items-center md:justify-between md:gap-xl">
         <div className={cn("min-w-0", variant === "bar" && "pr-2xl md:pr-0")}>
-          <p className="text-label text-foreground">
-            <strong className="font-medium">
-              HoudiniMD closes on {CLOSURE_DATE}. It&apos;s being replaced by a free, open-source app.
-            </strong>
+          <p className="text-label text-foreground space-x-sm">
+            <strong className="font-medium">{notice.title}</strong>
+            {notice.linkHref && notice.linkLabel && (
+              <strong className="font-medium">
+                <a
+                  className={DOC_LINK_CLASS_NAME + " text-neutral-500 hover:text-neutral-800 transition"}
+                  href={notice.linkHref}
+                >
+                  {notice.linkLabel}
+                </a>
+              </strong>
+            )}
           </p>
-          <p className="text-meta text-muted-foreground whitespace-pre-line">
-            {"SideFX owns the documentation and did not give permission to host it.\nThis new app will read the docs already installed with Houdini."}
-          </p>
+          <p className="text-meta text-muted-foreground whitespace-pre-line">{notice.body}</p>
         </div>
 
-        {state !== "done" && !signedEarlier && (
-          <form
-            onSubmit={submit}
-            className="flex w-full shrink-0 flex-col gap-2xs md:w-auto"
-          >
-            <div className="flex w-full items-center gap-sm">
-              <label
-                htmlFor={`waitlist-${variant}`}
-                className="sr-only"
-              >
-                Email address
-              </label>
-              <Input
-                id={`waitlist-${variant}`}
-                type="email"
-                name="email"
-                required
-                autoComplete="email"
-                placeholder="you@studio.com"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                aria-invalid={state === "error"}
-                className="h-8 min-w-0 flex-1 -ml-2.5 px-2.5 py-4 md:w-52 md:flex-none"
-              />
-              {/* Honeypot. Hidden from people and from screen readers, filled by bots. */}
-              <input
-                type="text"
-                name="website"
-                tabIndex={-1}
-                autoComplete="off"
-                aria-hidden="true"
-                className="absolute left-[-9999px] h-px w-px opacity-0"
-              />
-              <Button
-                type="submit"
-                size="sm"
-                disabled={state === "sending"}
-                // Mirrors the field: same inner padding, same pull outwards, so
-                // the label sits on the card's padding line instead of inside it.
-                className="-mr-2.5 cursor-pointer px-2.5"
-              >
-                {state === "sending" ? "Sending" : "Notify me"}
-              </Button>
-            </div>
-            {/* Under the field, where the reader looks last before they type.
-                Beside the rest of the copy it read as one more sentence to
-                skip, and the promise is the part that earns the address. A
-                failure speaks in the same place, beside the control that
-                caused it, so the notice copy above never moves. */}
-            {/* Not cn(): tailwind-merge does not know the custom `text-caption` size,
-                reads it as a colour, and lets `text-muted-foreground` evict it. */}
+        {/* The key and the cross are one group, not two flex children. Under
+            `justify-between` two children split the leftover width twice and
+            leave a hole between them. */}
+        <div className="flex w-full shrink-0 items-center gap-sm md:w-auto">
+          {notice.kind === "waitlist" && !done && (
+            <form
+              onSubmit={submit}
+              className="flex w-full shrink-0 flex-col gap-2xs md:w-auto"
+            >
+              <div className="flex w-full items-stretch gap-sm">
+                <label
+                  htmlFor={`waitlist-${variant}`}
+                  className="sr-only"
+                >
+                  Email address
+                </label>
+                <Input
+                  id={`waitlist-${variant}`}
+                  type="email"
+                  name="email"
+                  required
+                  autoComplete="email"
+                  placeholder={notice.placeholder}
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  aria-invalid={state === "error"}
+                  // No height of its own: the key sets the row's height and the
+                  // field takes it, so the two controls are one line.
+                  className="h-auto min-w-0 flex-1 px-ms md:w-52 md:flex-none"
+                />
+                {/* Honeypot. Hidden from people and from screen readers, filled by bots. */}
+                <input
+                  type="text"
+                  name="website"
+                  tabIndex={-1}
+                  autoComplete="off"
+                  aria-hidden="true"
+                  className="absolute left-[-9999px] h-px w-px opacity-0"
+                />
+                <ControlButton
+                  type="submit"
+                  disabled={state === "sending"}
+                  // The download key's own padding. One key, one look, whichever
+                  // call to action the notice carries.
+                  className="p-md leading-none"
+                >
+                  {state === "sending" ? "Sending" : notice.submitLabel}
+                </ControlButton>
+              </div>
+              {/* Under the field, where the reader looks last before they type.
+                  Beside the rest of the copy it read as one more sentence to
+                  skip, and the promise is the part that earns the address. A
+                  failure speaks in the same place, beside the control that
+                  caused it, so the notice copy above never moves. */}
+              {/* Not cn(): tailwind-merge does not know the custom `text-caption` size,
+                  reads it as a colour, and lets `text-muted-foreground` evict it. */}
+              {(state === "error" || notice.promise) && (
+                <p
+                  role="status"
+                  className={`text-caption ${state === "error" ? "text-destructive" : "text-muted-foreground"}`}
+                >
+                  {state === "error" ? message : notice.promise}
+                </p>
+              )}
+            </form>
+          )}
+
+          {notice.kind === "waitlist" && done && (
             <p
               role="status"
-              className={`text-caption ${state === "error" ? "text-destructive" : "text-muted-foreground"}`}
+              className="text-label shrink-0 text-foreground"
             >
-              {state === "error" ? message : "One email at release. Nothing else, ever."}
+              {notice.signedLabel}
             </p>
-          </form>
-        )}
+          )}
+          {notice.kind === "download" && notice.ctaHref && notice.ctaLabel && (
+            <ControlButton
+              href={notice.ctaHref}
+              icon={<WindowsMark className="size-4" />}
+              // `p-md` overrides the key's own 16/8: one number, 16, on all
+              // four sides, so the key is inset from the card by the same
+              // amount everywhere. The card's radius follows from it, 24 = the
+              // key's own 8 plus that 16.
+              //
+              // `leading-none` stops the label's line box, which is taller
+              // than its glyphs, from adding half-leading at the top and the
+              // bottom only.
+              className="w-full justify-center p-md leading-none md:w-auto"
+            >
+              {notice.ctaLabel}
+            </ControlButton>
+          )}
 
-        {(state === "done" || signedEarlier) && (
-          <p role="status" className="text-label shrink-0 text-foreground">
-            You are on the list. One email at release.
-          </p>
-        )}
-
-        {/* Absolute below md, where it floats over the copy and the copy makes
-            room for it. A real flex item from md up, where the form already
-            fills the top-right corner — reserving padding for it there is what
-            made the right inset wider than the left. */}
-        {variant === "bar" && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            aria-label="Dismiss"
-            className="absolute right-md top-md cursor-pointer text-muted-foreground hover:text-foreground md:static md:self-start"
-            onClick={dismiss}
-          >
-            <X />
-          </Button>
-        )}
+          {variant === "bar" && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              aria-label="Dismiss"
+              // Absolute below md, where the key is full width and leaves the
+              // cross no room in the row: it floats over the top-right corner
+              // and the prose makes room for it. A real flex item from md up,
+              // where the key shrinks to its label and the row has a gap to
+              // put it in.
+              className="absolute right-md top-md shrink-0 cursor-pointer text-muted-foreground hover:text-foreground md:static"
+              onClick={dismiss}
+            >
+              <X />
+            </Button>
+          )}
+        </div>
       </div>
     </aside>
   );
 
-  // The bar carries its own page container. Wrapping it in the doc shell
-  // instead would leave an empty div in every prerendered page, so a dismissed
-  // notice would still change 21k cached HTML outputs and make every deploy
-  // rewrite the whole R2 cache. Returning null here leaves no markup at all.
-  return variant === "bar" ? (
-    <div className="@container mx-auto w-full max-w-page px-page-x pt-5">{card}</div>
-  ) : (
-    card
-  );
+  return variant === "bar" ? <div className="@container mx-auto w-full max-w-page px-page-x pt-5">{card}</div> : card;
 }
