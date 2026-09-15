@@ -1,4 +1,5 @@
 import { SITE_URL } from "@/lib/site";
+import { NOTICE_HEAD_SCRIPT } from "@/lib/notice";
 import type { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
 import Script from "next/script";
@@ -113,19 +114,10 @@ export default function RootLayout({
             }}
           />
         )}
-        {/* Before the first paint, so a notice this reader already closed, or a
-            notice that is off, never draws and never moves the page under them.
-            It reads only what the last visit wrote; a first visit reserves the
-            space, which is what the notice needs anyway. Inline because a
-            module loads too late to beat the paint. */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html:
-              "try{var s=JSON.parse(localStorage.getItem('houdinimd:notice')||'{}');" +
-              "if(s.show===false)document.documentElement.dataset.notice='off';" +
-              "else if(s.dismissed&&s.dismissed===s.kind)document.documentElement.dataset.notice='dismissed'}catch(e){}",
-          }}
-        />
+        {/* Before the first paint, so a notice this reader closed, or one they
+            already signed, never draws and never moves the page under them.
+            Inline because a module loads too late to beat the paint. */}
+        <script dangerouslySetInnerHTML={{ __html: NOTICE_HEAD_SCRIPT }} />
       </head>
       <body>
         <ServiceWorkerRegistration />

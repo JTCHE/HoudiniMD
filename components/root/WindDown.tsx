@@ -8,107 +8,20 @@ import { ControlButton } from "@/components/ui/control-button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { DOC_LINK_CLASS_NAME } from "@/components/docs/DocLink";
-
-/**
- * The notice lives in `public/notice.json`, NOT in this file.
- *
- * Every doc page's HTML is an object in the R2 incremental cache, ~21k of
- * them. Copy written here would reach them one of two ways, and both cost a
- * full rewrite of the cache: rendered on the server it lands in the HTML
- * itself, and rendered on the client it lands in a chunk whose content-hashed
- * name the HTML carries in a script tag.
- *
- * A file in `public/` is neither. It is a static asset, served by the asset
- * server without touching the Worker, and it is in no chunk. Change the copy,
- * or set `show` to false, and the next deploy rewrites that one file and no
- * cache object at all.
- *
- * `kind` is in the JSON for the same reason. The notice has to carry the email
- * field until the release mail goes out, then the download. Both forms ship
- * here once, and the switch between them is a one-word edit to a static file.
- *
- * The price is that the code below must not change either — an edit here moves
- * the chunk hash and the 21k rewrite comes back.
- */
-const NOTICE_URL = "/notice.json";
-
-/** One block per kind. The handoff is a one-word edit to `kind`, and each
-    kind keeps its own wording: a waitlist asks, a release tells. */
-interface Copy {
-  title?: string;
-  body?: string;
-  promise?: string;
-  placeholder?: string;
-  submitLabel?: string;
-  signedLabel?: string;
-  linkLabel?: string;
-  linkHref?: string;
-  ctaLabel?: string;
-  ctaHref?: string;
-  /** Where a reader who is not on Windows goes instead. */
-  altLabel?: string;
-  altHref?: string;
-}
-
-interface Notice {
-  show?: boolean;
-  kind?: "waitlist" | "download";
-  waitlist?: Copy;
-  download?: Copy;
-}
+import { NOTICE, NOTICE_KIND, NOTICE_STATE_KEY } from "@/lib/notice";
 
 type State = "idle" | "sending" | "done" | "error";
 
-/** Set once an address is accepted. A reader who signed up is done with the
-    field on every page, not only the one they typed on. */
-const SIGNED_KEY = "houdinimd:wind-down-signed";
-
 /**
- * What the LAST visit saw. The inline script in the document head reads this
- * before the first paint and hides the notice when this reader closed it, so a
- * closed bar is never drawn and the page does not jump.
+ * Hidden for the rest of this tab: the reader closed the notice, or signed.
  *
- * `dismissed` holds the KIND that was closed, not a flag. A reader who closed
- * the waitlist has not closed the download, so the release notice comes back
- * one time for everybody.
+ * A module value, not component state, because a navigation mounts the
+ * component again. State would come back as "show", and the card would flash
+ * on a page the reader already closed it on.
  */
-const STATE_KEY = "houdinimd:notice";
-
-interface Saved {
-  kind?: string;
-  show?: boolean;
-  dismissed?: string;
-}
-
-function readState(): Saved {
-  try {
-    return JSON.parse(localStorage.getItem(STATE_KEY) ?? "{}") as Saved;
-  } catch {
-    return {};
-  }
-}
-
-/** The app runs on Windows only. Every other reader gets the source. */
-function onWindows() {
-  if (typeof navigator === "undefined") return false;
-  const data = (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData;
-  return /win/i.test(data?.platform ?? navigator.userAgent);
-}
+let hiddenForTab = false;
 
 /** Windows. Not in lucide, which carries no brand marks. */
-function GitHubMark({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="currentColor"
-      aria-hidden="true"
-      className={className}
-    >
-      <path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.61.07-.61 1 .07 1.53 1.03 1.53 1.03.9 1.53 2.36 1.09 2.93.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02a9.5 9.5 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0 0 12 2Z" />
-    </svg>
-  );
-}
-
 function WindowsMark({ className }: { className?: string }) {
   return (
     <svg
@@ -122,9 +35,35 @@ function WindowsMark({ className }: { className?: string }) {
   );
 }
 
+function GitHubMark({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+      className={className}
+    >
+      <path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.61.07-.61 1 .07 1.53 1.03 1.53 1.03.9 1.53 2.36 1.09 2.93.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02a9.5 9.5 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0 0 12 2Z" />
+    </svg>
+  );
+}
+
+function saveState(next: { dismissed?: string; signed?: boolean }) {
+  try {
+    const saved = JSON.parse(localStorage.getItem(NOTICE_STATE_KEY) ?? "{}") as Record<string, unknown>;
+    localStorage.setItem(NOTICE_STATE_KEY, JSON.stringify({ ...saved, ...next }));
+  } catch {
+    // Private mode. The notice comes back next visit, which is acceptable.
+  }
+}
+
 /**
  * The wind-down notice and the call to action are one component on purpose: a
  * reader learns the site closes and can act on it without moving.
+ *
+ * The copy is prerendered into every page — lib/notice.ts says what that costs
+ * and why it is worth it. Nothing here waits for a request, so the card is
+ * complete in the first paint and no page moves under the reader.
  *
  * The negative inline margin matches the horizontal padding exactly, so the
  * copy sits on the same vertical axis as the page title and everything under
@@ -134,48 +73,27 @@ function WindowsMark({ className }: { className?: string }) {
  */
 export function WindDown({ variant = "banner" }: { variant?: "banner" | "bar" }) {
   const pathname = usePathname();
-  const [notice, setNotice] = useState<Notice | null>(null);
-  const [signed, setSigned] = useState(false);
-  const [closed, setClosed] = useState(false);
+  const [closed, setClosed] = useState(hiddenForTab);
   const [email, setEmail] = useState("");
   const [state, setState] = useState<State>("idle");
   const [message, setMessage] = useState("");
+  // Windows is the prerendered answer, because the installer is the point of
+  // the notice and most readers are on Windows. Everybody else is corrected
+  // after hydration. Only the label moves, and only for them.
+  const [windows, setWindows] = useState(true);
 
   useEffect(() => {
-    let live = true;
-    // A static asset, so the browser and the service worker both cache it and
-    // a second page costs no request. A failure leaves the notice absent,
-    // which is the safe way for it to fail.
-    fetch(NOTICE_URL)
-      .then((response) => (response.ok ? response.json() : null))
-      .then((body: Notice | null) => {
-        if (!live) return;
-        // Read here, not in the effect body: the answer arrives asynchronously
-        // anyway, and a synchronous setState in an effect cascades a render.
-        try {
-          const saved = readState();
-          if (localStorage.getItem(SIGNED_KEY) === "1") setSigned(true);
-          if (variant === "bar" && saved.dismissed && saved.dismissed === body?.kind) setClosed(true);
-          localStorage.setItem(
-            STATE_KEY,
-            JSON.stringify({ kind: body?.kind, show: body?.show, dismissed: saved.dismissed }),
-          );
-        } catch {
-          // Private mode. The notice comes back next visit, which is acceptable.
-        }
-        setNotice(body);
-      })
-      .catch(() => {});
-    return () => {
-      live = false;
-    };
-  }, [variant]);
+    const data = (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData;
+    setWindows(/win/i.test(data?.platform ?? navigator.userAgent));
+  }, []);
 
   function dismiss() {
+    hiddenForTab = true;
     setClosed(true);
-    try {
-      localStorage.setItem(STATE_KEY, JSON.stringify({ ...readState(), dismissed: notice?.kind }));
-    } catch {}
+    saveState({ dismissed: NOTICE_KIND });
+    // The head script sets this on the next visit. Set it here as well, so the
+    // card stays gone through the navigations of this one.
+    document.documentElement.dataset.notice = "dismissed";
   }
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
@@ -200,33 +118,23 @@ export function WindDown({ variant = "banner" }: { variant?: "banner" | "bar" })
         return;
       }
       setState("done");
-      try {
-        localStorage.setItem(SIGNED_KEY, "1");
-      } catch {}
+      // The thank-you stays on this page, and the notice is gone from the next
+      // one. A reader who signed has nothing left to do with it.
+      hiddenForTab = true;
+      saveState({ signed: true });
     } catch {
       setState("error");
       setMessage("No connection. Try again.");
     }
   }
 
-  // The CARD is drawn from the first paint, empty; only the words wait for the
-  // JSON. A notice that appeared late pushed every page down after it loaded,
-  // and the reader lost their place. The shell holds the space instead, and it
-  // carries no copy, so the prerendered HTML says nothing about the notice.
-  //
-  // A reader who closed the bar, or a notice that is off, still has to leave no
-  // gap. The inline script in the head reads the last visit's answer from
-  // localStorage and hides the shell before the first paint; this return then
-  // removes it once the JSON confirms.
-  if (closed || (notice && !notice.show)) return null;
+  if (closed) return null;
 
-  const copy: Copy = (notice?.kind === "download" ? notice?.download : notice?.waitlist) ?? {};
-  const done = state === "done" || (signed && state === "idle");
-  // The key sends a Windows reader to the installer and everyone else to the
-  // source, so no reader downloads a build their machine cannot run.
-  const windows = onWindows();
-  const ctaHref = windows ? copy.ctaHref : copy.altHref;
-  const ctaLabel = windows ? copy.ctaLabel : copy.altLabel;
+  const copy = NOTICE[NOTICE_KIND];
+  const waitlist = NOTICE_KIND === "waitlist" ? NOTICE.waitlist : null;
+  const download = NOTICE_KIND === "download" ? NOTICE.download : null;
+  const ctaHref = windows ? download?.ctaHref : download?.altHref;
+  const ctaLabel = windows ? download?.ctaLabel : download?.altLabel;
 
   const card = (
     <aside
@@ -251,29 +159,25 @@ export function WindDown({ variant = "banner" }: { variant?: "banner" | "bar" })
     >
       <div className="flex flex-col gap-md md:flex-row md:items-center md:justify-between md:gap-xl">
         <div className={cn("min-w-0", variant === "bar" && "pr-2xl md:pr-0")}>
-          <p className="text-label text-foreground space-x-sm line-clamp-2 min-h-[2lh] md:line-clamp-1 md:min-h-[1lh]">
+          <p className="text-label text-foreground space-x-sm">
             <strong className="font-medium">{copy.title}</strong>
-            {copy.linkHref && copy.linkLabel && (
-              <strong className="font-medium">
-                <a
-                  className={DOC_LINK_CLASS_NAME + " text-neutral-500 hover:text-neutral-800 transition"}
-                  href={copy.linkHref}
-                >
-                  {copy.linkLabel}
-                </a>
-              </strong>
-            )}
+            <strong className="font-medium">
+              <a
+                className={DOC_LINK_CLASS_NAME + " text-neutral-500 hover:text-neutral-800 transition"}
+                href={copy.linkHref}
+              >
+                {copy.linkLabel}
+              </a>
+            </strong>
           </p>
-          <p className="text-meta text-muted-foreground whitespace-pre-line line-clamp-2 min-h-[2lh] md:line-clamp-1 md:min-h-[1lh]">
-            {copy.body}
-          </p>
+          <p className="text-meta text-muted-foreground whitespace-pre-line">{copy.body}</p>
         </div>
 
         {/* The key and the cross are one group, not two flex children. Under
             `justify-between` two children split the leftover width twice and
             leave a hole between them. */}
-        <div className="flex min-h-12 w-full shrink-0 items-center gap-sm md:w-auto">
-          {notice?.kind === "waitlist" && !done && (
+        <div className="flex w-full shrink-0 items-center gap-sm md:w-auto">
+          {waitlist && state !== "done" && (
             <form
               onSubmit={submit}
               className="flex w-full shrink-0 flex-col gap-2xs md:w-auto"
@@ -291,7 +195,7 @@ export function WindDown({ variant = "banner" }: { variant?: "banner" | "bar" })
                   name="email"
                   required
                   autoComplete="email"
-                  placeholder={copy.placeholder}
+                  placeholder={waitlist.placeholder}
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   aria-invalid={state === "error"}
@@ -311,51 +215,42 @@ export function WindDown({ variant = "banner" }: { variant?: "banner" | "bar" })
                 <ControlButton
                   type="submit"
                   disabled={state === "sending"}
-                  // The download key's own padding. One key, one look, whichever
-                  // call to action the notice carries.
                   className="px-md py-sm leading-none"
                 >
-                  {state === "sending" ? "Sending" : copy.submitLabel}
+                  {state === "sending" ? "Sending" : waitlist.submitLabel}
                 </ControlButton>
               </div>
-              {/* Under the field, where the reader looks last before they type.
-                  Beside the rest of the copy it read as one more sentence to
-                  skip, and the promise is the part that earns the address. A
-                  failure speaks in the same place, beside the control that
-                  caused it, so the notice copy above never moves. */}
-              {/* Not cn(): tailwind-merge does not know the custom `text-caption` size,
-                  reads it as a colour, and lets `text-muted-foreground` evict it. */}
-              {(state === "error" || copy.promise) && (
+              {/* A failure speaks beside the control that caused it, so the
+                  notice copy above never moves.
+                  Not cn(): tailwind-merge does not know the custom `text-caption`
+                  size, reads it as a colour, and lets a colour class evict it. */}
+              {state === "error" && (
                 <p
                   role="status"
-                  className={`text-caption ${state === "error" ? "text-destructive" : "text-muted-foreground"}`}
+                  className="text-caption text-destructive"
                 >
-                  {state === "error" ? message : copy.promise}
+                  {message}
                 </p>
               )}
             </form>
           )}
 
-          {notice?.kind === "waitlist" && done && (
+          {waitlist && state === "done" && (
             <p
               role="status"
               className="text-label shrink-0 text-foreground"
             >
-              {copy.signedLabel}
+              {waitlist.signedLabel}
             </p>
           )}
-          {notice?.kind === "download" && ctaHref && ctaLabel && (
+
+          {download && ctaHref && ctaLabel && (
             <ControlButton
               href={ctaHref}
               icon={windows ? <WindowsMark className="size-4" /> : <GitHubMark className="size-4" />}
-              // `p-md` overrides the key's own 16/8: one number, 16, on all
-              // four sides, so the key is inset from the card by the same
-              // amount everywhere. The card's radius follows from it, 24 = the
-              // key's own 8 plus that 16.
-              //
-              // `leading-none` stops the label's line box, which is taller
-              // than its glyphs, from adding half-leading at the top and the
-              // bottom only.
+              // `leading-none` stops the label's line box, which is taller than
+              // its glyphs, from adding half-leading at the top and the bottom
+              // only.
               className="w-full justify-center px-md py-sm leading-none md:w-auto"
             >
               {ctaLabel}
