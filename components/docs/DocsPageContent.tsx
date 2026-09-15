@@ -24,11 +24,9 @@ export function DocsPageContent({ breadcrumbs, sourceUrl, children }: DocsPageCo
           still rendered from layout.tsx (via the `breadcrumbs` prop threaded
           in from DocsLayout) so they persist untouched across a page.tsx
           remount instead of flashing on every navigation. */}
-      {/* Above the breadcrumbs, and carrying its own page container, so that
-          an absent notice leaves NO markup behind. It renders nothing on the
-          server and reads its copy from `public/notice.json` after, so the
-          prerendered HTML of all 21k pages is byte-identical whatever the
-          notice says. */}
+      {/* Above the breadcrumbs, and carrying its own page container. The copy
+          is prerendered with the page, so the card is whole in the first paint
+          and the breadcrumbs below it never move. */}
       <WindDown variant="bar" />
       <div className="@container mx-auto w-full max-w-page px-page-x pt-5">{breadcrumbs}</div>
       <div className="flex-1 flex min-w-0 flex-col">{children}</div>
