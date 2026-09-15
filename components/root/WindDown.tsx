@@ -275,7 +275,7 @@ export function WindDown({ variant = "banner" }: { variant?: "banner" | "bar" })
                   disabled={state === "sending"}
                   // The download key's own padding. One key, one look, whichever
                   // call to action the notice carries.
-                  className="p-md leading-none"
+                  className="px-md py-sm leading-none"
                 >
                   {state === "sending" ? "Sending" : copy.submitLabel}
                 </ControlButton>
