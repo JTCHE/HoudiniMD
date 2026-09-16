@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
-import { BUILD_ID } from "./lib/build-id";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 if (process.env.NODE_ENV === "development") {
   import("@opennextjs/cloudflare").then((m) => m.initOpenNextCloudflareForDev());
@@ -19,9 +20,13 @@ const nextConfig: NextConfig = {
   // overwrite in place instead of accumulating orphans. Tradeoff: during a
   // rollout the old and new worker share keys, so a content/serialization change
   // could briefly be read by the other version — acceptable for a static wiki.
-  // The value lives in lib/build-id.ts: lib/segment-prefetch.ts builds the same
-  // key to read those entries from the Worker.
-  generateBuildId: () => BUILD_ID,
+  // The value lives in lib/build-id.json: lib/segment-prefetch.ts builds the same
+  // key to read those entries from the Worker. Read from disk, not imported:
+  // Next compiles this file and evaluates it outside the repo, so every
+  // relative import fails to resolve.
+  generateBuildId: () =>
+    JSON.parse(readFileSync(join(process.cwd(), "lib/build-id.json"), "utf8"))
+      .buildId,
   // Prerendering all ~10.5k doc pages fetches each one's markdown from R2 over
   // the network. The default 60s per-page export timeout is occasionally
   // exceeded when a single R2 fetch stalls, which aborts the entire build.
