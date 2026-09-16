@@ -49,43 +49,70 @@ once it is published. CI cannot read the vault — it is in iCloud — so the fi
 the source and the GitHub release body is a copy. Paste it into the draft
 before publishing.
 
-The note carries `Type: Release`, `Version`, `Date` and `Status` in its
-frontmatter. The note mover plugin reads those two last: it files the note under
-`releases/<Status>`, so changing `Status` to `Closed` moves it. A note without
-them is moved to the specs tree instead, which is where the first ones went
-missing.
+The note must include `Type: Release`, `Version`, `Date`, and `Status` in its frontmatter.
 
-A release note is about one version, not about the project.
+The note mover plugin reads `Status` and files the note under `releases/<Status>`. 
+Changing `Status` to `Closed` therefore moves the note. 
+Make sure none of these frontmatter fields are missing.
 
-Write what changed in this version, as a list. Nothing else. For the first
-release, say "first release" and list what it ships.
+A release note covers one version only.
 
-Put the list under two headings: `## Features` for what the reader can now do,
-and `## Fixes` for what now works as it should. A speed or memory gain is a
-fix. Leave out a heading that has no items.
+Write only what changed in that version. Do not describe the project, the product, or previous versions.
 
-Each change should be written in a very objective and straightforward manner.
-Do not adress the user directly by saying "you".
-Use dead prose extensively. Cut down on verbose phrases.
+Organize changes under these headings:
+
+* `## Features` — new or changed functionality available in this version.
+* `## Fixes` — behavior that now works as intended. Performance and memory improvements belong here.
+
+Omit headings with no items.
+
+### Style
+
+Write every change as a short, objective statement.
+
+* Describe the change directly.
+* Do not address the reader as "you".
+* Prefer simple, factual sentences.
+* Use concise, dead prose.
+* Remove explanations that do not clarify the change.
+* Include implementation details when they describe a meaningful change or behavior.
+* Do not describe the old behavior unless it is needed to make the new behavior clear.
+* Avoid narrative, justification, marketing language, and filler.
+* Prefer `now` for behavior that changed.
+* Keep each bullet focused on one change; combine details when they describe the same change.
 
 ### Examples
-- Bad (Refers to the user, too long at 207 chars): The index starts the moment you choose your Houdini in the setup, not when you leave that screen. The rest of the setup takes longer than the index, so the docs are ready by the time you reach the home page.
-- Good (Objective, 180 chars): Indexing now starts as soon as the Houdini build is picked during onboarding, not when the screen is left, in order for it to be complete by the time the user reaches the home page.
 
-- Bad (300 chars, useless prose): A log of what the app did. It sits in `logs/` beside the index, it is written whether or not you send usage data, and it holds the launch, the install, the index pass, the server, the F1 hook, the update check and every error. The app name in the title bar has "Open logs". It goes when the app goes.
-- Good (Objective, more descript, 279 chars) : App now creates logs in `logs/` beside the index. Not sent via telemetry. It records standard flows (launch, install, indexing, server, F1 hook, update check, all errors). App name in the title bar also gets a new "Open logs" button. Logs are deleted when the app is uninstalled.
+**Bad — too long and addresses the reader:**
 
-Never include the following, which belong in the README:
+> The index starts the moment you choose your Houdini in the setup, not when you leave that screen. The rest of the setup takes longer than the index, so the docs are ready by the time you reach the home page.
 
-- What the product is, and what it is for.
-- How to install it, and what it runs on.
-- The feature list that is true of every version.
-- How the updater works.
-- Where to report a fault.
-- Credits and licence.
+**Good — objective and concise:**
 
-A reader opens a release note to answer one question: what is different now.
-Every line that does not answer this question is bloat.
+> Indexing now starts when the Houdini build is selected during onboarding.
+
+**Bad — verbose and narrative:**
+
+> A log of what the app did. It sits in `logs/` beside the index, it is written whether or not you send usage data, and it holds the launch, the install, the index pass, the server, the F1 hook, the update check and every error. The app name in the title bar has "Open logs". It goes when the app goes.
+
+**Good — objective and descriptive:**
+
+> App now creates local logs in `logs/` beside the index. Logs cover standard flows and errors, are not sent via telemetry, and are deleted on uninstall. The title bar also gets an "Open logs" button.
+
+Do not include information that belongs in the README:
+
+* What the product is or what it is for.
+* Installation instructions or supported platforms.
+* Features that are unchanged from previous versions.
+* How the updater works.
+* Where to report faults.
+* Credits or licence information.
+
+A reader should quickly be able to understand 
+what is different in this version.
+
+Every line must contribute directly to that answer.
+Delete anything that does not.
 
 ## Signing
 
