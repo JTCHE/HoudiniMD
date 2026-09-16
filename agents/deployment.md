@@ -2,12 +2,14 @@
 
 Never run `bun run deploy` locally.
 
-Deploy with a commit and a push to `prod`. The Cloudflare app is installed on
-the repo, so a push runs `bun run deploy` in Cloudflare CI.
+Deploy with a commit and a push to `web-prod`. The Cloudflare app is installed
+on the repo, so a push runs `bun run deploy` in Cloudflare CI.
 
-`main` is the trunk and does not release. A push to `main` runs
-`bun run deploy:preview`, which builds and uploads a Worker version but never
-promotes it and never writes to R2. Merge `main` into `prod` to release.
+`web` is the trunk of this site and does not release. Merge `web` into
+`web-prod` to release.
+
+`main` is the desktop app, not the site. Nothing on this branch releases from
+it, and a push to it builds no preview of this site. Leave it alone.
 
 A push only builds when it touches a path the build watches. Documentation and
 specs are excluded, so a push that changes only `*.md`, `agents/*` or
@@ -30,6 +32,8 @@ writes to R2.
 
 The hash problem is a local-versus-CI problem only. `deploy:preview` runs in the
 same CI image as `deploy`, so it makes the same hash and needs no cache sync.
+Nothing triggers it automatically — run it by hand when you want a version
+uploaded without a release.
 
 ## Reading a build
 

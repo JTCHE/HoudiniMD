@@ -28,8 +28,15 @@ Use this order:
 2. Build and run `bun run preview`. This runs the real Worker code
    (`opennextjs-cloudflare`) inside workerd, the same runtime as production.
    Use this step to find bugs that are specific to the Cloudflare adapter.
-3. Only push to `main` once both pass. CI deploys on push — see
+   It does not run on Windows: the bundle OpenNext writes there holds Windows
+   path separators, so workerd cannot resolve the wasm imports or the Turbopack
+   chunks. Use WSL, or accept step 1 alone.
+3. Only push to `web-prod` once both pass. CI deploys on that push — see
    [Deployment](deployment.md).
+
+To look at one page, `next dev` renders it on demand from R2 and costs one
+read. `next start` serves the last build, so it shows stale content after a
+`bun run regen`.
 
 A `next build` reads `content/index.json` from R2, then fetches every listed
 page from R2 to prerender it. On this site, that is near 11,000 reads. Do not
