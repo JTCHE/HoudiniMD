@@ -27,11 +27,11 @@
  * Everything it is not certain about, by returning null — the caller then
  * hands the request to Next exactly as before. The gates below repeat the ones
  * middleware applies, because answering here skips middleware: the build id is
- * pinned (see lib/build-id.ts), so R2 still holds entries written under slugs
+ * pinned (see lib/build-id.json), so R2 still holds entries written under slugs
  * that are now redirected, and serving one would strand a reader on a page the
  * site no longer admits to having.
  */
-import { BUILD_ID } from "./build-id";
+import buildId from "./build-id.json";
 import { checkDocNamespace } from "./url/namespaces";
 import { VERIFIED_SLUG_REDIRECTS } from "./url/slug-redirects";
 import { wantsMarkdown } from "./wants-markdown";
@@ -105,7 +105,7 @@ export async function segmentPrefetch(
 
   try {
     const object = await bucket.get(
-      `incremental-cache/${BUILD_ID}/${await sha256Hex(url.pathname)}.cache`,
+      `incremental-cache/${buildId.buildId}/${await sha256Hex(url.pathname)}.cache`,
     );
     if (!object) return null;
 
