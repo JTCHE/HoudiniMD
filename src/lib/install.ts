@@ -166,7 +166,6 @@ function subscribeIndex(notify: () => void) {
     listening = true;
     void listen<IndexStatus>("index", (event) => report(event.payload));
     void catchUp();
-    onBuildChanged(() => rereadTitles(readStatus(), readVersion()));
   }
   indexListeners.add(notify);
   return () => indexListeners.delete(notify);
@@ -208,11 +207,13 @@ export function pagesLabel(count: number, status: IndexStatus | null): string {
 }
 
 /** "35% indexed" while a pass runs, `null` once it is done. Never 100: the
-    last pages are ones the pass reads and does not list. */
+    last pages are ones the pass reads and does not list. A pass that has not
+    counted the install yet has no share to show, so it says what it is doing
+    instead. */
 export function indexedShare(status: IndexStatus | null): string | null {
   if (!status || status.done) return null;
-  const share = status.total > 0 ? Math.min(99, Math.floor((status.pages / status.total) * 100)) : 0;
-  return `${share}% indexed`;
+  if (status.total === 0) return "indexing…";
+  return `${Math.min(99, Math.floor((status.pages / status.total) * 100))}% indexed`;
 }
 
 /** Reads the build before the window's first draw, so the card never says
@@ -247,9 +248,12 @@ export async function pickInstall(): Promise<boolean> {
 
 const buildListeners = new Set<() => void>();
 
-/** Tells every `useBuild` to re-read the version and page count. Called after
-    the version picker switches the build this process reads. */
+/** The build this process reads has changed. The store re-reads the version,
+    the count and the pass, whether or not a view is watching yet: the setup
+    switches the build on a screen that shows neither, and the landing page
+    that comes after it must not show the build it was primed with. */
 export function announceBuildChanged() {
+  rereadTitles(readStatus(), readVersion());
   for (const notify of buildListeners) notify();
 }
 
