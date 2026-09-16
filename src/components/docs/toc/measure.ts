@@ -81,6 +81,14 @@ export function scrollToHeading(e: React.MouseEvent, index: number, id: string) 
 /** Position of the heading the reader is under, or nothing above the first one. */
 export function useActiveIndex(headings: Heading[]) {
   const [active, setActive] = useState<number>();
+  // Nothing is under the reader on a page they have not scrolled yet. The
+  // observer below says so a frame later, which is a frame of the last page's
+  // row marked on this one's list.
+  const [drawn, setDrawn] = useState(headings);
+  if (drawn !== headings) {
+    setDrawn(headings);
+    setActive(undefined);
+  }
 
   useEffect(() => {
     const box = scroller();
