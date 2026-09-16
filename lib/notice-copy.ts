@@ -19,10 +19,10 @@
  * so the entries holding the previous wording are never read again.
  */
 
-export const NOTICE_VERSION = "1";
+export const NOTICE_VERSION = "2";
 
 /** Which notice the site shows. One word, and a deploy. */
-export const NOTICE_KIND: NoticeKind = "waitlist";
+export const NOTICE_KIND: NoticeKind = "download";
 
 export type NoticeKind = "waitlist" | "download";
 
