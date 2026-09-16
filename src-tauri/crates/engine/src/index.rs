@@ -89,6 +89,10 @@ pub fn pass(
     // by running the same per-section read against each root in turn and
     // pooling the pages found. See `packages.rs`.
     let roots = install.help_roots();
+    // The scan below opens every zip's directory, which on a cold disk is the
+    // first seconds of the pass. This says the pass has begun before it, so
+    // the window never stands at nothing while the machine works.
+    report(Status { build: build.clone(), pages: 0, total: 0, done: false });
     let (mut sections, menu) = rayon::join(|| sections(&roots), || crate::place::Menu::read(&roots));
     // The biggest first, so the long parse of Nodes starts at once and ends
     // while the writer is still busy with the small ones.

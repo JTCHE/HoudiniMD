@@ -37,6 +37,9 @@ const MCP_PICTURE = "/onboarding/houdini-mcp.webp";
 export function Onboarding({ onDone }: { onDone: () => void }) {
   const [step, setStep] = useState(0);
   const [version, setVersion] = useState("");
+  /** The build the backend has been told about, which is what starts its
+      index pass. */
+  const [told, setTold] = useState("");
   const [hookOn, setHookOn] = useState(true);
   const [mcpOn, setMcpOn] = useState(true);
   const [agent, setAgent] = useState("");
@@ -65,10 +68,9 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
   /** What leaving a step writes. Each one is the reader's answer, applied
       before the next screen can depend on it. */
   async function commit(leaving: number) {
-    if (leaving === 1) {
-      await invoke("select_install", { version });
-      announceBuildChanged();
-    }
+    // The build was chosen on the screen itself, so the index has been running
+    // while the reader answered the rest of the setup.
+    if (leaving === 1) await choose(version);
     if (leaving === 2 && hookOn) await invoke("hook_current_build");
     // The download takes longer than the rest of the setup, so the setup does
     // not wait on it. The toast says how it ended, on whatever screen is open.
@@ -85,6 +87,18 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
       // installs never finish one.
       setupDone(`hook=${hookOn} mcp=${mcpOn && agent ? agent : "no"}`);
     }
+  }
+
+  /** Selecting a build is what starts its index, so it is applied the moment
+      the reader picks one — not when they leave the screen. A first index
+      takes seconds, and the rest of the setup takes longer than that, so by
+      the landing page it is done. */
+  async function choose(picked: string) {
+    setVersion(picked);
+    if (!picked || picked === told) return;
+    setTold(picked);
+    await invoke("select_install", { version: picked });
+    announceBuildChanged();
   }
 
   const back =
@@ -131,7 +145,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
       >
         <InstallStep
           value={version}
-          onChange={setVersion}
+          onChange={(picked) => void choose(picked).catch((reason) => setError(String(reason)))}
           onError={setError}
         />
       </StepFrame>
