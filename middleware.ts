@@ -2,13 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { wantsMarkdown } from './lib/wants-markdown';
 import { fetchSourceAlias } from './lib/source-aliases';
 import { checkDocNamespace } from './lib/url/namespaces';
-
-// Verified renamed/duplicated slugs — exact matches only, never a fuzzy guess.
-// Each entry was checked with `curl -L`: the old slug 404s, the new one 200s.
-const VERIFIED_SLUG_REDIRECTS: Record<string, string> = {
-  'houdini/nodes/sop/sop/copytopoints': 'houdini/nodes/sop/copytopoints',
-  'houdini/nodes/top/labs--filecache-2.0': 'houdini/nodes/top/labs--topfilecache-2.0',
-};
+import { VERIFIED_SLUG_REDIRECTS } from './lib/url/slug-redirects';
 
 const HOUDINI_PATH_PREFIXES = [
   'nodes/', 'vex/', 'hom/', 'expressions/', 'model/', 'copy/',
