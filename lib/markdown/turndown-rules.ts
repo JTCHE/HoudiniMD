@@ -91,6 +91,41 @@ function restoreMedia(markdown: string, media: string[]): string {
   return markdown.replace(/MEDIA_PLACEHOLDER_(\d+)/g, (_, index) => media[Number(index)] || '');
 }
 
+/**
+ * True when this node sits inside another `<code>`.
+ *
+ * HDK's Doxygen pages nest `<code>` inside `<code>`. Turndown converts the
+ * innermost first, so without this every level saw backticks in its own
+ * content and picked a longer delimiter than the level below it — one span on
+ * `hdk/_h_d_k__g_a__using` reached a run of nine. A line that opens with three
+ * or more backticks is a fence, so the page broke apart from there on.
+ *
+ * Only the outermost `<code>` of a nest becomes a code span. The inner ones
+ * pass their text through, which is what they meant in the first place.
+ */
+function insideCode(node: TurndownService.Node): boolean {
+  for (let parent = node.parentNode; parent; parent = parent.parentNode) {
+    if (parent.nodeName === 'CODE') return true;
+  }
+  return false;
+}
+
+/** Block tags that cannot sit inside a code span, whatever the source says. */
+const BLOCK_IN_CODE = 'pre, ul, ol, li, p, div, table, blockquote, h1, h2, h3, h4, h5, h6';
+
+/**
+ * True when a `<code>` wraps whole blocks rather than a phrase.
+ *
+ * HDK's Doxygen pages put a list — and sometimes a `<pre>` inside that list —
+ * inside `<code>`. A code span is inline by definition, so wrapping that in
+ * backticks produced a delimiter long enough to clear the fence it contained
+ * (four, against the inner three) and then ran it across many lines, which
+ * ends the page. Content like this keeps its own markup instead.
+ */
+function wrapsBlockContent(node: TurndownService.Node): boolean {
+  return Boolean((node as unknown as Element).querySelector?.(BLOCK_IN_CODE));
+}
+
 function inlineCodeMarkdown(value: string): string {
   const cleaned = value
     .replace(/&lt;/g, '<')
@@ -561,7 +596,8 @@ export function addCustomRules(
         node.parentNode?.nodeName !== 'PRE'
       );
     },
-    replacement: (content) => inlineCodeMarkdown(content),
+    replacement: (content, node) =>
+      insideCode(node) || wrapsBlockContent(node) ? content : inlineCodeMarkdown(content),
   });
 
   turndown.addRule('keyboardKeys', {
