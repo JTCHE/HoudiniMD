@@ -64,13 +64,18 @@ Put the list under two headings: `## Features` for what the reader can now do,
 and `## Fixes` for what now works as it should. A speed or memory gain is a
 fix. Leave out a heading that has no items.
 
-Sell each change. Lead with what the reader gains, and prove it with a number
-when there is one: before and after, or how many. "Performance gains: the first
-index is 6× faster, 13 s down to 2 s." "This fixes 174 broken links." The
-number must be one the reader can feel. A time is the wait from the click to
-the result, not CPU time summed across threads.
+Each change should be written in a very objective and straightforward manner.
+Do not adress the user directly by saying "you".
+Use dead prose extensively. Cut down on verbose phrases.
 
-Keep these out. They are project facts, and they belong in the README:
+### Examples
+- Bad (Refers to the user, too long at 207 chars): The index starts the moment you choose your Houdini in the setup, not when you leave that screen. The rest of the setup takes longer than the index, so the docs are ready by the time you reach the home page.
+- Good (Objective, 180 chars): Indexing now starts as soon as the Houdini build is picked during onboarding, not when the screen is left, in order for it to be complete by the time the user reaches the home page.
+
+- Bad (300 chars, useless prose): A log of what the app did. It sits in `logs/` beside the index, it is written whether or not you send usage data, and it holds the launch, the install, the index pass, the server, the F1 hook, the update check and every error. The app name in the title bar has "Open logs". It goes when the app goes.
+- Good (Objective, more descript, 279 chars) : App now creates logs in `logs/` beside the index. Not sent via telemetry. It records standard flows (launch, install, indexing, server, F1 hook, update check, all errors). App name in the title bar also gets a new "Open logs" button. Logs are deleted when the app is uninstalled.
+
+Never include the following, which belong in the README:
 
 - What the product is, and what it is for.
 - How to install it, and what it runs on.
