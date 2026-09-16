@@ -107,12 +107,16 @@ export function TableOfContents({ headings }: { headings: Heading[] }) {
           title is centred in a box as tall as the bar, so "On this page" is
           always on the breadcrumbs' line. The list under the title scrolls on
           its own and is never taller than the scroller. */}
-      <div className="not-prose print:hidden hidden @min-[780px]:block absolute top-0 left-full ml-lg h-full w-44">
+      {/* The background is not decoration: the webview leaves the last page's
+          rows painted under the new ones, so two lists of headings stand on
+          top of each other. A box that paints its own ground clears them, and
+          it is THIS box that has to paint, not the nav inside it: the nav is
+          as tall as its own list, so a shorter list on the next page leaves
+          the rows below it uncovered. The gutter is the same size on every
+          page. */}
+      <div className="not-prose print:hidden hidden @min-[780px]:block absolute top-0 left-full ml-lg h-full w-44 bg-background">
         <nav
           aria-label="On this page"
-          // The background is not decoration: the webview left the last page's
-          // rows painted under the new ones, so two lists of headings stood on
-          // top of each other. A box that paints its own ground clears them.
           className="sticky top-0 flex max-h-[calc(100dvh-var(--spacing-titlebar)-var(--spacing-statusbar))] flex-col bg-background"
         >
           <p className="flex h-(--page-bar-h) shrink-0 items-center text-sm font-medium text-foreground">On this page</p>
