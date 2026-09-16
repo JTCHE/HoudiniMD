@@ -84,7 +84,7 @@ pub fn start(app: &tauri::AppHandle) {
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         if let Err(reason) = install(&app).await {
-            eprintln!("update check failed: {reason}");
+            crate::say!(Warn, "update", "check failed: {reason}");
         }
         // Started by Houdini: the reader asked for F1, not for a window. The
         // tray icon opens it.
@@ -111,7 +111,7 @@ async fn install(app: &tauri::AppHandle) -> tauri_plugin_updater::Result<()> {
     else {
         return Ok(());
     };
-    eprintln!("installing update {}", update.version);
+    crate::say!(Info, "update", "installing {}", update.version);
     update.download_and_install(|_, _| {}, || {}).await?;
     app.restart();
 }

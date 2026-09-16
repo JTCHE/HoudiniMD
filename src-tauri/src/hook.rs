@@ -134,6 +134,7 @@ pub fn apply(data: &Path, port: u16, wanted: &[String]) -> Result<Vec<String>, S
     }
 
     save(data, &record)?;
+    crate::say!(Info, "hook", "F1 now opens this app in Houdini {}", changed.join(", "));
     Ok(changed)
 }
 
@@ -171,6 +172,7 @@ pub fn revert(data: &Path, wanted: &[String]) -> Result<Vec<String>, String> {
     }
 
     save(data, &record)?;
+    crate::say!(Info, "hook", "F1 given back to Houdini {}", restored.join(", "));
     Ok(restored)
 }
 

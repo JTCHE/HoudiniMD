@@ -32,6 +32,8 @@
 
 # debug
 *log*
+# The module that writes the log is source, not a log.
+!src-tauri/src/log.rs
 
 # env files (can opt-in for committing if needed)
 .env*
