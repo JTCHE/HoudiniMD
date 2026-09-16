@@ -37,6 +37,20 @@ const LONG = 5;
 export function TableOfContents({ headings }: { headings: Heading[] }) {
   const [floating, setFloating] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  // A new page, which is a new list. The state below belongs to the page that
+  // is leaving: a pill left floating stands over the top of the next page, and
+  // a list left open opens the next one open. It is put back here rather than
+  // by a `key` on this component, and rather than in an effect: React 19 does
+  // not take a keyed child's nodes out of the document when the child that
+  // replaces it draws nothing, so a page with no list kept the last one's
+  // (a doc page with one heading, reached from a page with several). An effect
+  // runs after the paint, which is the frame the pill is seen in.
+  const [drawn, setDrawn] = useState(headings);
+  if (drawn !== headings) {
+    setDrawn(headings);
+    setFloating(false);
+    setExpanded(false);
+  }
   const active = useActiveIndex(headings);
   // A short list never needs to scroll, but "never" is only true up to
   // rounding: a row's own hit-area padding can leave it a couple of px taller
@@ -107,14 +121,7 @@ export function TableOfContents({ headings }: { headings: Heading[] }) {
           title is centred in a box as tall as the bar, so "On this page" is
           always on the breadcrumbs' line. The list under the title scrolls on
           its own and is never taller than the scroller. */}
-      {/* The background is not decoration: the webview leaves the last page's
-          rows painted under the new ones, so two lists of headings stand on
-          top of each other. A box that paints its own ground clears them, and
-          it is THIS box that has to paint, not the nav inside it: the nav is
-          as tall as its own list, so a shorter list on the next page leaves
-          the rows below it uncovered. The gutter is the same size on every
-          page. */}
-      <div className="not-prose print:hidden hidden @min-[780px]:block absolute top-0 left-full ml-lg h-full w-44 bg-background">
+      <div className="not-prose print:hidden hidden @min-[780px]:block absolute top-0 left-full ml-lg h-full w-44">
         <nav
           aria-label="On this page"
           className="sticky top-0 flex max-h-[calc(100dvh-var(--spacing-titlebar)-var(--spacing-statusbar))] flex-col bg-background"

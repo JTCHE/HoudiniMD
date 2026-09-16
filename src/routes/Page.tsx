@@ -390,10 +390,12 @@ export default function Page() {
                     markdown={page.markdown}
                     versions={page.nodeVersions}
                   />
-                  {/* Keyed on the page: a pill left floating by the last page
-                      stood over the top of the next one until the observer
-                      caught up, then faded out. A new page starts it hidden. */}
-                  <TableOfContents key={page.path} headings={headings} />
+                  {/* NOT keyed on the page. React 19 leaves a keyed child's
+                      nodes in the document when the child that replaces it
+                      draws nothing, so the last page's list stayed on a page
+                      that has none. TableOfContents puts its own state back
+                      when the list changes. */}
+                  <TableOfContents headings={headings} />
                   {body}
                 </article>
               )}
