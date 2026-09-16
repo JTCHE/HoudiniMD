@@ -55,7 +55,8 @@ pub fn catch_panics(data: PathBuf) {
     let default = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         let text = format!("{} {info}", env!("CARGO_PKG_VERSION"));
-        let _ = std::fs::write(data.join(CRASH), text);
+        crate::say!(Error, "crash", "{info}");
+        let _ = std::fs::write(data.join(CRASH), &text);
         default(info);
     }));
 }

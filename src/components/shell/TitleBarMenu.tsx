@@ -116,6 +116,17 @@ export function TitleBarMenu({ at, onClose }: { at: { x: number; y: number }; on
       >
         See what is sent
       </button>
+      <button
+        type="button"
+        role="menuitem"
+        className={ITEM}
+        onClick={() => {
+          void invoke("show_logs").catch((reason) => showToast(String(reason), "error"));
+          onClose();
+        }}
+      >
+        Open logs
+      </button>
       <div role="separator" className="mx-sm my-1 h-px bg-hairline" />
       <button type="button" role="menuitem" disabled={busy} className={ITEM} onClick={resetIndex}>
         Reset index

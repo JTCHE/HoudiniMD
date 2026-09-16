@@ -1,5 +1,6 @@
 pub mod db;
 pub mod hook;
+pub mod log;
 pub mod library;
 pub mod mcp;
 pub mod preview;
@@ -140,6 +141,7 @@ fn switch(
     db::set_setting(db, install::BUILD_KEY, &install.version)?;
     install::set_chosen(chosen, install.clone())?;
     let status = index::status(db, &install.version);
+    crate::say!(Info, "install", "switched to Houdini {}, {} pages in, done {}", install.version, status.pages, status.done);
     if !status.done {
         start_index(app, data.0.clone(), install.clone(), false);
     }
@@ -200,7 +202,16 @@ fn page(
 /// the reader said no.
 #[tauri::command]
 fn report_error(app: tauri::AppHandle, message: String) {
+    crate::say!(Error, "window", "{message}");
     telemetry::error(&app, &message);
+}
+
+/// Opens `logs/` in the file manager, for a reader who was asked for it.
+#[tauri::command]
+fn show_logs(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    let dir = log::dir().ok_or("the log folder is not open")?;
+    app.opener().open_path(dir.to_string_lossy(), None::<&str>).map_err(|e| e.to_string())
 }
 
 /// The first launch ended, or a part of the app was used. See
@@ -501,10 +512,12 @@ pub fn start_index(app: tauri::AppHandle, data: std::path::PathBuf, install: ins
             return;
         }
         if reset && let Err(message) = engine::db::open(&data).and_then(|db| engine::db::reset(&db)) {
+            crate::say!(Error, "index", "reset failed: {message}");
             let _ = app.emit("index-failed", message);
             return;
         }
         let started = std::time::Instant::now();
+        crate::say!(Info, "index", "pass {mine} starting for {}{}", install.version, if reset { ", after a reset" } else { "" });
         // A build already indexed reports `done` at once; only a pass that
         // reported progress first did any work worth timing.
         let worked = std::sync::atomic::AtomicBool::new(false);
@@ -513,9 +526,11 @@ pub fn start_index(app: tauri::AppHandle, data: std::path::PathBuf, install: ins
                 worked.store(true, std::sync::atomic::Ordering::Relaxed);
                 WROTE.store(true, std::sync::atomic::Ordering::Relaxed);
             } else if worked.load(std::sync::atomic::Ordering::Relaxed) {
+                crate::say!(Info, "index", "pass {mine} wrote {} pages in {:.1} s", status.pages, started.elapsed().as_secs_f64());
                 telemetry::index_done(&app, started.elapsed().as_secs_f64(), status.pages);
             } else {
                 // Nothing was written, so nothing on screen is out of date.
+                crate::say!(Info, "index", "pass {mine} had nothing to do: {} pages already in", status.pages);
                 return;
             }
             if live() {
@@ -523,7 +538,11 @@ pub fn start_index(app: tauri::AppHandle, data: std::path::PathBuf, install: ins
             }
         };
         if let Err(message) = index::run(&data, &install, &report, &live) {
+            crate::say!(Error, "index", "pass {mine} failed: {message}");
             let _ = app.emit("index-failed", message);
+        }
+        if !live() {
+            crate::say!(Info, "index", "pass {mine} dropped for a newer one");
         }
         // Outside the lock: a reset asked for now must not wait for this.
         drop(writing);
@@ -831,6 +850,7 @@ pub fn run() {
             } else {
                 update::data_dir(app)?
             };
+            log::start(&data, env!("CARGO_PKG_VERSION"));
             telemetry::catch_panics(data.clone());
             app.manage(telemetry::Telemetry::new(data.clone()));
             app.manage(Db(Mutex::new(db::open(&data)?)));
@@ -851,11 +871,24 @@ pub fn run() {
             // any Houdini is hooked yet. A reader who never hooks one pays a
             // thread and a socket for it. It reads the same `chosen` and
             // `cache` as the window, not copies — see `server::start`.
-            let port = server::start(app.handle().clone(), data.clone(), chosen.clone(), cache.clone()).unwrap_or(0);
+            let port = match server::start(app.handle().clone(), data.clone(), chosen.clone(), cache.clone()) {
+                Ok(port) => {
+                    crate::say!(Info, "server", "listening on localhost:{port}");
+                    port
+                }
+                Err(reason) => {
+                    crate::say!(Error, "server", "did not start: {reason}");
+                    0
+                }
+            };
             app.manage(Port(port));
             hook_from_the_command_line(&data, port);
-            if let Ok(install) = current_for(&app.handle().clone()) {
-                start_index(app.handle().clone(), data, install, false);
+            match current_for(&app.handle().clone()) {
+                Ok(install) => {
+                    crate::say!(Info, "install", "reading Houdini {} at {}", install.version, install.root.display());
+                    start_index(app.handle().clone(), data, install, false);
+                }
+                Err(reason) => crate::say!(Warn, "install", "no build to read: {reason}"),
             }
             tray::build(app)?;
             telemetry::start(app.handle());
@@ -899,6 +932,7 @@ pub fn run() {
             report_use,
             report_search,
             show_telemetry_log,
+            show_logs,
             open_page,
             save_page,
             new_window,
