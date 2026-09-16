@@ -67,6 +67,10 @@ export interface IndexStatus {
   /** Pages the install holds. */
   total: number;
   done: boolean;
+  /** True when a pass has written in this process. Only `index_status` says
+      it; the events do not carry it, because a view that gets one was there
+      for the pass. */
+  wrote?: boolean;
 }
 
 /**
@@ -160,14 +164,30 @@ let listening = false;
 function subscribeIndex(notify: () => void) {
   if (!listening) {
     listening = true;
-    if (index.build.version === null) void primeBuild();
-    // The state on mount, which the events do not repeat.
-    void readStatus().then((status) => status && showStatus(status));
     void listen<IndexStatus>("index", (event) => report(event.payload));
+    void catchUp();
     onBuildChanged(() => rereadTitles(readStatus(), readVersion()));
   }
   indexListeners.add(notify);
   return () => indexListeners.delete(notify);
+}
+
+/**
+ * The state on mount, which the events do not repeat.
+ *
+ * The pass starts before the window has a page in it, so the reports it made
+ * while the webview loaded reached nobody. A pass that also ENDED in that gap
+ * left the title list read at boot out of date — empty on a fresh index — and
+ * nothing later says so: the window stood at "0 pages" until the reader
+ * reloaded it by hand. `wrote` is how Rust says a pass has written in this
+ * process, and the list is read again when it has.
+ */
+async function catchUp() {
+  if (index.build.version === null) await primeBuild();
+  const status = await readStatus();
+  if (!status) return;
+  if (status.done && !status.wrote) showStatus(status);
+  else report(status);
 }
 
 export function useIndex() {

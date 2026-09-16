@@ -258,7 +258,7 @@ fn indexed(
         "titles" => crate::all_titles(&db, build).and_then(|hits| ser(&hits)),
         "search" => crate::find(&db, build, &call.query, call.limit).and_then(|hits| ser(&hits)),
         "meta" => crate::read_meta(&db, &install, &call.paths).and_then(|meta| ser(&meta)),
-        _ => ser(&index::status(&db, build)),
+        _ => ser(&crate::status_now(&db, build)),
     };
     match json {
         Ok(body) => (200, body, "application/json"),

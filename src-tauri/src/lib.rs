@@ -433,13 +433,31 @@ fn search(state: State<Db>, chosen: State<Arc<install::Chosen>>, cache: State<Ar
     find(&db, &build, &query, limit)
 }
 
+/// The pass's state, plus whether a pass has written in this process. The
+/// window reads `wrote` on mount: the pass starts before the page exists, so
+/// the reports it made while the webview loaded reached nobody, and without
+/// this the window keeps the title list it read at boot — empty on a fresh
+/// index — until the reader reloads it by hand.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StatusNow {
+    #[serde(flatten)]
+    status: index::Status,
+    wrote: bool,
+}
+
 /// How far the background pass has got. The front-end also gets this as an
 /// `index` event, so this call is only for what it missed before it mounted.
 #[tauri::command(async)]
-fn index_status(state: State<Db>, chosen: State<Arc<install::Chosen>>, cache: State<Arc<install::Cache>>) -> Result<index::Status, String> {
+fn index_status(state: State<Db>, chosen: State<Arc<install::Chosen>>, cache: State<Arc<install::Cache>>) -> Result<StatusNow, String> {
     let db = state.0.lock().map_err(|e| e.to_string())?;
     let build = current(&db, &chosen, &cache)?.version;
-    Ok(index::status(&db, &build))
+    Ok(status_now(&db, &build))
+}
+
+/// The same answer for the window and for the help pane.
+pub fn status_now(db: &rusqlite::Connection, build: &str) -> StatusNow {
+    StatusNow { status: index::status(db, build), wrote: WROTE.load(std::sync::atomic::Ordering::Relaxed) }
 }
 
 /// The install every command in this process reads, resolved once and cached
@@ -466,6 +484,9 @@ pub fn current(
 static PASS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 /// Held for the length of a pass: two passes never write at once.
 static WRITING: Mutex<()> = Mutex::new(());
+/// True once a pass in this process has written a page. `index_status` hands
+/// it to the window, which reads the title list again when it sees it.
+static WROTE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// Starts the index pass for one build, reporting to the front-end as it
 /// goes. `reset` empties the whole index first. The pass itself is
@@ -490,6 +511,7 @@ pub fn start_index(app: tauri::AppHandle, data: std::path::PathBuf, install: ins
         let report = |status: index::Status| {
             if !status.done {
                 worked.store(true, std::sync::atomic::Ordering::Relaxed);
+                WROTE.store(true, std::sync::atomic::Ordering::Relaxed);
             } else if worked.load(std::sync::atomic::Ordering::Relaxed) {
                 telemetry::index_done(&app, started.elapsed().as_secs_f64(), status.pages);
             } else {
