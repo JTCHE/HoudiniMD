@@ -1,3 +1,4 @@
+import { BUILD_STAMP } from '../build-stamp';
 import { getConfig, getS3Client } from './config';
 import type { SearchIndexEntry, LiteIndexEntry } from './search-index';
 import { LITE_INDEX_PATH, toLiteIndex } from './search-index';
@@ -92,6 +93,22 @@ export async function fileExistsInR2(filePath: string): Promise<boolean> {
 }
 
 /**
+ * A per-build query on every content read, and only while prerendering.
+ *
+ * Cloudflare CI restores `.next` from the build cache, so Next answers a
+ * prerender's `fetch` from the fetch cache it wrote on the last deploy. A page
+ * that `bun run regen` rewrote in R2 since then renders from the old markdown
+ * and ships stale. The stamp changes each build, so the cached entry is never
+ * the one a prerender reads.
+ *
+ * Runtime reads keep the bare URL: the query would also miss the CDN cache in
+ * front of R2, and at runtime there is nothing stale to miss.
+ */
+function buildCacheBuster(): string {
+  return process.env.NEXT_PHASE === "phase-production-build" ? `?b=${BUILD_STAMP}` : "";
+}
+
+/**
  * Fetch file content from R2 using the public URL (faster for reads).
  * Returns null if the file is missing or its content predates CACHE_INVALIDATE_BEFORE.
  */
@@ -102,7 +119,7 @@ export async function fetchFromR2(filePath: string, noValidate = false): Promise
   try {
     // Use public URL for reads (faster, no auth required)
     const publicUrl = `${config.publicUrl}/${filePath}`;
-    const response = await fetch(publicUrl);
+    const response = await fetch(publicUrl + buildCacheBuster());
 
     if (!response.ok) {
       if (response.status === 404) {
