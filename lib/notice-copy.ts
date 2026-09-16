@@ -19,7 +19,7 @@
  * so the entries holding the previous wording are never read again.
  */
 
-export const NOTICE_VERSION = "2";
+export const NOTICE_VERSION = "3";
 
 /** Which notice the site shows. One word, and a deploy. */
 export const NOTICE_KIND: NoticeKind = "download";
@@ -58,7 +58,7 @@ const WAITLIST: NoticeCopy = {
 
 const DOWNLOAD: NoticeCopy = {
   ...WAITLIST,
-  title: "HoudiniMD is now a free, offline & open-source app.",
+  title: "HoudiniMD is now a free, offline & open-source app due to a SideFX takedown.",
   body: "A blazing fast interface combined with smart search features. This site will close on Jan 1st, 2027.",
 };
 
