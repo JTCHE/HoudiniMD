@@ -95,6 +95,9 @@ struct Serve {
 /// Which pass is live, and the lock one writer holds, as in the app.
 static PASS: AtomicU64 = AtomicU64::new(0);
 static WRITING: Mutex<()> = Mutex::new(());
+/// True once a pass here has written, as `WROTE` in the app: the page reads
+/// it to know the title list it holds is older than the index.
+static WROTE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// The pass on a thread of its own, as the app runs it, so the browser can
 /// watch it fill the index. `reset` empties the index first. A new pass stops
@@ -112,7 +115,7 @@ fn start_index(data: &Path, install: &install::Install, reset: bool) {
             true => engine::db::open(&data).and_then(|db| engine::db::reset(&db)),
             false => Ok(()),
         }
-        .and_then(|()| index::run(&data, &install, &|_| {}, &live));
+        .and_then(|()| index::run(&data, &install, &|_| WROTE.store(true, Ordering::Relaxed), &live));
         if let Err(reason) = done {
             eprintln!("{reason}");
         }
@@ -237,7 +240,12 @@ fn command_response(state: &Serve, command: &str, query: &str) -> (u16, &'static
         "clean_start" => Ok("false".to_string()),
         "index_status" => {
             let db = state.db.lock().map_err(|e| e.to_string()).unwrap();
-            serde_json::to_string(&index::status(&db, &install.version))
+            let status = index::status(&db, &install.version);
+            serde_json::to_value(&status)
+                .map(|mut json| {
+                    json["wrote"] = WROTE.load(Ordering::Relaxed).into();
+                    json.to_string()
+                })
                 .map_err(|e| e.to_string())
         }
         "titles" => {
