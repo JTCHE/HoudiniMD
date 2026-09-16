@@ -5,6 +5,9 @@ import path from "node:path";
 
 // Tauri drives this dev server, so the port is fixed and failures are loud
 // rather than silently moving to another port the Rust side does not know.
+// It sits above 15000 on purpose: Windows hands the ports below that out as
+// ephemeral ones, and Hyper-V reserves blocks inside that range at boot — one
+// of them swallowed Vite's usual 1420 and `bun run app` died with EACCES.
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
@@ -21,7 +24,7 @@ export default defineConfig({
   },
   clearScreen: false,
   server: {
-    port: 1420,
+    port: 21420,
     strictPort: true,
     // The repository root still holds the site-era build folders and the Rust
     // target directory. Watching them starved the dev server, so a request for
