@@ -1,9 +1,10 @@
 import { Check, ChevronDown, Copy, Download, FileText, SquareArrowOutUpRight } from "lucide-react";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { MENU_ICON, MENU_ITEM, MENU_PANEL, useMenu } from "@/lib/ui/menu";
-import { invoke, inTauri } from "@/lib/backend";
+import { invoke, inTauri, listen } from "@/lib/backend";
 import { HOUDINIMD_DOCS_ROOT } from "@/lib/houdini";
+import { pageHtml } from "@/lib/markdown/html";
 import { showToast } from "@/components/ui/toast-notification";
 import { isCommand, isTyping, useHotkey } from "@/lib/hotkeys";
 import { used } from "@/lib/telemetry";
@@ -24,6 +25,14 @@ function ChatGPTIcon({ className }: { className?: string }) {
   );
 }
 
+
+function ObsidianIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden="true">
+      <path d="M19.355 18.538a68.967 68.959 0 0 0 1.858-2.954.81.81 0 0 0-.062-.9c-.516-.685-1.504-2.075-2.042-3.362-.553-1.321-.636-3.375-.64-4.377a1.707 1.707 0 0 0-.358-1.05l-3.198-4.064a3.744 3.744 0 0 1-.076.543c-.106.503-.307 1.004-.536 1.5-.134.29-.29.6-.446.914l-.31.626c-.516 1.068-.997 2.227-1.132 3.59-.124 1.26.046 2.73.815 4.481.128.011.257.025.386.044a6.363 6.363 0 0 1 3.326 1.505c.916.79 1.744 1.922 2.415 3.5zM8.199 22.569c.073.012.146.02.22.02.78.024 2.095.092 3.16.29.87.16 2.593.64 4.01 1.055 1.083.316 2.198-.548 2.355-1.664.114-.814.33-1.735.725-2.58l-.01.005c-.67-1.87-1.522-3.078-2.416-3.849a5.295 5.295 0 0 0-2.778-1.257c-1.54-.216-2.952.19-3.84.45.532 2.218.368 4.829-1.425 7.531zM5.533 9.938c-.023.1-.056.197-.098.29L2.82 16.059a1.602 1.602 0 0 0 .313 1.772l4.116 4.24c2.103-3.101 1.796-6.02.836-8.3-.728-1.73-1.832-3.081-2.55-3.831zM9.32 14.01c.615-.183 1.606-.465 2.745-.534-.683-1.725-.848-3.233-.716-4.577.154-1.552.7-2.847 1.235-3.95.113-.235.223-.454.328-.664.149-.297.288-.577.419-.86.217-.47.379-.885.46-1.27.08-.38.08-.72-.014-1.043-.095-.325-.297-.675-.68-1.06a1.6 1.6 0 0 0-1.475.36l-4.95 4.452a1.602 1.602 0 0 0-.513.952l-.427 2.83c.672.59 2.328 2.316 3.335 4.711.09.21.175.43.253.653z" />
+    </svg>
+  );
+}
 
 /** Opens a web address in the reader's browser: the desktop window hands it to
     the system, Houdini's pane opens a window of its own. */
@@ -85,6 +94,56 @@ export function MarkdownActions({ markdown, path, title }: { markdown: string; p
     });
   });
 
+  // Saving the page: the header menu, Ctrl+S and the webview's own right-click
+  // menu all come here, so all three write the same file. The reader's chosen
+  // name picks the form, so both shapes are made before the dialog opens.
+  const save = useCallback(async () => {
+    const name = path.split("/").pop() || "page";
+    const html = await pageHtml({ title, source: `${HOUDINIMD_DOCS_ROOT}/${path}` });
+    if (await invoke<boolean>("save_page", { name, markdown, html })) showToast("Page saved");
+  }, [markdown, path, title]);
+
+  // A note in the reader's vault. The page goes through the clipboard, not
+  // through the address: a doc page is far longer than a URI handler accepts.
+  // No vault is named, so Obsidian writes into the one last opened.
+  const toObsidian = useCallback(async () => {
+    await navigator.clipboard.writeText(markdown);
+    const file = `HoudiniMD/${title.replace(/[\/:*?"<>|]/g, " ").trim() || "page"}`;
+    await openWeb(`obsidian://new?file=${encodeURIComponent(file)}&clipboard=true`);
+  }, [markdown, title]);
+
+  // Ctrl/Cmd+S. The webview binds it to its own "save page", which writes the
+  // app's HTML shell, so the press is taken here whether or not it is used.
+  useHotkey((event) => {
+    if (event.key !== "s" || !isCommand(event) || event.shiftKey || event.altKey) return;
+    if (isTyping(event.target)) return;
+    event.preventDefault();
+    if (!inTauri) return;
+    used("save-as");
+    void save().catch((reason) => showToast(String(reason), "error"));
+  });
+
+  // The item this app puts in the webview's right-click menu — see
+  // `context_menu.rs`.
+  useEffect(() => {
+    // `listen` answers later than the effect ends, so the answer has to know
+    // whether it is still wanted. Without this the listener of a mount that is
+    // already gone stays on, and one right-click opens two dialogs.
+    let wanted = true;
+    let drop: (() => void) | undefined;
+    void listen("save-page", () => {
+      used("save-as");
+      void save().catch((reason) => showToast(String(reason), "error"));
+    }).then((off) => {
+      if (wanted) drop = off;
+      else off();
+    });
+    return () => {
+      wanted = false;
+      drop?.();
+    };
+  }, [save]);
+
   function run(name: string, action: () => Promise<unknown>) {
     setOpen(false);
     used(name);
@@ -101,8 +160,6 @@ export function MarkdownActions({ markdown, path, title }: { markdown: string; p
         ),
       ),
     );
-
-  const name = path.split("/").pop() || "page";
 
   return (
     <div ref={container} onKeyDown={onMenuKey} className="relative inline-flex print:hidden">
@@ -169,14 +226,19 @@ export function MarkdownActions({ markdown, path, title }: { markdown: string; p
                 type="button"
                 role="menuitem"
                 className={MENU_ITEM}
-                onClick={() =>
-                  run("save-as", async () => {
-                    if (await invoke<boolean>("save_page", { name, markdown })) showToast("Page saved");
-                  })
-                }
+                onClick={() => run("save-as", save)}
               >
                 <Download className={MENU_ICON} aria-hidden="true" />
                 Save as…
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                className={MENU_ITEM}
+                onClick={() => run("send-to-obsidian", toObsidian)}
+              >
+                <ObsidianIcon className={MENU_ICON} />
+                Send to Obsidian
               </button>
             </>
           )}

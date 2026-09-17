@@ -1,3 +1,4 @@
+pub mod context_menu;
 pub mod db;
 pub mod hook;
 pub mod log;
@@ -277,24 +278,42 @@ fn open_page(
     app.opener().open_path(file.to_string_lossy(), None::<&str>).map_err(|e| e.to_string())
 }
 
-/// Asks where to save the page, then writes its Markdown there. The dialog is
-/// opened here and not in the page, so the page never names a path to write.
-/// Async, because a blocking dialog on the main thread stops the window.
+/// Asks where to save the page, then writes it there. The dialog is opened
+/// here and not in the page, so the page never names a path to write. The
+/// chosen name picks the form: `.html` writes the page as a document, anything
+/// else writes its Markdown. Async, because a blocking dialog on the main
+/// thread stops the window.
 #[tauri::command]
-async fn save_page(app: tauri::AppHandle, name: String, markdown: String) -> Result<bool, String> {
+async fn save_page(
+    app: tauri::AppHandle,
+    window: tauri::WebviewWindow,
+    name: String,
+    markdown: String,
+    html: String,
+) -> Result<bool, String> {
     use tauri_plugin_dialog::DialogExt;
     let Some(chosen) = app
         .dialog()
         .file()
+        // The window owns the dialog. Without an owner the dialog opened
+        // behind the window when the reader came from the webview's own
+        // right-click menu: that menu is closing as the dialog is made, and
+        // Windows gives the front to nothing in between.
+        .set_parent(&window)
         .set_file_name(format!("{name}.md"))
         .add_filter("Markdown", &["md"])
+        .add_filter("HTML", &["html", "htm"])
         .add_filter("Text", &["txt"])
         .blocking_save_file()
     else {
         return Ok(false);
     };
     let file = chosen.into_path().map_err(|e| e.to_string())?;
-    std::fs::write(file, markdown).map_err(|e| e.to_string())?;
+    let wants_html = file
+        .extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| e.eq_ignore_ascii_case("html") || e.eq_ignore_ascii_case("htm"));
+    std::fs::write(file, if wants_html { html } else { markdown }).map_err(|e| e.to_string())?;
     Ok(true)
 }
 
@@ -318,7 +337,7 @@ async fn new_window(app: tauri::AppHandle, path: Option<String>) -> Result<(), S
         }
         config.url = tauri::WebviewUrl::App(path.trim_start_matches('/').into());
     }
-    tauri::WebviewWindowBuilder::from_config(&app, &config)
+    let window = tauri::WebviewWindowBuilder::from_config(&app, &config)
         .map_err(|e| e.to_string())?
         .on_page_load(|window, load| {
             if load.event() == PageLoadEvent::Finished {
@@ -328,6 +347,7 @@ async fn new_window(app: tauri::AppHandle, path: Option<String>) -> Result<(), S
         })
         .build()
         .map_err(|e| e.to_string())?;
+    context_menu::hook(&window);
     Ok(())
 }
 
@@ -889,6 +909,9 @@ pub fn run() {
                     start_index(app.handle().clone(), data, install, false);
                 }
                 Err(reason) => crate::say!(Warn, "install", "no build to read: {reason}"),
+            }
+            if let Some(window) = app.get_webview_window("main") {
+                context_menu::hook(&window);
             }
             tray::build(app)?;
             telemetry::start(app.handle());

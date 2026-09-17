@@ -31,14 +31,27 @@ Open the page and look at it. A build that compiles is not a page that reads.
 `bun run app` starts the Vite dev server and the Rust side together. The window
 it opens is a real webview on a real Houdini install, so it is the true check.
 
-This machine has no interactive desktop session for a headless agent, so a
-Tauri window cannot be driven from here. Verify against the built front-end
-instead:
+Drive the front-end headlessly. Do not reach for the computer-use MCP: it
+takes the reader's screen and needs their permission for every application.
+Keep it for the last resort — a native window part with no other door, such as
+the webview's own right-click menu — and say so before you ask.
 
-1. `bun run build`, then serve `dist/`.
-2. Open it with a Browser MCP.
-3. Stub `window.__TAURI_INTERNALS__` before the bundle runs, so `invoke`
-   answers with a real page payload and `convertFileSrc` returns a URL.
+The headless route, and the reason it works: the app serves its own front end
+and its own data over HTTP (`server.rs`), and that server answers
+`/api/<command>` exactly as `invoke` does.
+
+1. Start the app (`bun run app`). Read the port from the status bar, or from
+   `listening on localhost:<port>` in the log.
+2. Open the Vite dev server in a Browser MCP or in Playwright, and send every
+   `/api/`, `/himage/` and `/hicon/` request on to that port. Same origin, no
+   CORS, no stub, and the real Houdini install behind it.
+3. `await import("/src/lib/<module>.ts")` in the page to call a module
+   directly — the dev server serves the real source as an ES module.
+
+Two traps. The Browser pane can hold a stale paint after a scroll or a
+navigation, so a black screenshot is not an empty page; assert first, then
+screenshot. A background server dies with the shell that started it; start it
+with `Start-Process -WindowStyle Hidden`.
 
 Assert with `page.evaluate` — counts, rects, `naturalWidth`, `readyState` —
 instead of your eyes. A picture that loaded is not a picture drawn at the
