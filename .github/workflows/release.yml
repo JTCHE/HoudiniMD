@@ -93,7 +93,12 @@ jobs:
       - name: install front-end dependencies
         run: bun install
 
+      # tauri signs the bundle it packs, so the key has to be here as well, even
+      # though the widen pass makes that signature stale.
       - name: build
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
         run: bun run tauri build --bundles appimage
 
       - name: widen to RHEL 9, repack, and sign
