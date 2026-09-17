@@ -39,6 +39,44 @@ The desktop app reads the docs from the Houdini build on your machine, so it wor
 > [!WARNING]
 > Windows shows "Windows protected your PC" because the installer is not signed yet. Select **More info**, then **Run anyway**. A signature needs a legal entity, and it is on the list.
 
+<details>
+<summary><b>Linux</b> — one AppImage, no install</summary>
+
+<br>
+
+Download `HoudiniMD.AppImage` from the [latest release](https://github.com/JTCHE/HoudiniMD/releases/latest), then:
+
+```sh
+chmod +x HoudiniMD.AppImage
+./HoudiniMD.AppImage
+```
+
+The file carries its own WebKitGTK, so it needs no packages. It is built on Ubuntu 22.04 and runs on glibc 2.34 and later: RHEL 9, Rocky 9, AlmaLinux 9, Ubuntu 22.04 and 24.04. On Ubuntu 26.04 the web process dies in EGL — that is WebKit 2.50 against a very new mesa, and it is not fixed yet.
+
+**Build it yourself.** You need [Bun](https://bun.sh), [Rust](https://rustup.rs) and, on a Debian or Ubuntu base:
+
+```sh
+sudo apt install build-essential curl wget file pkg-config libssl-dev python3 \
+  libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev \
+  patchelf xdg-utils desktop-file-utils
+```
+
+```sh
+bun install
+bun run tauri build --bundles appimage
+```
+
+The file lands in `src-tauri/target/release/bundle/appimage/`. That file runs on the distro that built it. To also reach RHEL 9, run the widen pass over the packed folder — it carries the fonts stack, retags `hypot`, and puts a newer `libstdc++` where only an older host uses it:
+
+```sh
+cd src-tauri/target/release/bundle/appimage
+OUTPUT=$PWD/HoudiniMD.AppImage bash ../../../../linux/widen.sh HoudiniMD.AppDir
+```
+
+The release workflow does all of this: [.github/workflows/release.yml](.github/workflows/release.yml).
+
+</details>
+
 ## Pricing
 
 Free. No account, no subscription. A doc page is public and belongs to SideFX, so no doc page is ever going behind a payment. 
