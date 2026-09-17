@@ -44,8 +44,21 @@ pub fn data_dir_before_launch(identifier: &str) -> io::Result<PathBuf> {
     if let Some(dir) = portable_dir()? {
         return Ok(dir);
     }
-    let roaming = std::env::var_os("APPDATA").ok_or_else(|| io::Error::other("APPDATA is not set"))?;
-    Ok(PathBuf::from(roaming).join(identifier))
+    #[cfg(windows)]
+    {
+        let roaming = std::env::var_os("APPDATA").ok_or_else(|| io::Error::other("APPDATA is not set"))?;
+        Ok(PathBuf::from(roaming).join(identifier))
+    }
+    // What Tauri resolves `app_data_dir()` to here: `$XDG_DATA_HOME`, or the
+    // documented default when the variable is not set.
+    #[cfg(not(windows))]
+    {
+        let data = std::env::var_os("XDG_DATA_HOME")
+            .map(PathBuf::from)
+            .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/share")))
+            .ok_or_else(|| io::Error::other("HOME is not set"))?;
+        Ok(data.join(identifier))
+    }
 }
 
 fn portable_dir() -> io::Result<Option<PathBuf>> {

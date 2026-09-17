@@ -1,8 +1,8 @@
 name: release
 
-# Tag a version to cut a release: build the Windows installer, sign it for the
-# updater, and put the installer, its signature and `latest.json` on GitHub
-# Releases. GitHub Releases IS the update channel — the app reads
+# Tag a version to cut a release: build the Windows installer and the Linux
+# AppImage, sign both for the updater, and put them with `latest.json` on
+# GitHub Releases. GitHub Releases IS the update channel — the app reads
 # `releases/latest/download/latest.json`. See the "Update Channel and Signing
 # Keys" spec, and agents/deployment.md.
 on:
@@ -11,7 +11,7 @@ on:
       - "v*"
 
 jobs:
-  build-and-release:
+  windows:
     runs-on: windows-latest
     # The job creates a release and uploads to it. Without this the default
     # token is read-only and the build fails at the last step with
@@ -49,16 +49,114 @@ jobs:
           prerelease: false
           includeUpdaterJson: true
           updaterJsonPreferNsis: true
+          args: --bundles nsis
 
-      # The signature the app checks lives INSIDE latest.json. The `.sig` file
-      # is a second copy that nothing reads, and on the release page it sits
-      # beside the installer and asks the reader a question they cannot
-      # answer. tauri-action has no switch for it, so it goes after the fact.
-      - name: drop the .sig assets
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  linux:
+    # The AppImage carries its own WebKitGTK, GTK and glib, so the build base
+    # decides one thing: the oldest glibc the result runs on. Ubuntu 22.04 is
+    # the oldest base that still has WebKitGTK 4.1, and it goes in a container
+    # because the runner image of that name retires in April 2027.
+    #
+    # `src-tauri/linux/widen.sh` then takes the bundle down to RHEL 9, which is
+    # where the readers who asked for Linux are. That pass runs on the AppDir
+    # after tauri packs it, so the file has to be packed, signed and uploaded
+    # here rather than by tauri-action.
+    runs-on: ubuntu-latest
+    container: ubuntu:22.04
+    env:
+      # linuxdeploy is itself an AppImage, and a container has no FUSE to mount
+      # one with.
+      APPIMAGE_EXTRACT_AND_RUN: 1
+      DEBIAN_FRONTEND: noninteractive
+    steps:
+      # The webview, the tray icon, the tools the AppImage bundler and the
+      # widen pass run, and the basics a bare container does not have.
+      - name: install build dependencies
         run: |
-          $tag = "${{ github.ref_name }}"
-          gh release view $tag --json assets --jq '.assets[].name' |
-            Where-Object { $_ -like "*.sig" } |
-            ForEach-Object { gh release delete-asset $tag $_ --yes }
+          apt-get update
+          apt-get install -y \
+            build-essential curl wget file git unzip ca-certificates \
+            pkg-config libssl-dev python3 \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            xdg-utils \
+            desktop-file-utils
+
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: install front-end dependencies
+        run: bun install
+
+      - name: build
+        run: bun run tauri build --bundles appimage
+
+      - name: widen to RHEL 9, repack, and sign
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+        run: |
+          bundle=src-tauri/target/release/bundle/appimage
+          file=$(ls "$bundle"/*.AppImage)
+          # Pack over the file tauri just made: the name is what the release
+          # page and `latest.json` already carry.
+          OUTPUT="$PWD/$file" bash src-tauri/linux/widen.sh "$bundle/HoudiniMD.AppDir"
+          # The signature tauri wrote covers the file before the widen pass, so
+          # it is replaced here.
+          bun run tauri signer sign "$file"
+          ls -la "$bundle"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: appimage
+          path: |
+            src-tauri/target/release/bundle/appimage/*.AppImage
+            src-tauri/target/release/bundle/appimage/*.AppImage.sig
+
+  publish:
+    # Both platforms are on the draft now: add the Linux one to `latest.json`,
+    # which the Windows job created, and take the loose `.sig` files off.
+    needs: [windows, linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAG: ${{ github.ref_name }}
+      REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: appimage
+          path: appimage
+
+      - name: upload the AppImage
+        run: gh release upload "$TAG" appimage/*.AppImage --repo "$REPO" --clobber
+
+      - name: add the Linux platform to latest.json
+        run: |
+          gh release download "$TAG" --repo "$REPO" --pattern latest.json --output latest.json
+          version=$(jq -r .version latest.json)
+          name=$(basename appimage/*.AppImage)
+          url="https://github.com/$REPO/releases/latest/download/$name"
+          signature=$(cat appimage/*.AppImage.sig)
+          jq --arg url "$url" --arg sig "$signature" \
+            '.platforms["linux-x86_64"] = {"signature": $sig, "url": $url}' \
+            latest.json > latest.new.json
+          mv latest.new.json latest.json
+          jq -r '.version, (.platforms | keys | join(", "))' latest.json
+          gh release upload "$TAG" latest.json --repo "$REPO" --clobber
+
+      # The signature the app checks lives INSIDE latest.json. A `.sig` file is
+      # a second copy that nothing reads, and on the release page it sits
+      # beside the installer and asks the reader a question they cannot answer.
+      - name: drop the .sig assets
+        run: |
+          gh release view "$TAG" --repo "$REPO" --json assets --jq '.assets[].name' |
+            grep '\.sig$' |
+            xargs -r -I{} gh release delete-asset "$TAG" {} --repo "$REPO" --yes
