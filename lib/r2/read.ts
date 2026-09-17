@@ -1,7 +1,11 @@
 import { BUILD_STAMP } from '../build-stamp';
+import { CACHE_INVALIDATE_BEFORE, generatedAtIsCurrent } from '../content-freshness';
 import { getConfig, getS3Client } from './config';
 import type { SearchIndexEntry, LiteIndexEntry } from './search-index';
 import { LITE_INDEX_PATH, toLiteIndex } from './search-index';
+
+/** Re-exported so `scripts/regenerate.ts` keeps one import for its R2 reads. */
+export { CACHE_INVALIDATE_BEFORE };
 
 let indexCache: { data: string; expiry: number } | null = null;
 const INDEX_CACHE_TTL = 5 * 60 * 1000;
@@ -53,14 +57,6 @@ export async function fetchLiteIndexEntries(): Promise<LiteIndexEntry[] | null> 
   return entries;
 }
 
-// This is a global cutoff — every one of the ~10.7k cached pages older than
-// it is treated as stale and regenerated live on next visit, which is slow
-// for the whole site. Only bump it for a change that affects rendering of
-// EVERY page (e.g. a markdown converter/layout change). For a change scoped
-// to specific pages (e.g. one template or node category), leave this alone
-// and instead re-scrape just those pages: `bun regen --url <glob>`.
-/** Cached files generated before this date will be re-generated */
-export const CACHE_INVALIDATE_BEFORE = new Date("2026-07-24T18:00:00Z");
 
 /**
  * Check if a file exists in R2
@@ -131,15 +127,7 @@ export async function fetchFromR2(filePath: string, noValidate = false): Promise
     const text = await response.text();
 
     // Invalidate stale content based on generated_at frontmatter (skip for metadata reads)
-    if (!noValidate) {
-      const generatedAtMatch = text.match(/^---[\s\S]*?generated_at:\s*(.+?)\s*\n[\s\S]*?---/);
-      if (generatedAtMatch) {
-        const generatedAt = new Date(generatedAtMatch[1]);
-        if (generatedAt < CACHE_INVALIDATE_BEFORE) return null;
-      } else {
-        return null;
-      }
-    }
+    if (!noValidate && !generatedAtIsCurrent(text)) return null;
 
     return text;
   } catch (error: unknown) {

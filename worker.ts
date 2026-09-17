@@ -1,18 +1,36 @@
-import handler, { DOShardedTagCache, BucketCachePurge } from "./.open-next/worker.js";
 import { recordApiSearch, recordPageView, recordSearchBeacon, recordViewBeacon } from "./telemetry";
 import { pruneAnalytics } from "./telemetry/prune";
 import type { D1Database } from "./telemetry/types";
 import { iconNeedsRefresh, iconResponse, refreshIcon, validIconPath, type IconBucket } from "./lib/icon-cache";
 import { cacheKey, fromCache, keep } from "./lib/edge-cache";
 import { rewriteNotice } from "./lib/notice-rewrite";
-import { storedAnswer } from "./lib/stored-answer";
+import { storedAnswer, type Bucket } from "./lib/stored-answer";
 
-// DOQueueHandler is not exported: its class is deleted while the routes are
-// frozen, and a deleted class must not stay exported. See wrangler.jsonc.
-export { DOShardedTagCache, BucketCachePurge };
+/**
+ * The OpenNext entry, loaded by the request that needs it and never at module
+ * scope.
+ *
+ * A static import evaluates on every cold isolate, and that module pulls in
+ * the Next middleware bundle: 870 KB of JavaScript, measured on this build. It
+ * is what makes a cold prefetch cost 337 CPU-ms when the answer itself is one
+ * R2 read. The Next *server* was already lazy inside that module; this makes
+ * the rest of it lazy too, so an isolate that only ever answers from R2 never
+ * evaluates any of Next.
+ *
+ * No Durable Object class is re-exported. The queue is deleted (see
+ * wrangler.jsonc) and nothing binds the tag cache or the cache purge, so every
+ * export was inert — and a static re-export is exactly what would force this
+ * module to load. Restore them beside the durable_objects bindings that need
+ * them, as static re-exports from `.open-next/worker.js`.
+ */
+type NextHandler = { fetch(request: Request, env: unknown, ctx: unknown): Promise<Response> };
+let loading: Promise<NextHandler> | undefined;
+const nextHandler = (): Promise<NextHandler> =>
+  (loading ??= import("./.open-next/worker.js").then((m) => m.default as NextHandler));
 
 interface Env {
-  NEXT_INC_CACHE_R2_BUCKET: { get(key: string): Promise<{ body: ReadableStream } | null> };
+  NEXT_INC_CACHE_R2_BUCKET: Bucket;
+  CONTENT: Bucket;
   HOUDINIMD_ICONS: IconBucket;
   DB?: D1Database;
   VISITOR_SALT?: string;
@@ -93,11 +111,12 @@ const worker = {
       }
     }
 
-    // A doc prefetch and a doc page are both a lookup in the entry Next would
-    // read anyway, so both are answered here and Next is never started. This
-    // is where the meter is: the edge cache above only catches the few
-    // requests that repeat inside one colo. See lib/stored-answer.ts.
-    const stored = await storedAnswer(request, url, env.NEXT_INC_CACHE_R2_BUCKET);
+    // A doc page, its prefetches, its RSC payload and its `.md` twin are all
+    // a lookup in an object Next would read anyway, so all four are answered
+    // here and Next is never started. This is where the meter is: the edge
+    // cache above only catches the few requests that repeat inside one colo.
+    // See lib/stored-answer.ts.
+    const stored = await storedAnswer(request, url, env.NEXT_INC_CACHE_R2_BUCKET, env.CONTENT);
     if (stored) {
       const answer = rewriteNotice(stored);
       recordPageView(request, url, answer, env, ctx);
@@ -109,7 +128,7 @@ const worker = {
     // costs one Worker script instead of a rewrite of 21k cached pages. See
     // lib/notice-copy.ts. It runs before `keep`, so what the edge cache holds
     // is the finished answer, and before the reader sees any byte of it.
-    const response = rewriteNotice(await handler.fetch(request, env, ctx));
+    const response = rewriteNotice(await (await nextHandler()).fetch(request, env, ctx));
     recordPageView(request, url, response, env, ctx);
     recordApiSearch(request, url, response, env, ctx);
 

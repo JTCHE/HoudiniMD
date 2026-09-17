@@ -56,7 +56,13 @@ export default function GeneratingPage({ slug }: { slug: string }) {
   return (
     <>
       <DocsSkeleton />
-      <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[55] pointer-events-none w-96 bg-background border shadow-2xl p-3 space-y-1.5">
+      {/* The Worker reads this back out of the stored HTML: an entry holding a
+          progress view is not a page, so it refuses to serve it. See
+          lib/stored-answer.ts. */}
+      <div
+        data-generating=""
+        className="fixed top-4 left-1/2 -translate-x-1/2 z-[55] pointer-events-none w-96 bg-background border shadow-2xl p-3 space-y-1.5"
+      >
         {progressLog.map((event, i) => (
           <ProgressLogEntry
             key={i}
