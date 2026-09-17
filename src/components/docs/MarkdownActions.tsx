@@ -103,13 +103,12 @@ export function MarkdownActions({ markdown, path, title }: { markdown: string; p
     if (await invoke<boolean>("save_page", { name, markdown, html })) showToast("Page saved");
   }, [markdown, path, title]);
 
-  // A note in the reader's vault. The page goes through the clipboard, not
-  // through the address: a doc page is far longer than a URI handler accepts.
-  // No vault is named, so Obsidian writes into the one last opened.
+  // A note in the reader's vault, its pictures beside it. The obsidian://
+  // URI carries text alone, and a doc page's pictures are what the clipboard
+  // trick could not bring across, so this writes straight into the vault
+  // instead — asked for once, not named on every note.
   const toObsidian = useCallback(async () => {
-    await navigator.clipboard.writeText(markdown);
-    const file = `HoudiniMD/${title.replace(/[\/:*?"<>|]/g, " ").trim() || "page"}`;
-    await openWeb(`obsidian://new?file=${encodeURIComponent(file)}&clipboard=true`);
+    if (await invoke<boolean>("send_to_obsidian", { title, markdown })) showToast("Sent to Obsidian");
   }, [markdown, title]);
 
   // Ctrl/Cmd+S. The webview binds it to its own "save page", which writes the
