@@ -29,8 +29,11 @@ It follows the [llms.txt](https://llmstxt.org) standard. AI agents are automatic
 - **AI Native & MCP Integration** — Paired with my [Houdini MCP](https://github.com/JTCHE/houdini-mcp) fork, agents can query pure markdown directly from HoudiniMD to inform their decisions and actions inside Houdini. Accurate info, at the right time, without context bloat.
 
 ## Install
+
 <img src="public/help-server-benchmark.png" alt="A horizontal bar chart comparing the time from F1 to a readable page in Houdini's help pane, between Houdini's own help server and HoudiniMD, with the latter showing a median of 13.1x faster">
 HoudiniMD is also now available as a Desktop app, living locally, directly on your computer.
+
+## Windows
 
 [Download for Windows](https://houdinimd.com/download).
 
@@ -39,10 +42,7 @@ The desktop app reads the docs from the Houdini build on your machine, so it wor
 > [!WARNING]
 > Windows shows "Windows protected your PC" because the installer is not signed yet. Select **More info**, then **Run anyway**. A signature needs a legal entity, and it is on the list.
 
-<details>
-<summary><b>Linux</b> — one AppImage, no install</summary>
-
-<br>
+## Linux
 
 Download `HoudiniMD.AppImage` from the [latest release](https://github.com/JTCHE/HoudiniMD/releases/latest), then:
 
@@ -51,9 +51,15 @@ chmod +x HoudiniMD.AppImage
 ./HoudiniMD.AppImage
 ```
 
-The file carries its own WebKitGTK, so it needs no packages. It is built on Ubuntu 22.04 and runs on glibc 2.34 and later: RHEL 9, Rocky 9, AlmaLinux 9, Ubuntu 22.04 and 24.04. On Ubuntu 26.04 the web process dies in EGL — that is WebKit 2.50 against a very new mesa, and it is not fixed yet.
+The file carries its own WebKitGTK, so it needs no packages. It is built on Ubuntu 22.04 and runs on glibc 2.34 and later: RHEL 9, Rocky 9, AlmaLinux 9, Ubuntu 22.04 and 24.04.
 
-**Build it yourself.** You need [Bun](https://bun.sh), [Rust](https://rustup.rs) and, on a Debian or Ubuntu base:
+> [!WARNING]
+> On Ubuntu 26.04 the web process dies in EGL. That is WebKit 2.50 against a very new mesa. This is a known issue.
+
+<details>
+<summary><b>Compiling a Linux Build</b></summary>
+
+You need [Bun](https://bun.sh), [Rust](https://rustup.rs) and, on a Debian or Ubuntu base:
 
 ```sh
 sudo apt install build-essential curl wget file pkg-config libssl-dev python3 \
@@ -79,7 +85,7 @@ The release workflow does all of this: [.github/workflows/release.yml](.github/w
 
 ## Pricing
 
-Free. No account, no subscription. A doc page is public and belongs to SideFX, so no doc page is ever going behind a payment. 
+Free. No account, no subscription. A doc page is public and belongs to SideFX, so no doc page is ever going behind a payment.
 
 Paid features will come in a later update to support power-users and allow them to write custom notes on a page, sync their settings and bookmarks across machines in the cloud, and much more.
 
