@@ -20,7 +20,7 @@ const nextConfig: NextConfig = {
   // overwrite in place instead of accumulating orphans. Tradeoff: during a
   // rollout the old and new worker share keys, so a content/serialization change
   // could briefly be read by the other version — acceptable for a static wiki.
-  // The value lives in lib/build-id.json: lib/segment-prefetch.ts builds the same
+  // The value lives in lib/build-id.json: lib/stored-answer.ts builds the same
   // key to read those entries from the Worker. Read from disk, not imported:
   // Next compiles this file and evaluates it outside the repo, so every
   // relative import fails to resolve.
