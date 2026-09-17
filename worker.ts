@@ -5,7 +5,7 @@ import type { D1Database } from "./telemetry/types";
 import { iconNeedsRefresh, iconResponse, refreshIcon, validIconPath, type IconBucket } from "./lib/icon-cache";
 import { cacheKey, fromCache, keep } from "./lib/edge-cache";
 import { rewriteNotice } from "./lib/notice-rewrite";
-import { segmentPrefetch } from "./lib/segment-prefetch";
+import { storedAnswer } from "./lib/stored-answer";
 
 // DOQueueHandler is not exported: its class is deleted while the routes are
 // frozen, and a deleted class must not stay exported. See wrangler.jsonc.
@@ -93,14 +93,16 @@ const worker = {
       }
     }
 
-    // A segment prefetch is a lookup in the entry Next would read anyway, so
-    // it is answered here and Next is never started. This is where the meter
-    // is: prefetches are most of the traffic, and the edge cache above only
-    // catches the few that repeat inside one colo. See lib/segment-prefetch.ts.
-    const prefetch = await segmentPrefetch(request, url, env.NEXT_INC_CACHE_R2_BUCKET);
-    if (prefetch) {
-      if (key) keep(key, prefetch, ctx);
-      return prefetch;
+    // A doc prefetch and a doc page are both a lookup in the entry Next would
+    // read anyway, so both are answered here and Next is never started. This
+    // is where the meter is: the edge cache above only catches the few
+    // requests that repeat inside one colo. See lib/stored-answer.ts.
+    const stored = await storedAnswer(request, url, env.NEXT_INC_CACHE_R2_BUCKET);
+    if (stored) {
+      const answer = rewriteNotice(stored);
+      recordPageView(request, url, answer, env, ctx);
+      if (key) keep(key, answer, ctx);
+      return answer;
     }
 
     // The notice copy is written in here, not in the page, so changing it
