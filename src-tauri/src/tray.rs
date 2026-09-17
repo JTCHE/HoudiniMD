@@ -80,6 +80,8 @@ pub fn rest(app: &AppHandle) {
 /// Scripts keep running at the low level (unlike `TrySuspend`), so the index
 /// progress and the page F1 opens still reach a hidden window. WebView2 does
 /// not set the level back by itself; `show` does.
+// The call below is WebView2, so off Windows both arguments go unread.
+#[cfg_attr(not(windows), allow(unused_variables))]
 fn memory(window: &tauri::WebviewWindow, low: bool) {
     #[cfg(windows)]
     let _ = window.with_webview(move |webview| unsafe {
