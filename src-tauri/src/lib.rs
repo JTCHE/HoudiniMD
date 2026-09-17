@@ -317,6 +317,90 @@ async fn save_page(
     Ok(true)
 }
 
+/// The setting that remembers the reader's vault, so the folder is asked for
+/// once, not on every note.
+const OBSIDIAN_VAULT_KEY: &str = "obsidian-vault";
+
+/// Writes the page into the reader's Obsidian vault, under `HoudiniMD/`, its
+/// pictures beside it under `HoudiniMD/attachments/`.
+///
+/// The vault is a folder on disk, not a URI a browser can carry, so this is a
+/// second door next to `save_page` rather than a use of it: the reader is
+/// never asked where, only once which vault. Pictures come out of the zip the
+/// app already reads pages from, not off the screen, so nothing has to leave
+/// the app just to come back as bytes.
+#[tauri::command]
+async fn send_to_obsidian(app: tauri::AppHandle, window: tauri::WebviewWindow, title: String, markdown: String) -> Result<bool, String> {
+    let db = app.state::<Db>();
+    let remembered = {
+        let conn = db.0.lock().map_err(|e| e.to_string())?;
+        db::get_setting(&conn, OBSIDIAN_VAULT_KEY)
+    };
+    let vault = match remembered {
+        Some(path) if std::path::Path::new(&path).is_dir() => std::path::PathBuf::from(path),
+        _ => {
+            use tauri_plugin_dialog::DialogExt;
+            let Some(picked) = app
+                .dialog()
+                .file()
+                .set_parent(&window)
+                .set_title("Choose your Obsidian vault")
+                .blocking_pick_folder()
+            else {
+                return Ok(false);
+            };
+            let picked = picked.into_path().map_err(|e| e.to_string())?;
+            let conn = db.0.lock().map_err(|e| e.to_string())?;
+            db::set_setting(&conn, OBSIDIAN_VAULT_KEY, &picked.to_string_lossy())?;
+            picked
+        }
+    };
+
+    let folder = vault.join("HoudiniMD");
+    let attachments = folder.join("attachments");
+    std::fs::create_dir_all(&attachments).map_err(|e| e.to_string())?;
+
+    let install = current_for(&app)?;
+    let roots = install.help_roots();
+    let mut note = markdown.clone();
+    let mut carried = std::collections::HashSet::new();
+    for kind in ["images/", "videos/"] {
+        for asset in asset_paths(&markdown, kind) {
+            if !carried.insert(asset.clone()) {
+                continue;
+            }
+            let Ok(bytes) = help::asset_layered(&roots, &asset) else { continue };
+            let file_name = asset.rsplit('/').next().unwrap_or(&asset);
+            std::fs::write(attachments.join(file_name), bytes).map_err(|e| e.to_string())?;
+            note = note.replace(&asset, &format!("attachments/{file_name}"));
+        }
+    }
+
+    let safe: String = title.chars().map(|c| if "\\/:*?\"<>|".contains(c) { ' ' } else { c }).collect();
+    let safe = safe.trim();
+    std::fs::write(folder.join(format!("{}.md", if safe.is_empty() { "page" } else { safe })), note)
+        .map_err(|e| e.to_string())?;
+    Ok(true)
+}
+
+/// Every `<kind>path/to/file.ext` substring `text` carries, ending at the
+/// nearest `)`, `"` or space — the ways an asset path ends inside a Markdown
+/// image or an HTML `src`.
+fn asset_paths(text: &str, kind: &str) -> Vec<String> {
+    let mut found = Vec::new();
+    let mut at = 0;
+    while let Some(rel) = text[at..].find(kind) {
+        let start = at + rel;
+        let end = text[start..]
+            .find(|c: char| c == ')' || c == '"' || c.is_whitespace())
+            .map(|i| start + i)
+            .unwrap_or(text.len());
+        found.push(text[start..end].to_string());
+        at = end;
+    }
+    found
+}
+
 /// Opens one more window, made from the same entry in `tauri.conf.json` as the
 /// first, on the home page or on `path` (`/nodes/sop/box#inputs`). It stays
 /// hidden until its page has loaded, so it never shows an empty frame. Async,
@@ -958,6 +1042,7 @@ pub fn run() {
             show_logs,
             open_page,
             save_page,
+            send_to_obsidian,
             new_window,
             close_window,
             open_devtools
