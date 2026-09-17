@@ -51,6 +51,13 @@
       "binding": "NEXT_INC_CACHE_R2_BUCKET",
       "bucket_name": "houdinimd-cache",
     },
+    {
+      // The mirrored markdown. The Next runtime reads it over the bucket's
+      // public URL (R2_PUBLIC_URL); the Worker answers a `.md` request from
+      // this binding instead, which is one less subrequest and no CDN hop.
+      "binding": "CONTENT",
+      "bucket_name": "vexllm",
+    },
   ],
   // Page views + searches written by telemetry/*.ts, read by the
   // houdinimd-analytics TUI (D1 HTTP API, Read-scoped token). 90-day
