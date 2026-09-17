@@ -50,7 +50,9 @@ strip = true
 [target."cfg(windows)".dependencies]
 windows-sys = { version = "0.61.2", features = ["Win32_System_Threading", "Win32_System_ProcessStatus", "Win32_Foundation"] }
 winreg = "0.56.0"
-# The versions Tauri's own webview already links, for the one WebView2 call
-# Tauri does not make: the memory level of a hidden window (`tray.rs`).
+# The versions Tauri's own webview already links, for the WebView2 calls Tauri
+# does not make: the memory level of a hidden window (`tray.rs`), and the item
+# in the right-click menu (`context_menu.rs`).
 webview2-com = "0.38"
+windows = { version = "0.61", features = ["Win32_System_Com"] }
 windows-core = "0.61"

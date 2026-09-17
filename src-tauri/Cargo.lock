@@ -1567,6 +1567,7 @@ dependencies = [
  "tiny_http",
  "webview2-com",
  "wiki",
+ "windows",
  "windows-core 0.61.2",
  "windows-sys 0.61.2",
  "winreg 0.56.0",
