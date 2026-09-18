@@ -18,8 +18,12 @@ const referrerHost = (request: Request, url: URL) => {
   }
 };
 
+/** The installer hand-off. It answers 302 and never renders, so it is the one
+    tracked address whose row is a redirect. See recordPageView(). */
+const DOWNLOAD = "/download";
+
 /** A page address we count. Everything else on the site is not a doc read. */
-const isTracked = (path: string) => path === "/" || path.startsWith("/docs/");
+const isTracked = (path: string) => path === "/" || path === DOWNLOAD || path.startsWith("/docs/");
 
 /**
  * The same read can reach the worker twice under one source IP each —
@@ -111,9 +115,13 @@ async function writeView(
  * and the browser reports its own navigations — see recordViewBeacon.
  */
 export function recordPageView(request: Request, url: URL, response: Response, env: TelemetryEnv, ctx: WaitUntil) {
-  if (!canRecord(env) || request.method !== "GET" || (response.status >= 300 && response.status < 400)) return;
+  if (!canRecord(env) || request.method !== "GET") return;
   if (request.headers.get("rsc")) return;
   const path = url.pathname;
+  // A redirect is a detour, not a read — except on /download, where the 302 to
+  // the GitHub asset is the whole page. Counting it is the only way to see how
+  // many readers the site sends to the installer.
+  if (path !== DOWNLOAD && response.status >= 300 && response.status < 400) return;
   if (!isTracked(path)) return;
   ctx.waitUntil(writeView(request, env, {
     path: path.endsWith(".md") ? path.slice(0, -3) : path,
