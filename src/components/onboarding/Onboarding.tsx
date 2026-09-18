@@ -43,6 +43,8 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
   const [hookOn, setHookOn] = useState(true);
   const [mcpOn, setMcpOn] = useState(true);
   const [agent, setAgent] = useState("");
+  /** Every agent installer key the scan found on this machine. */
+  const [agentsFound, setAgentsFound] = useState<string[]>([]);
   const [telemetryOn, setTelemetryOn] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -84,8 +86,12 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
     if (leaving === 5) {
       await invoke("set_setting", { key: ONBOARDED, value: "done" });
       // The only event that says a setup ended, so it is also how many
-      // installs never finish one.
-      setupDone(`hook=${hookOn} mcp=${mcpOn && agent ? agent : "no"}`);
+      // installs never finish one. `mcp` separates the two ways to end up
+      // without it: `none` is a machine with no agent to connect, `off` is a
+      // reader who had one and said no. `agents` is what the scan found, so
+      // a missing agent is countable rather than guessed at.
+      const mcp = mcpOn && agent ? agent : agentsFound.length === 0 ? "none" : "off";
+      setupDone(`hook=${hookOn} mcp=${mcp} agents=${agentsFound.join(",") || "none"}`);
     }
   }
 
@@ -194,7 +200,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
           />
         }
       >
-        <McpStep on={mcpOn} onToggle={setMcpOn} agent={agent} onAgent={setAgent} />
+        <McpStep on={mcpOn} onToggle={setMcpOn} agent={agent} onAgent={setAgent} onScanned={setAgentsFound} />
       </StepFrame>
     );
   }

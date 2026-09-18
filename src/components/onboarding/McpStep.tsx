@@ -22,12 +22,16 @@ export function McpStep({
   onToggle,
   agent,
   onAgent,
+  onScanned,
 }: {
   on: boolean;
   onToggle: (next: boolean) => void;
   /** The chosen agent's installer key, or "" until the scan is done. */
   agent: string;
   onAgent: (key: string) => void;
+  /** Every agent the scan found, so the setup event can tell a machine with
+      no agent from a reader who said no. */
+  onScanned: (keys: string[]) => void;
 }) {
   const [agents, setAgents] = useState<Agent[] | null>(null);
 
@@ -38,6 +42,7 @@ export function McpStep({
       .then((found) => {
         if (!live) return;
         setAgents(found);
+        onScanned(found.map((one) => one.key));
         if (found[0]) onAgent(found[0].key);
         else onToggle(false);
       });
