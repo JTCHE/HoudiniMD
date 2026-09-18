@@ -47,7 +47,7 @@
  * site no longer admits to having.
  */
 import buildId from "./build-id.json";
-import { META_ALL_KEY, META_ALL_PATH } from "./meta-all";
+import { META_ALL_KEY, META_ALL_PATH, SITEMAP_KEY, SITEMAP_PATH } from "./meta-all";
 import { DOCS_KEY } from "./search/bm25";
 import { generatedAtIsCurrent } from "./content-freshness";
 import { SIDEFX_DOCS_ROOT } from "./houdini";
@@ -114,6 +114,13 @@ const PROXIED_OBJECTS: ReadonlyMap<string, ProxiedObject> = new Map<string, Prox
     key: META_ALL_KEY,
     headers: {
       "content-type": "application/json; charset=utf-8",
+      "cache-control": "public, max-age=3600, s-maxage=86400",
+    },
+  }],
+  [SITEMAP_PATH, {
+    key: SITEMAP_KEY,
+    headers: {
+      "content-type": "application/xml; charset=utf-8",
       "cache-control": "public, max-age=3600, s-maxage=86400",
     },
   }],

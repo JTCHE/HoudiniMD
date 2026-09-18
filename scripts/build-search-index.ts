@@ -41,7 +41,9 @@ import {
 } from "../lib/search/bm25";
 import { parseArgs, getNumber, c, fmtMs } from "./lib/cli";
 import { listR2Slugs, putSearchIndex } from "./lib/regen";
-import { META_ALL_KEY } from "../lib/meta-all";
+import { META_ALL_KEY, SITEMAP_KEY } from "../lib/meta-all";
+import { SITE_URL } from "../lib/site";
+import { checkDocNamespace } from "../lib/url/namespaces";
 
 /**
  * A title or slug match is worth far more than a body mention, so title tokens
@@ -190,6 +192,10 @@ async function mapPool<T>(items: T[], limit: number, worker: (item: T, i: number
       }
     }),
   );
+}
+
+function escapeXml(s: string): string {
+  return s.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[ch]!);
 }
 
 async function main() {
@@ -378,6 +384,32 @@ async function main() {
           .map((e) => [e.path, { title: e.title, summary: e.summary ?? "" }]),
       ),
     ),
+  );
+
+  // The sitemap. Same reason as the map above: app/sitemap.ts read and parsed
+  // the whole index to emit a list only a deploy can change, and paid it on
+  // every cold isolate.
+  const urls = entries
+    .filter((e) => checkDocNamespace(e.path).kind === "allowed")
+    .map(
+      (e) =>
+        `<url><loc>${SITE_URL}/docs/${escapeXml(e.path)}</loc>` +
+        `<lastmod>${(e.lastModified ?? "2026-01-01T00:00:00.000Z").slice(0, 10)}</lastmod>` +
+        `<changefreq>monthly</changefreq><priority>0.7</priority></url>`,
+    );
+  await client.send(
+    new PutObjectCommand({
+      Bucket: config!.bucketName,
+      Key: SITEMAP_KEY,
+      Body:
+        `<?xml version="1.0" encoding="UTF-8"?>` +
+        `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">` +
+        `<url><loc>${SITE_URL}</loc><changefreq>monthly</changefreq><priority>1</priority></url>` +
+        `<url><loc>${SITE_URL}/docs</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>` +
+        urls.join("") +
+        `</urlset>`,
+      ContentType: "application/xml; charset=utf-8",
+    }),
   );
 
   console.log(`${c.green("done")} in ${fmtMs(Date.now() - started)}`);

@@ -9,3 +9,11 @@
 export const META_ALL_KEY = "content/meta-all.json";
 
 export const META_ALL_PATH = "/api/meta-all";
+
+/**
+ * The sitemap, written by the same deploy for the same reason: app/sitemap.ts
+ * parsed the whole index to emit a list that only a deploy can change.
+ */
+export const SITEMAP_KEY = "content/sitemap.xml";
+
+export const SITEMAP_PATH = "/sitemap.xml";
