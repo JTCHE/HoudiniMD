@@ -53,6 +53,7 @@ import { generatedAtIsCurrent } from "./content-freshness";
 import { SIDEFX_DOCS_ROOT } from "./houdini";
 import { checkDocNamespace, DOC_NAMESPACES } from "./url/namespaces";
 import { VERIFIED_SLUG_REDIRECTS } from "./url/slug-redirects";
+import { parseFrontmatter } from "./markdown/frontmatter";
 import { wantsMarkdown } from "./wants-markdown";
 
 /** `segmentData` stores this one as null when it equals `rsc`. See lib/cache/compressed-r2-cache.ts. */
@@ -172,6 +173,7 @@ type Ask =
   | { kind: "rsc"; path: string }
   | { kind: "prefetch"; path: string; segment: string }
   | { kind: "markdown"; slug: string; cacheControl: string }
+  | { kind: "meta"; slug: string }
   | { kind: "redirect"; to: string };
 
 /**
@@ -180,6 +182,20 @@ type Ask =
  */
 function read(request: Request, url: URL): Ask | null {
   if (request.method !== "GET") return null;
+
+  // The tooltip's first paint. It carries a query, so it is read before the
+  // gate below. `/api/meta-all` holds the same two fields for every page, but
+  // the reader does not have it yet on the first hover, which is why this call
+  // exists at all — and why it is worth answering without starting Next.
+  if (url.pathname === "/api/meta") {
+    const slug = url.searchParams.get("slug");
+    const only = [...url.searchParams.keys()].join() === "slug";
+    if (!slug || !only) return null;
+    if (slug.endsWith("/") || slug.endsWith(".md") || slug.endsWith("/index")) return null;
+    if (checkDocNamespace(slug).kind !== "allowed") return null;
+    if (slug in VERIFIED_SLUG_REDIRECTS) return null;
+    return { kind: "meta", slug };
+  }
 
   // A prerendered answer never varies on a query string, and the keys read
   // below carry none. The one exception is `_rsc`, the cache buster Next puts
@@ -277,6 +293,36 @@ async function entryFor(path: string, cache: Bucket): Promise<Entry | null> {
 }
 
 /**
+ * Title and summary for one page, from the same content object app/api/meta
+ * reads. The H1 carries title and node type together, which is what the
+ * tooltip heading shows, so it is read instead of the frontmatter `title`.
+ *
+ * A slug this cannot find is a source alias (`.../index` forms), which needs
+ * an R2 lookup this file does not do — null sends it to the route.
+ */
+const TITLE_LINE = /^#[ \t]+(\S[^\n]*)$/m;
+
+async function meta(slug: string, content: Bucket): Promise<Response | null> {
+  try {
+    const object = await content.get(`content/${slug}.md`);
+    if (!object) return null;
+
+    const text = await new Response(object.body).text();
+    if (!generatedAtIsCurrent(text)) return null;
+
+    return Response.json(
+      {
+        title: TITLE_LINE.exec(text)?.[1]?.trim() ?? "",
+        summary: parseFrontmatter(text).data.description ?? "",
+      },
+      { headers: { "cache-control": "private, max-age=86400" } },
+    );
+  } catch {
+    return null;
+  }
+}
+
+/**
  * The `.md` twin, straight from the content object.
  *
  * `/api/raw` puts that object through two transforms before answering, and
@@ -325,6 +371,7 @@ export async function storedAnswer(
     return new Response(null, { status: 302, headers: { location: ask.to } });
   }
   if (ask.kind === "markdown") return markdown(ask.slug, ask.cacheControl, content);
+  if (ask.kind === "meta") return meta(ask.slug, content);
 
   const entry = await entryFor(ask.path, cache);
   if (!entry) return null;
