@@ -13,6 +13,19 @@ const RELEASES = "https://api.github.com/repos/JTCHE/HoudiniMD/releases/latest";
 /** Where the reader lands if GitHub cannot be asked. Never a dead link. */
 const FALLBACK = "https://github.com/JTCHE/HoudiniMD/releases/latest";
 
+/**
+ * The same five minutes the GitHub call is held for, said out loud so the edge
+ * cache in worker.ts can hold the redirect too. Without it every reader who
+ * asks for the installer starts the Next server, which measured 990 CPU-ms on
+ * a cold isolate for an answer that is one line of text.
+ */
+function redirect(to: string): Response {
+  return new Response(null, {
+    status: 302,
+    headers: { location: to, "cache-control": "public, s-maxage=300" },
+  });
+}
+
 export async function GET(): Promise<Response> {
   try {
     const response = await fetch(RELEASES, {
@@ -22,7 +35,7 @@ export async function GET(): Promise<Response> {
       // minutes after it is published is not a problem worth a token.
       next: { revalidate: 300 },
     });
-    if (!response.ok) return Response.redirect(FALLBACK, 302);
+    if (!response.ok) return redirect(FALLBACK);
 
     const release = (await response.json()) as {
       assets?: { name?: string; browser_download_url?: string }[];
@@ -30,8 +43,8 @@ export async function GET(): Promise<Response> {
     const installer = release.assets?.find(
       (asset) => asset.name?.endsWith("-setup.exe") && asset.browser_download_url,
     );
-    return Response.redirect(installer?.browser_download_url ?? FALLBACK, 302);
+    return redirect(installer?.browser_download_url ?? FALLBACK);
   } catch {
-    return Response.redirect(FALLBACK, 302);
+    return redirect(FALLBACK);
   }
 }

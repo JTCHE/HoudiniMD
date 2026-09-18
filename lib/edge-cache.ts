@@ -30,8 +30,12 @@ import { wantsMarkdown } from "./wants-markdown";
 import { BUILD_STAMP } from "./build-stamp";
 import { NOTICE_VERSION } from "./notice-copy";
 
-/** How long an entry lives. A deploy makes it unreachable before this. */
+/** How long an entry lives when the answer asks for nothing longer. */
 const TTL_SECONDS = 3600;
+
+/** The bounds an answer's own `s-maxage` is held to. */
+const MIN_TTL_SECONDS = 60;
+const MAX_TTL_SECONDS = 86400;
 
 /** Holds the reader-facing value while the stored copy carries the edge TTL. */
 const HEADER_CC = "x-hmd-cc";
@@ -62,7 +66,8 @@ function cacheablePath(p: string): boolean {
     p === "/robots.txt" ||
     p === "/sitemap.xml" ||
     p === "/api/meta-all" ||
-    p === "/api/search-index"
+    p === "/api/search-index" ||
+    p === "/download"
   );
 }
 
@@ -139,12 +144,25 @@ function storable(response: Response): boolean {
   return page ? response.headers.get("x-nextjs-cache") === "HIT" : true;
 }
 
+/**
+ * How long to hold it. An answer that names an `s-maxage` is naming the age a
+ * shared cache may serve it at, and this is a shared cache. `/api/meta-all`
+ * asks for a day: it is one projection of the search index, it costs 574
+ * CPU-ms to build from the 3 MB index, and an hourly TTL made every colo pay
+ * that again 24 times a day.
+ */
+function ttl(response: Response): number {
+  const asked = Number(/s-maxage=(\d+)/.exec(response.headers.get("cache-control") ?? "")?.[1]);
+  if (!Number.isFinite(asked)) return TTL_SECONDS;
+  return Math.min(Math.max(asked, MIN_TTL_SECONDS), MAX_TTL_SECONDS);
+}
+
 /** Keep the answer, if it is one every reader may have. Never throws. */
 export function keep(key: Request, response: Response, ctx: Ctx): void {
   if (!storable(response)) return;
 
   const stored = new Response(response.clone().body, response);
   stored.headers.set(HEADER_CC, response.headers.get("cache-control") ?? "");
-  stored.headers.set("cache-control", `public, max-age=${TTL_SECONDS}`);
+  stored.headers.set("cache-control", `public, max-age=${ttl(response)}`);
   ctx.waitUntil(edge().put(key, stored).catch(() => {}));
 }
