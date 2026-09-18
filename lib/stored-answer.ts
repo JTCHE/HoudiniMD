@@ -127,6 +127,12 @@ const PROXIED_OBJECTS: ReadonlyMap<string, ProxiedObject> = new Map<string, Prox
   }],
 ]);
 
+/** What app/api/og/route.tsx sets on a card it drew. */
+const CARD_HEADERS: Record<string, string> = {
+  "content-type": "image/png",
+  "cache-control": "public, max-age=31536000, immutable",
+};
+
 const PREFETCH_HEADERS: Record<string, string> = {
   "content-type": "text/x-component",
   vary: VARY,
@@ -174,6 +180,7 @@ type Ask =
   | { kind: "prefetch"; path: string; segment: string }
   | { kind: "markdown"; slug: string; cacheControl: string }
   | { kind: "meta"; slug: string }
+  | { kind: "card"; key: string }
   | { kind: "redirect"; to: string };
 
 /**
@@ -182,6 +189,15 @@ type Ask =
  */
 function read(request: Request, url: URL): Ask | null {
   if (request.method !== "GET") return null;
+
+  // A social card already rendered. app/api/og/route.tsx stores every card it
+  // draws under the hash of its own query, so the Worker can hand back the
+  // bytes instead of starting Next to find them in the same place: that route
+  // was 32% of one hour's CPU, and three requests for one card cost 889, 545
+  // and 486 ms because each paid the bootstrap again.
+  if (url.pathname === "/api/og" && url.search) {
+    return { kind: "card", key: url.searchParams.toString() };
+  }
 
   // The tooltip's first paint. It carries a query, so it is read before the
   // gate below. `/api/meta-all` holds the same two fields for every page, but
@@ -372,6 +388,10 @@ export async function storedAnswer(
   }
   if (ask.kind === "markdown") return markdown(ask.slug, ask.cacheControl, content);
   if (ask.kind === "meta") return meta(ask.slug, content);
+  if (ask.kind === "card") {
+    const object = await cache.get(`og/${await sha256Hex(ask.key)}.png`).catch(() => null);
+    return object ? new Response(object.body, { headers: CARD_HEADERS }) : null;
+  }
 
   const entry = await entryFor(ask.path, cache);
   if (!entry) return null;
