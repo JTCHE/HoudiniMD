@@ -68,6 +68,7 @@ function cacheablePath(p: string): boolean {
     p === "/api/meta-all" ||
     p === "/api/search-index" ||
     p === "/api/search" ||
+    p === "/api/index" ||
     p === "/download"
   );
 }
@@ -84,6 +85,16 @@ function queryVariant(url: URL): string | null {
       if (key !== "q" && key !== "limit" && key !== "category") return null;
     }
     return `search/${encodeURIComponent(q)}/${url.searchParams.get("limit") ?? ""}/${url.searchParams.get("category") ?? ""}`;
+  }
+
+  // The corpus listing llms.txt points agents at. Same shape as the search
+  // above: three parameters, one answer per build.
+  if (url.pathname === "/api/index") {
+    for (const key of url.searchParams.keys()) {
+      if (key !== "category" && key !== "page" && key !== "limit") return null;
+    }
+    const part = (key: string) => encodeURIComponent(url.searchParams.get(key) ?? "");
+    return `index/${part("category")}/${part("page")}/${part("limit")}`;
   }
 
   if (!url.search) return "";
