@@ -33,28 +33,24 @@ export function iconNeedsRefresh(icon: IconObject): boolean {
   return !Number.isFinite(refreshedAt) || Date.now() - refreshedAt >= MONTH_MS;
 }
 
-export async function normalizeIcon(svg: string, path: string): Promise<string> {
-  const { optimize } = await import("svgo/browser");
-  return optimize(svg, {
-    multipass: true,
-    path,
-    plugins: ["preset-default", "removeDimensions", "sortAttrs"],
-  }).data;
-}
-
-export async function fetchIcon(path: string): Promise<string> {
+/**
+ * Read one icon from SideFX and keep the bytes, so the next request reads R2.
+ *
+ * The bytes go in as they arrive. An earlier version ran svgo here, which cost
+ * 2700 CPU-ms for a single miss: 660 ms to evaluate the module, then up to
+ * 730 ms of multipass over a 100 KB crowd icon. svgo is a build tool, and a
+ * request is not a build. It saved 43-60% of the bytes, which R2 gives away
+ * and the edge holds for a month.
+ */
+export async function refreshIcon(path: string, bucket: IconBucket): Promise<string> {
   const response = await fetch(`${HOUDINI_ICON_ROOT}/${path}`);
   if (!response.ok) throw new Error(`SideFX icon returned ${response.status}: ${path}`);
-  return normalizeIcon(await response.text(), path);
-}
-
-export async function refreshIcon(path: string, bucket: IconBucket): Promise<string> {
-  const data = await fetchIcon(path);
-  await bucket.put(path, data, {
+  const svg = await response.text();
+  await bucket.put(path, svg, {
     httpMetadata: { contentType: "image/svg+xml; charset=utf-8" },
     customMetadata: { refreshedAt: new Date().toISOString() },
   });
-  return data;
+  return svg;
 }
 
 export function iconResponse(body: BodyInit, etag?: string): Response {
@@ -64,4 +60,16 @@ export function iconResponse(body: BodyInit, etag?: string): Response {
   });
   if (etag) headers.set("etag", etag);
   return new Response(body, { headers });
+}
+
+/**
+ * SideFX's icon tree has gaps, and a page that names a missing icon names it on
+ * every view: one tail hour showed the same 404 asked for 14 times. Each of
+ * those was a fetch to SideFX. Hold the answer at the edge for an hour instead.
+ */
+export function iconMissing(): Response {
+  return new Response("Not found", {
+    status: 404,
+    headers: { "cache-control": `public, max-age=${60 * 60}` },
+  });
 }
