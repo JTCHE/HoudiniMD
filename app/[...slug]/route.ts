@@ -5,7 +5,18 @@ import { NextRequest, NextResponse } from "next/server";
 // after a deploy, favicon requests, etc). These aren't doc-slug lookups — running
 // the full-index Fuse search on them just burns CPU for a guaranteed miss, and on
 // Workers Free that alone can trip the 10ms limit. Bail out before the fetch.
-const NOT_A_SLUG = /^_next\/|\.[a-z0-9]{1,5}$/i;
+const NOT_A_SLUG = /^_next\//i;
+
+/**
+ * A doc slug is words, digits, `-` and `_`, in up to a few path steps. It
+ * never starts a step with `.` or `_`, and it never ends in a file extension.
+ *
+ * Everything else reaching this route is a scanner: `.env.production`,
+ * `_profiler/phpinfo`, `.well-known/traffic-advice`. Each of those used to
+ * run a search over the whole index, which is the dearest request the site
+ * makes, and one tail showed 95 of them in six hours.
+ */
+const DOC_SLUG = /^[a-z0-9][a-z0-9_-]*(\/[a-z0-9][a-z0-9_-]*)*$/i;
 
 // Catch-all for unrecognised paths (e.g. /rbdconstraintsfromrules).
 // Searches the index for the best match and redirects there.
@@ -16,7 +27,8 @@ export async function GET(
   const { slug } = await params;
   const query = slug.join(" ");
 
-  if (NOT_A_SLUG.test(slug.join("/"))) {
+  const path = slug.join("/");
+  if (NOT_A_SLUG.test(path) || !DOC_SLUG.test(path)) {
     return new Response("Not found", { status: 404 });
   }
 
