@@ -3,6 +3,7 @@ import { NextRequest } from "next/server";
 import { fetchIndexEntries } from "@/lib/r2/read";
 import { buildOgImageJsx } from "@/lib/og/og-image";
 import { SITE_URL } from "@/lib/site";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 // Self-hosted (public/fonts/geist/, MIT-licensed) so satori doesn't depend on
 // an external CDN at request time. Fetched once per warm isolate.
@@ -63,6 +64,19 @@ export async function GET(req: NextRequest) {
   const cached = await cache?.match(cacheKey);
   if (cached) return cached;
 
+  // `caches.default` is per colo, so a card shared widely renders once in each
+  // one: 1483 CPU-ms a render, measured on the live Worker. R2 is behind every
+  // colo, so the second colo reads bytes instead. The key is the query, which
+  // is the whole of the image's input.
+  const store = ogStore();
+  const key = `og/${await sha256Hex(searchParams.toString())}.png`;
+  const stored = await store?.get(key).catch(() => null);
+  if (stored) {
+    const hit = new Response(stored.body, { headers: OG_HEADERS });
+    await cache?.put(cacheKey, hit.clone());
+    return hit;
+  }
+
   const iconParam = searchParams.get("icon") || undefined;
   const icon = iconParam ? await resolveIcon(iconParam) : undefined;
   const jsx = buildOgImageJsx({
@@ -81,14 +95,32 @@ export async function GET(req: NextRequest) {
     // Generation failed — fall back to the static cover image (don't cache it).
     return Response.redirect(new URL("/cover.png", req.url).toString(), 302);
   }
-  const response = new Response(body, {
-    headers: {
-      "Content-Type": "image/png",
-      "Cache-Control": "public, max-age=31536000, immutable",
-    },
-  });
+  const response = new Response(body, { headers: OG_HEADERS });
+  await store?.put(key, body).catch(() => {});
   await cache?.put(cacheKey, response.clone());
   return response;
+}
+
+const OG_HEADERS = {
+  "Content-Type": "image/png",
+  "Cache-Control": "public, max-age=31536000, immutable",
+};
+
+/**
+ * The incremental-cache bucket, under a prefix of its own. cache-sync prunes
+ * only `incremental-cache/`, so nothing here is swept by a deploy.
+ */
+function ogStore() {
+  try {
+    return getCloudflareContext().env.NEXT_INC_CACHE_R2_BUCKET;
+  } catch {
+    return undefined; // `next dev` has no binding
+  }
+}
+
+async function sha256Hex(text: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 /**
