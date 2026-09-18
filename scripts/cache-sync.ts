@@ -70,6 +70,8 @@ interface CacheAsset {
   fullPath: string;
   /** R2 object key, identical to what the runtime computes. */
   key: string;
+  /** The route this entry holds, for the log. */
+  path: string;
 }
 
 /** Mirror of OpenNext's computeCacheKey. */
@@ -98,9 +100,11 @@ function collectAssets(): CacheAsset[] {
     if (relPath.endsWith(".cache")) {
       const [buildId, ...keyParts] = relPath.slice(0, -".cache".length).split("/");
       if (!buildId || keyParts.length === 0) continue;
+      const routePath = `/${keyParts.join("/")}`;
       assets.push({
         fullPath,
-        key: computeCacheKey(`/${keyParts.join("/")}`, buildId),
+        key: computeCacheKey(routePath, buildId),
+        path: routePath,
       });
     }
     // everything else (directories) is skipped
@@ -300,6 +304,13 @@ async function main() {
   console.log("");
   console.log(`  ${c.green("upload")}  ${toUpload.length} / ${assets.length} (${fmtPct(toUpload.length, assets.length)} changed)`);
   if (skippedByHash) console.log(c.dim(`          ${skippedByHash} unchanged despite a new etag (worker-written, matched on srchash)`));
+  // Which routes changed, not just how many. A deploy that touches no content
+  // should upload almost nothing; when it does not, this names the pages to
+  // look at. Six is enough to see a shape and short enough to read in a build log.
+  if (toUpload.length) {
+    const fresh = toUpload.filter((a) => !remote.has(a.key)).length;
+    console.log(c.dim(`          ${fresh} new, ${toUpload.length - fresh} rewritten; e.g. ${toUpload.slice(0, 6).map((a) => a.path).join(" ")}`));
+  }
   console.log(`  ${c.red("delete")}  ${toDelete.length} orphan(s)`);
 
   if (!apply) {
