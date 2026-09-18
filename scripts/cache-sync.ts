@@ -14,6 +14,15 @@
  *      rewrote at runtime gzip differently, so those get one HEAD each and are
  *      compared on the `srchash` metadata (hash of the uncompressed source)
  *      instead. A content-stable deploy uploads nothing.
+ *
+ * Only `.cache` entries are synced. Next also writes a `__fetch/` cache, one
+ * entry per page, and those were being uploaded too: 11,423 PUTs on every
+ * deploy, the larger half of its cost. They were never readable. The build
+ * fetches each page's markdown with `?b=<BUILD_STAMP>` (lib/r2/read.ts) so the
+ * build cannot read a stale copy through the CDN, which makes every fetch key
+ * new on every build — and the runtime, which adds no such query, computes a
+ * different key again and so never matches what the build stored. A page that
+ * revalidates just reads R2 again, which is one class B operation.
  *   3. Delete orphans — any object under the prefix that no current asset maps
  *      to. This reclaims old random-build-id prefixes and removed pages.
  *
@@ -61,17 +70,12 @@ interface CacheAsset {
   fullPath: string;
   /** R2 object key, identical to what the runtime computes. */
   key: string;
-  kind: "cache" | "fetch";
 }
 
 /** Mirror of OpenNext's computeCacheKey. */
-function computeCacheKey(
-  key: string,
-  cacheType: "cache" | "fetch",
-  buildId: string,
-): string {
+function computeCacheKey(key: string, buildId: string): string {
   const hash = createHash("sha256").update(key).digest("hex");
-  return `${PREFIX}/${buildId}/${hash}.${cacheType}`.replace(/\/+/g, "/");
+  return `${PREFIX}/${buildId}/${hash}.cache`.replace(/\/+/g, "/");
 }
 
 /**
@@ -91,21 +95,12 @@ function collectAssets(): CacheAsset[] {
   for (const rel of entries) {
     const fullPath = path.join(CACHE_DIR, rel);
     const relPath = rel.split(path.sep).join("/");
-    if (relPath.startsWith("__fetch/")) {
-      const [, buildId, ...keyParts] = relPath.split("/");
-      if (!buildId || keyParts.length === 0) continue; // dir entry / malformed
-      assets.push({
-        fullPath,
-        key: computeCacheKey(`/${keyParts.join("/")}`, "fetch", buildId),
-        kind: "fetch",
-      });
-    } else if (relPath.endsWith(".cache")) {
+    if (relPath.endsWith(".cache")) {
       const [buildId, ...keyParts] = relPath.slice(0, -".cache".length).split("/");
       if (!buildId || keyParts.length === 0) continue;
       assets.push({
         fullPath,
-        key: computeCacheKey(`/${keyParts.join("/")}`, "cache", buildId),
-        kind: "cache",
+        key: computeCacheKey(`/${keyParts.join("/")}`, buildId),
       });
     }
     // everything else (directories) is skipped
@@ -117,40 +112,11 @@ function md5(buf: Buffer): string {
   return createHash("md5").update(buf).digest("hex");
 }
 
-// A .fetch entry is a whole HTTP response from the docs origin, response
-// headers included. Some of those headers change on every request (`date`,
-// `cf-ray`, ...), so byte-identical markdown produced a different object each
-// build and re-uploaded all ~11k .fetch entries — half the PUTs of a deploy,
-// for no content change. Drop the volatile ones and sort the rest, so the
-// stored bytes depend only on the response body. Next only reads the headers
-// it cares about (content-type, etag, cache-control), all of which stay.
-const VOLATILE_FETCH_HEADERS = new Set([
-  "age",
-  "alt-svc",
-  "cf-cache-status",
-  "cf-ray",
-  "date",
-  "nel",
-  "report-to",
-  "server-timing",
-  "x-request-id",
-]);
-
-/** Source bytes for an asset: .fetch entries normalised, .cache de-duplicated. */
+/** Source bytes for an asset, with the duplicate segment removed. */
 function sourceFor(a: CacheAsset): Buffer {
   const raw = readFileSync(a.fullPath);
   try {
     const entry = JSON.parse(raw.toString("utf8"));
-    if (a.kind === "fetch") {
-      const headers = entry?.data?.headers;
-      if (!headers || typeof headers !== "object") return raw;
-      entry.data.headers = Object.fromEntries(
-        Object.entries(headers)
-          .filter(([k]) => !VOLATILE_FETCH_HEADERS.has(k.toLowerCase()))
-          .sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0)),
-      );
-      return Buffer.from(JSON.stringify(entry));
-    }
     // `segmentData["/_full"]` is a byte-for-byte copy of `rsc`, ~400 KB on a
     // large doc page. Null it out here; lib/cache/compressed-r2-cache.ts
     // restores it on read. Must stay identical to `shrink()` there.
