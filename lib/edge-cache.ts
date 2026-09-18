@@ -67,12 +67,25 @@ function cacheablePath(p: string): boolean {
     p === "/sitemap.xml" ||
     p === "/api/meta-all" ||
     p === "/api/search-index" ||
+    p === "/api/search" ||
     p === "/download"
   );
 }
 
 /** The query a path is allowed to carry, and still be one answer per build. */
 function queryVariant(url: URL): string | null {
+  // One query, one answer, until the next deploy rebuilds the index. The route
+  // already asks to be held (see app/api/search/route.ts); without this the
+  // key was refused and two identical queries cost 1385 and 1237 CPU-ms.
+  if (url.pathname === "/api/search") {
+    const q = url.searchParams.get("q")?.trim();
+    if (!q) return null;
+    for (const key of url.searchParams.keys()) {
+      if (key !== "q" && key !== "limit" && key !== "category") return null;
+    }
+    return `search/${encodeURIComponent(q)}/${url.searchParams.get("limit") ?? ""}/${url.searchParams.get("category") ?? ""}`;
+  }
+
   if (!url.search) return "";
 
   // One tooltip, one slug. The answer is the page's own title and summary.
