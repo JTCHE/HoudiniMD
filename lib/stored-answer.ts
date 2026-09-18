@@ -73,7 +73,9 @@ interface Entry {
   html?: string;
   rsc?: string;
   segmentData?: Record<string, string | null>;
-  meta?: { status?: number };
+  /** A route handler's whole answer, when the route is prerendered. */
+  body?: string;
+  meta?: { status?: number; headers?: Record<string, string> };
 }
 
 /** What Next says an RSC answer varies on. It sends this on the page too. */
@@ -118,11 +120,29 @@ async function sha256Hex(text: string): Promise<string> {
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-/** Paths outside `/docs/` whose answer is one prerendered entry per build. */
-const FIXED_PAGES: ReadonlySet<string> = new Set(["/docs", "/privacy"]);
+/**
+ * Paths outside `/docs/` whose answer is one prerendered entry per build, and
+ * the name Next stores that entry under. The root is `/index`, not `/`.
+ */
+const FIXED_PAGES: ReadonlyMap<string, string> = new Map([
+  ["/", "/index"],
+  ["/docs", "/docs"],
+  ["/privacy", "/privacy"],
+]);
+
+/**
+ * Route handlers Next prerenders whole: the entry carries the body and the
+ * headers the route itself set, so nothing here decides what they say.
+ *
+ * `/sitemap.xml` is not one of these. next.config.ts gives it a different
+ * `cache-control` than the entry stores, and copying that rule here would put
+ * it in two places.
+ */
+const STORED_ROUTES: ReadonlySet<string> = new Set(["/robots.txt"]);
 
 type Ask =
   | { kind: "searchIndex" }
+  | { kind: "route"; path: string }
   | { kind: "page"; path: string }
   | { kind: "rsc"; path: string }
   | { kind: "prefetch"; path: string; segment: string }
@@ -137,22 +157,27 @@ function read(request: Request, url: URL): Ask | null {
   if (request.method !== "GET") return null;
 
   // A prerendered answer never varies on a query string, and the keys read
-  // below carry none. Anything arriving with one is Next's business.
-  if (url.search) return null;
+  // below carry none. The one exception is `_rsc`, the cache buster Next puts
+  // on every RSC and prefetch request: the value never changes the answer.
+  // Anything else arriving with a query is Next's business.
+  if (url.search && [...url.searchParams.keys()].join() !== "_rsc") return null;
 
   // One R2 object, streamed through. The route does the same, and the only
   // reason it is a route is that the browser needs it same-origin.
   if (url.pathname === SEARCH_INDEX_PATH) return { kind: "searchIndex" };
+
+  if (STORED_ROUTES.has(url.pathname)) return { kind: "route", path: url.pathname };
 
   const segment = request.headers.get("next-router-segment-prefetch");
   const rsc = request.headers.get("rsc");
 
   // Neither of these is under the `/docs/:path*` matcher, so middleware never
   // redirects an agent away from them: everyone gets the page.
-  if (FIXED_PAGES.has(url.pathname)) {
-    if (segment) return { kind: "prefetch", path: url.pathname, segment };
-    if (rsc) return { kind: "rsc", path: url.pathname };
-    return { kind: "page", path: url.pathname };
+  const fixed = FIXED_PAGES.get(url.pathname);
+  if (fixed) {
+    if (segment) return { kind: "prefetch", path: fixed, segment };
+    if (rsc) return { kind: "rsc", path: fixed };
+    return { kind: "page", path: fixed };
   }
 
   // `/api/raw/<slug>` is the route middleware rewrites a `.md` path to, and
@@ -267,6 +292,13 @@ export async function storedAnswer(
 
   const entry = await entryFor(ask.path, cache);
   if (!entry) return null;
+
+  if (ask.kind === "route") {
+    if (typeof entry.body !== "string") return null;
+    // The tag list drives revalidation inside Next and never leaves it.
+    const { "x-next-cache-tags": _tags, ...stored } = entry.meta?.headers ?? {};
+    return new Response(entry.body, { headers: { ...stored, vary: VARY, "x-nextjs-cache": "HIT" } });
+  }
 
   if (ask.kind === "prefetch") {
     const stored = entry.segmentData?.[ask.segment];
