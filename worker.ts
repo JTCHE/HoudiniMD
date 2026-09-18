@@ -1,10 +1,11 @@
 import { recordApiSearch, recordPageView, recordSearchBeacon, recordViewBeacon } from "./telemetry";
 import { pruneAnalytics } from "./telemetry/prune";
 import type { D1Database } from "./telemetry/types";
-import { iconNeedsRefresh, iconResponse, refreshIcon, validIconPath, type IconBucket } from "./lib/icon-cache";
+import { iconMissing, iconNeedsRefresh, iconResponse, refreshIcon, validIconPath, type IconBucket } from "./lib/icon-cache";
 import { cacheKey, fromCache, keep } from "./lib/edge-cache";
 import { rewriteNotice } from "./lib/notice-rewrite";
 import { storedAnswer, type Bucket } from "./lib/stored-answer";
+import { isProbe } from "./lib/is-probe";
 
 /**
  * The OpenNext entry, loaded by the request that needs it and never at module
@@ -51,7 +52,7 @@ const worker = {
     const url = new URL(request.url);
     if (url.pathname.startsWith("/icons/") && (request.method === "GET" || request.method === "HEAD")) {
       const path = url.pathname.slice(7);
-      if (!validIconPath(path)) return new Response("Not found", { status: 404 });
+      if (!validIconPath(path)) return iconMissing();
 
       const edgeCache = (caches as unknown as { default: Cache }).default;
       const cacheRequest = new Request(request, { method: "GET" });
@@ -81,7 +82,9 @@ const worker = {
         return request.method === "HEAD" ? new Response(null, response) : response;
       } catch (error) {
         console.error(`Icon fill failed: ${error}`);
-        return new Response("Not found", { status: 404 });
+        const missing = iconMissing();
+        ctx.waitUntil(edgeCache.put(cacheRequest, missing.clone()));
+        return missing;
       }
     }
     const beacon = recordSearchBeacon(request, url, env, ctx) ?? recordViewBeacon(request, url, env, ctx);
@@ -99,6 +102,8 @@ const worker = {
         });
       }
     }
+
+    if (isProbe(url.pathname)) return new Response("Not found", { status: 404 });
 
     // The edge cache sits here, in front of the Next server, because the cost
     // it saves is Next's own bootstrap. See lib/edge-cache.ts.
