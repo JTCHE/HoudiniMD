@@ -1,4 +1,5 @@
 import { parseImageDimensions, type ImageDimensions } from "./dimensions";
+import { fetchFromR2 } from "../r2/read";
 
 export interface ImageProbe extends ImageDimensions {
   /**
@@ -66,9 +67,51 @@ async function fetchPrefix(url: string, bytes: number): Promise<Uint8Array | nul
   }
 }
 
+/**
+ * Sizes for every image the mirror references, written by scripts/probe-images.ts.
+ *
+ * The build used to read each one off sidefx.com. A probe that times out drops
+ * the image's reserved box, which changes the page — so a few percent of
+ * probes failing meant ~1,100 of 11,422 pages rendered differently on every
+ * build and were re-uploaded for nothing (measured: pages that churned carry
+ * 9.0 images each against 5.4 for pages that do not). The build reads this
+ * instead and never touches the network, so two builds of the same content
+ * give the same bytes.
+ */
+export const DIMENSIONS_KEY = "content/image-dimensions.json";
+
+let knownPromise: Promise<ReadonlyMap<string, ImageDimensions>> | null = null;
+
+function known(): Promise<ReadonlyMap<string, ImageDimensions>> {
+  knownPromise ??= fetchFromR2(DIMENSIONS_KEY, true)
+    .then((raw) => {
+      const rows = raw ? (JSON.parse(raw) as Record<string, [number, number]>) : {};
+      return new Map(Object.entries(rows).map(([url, [width, height]]) => [url, { width, height }]));
+    })
+    .catch(() => new Map<string, ImageDimensions>());
+  return knownPromise;
+}
+
+/** The build must not probe: see `known()`. A live render still may. */
+const IS_BUILD = process.env.NEXT_PHASE === "phase-production-build";
+
 export async function probeImage(url: string): Promise<ImageProbe | null> {
   const cached = probeCache.get(url);
   if (cached !== undefined) return cached;
+
+  const stored = (await known()).get(url);
+  if (stored) {
+    const probe = { ...stored, placeholder: null };
+    cacheProbe(url, probe);
+    return probe;
+  }
+  // An image added since the last run of scripts/probe-images.ts. A live render
+  // reads it once and holds it for the isolate; the build leaves it unreserved
+  // rather than letting the network decide what the page looks like.
+  if (IS_BUILD) {
+    cacheProbe(url, null);
+    return null;
+  }
 
   let bytes = await fetchPrefix(url, PROBE_BYTES);
   let dims = bytes ? parseImageDimensions(bytes) : null;
