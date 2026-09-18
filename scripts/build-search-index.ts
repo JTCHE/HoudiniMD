@@ -41,6 +41,7 @@ import {
 } from "../lib/search/bm25";
 import { parseArgs, getNumber, c, fmtMs } from "./lib/cli";
 import { listR2Slugs, putSearchIndex } from "./lib/regen";
+import { META_ALL_KEY } from "../lib/meta-all";
 
 /**
  * A title or slug match is worth far more than a body mention, so title tokens
@@ -364,6 +365,20 @@ async function main() {
   });
   process.stdout.write("\r");
   await put(DOCS_KEY, table);
+
+  // The title/summary map behind /api/meta-all. Built from the same entries so
+  // it cannot disagree with the search table, and written here so the Worker
+  // streams one object instead of parsing 3 MB of index.json per cold isolate.
+  await put(
+    META_ALL_KEY,
+    JSON.stringify(
+      Object.fromEntries(
+        entries
+          .filter((e) => e.path && e.title)
+          .map((e) => [e.path, { title: e.title, summary: e.summary ?? "" }]),
+      ),
+    ),
+  );
 
   console.log(`${c.green("done")} in ${fmtMs(Date.now() - started)}`);
 }

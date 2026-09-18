@@ -47,6 +47,7 @@
  * site no longer admits to having.
  */
 import buildId from "./build-id.json";
+import { META_ALL_KEY, META_ALL_PATH } from "./meta-all";
 import { DOCS_KEY } from "./search/bm25";
 import { generatedAtIsCurrent } from "./content-freshness";
 import { SIDEFX_DOCS_ROOT } from "./houdini";
@@ -91,15 +92,32 @@ const MARKDOWN_CACHE_CONTROL =
 /** What `/api/raw` sets on its own answers, where the `/docs/` rule does not reach. */
 const RAW_CACHE_CONTROL = "public, max-age=2592000";
 
-/** The BM25 doc table, and the headers app/api/search-index/route.ts gives it. */
-const SEARCH_INDEX_PATH = "/api/search-index";
-const SEARCH_INDEX_HEADERS: Record<string, string> = {
-  "access-control-allow-origin": "*",
-  "access-control-allow-methods": "GET, OPTIONS",
-  "access-control-allow-headers": "Content-Type",
-  "content-type": "application/json; charset=utf-8",
-  "cache-control": "public, max-age=300, s-maxage=86400, stale-while-revalidate=604800",
-};
+/**
+ * Routes that are one R2 object and nothing else: the BM25 doc table and the
+ * title/summary map. Each is written by a deploy (scripts/build-search-index.ts)
+ * and never changes between deploys, so the Worker streams the object rather
+ * than starting Next to build the same bytes again.
+ */
+type ProxiedObject = { key: string; headers: Record<string, string> };
+const PROXIED_OBJECTS: ReadonlyMap<string, ProxiedObject> = new Map<string, ProxiedObject>([
+  ["/api/search-index", {
+    key: DOCS_KEY,
+    headers: {
+      "access-control-allow-origin": "*",
+      "access-control-allow-methods": "GET, OPTIONS",
+      "access-control-allow-headers": "Content-Type",
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": "public, max-age=300, s-maxage=86400, stale-while-revalidate=604800",
+    },
+  }],
+  [META_ALL_PATH, {
+    key: META_ALL_KEY,
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": "public, max-age=3600, s-maxage=86400",
+    },
+  }],
+]);
 
 const PREFETCH_HEADERS: Record<string, string> = {
   "content-type": "text/x-component",
@@ -141,7 +159,7 @@ const FIXED_PAGES: ReadonlyMap<string, string> = new Map([
 const STORED_ROUTES: ReadonlySet<string> = new Set(["/robots.txt"]);
 
 type Ask =
-  | { kind: "searchIndex" }
+  | { kind: "object"; key: string; headers: Record<string, string> }
   | { kind: "route"; path: string }
   | { kind: "page"; path: string }
   | { kind: "rsc"; path: string }
@@ -164,7 +182,8 @@ function read(request: Request, url: URL): Ask | null {
 
   // One R2 object, streamed through. The route does the same, and the only
   // reason it is a route is that the browser needs it same-origin.
-  if (url.pathname === SEARCH_INDEX_PATH) return { kind: "searchIndex" };
+  const proxied = PROXIED_OBJECTS.get(url.pathname);
+  if (proxied) return { kind: "object", ...proxied };
 
   if (STORED_ROUTES.has(url.pathname)) return { kind: "route", path: url.pathname };
 
@@ -291,9 +310,9 @@ export async function storedAnswer(
   const ask = read(request, url);
   if (!ask) return null;
 
-  if (ask.kind === "searchIndex") {
-    const object = await content.get(DOCS_KEY).catch(() => null);
-    return object ? new Response(object.body, { headers: SEARCH_INDEX_HEADERS }) : null;
+  if (ask.kind === "object") {
+    const object = await content.get(ask.key).catch(() => null);
+    return object ? new Response(object.body, { headers: ask.headers }) : null;
   }
   if (ask.kind === "redirect") {
     return new Response(null, { status: 302, headers: { location: ask.to } });
