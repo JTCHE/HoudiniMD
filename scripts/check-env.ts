@@ -34,3 +34,13 @@ if (missing.length > 0) {
   console.error(`Missing required env var(s): ${missing.join(", ")}`);
   process.exit(1);
 }
+
+// A set-but-wrong origin is worse than a missing one, because nothing stops
+// the build: the pipeline held `http://localhost:3000` and every prerendered
+// page went out with a localhost canonical, og:url, JSON-LD id and markdown
+// alternate link. `deploy` exports this from wrangler.jsonc now (see
+// scripts/site-url.ts); this is the second lock on the same door.
+if (!/^https:\/\//.test(process.env.URL!)) {
+  console.error(`URL must be the https public origin, got "${process.env.URL}".`);
+  process.exit(1);
+}
