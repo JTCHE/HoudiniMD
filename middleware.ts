@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { wantsMarkdown } from './lib/wants-markdown';
 import { fetchSourceAlias } from './lib/source-aliases';
-import { checkDocNamespace } from './lib/url/namespaces';
+import { checkDocNamespace, DOC_NAMESPACES } from './lib/url/namespaces';
 import { VERIFIED_SLUG_REDIRECTS } from './lib/url/slug-redirects';
 
 const HOUDINI_PATH_PREFIXES = [
@@ -113,7 +113,14 @@ export async function middleware(request: NextRequest) {
     // AI agents / programmatic fetchers → redirect to the .md equivalent so they
     // receive raw markdown instead of the Next.js-rendered HTML. Search and
     // social crawlers fall through to the HTML below.
-    if (wantsMarkdown(request.headers.get('user-agent'), request.headers)) {
+    // A tree root is held back from this: `/docs/houdini.md` is answered in
+    // front of the Worker with a 301 to `/docs/houdini`, so the twin would
+    // bounce the agent straight back here. See lib/stored-answer.ts, which
+    // answers the same shape before Next runs and carries the same guard.
+    if (
+      !DOC_NAMESPACES.includes(bareSlug as (typeof DOC_NAMESPACES)[number]) &&
+      wantsMarkdown(request.headers.get('user-agent'), request.headers)
+    ) {
       url.pathname = `${pathname}.md`;
       return NextResponse.redirect(url, 302);
     }

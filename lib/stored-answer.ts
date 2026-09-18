@@ -50,7 +50,7 @@ import buildId from "./build-id.json";
 import { DOCS_KEY } from "./search/bm25";
 import { generatedAtIsCurrent } from "./content-freshness";
 import { SIDEFX_DOCS_ROOT } from "./houdini";
-import { checkDocNamespace } from "./url/namespaces";
+import { checkDocNamespace, DOC_NAMESPACES } from "./url/namespaces";
 import { VERIFIED_SLUG_REDIRECTS } from "./url/slug-redirects";
 import { wantsMarkdown } from "./wants-markdown";
 
@@ -209,7 +209,17 @@ function read(request: Request, url: URL): Ask | null {
 
   // An agent is sent to the `.md` twin by middleware, and that redirect is one
   // of the commonest answers the site gives. It needs no object at all.
-  if (wantsMarkdown(request.headers.get("user-agent"), request.headers)) {
+  //
+  // A tree root is the exception. `/docs/houdini.md` and its three siblings are
+  // answered in front of this Worker with a 301 back to `/docs/houdini`, so
+  // sending an agent to the twin puts it in a redirect loop: one hour of tail
+  // showed a single client asking for `/docs/hdk` 132 times. Give the root its
+  // rendered page instead, which is what a tree root holds anyway — a list of
+  // links, not prose an agent would rather have as markdown.
+  if (
+    !DOC_NAMESPACES.includes(slug as (typeof DOC_NAMESPACES)[number]) &&
+    wantsMarkdown(request.headers.get("user-agent"), request.headers)
+  ) {
     return { kind: "redirect", to: `${url.pathname}.md` };
   }
   return { kind: "page", path: url.pathname };
