@@ -375,16 +375,23 @@ async function main() {
   // The title/summary map behind /api/meta-all. Built from the same entries so
   // it cannot disagree with the search table, and written here so the Worker
   // streams one object instead of parsing 3 MB of index.json per cold isolate.
-  await put(
-    META_ALL_KEY,
-    JSON.stringify(
-      Object.fromEntries(
-        entries
-          .filter((e) => e.path && e.title)
-          .map((e) => [e.path, { title: e.title, summary: e.summary ?? "" }]),
-      ),
-    ),
-  );
+  //
+  // A section link keeps its source `.../index` form in the markdown, so a
+  // tooltip asks about `houdini/shelf/index` and this map, keyed by canonical
+  // path, never held it. Every reader then scheduled a live generation for the
+  // miss: one hour of tail shows 47 `/api/generate` calls and every one of
+  // them is an `.../index` slug. Each scrapes SideFX and rewrites the page,
+  // which is also why those sections were the last pages a deploy re-uploaded.
+  const byPath = new Map(entries.filter((e) => e.path && e.title).map((e) => [e.path, e] as const));
+  const metaAll: Record<string, { title: string; summary: string }> = {};
+  const summarise = (e: SearchIndexEntry) => ({ title: e.title, summary: e.summary ?? "" });
+  for (const [path, entry] of byPath) metaAll[path] = summarise(entry);
+  for (const parent of parents) {
+    const entry = byPath.get(parent);
+    if (entry) metaAll[`${parent}/index`] = summarise(entry);
+  }
+  await put(META_ALL_KEY, JSON.stringify(metaAll));
+
 
   // The sitemap. Same reason as the map above: app/sitemap.ts read and parsed
   // the whole index to emit a list only a deploy can change, and paid it on
