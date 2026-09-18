@@ -14,6 +14,8 @@ import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { getConfig, getS3Client } from "../lib/r2/config";
 import { parseImageDimensions } from "../lib/images/dimensions";
 import { DIMENSIONS_KEY } from "../lib/images/probe";
+import { VIDEO_DIMENSIONS_KEY } from "../lib/videos/probe";
+import { parseWebmDimensions } from "../lib/videos/dimensions";
 import { checkDocNamespace } from "../lib/url/namespaces";
 import type { SearchIndexEntry } from "../lib/r2/search-index";
 import { parseArgs, getNumber, c, fmtMs } from "./lib/cli";
@@ -29,6 +31,8 @@ const PROBE_BYTES_FALLBACK = 128 * 1024;
 const TIMEOUT_MS = 10_000;
 
 const IMAGE_IN_MARKDOWN = /!\[[^\]]*\]\((https?:\/\/[^)\s]+)\)/g;
+// Mirrors what app/docs/[...slug]/page.tsx hands to probeVideos.
+const VIDEO_IN_MARKDOWN = /<video\b[^>]*\ssrc="([^"]+)"/g;
 
 async function prefix(url: string, bytes: number): Promise<Uint8Array | null> {
   const controller = new AbortController();
@@ -76,6 +80,7 @@ async function main() {
   console.log(`${c.bold(String(pages.length))} pages`);
 
   const urls = new Set<string>();
+  const videoUrls = new Set<string>();
   let read = 0;
   // Read the pages over the public URL, not the S3 client: same bytes, no
   // signature, and it is what the site itself reads.
@@ -84,7 +89,12 @@ async function main() {
     try {
       const res = await fetch(`${config.publicUrl}/content/${path}.md`);
       if (!res.ok) return;
-      for (const match of (await res.text()).matchAll(IMAGE_IN_MARKDOWN)) urls.add(match[1]!);
+      const markdown = await res.text();
+      for (const match of markdown.matchAll(IMAGE_IN_MARKDOWN)) urls.add(match[1]!);
+      for (const match of markdown.matchAll(VIDEO_IN_MARKDOWN)) {
+        const src = match[1]!;
+        if (src.startsWith("http") && !src.includes("vimeo.com")) videoUrls.add(src);
+      }
     } catch {
       // a page the index names and the bucket does not hold: nothing to read
     }
@@ -126,6 +136,33 @@ async function main() {
     return;
   }
   await write();
+
+  // Videos get the same treatment, with the Matroska header parser. The
+  // markdown carries far fewer of them, so this is a short tail on the run.
+  const storedVideos: Record<string, [number, number]> = await fetch(`${config.publicUrl}/${VIDEO_DIMENSIONS_KEY}`)
+    .then((r) => (r.ok ? r.json() : {}))
+    .catch(() => ({}));
+  const videoTodo = [...videoUrls].filter((url) => !(url in storedVideos));
+  console.log(`${videoUrls.size} videos referenced, ${videoTodo.length} to do`);
+  let videoFailed = 0;
+  await pool(videoTodo, CONCURRENCY, async (url) => {
+    const bytes = await prefix(url, 64 * 1024);
+    const dims = bytes ? parseWebmDimensions(bytes) : null;
+    if (dims) storedVideos[url] = [dims.width, dims.height];
+    else videoFailed++;
+  });
+  console.log(`measured ${videoTodo.length - videoFailed} videos, unreadable ${videoFailed}`);
+  if (!DRY_RUN) {
+    await client.send(
+      new PutObjectCommand({
+        Bucket: config.bucketName,
+        Key: VIDEO_DIMENSIONS_KEY,
+        Body: JSON.stringify(storedVideos),
+        ContentType: "application/json; charset=utf-8",
+      }),
+    );
+  }
+
   console.log(`${c.green("done")} ${Object.keys(stored).length} sizes in ${fmtMs(Date.now() - started)}`);
 }
 

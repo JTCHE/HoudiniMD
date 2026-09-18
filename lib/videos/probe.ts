@@ -1,4 +1,5 @@
 import { parseWebmDimensions, type VideoDimensions } from "./dimensions";
+import { fetchFromR2 } from "../r2/read";
 
 export type VideoProbe = VideoDimensions;
 
@@ -32,11 +33,43 @@ function cacheProbe(url: string, probe: VideoProbe | null): void {
  * timeout, or a header that didn't fit in the fetched prefix. Callers must
  * treat null as "no hint available", not as an error to surface.
  */
+/**
+ * Sizes for every video the mirror references, written by
+ * scripts/probe-images.ts. Same reason as lib/images/probe.ts: a probe that
+ * times out drops the reserved box and changes the page, so the build reads
+ * measured sizes rather than asking the network on every run.
+ */
+export const VIDEO_DIMENSIONS_KEY = "content/video-dimensions.json";
+
+let knownPromise: Promise<ReadonlyMap<string, VideoDimensions>> | null = null;
+
+function known(): Promise<ReadonlyMap<string, VideoDimensions>> {
+  knownPromise ??= fetchFromR2(VIDEO_DIMENSIONS_KEY, true)
+    .then((raw) => {
+      const rows = raw ? (JSON.parse(raw) as Record<string, [number, number]>) : {};
+      return new Map(Object.entries(rows).map(([url, [width, height]]) => [url, { width, height }]));
+    })
+    .catch(() => new Map<string, VideoDimensions>());
+  return knownPromise;
+}
+
+const IS_BUILD = process.env.NEXT_PHASE === "phase-production-build";
+
 export async function probeVideo(url: string): Promise<VideoProbe | null> {
   const cached = probeCache.get(url);
   if (url.includes("vimeo.com")) return null;
 
   if (cached !== undefined) return cached;
+
+  const stored = (await known()).get(url);
+  if (stored) {
+    cacheProbe(url, stored);
+    return stored;
+  }
+  if (IS_BUILD) {
+    cacheProbe(url, null);
+    return null;
+  }
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
