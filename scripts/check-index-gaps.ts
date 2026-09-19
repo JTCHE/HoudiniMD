@@ -16,12 +16,15 @@
  *   bun scripts/check-index-gaps.ts                 # summary + up to 50 examples
  *   bun scripts/check-index-gaps.ts --full           # print every gap
  *   bun scripts/check-index-gaps.ts --out gaps.json  # write the full slug list as JSON
+ *   bun scripts/check-index-gaps.ts --apply          # index every gap the site serves
  */
 
 import { writeFile } from "node:fs/promises";
 import { ListObjectsV2Command, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getConfig, getS3Client } from "../lib/r2/config";
-import type { SearchIndexEntry } from "../lib/r2/search-index";
+import { mutateSearchIndex, type SearchIndexEntry } from "../lib/r2/search-index";
+import { parseFrontmatter } from "../lib/markdown/frontmatter";
+import { checkDocNamespace } from "../lib/url/namespaces";
 import { parseArgs, getString, c } from "./lib/cli";
 
 const INDEX_PATH = "content/index.json";
@@ -79,6 +82,89 @@ async function fetchSearchIndex(): Promise<SearchIndexEntry[]> {
   }
 }
 
+/**
+ * The index entry a stored page implies, read from its own frontmatter.
+ *
+ * Every field lib/scraping/scraper.ts puts in the index survives in the
+ * markdown it wrote, so a missed page is re-indexed from R2 alone — no second
+ * scrape of SideFX, and the summary/category/version match what the original
+ * generation run would have stored.
+ */
+function entryFromMarkdown(slug: string, markdown: string, lastModified?: Date): SearchIndexEntry | null {
+  const { data } = parseFrontmatter(markdown);
+  if (!data.title) return null;
+  const breadcrumbs = (data.breadcrumbs ?? "").split(" > ").filter(Boolean);
+  // Houdini pages lead with the product and its version ("Houdini 22.0"), and
+  // scraper.ts drops that crumb from the category. A sphinx or doxygen tree
+  // carries no version, and its first crumb *is* the category. Reading the
+  // version off crumb 0 tells the two apart.
+  const version = breadcrumbs[0]?.match(/\d+\.\d+/)?.[0];
+  return {
+    path: slug,
+    title: data.title,
+    summary: data.description ?? "",
+    category: version ? breadcrumbs.slice(1).join(" > ") : (breadcrumbs[0] ?? ""),
+    version: version ?? "unknown",
+    ...(data.icon ? { icon: data.icon } : {}),
+    lastModified: (lastModified ?? new Date()).toISOString(),
+  };
+}
+
+async function readPage(slug: string): Promise<{ markdown: string; lastModified?: Date } | null> {
+  const config = getConfig();
+  const client = await getS3Client();
+  if (!config || !client) throw new Error("R2 is not configured");
+  try {
+    const res = await client.send(new GetObjectCommand({
+      Bucket: config.bucketName,
+      Key: `content/${slug}.md`,
+    }));
+    if (!res.Body) return null;
+    return { markdown: await res.Body.transformToString("utf-8"), lastModified: res.LastModified };
+  } catch {
+    return null;
+  }
+}
+
+/** Index every gap the site actually serves. One index write, whatever the count. */
+async function applyGaps(gaps: string[]): Promise<void> {
+  // Only what checkDocNamespace admits: a versioned duplicate redirects to the
+  // current slug and a retired tree is not served, so neither belongs in the
+  // index that feeds generateStaticParams, the sitemap and search.
+  const servable = gaps.filter((slug) => checkDocNamespace(slug).kind === "allowed");
+  console.log(`
+  ${servable.length} of ${gaps.length} gaps are pages the site serves`);
+  if (servable.length === 0) return;
+
+  const entries: SearchIndexEntry[] = [];
+  const skipped: string[] = [];
+  for (let i = 0; i < servable.length; i += 20) {
+    const batch = servable.slice(i, i + 20);
+    const pages = await Promise.all(batch.map((slug) => readPage(slug)));
+    batch.forEach((slug, n) => {
+      const page = pages[n];
+      const entry = page ? entryFromMarkdown(slug, page.markdown, page.lastModified) : null;
+      if (entry) entries.push(entry);
+      else skipped.push(slug);
+    });
+    process.stdout.write(`
+  read ${Math.min(i + 20, servable.length)}/${servable.length}`);
+  }
+  console.log("");
+  if (skipped.length) {
+    console.log(c.yellow(`  ${skipped.length} stored pages carry no title in their frontmatter; left out`));
+    for (const slug of skipped.slice(0, 10)) console.log(c.dim(`    ${slug}`));
+  }
+  if (entries.length === 0) return;
+
+  const byPath = new Map(entries.map((e) => [e.path, e]));
+  const final = await mutateSearchIndex((current) => [
+    ...current.filter((e) => !byPath.has(e.path)),
+    ...entries,
+  ]);
+  console.log(c.green(`  indexed ${entries.length} pages; index now holds ${final.length} entries`));
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
 
@@ -110,6 +196,11 @@ async function main() {
   for (const slug of shown) console.log(`  ${c.yellow(slug)}`);
   if (!full && gaps.length > shown.length) {
     console.log(c.dim(`  … and ${gaps.length - shown.length} more (use --full to print all)`));
+  }
+
+  if (args.flags.has("apply")) {
+    await applyGaps(gaps);
+    return;
   }
 
   const outPath = getString(args, "out", "");
