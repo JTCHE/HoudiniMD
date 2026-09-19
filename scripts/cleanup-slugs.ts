@@ -3,6 +3,8 @@
  * Purge stray R2 objects and index entries whose paths are not routable:
  *   - Paths containing '#'  (anchor fragment baked into slug, e.g. page#section)
  *   - Paths ending in '.html' (bare HTML-extension slugs)
+ *   - Paths the namespace gate refuses, so a rule added there prunes what it
+ *     already stored: a tree we never carried, or the doxygen source listings
  *   - Paths with a leading/trailing slash or an internal '//' (produces an
  *     empty segment when split on '/', which breaks Next.js static params —
  *     "Requested and resolved page mismatch")
@@ -29,6 +31,8 @@ import path from "node:path";
 import { DeleteObjectsCommand } from "@aws-sdk/client-s3";
 import { getConfig, getS3Client } from "../lib/r2/config";
 import { resolveSideFXUrl, PageNotFoundError } from "../lib/scraping";
+import { checkDocNamespace } from "../lib/url/namespaces";
+import { contentPathForSlug } from "../lib/generator";
 import { listR2Slugs, fetchSearchIndex, putSearchIndex } from "./lib/regen";
 import { parseArgs, getNumber, c } from "./lib/cli";
 
@@ -64,14 +68,26 @@ function saveVerdicts(verdicts: Map<string, Verdict>): void {
   }
 }
 
+/**
+ * What `listR2Slugs` hands back for the docs root, whose object is not named
+ * after its slug. Derived from the function that writes it, so a rename there
+ * cannot quietly turn the root into something this script deletes.
+ */
+const DOCS_ROOT_NAME = contentPathForSlug("").replace(/^content\//, "").replace(/\.md$/, "");
+
 function isBadSlug(slug: string): boolean {
+  if (slug === DOCS_ROOT_NAME) return false;
   return (
     slug.includes("#") ||
     slug.endsWith(".html") ||
     slug === "" ||
     slug.startsWith("/") ||
     slug.endsWith("/") ||
-    slug.includes("//")
+    slug.includes("//") ||
+    // The gate decides what this mirror carries. Reading it here means a rule
+    // added there also removes what it had already let in. The empty slug is
+    // the docs root to the gate and a broken key here, so it is judged above.
+    checkDocNamespace(slug).kind === "unknown"
   );
 }
 
@@ -81,6 +97,7 @@ function badSlugReason(slug: string, stale?: Map<string, string>): string {
   if (slug.includes("#")) return c.yellow("#fragment");
   if (slug.endsWith(".html")) return c.yellow(".html");
   if (slug === "" || slug.startsWith("/") || slug.endsWith("/") || slug.includes("//")) return c.yellow("empty segment");
+  if (checkDocNamespace(slug).kind === "unknown") return c.yellow("not carried");
   return c.yellow("unknown");
 }
 
