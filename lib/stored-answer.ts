@@ -187,6 +187,7 @@ type Ask =
   | { kind: "markdown"; slug: string; cacheControl: string }
   | { kind: "meta"; slug: string }
   | { kind: "card"; key: string }
+  | { kind: "missing"; page: boolean }
   | { kind: "redirect"; to: string };
 
 /**
@@ -262,7 +263,16 @@ function read(request: Request, url: URL): Ask | null {
   // which can redirect them. That lookup reads R2 and is not repeated here.
   if (slug.endsWith("/index")) return null;
 
-  if (checkDocNamespace(slug).kind !== "allowed") return null;
+  const verdict = checkDocNamespace(slug);
+  // A tree this mirror does not carry, or one it has stopped carrying. The
+  // answer is 404 either way, and middleware already gives that answer — but it
+  // spends the whole framework to say it. A doxygen crawl walking a retired
+  // tree made that the site's largest cost on 2026-09-19: 94% of the CPU left
+  // after the tree was closed was Next booting to write a 404.
+  if (verdict.kind === "unknown") {
+    return { kind: "missing", page: !isMarkdown && !rsc && !segment };
+  }
+  if (verdict.kind !== "allowed") return null;
   if (slug in VERIFIED_SLUG_REDIRECTS) return null;
 
   if (isMarkdown) {
@@ -293,7 +303,7 @@ function read(request: Request, url: URL): Ask | null {
  * The stored ISR entry for a path, or null. Never throws: a malformed or
  * missing entry is a miss, and a miss is the behaviour this replaces.
  */
-async function entryFor(path: string, cache: Bucket): Promise<Entry | null> {
+async function readEntry(path: string, cache: Bucket): Promise<Entry | null> {
   try {
     const object = await cache.get(
       `incremental-cache/${buildId.buildId}/${await sha256Hex(path)}.cache`,
@@ -303,15 +313,21 @@ async function entryFor(path: string, cache: Bucket): Promise<Entry | null> {
     const json = await new Response(
       object.body.pipeThrough(new DecompressionStream("gzip")),
     ).text();
-    const entry = JSON.parse(json) as Entry;
-
-    // A stored 404 or 500 is Next's to give: that status carries headers and
-    // a no-store rule this file does not reproduce.
-    if (entry.meta?.status !== undefined && entry.meta.status !== 200) return null;
-    return entry;
+    return JSON.parse(json) as Entry;
   } catch {
     return null;
   }
+}
+
+async function entryFor(path: string, cache: Bucket): Promise<Entry | null> {
+  const entry = await readEntry(path, cache);
+  if (!entry) return null;
+
+  // A stored 404 or 500 is Next's to give: that status carries headers and
+  // a no-store rule this file does not reproduce. The one exception is the
+  // 404 page itself, read by missing() below, which asks for it on purpose.
+  if (entry.meta?.status !== undefined && entry.meta.status !== 200) return null;
+  return entry;
 }
 
 /**
@@ -406,7 +422,28 @@ async function canonicalCardQuery(query: string, content: Bucket): Promise<strin
 }
 
 /**
- * A slug SideFX has already refused, answered without starting Next.
+ * The site's own 404 page, for a path under a tree the mirror does not carry.
+ *
+ * Next prerenders that page like any other, so it is already in the cache under
+ * `/_not-found` and the reader gets the real thing rather than a bare status.
+ * Only a browser navigation is worth the read: the `.md` and RSC shapes are
+ * asked for by agents and prefetches, which want the status and nothing else.
+ */
+const NOT_FOUND_PATH = "/_not-found";
+
+async function missing(page: boolean, cache: Bucket): Promise<Response | null> {
+  if (!page) return new Response(null, { status: 404 });
+  const entry = await readEntry(NOT_FOUND_PATH, cache);
+  // Next stores this page with its own 404 status, which is the whole point of
+  // reading it here. Anything else under that key is not the page we want.
+  if (entry?.meta?.status !== 404 || typeof entry.html !== "string") return null;
+  return new Response(entry.html, {
+    status: 404,
+    headers: { ...PAGE_HEADERS, "cache-control": "public, max-age=60, s-maxage=3600" },
+  });
+}
+
+/** A slug SideFX has already refused, answered without starting Next.
  *
  * Agents guess URLs. A guess that will never resolve booted the framework and
  * scraped SideFX again on every request: 130 requests over 11.2 hours of live
@@ -447,6 +484,7 @@ export async function storedAnswer(
     return (await markdown(ask.slug, ask.cacheControl, content)) ?? (await goneAnswer(ask.slug, content));
   }
   if (ask.kind === "meta") return meta(ask.slug, content);
+  if (ask.kind === "missing") return missing(ask.page, cache);
   if (ask.kind === "card") {
     const object = await cache.get(`og/${await sha256Hex(ask.key)}.png`).catch(() => null);
     if (object) return new Response(object.body, { headers: CARD_HEADERS });
