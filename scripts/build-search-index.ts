@@ -208,8 +208,19 @@ async function main() {
   const live = all.filter((entry) => stored.has(entry.path));
   if (live.length !== all.length && !DRY_RUN) await putSearchIndex(live);
 
+  // What the site will answer for. `content/index.json` above keeps every
+  // stored page, including the trees the gate no longer carries, so it stays
+  // the record that makes retiring one reversible: put the name back in
+  // DOC_NAMESPACES and the next build serves the pages again. Everything
+  // derived below — the search shards, the title map, the sitemap — is what
+  // the site advertises, and must not name a page the gate will refuse.
+  const served = live.filter((entry) => checkDocNamespace(entry.path).kind === "allowed");
+  if (served.length !== live.length) {
+    console.log(c.dim(`  ${live.length - served.length} stored pages are not carried; kept in the index, left out of what is served`));
+  }
+
   // Sort by path so docIds are reproducible across runs.
-  const entries = live.sort((a, b) => a.path.localeCompare(b.path));
+  const entries = served.sort((a, b) => a.path.localeCompare(b.path));
   const source = LIMIT > 0 ? entries.slice(0, LIMIT) : entries;
   console.log(`${c.bold(String(source.length))} pages, concurrency ${CONCURRENCY}`);
 
@@ -397,7 +408,6 @@ async function main() {
   // the whole index to emit a list only a deploy can change, and paid it on
   // every cold isolate.
   const urls = entries
-    .filter((e) => checkDocNamespace(e.path).kind === "allowed")
     .map(
       (e) =>
         `<url><loc>${SITE_URL}/docs/${escapeXml(e.path)}</loc>` +
