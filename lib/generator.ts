@@ -6,6 +6,7 @@ import {
 } from "@/lib/scraping";
 import { convertToMarkdown, detectLanguage } from "@/lib/markdown";
 import { fetchFromR2, saveToR2, updateSearchIndex } from "@/lib/r2";
+import { goneKey, goneMarker } from "@/lib/gone";
 import { withLock } from "@/lib/lock-manager";
 import { normalizeDocSlug, toSideFXUrl } from "@/lib/url";
 import { checkDocNamespace } from "@/lib/url/namespaces";
@@ -150,7 +151,17 @@ export async function generateMarkdownForSlug(
   //   - slug ends with /index (e.g. houdini/chop/index):  try .html extension → index.html
   //   - directory slug (e.g. houdini/nodes/sop):           try /index.html
   progress("verifying", "Verifying page exists", toSideFXUrl(slug));
-  const resolved = await resolveSideFXUrl(slug);
+  let resolved;
+  try {
+    resolved = await resolveSideFXUrl(slug);
+  } catch (err) {
+    // Write down that SideFX has no such page, so the next request for it is
+    // answered by the Worker instead of scraping again. See lib/gone.ts.
+    if (err instanceof PageNotFoundError) {
+      await saveToR2(goneKey(slug), goneMarker()).catch(() => {});
+    }
+    throw err;
+  }
   const resolvedUrl = resolved.url;
 
   // SideFX answers an unknown path under a moved section with that section's

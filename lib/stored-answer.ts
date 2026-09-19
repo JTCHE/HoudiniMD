@@ -55,6 +55,7 @@ import { checkDocNamespace, DOC_NAMESPACES } from "./url/namespaces";
 import { VERIFIED_SLUG_REDIRECTS } from "./url/slug-redirects";
 import { parseFrontmatter } from "./markdown/frontmatter";
 import { wantsMarkdown } from "./wants-markdown";
+import { goneKey, goneIsCurrent } from "./gone";
 
 /** `segmentData` stores this one as null when it equals `rsc`. See lib/cache/compressed-r2-cache.ts. */
 const FULL_SEGMENT_KEY = "/_full";
@@ -394,6 +395,27 @@ async function cardIsForARealPage(query: string, content: Bucket): Promise<boole
   return Boolean(await content.head(`content/${path}.md`).catch(() => null));
 }
 
+/**
+ * A slug SideFX has already refused, answered without starting Next.
+ *
+ * Agents guess URLs. A guess that will never resolve booted the framework and
+ * scraped SideFX again on every request: 130 requests over 11.2 hours of live
+ * log, 68,637 CPU-ms a day. lib/generator.ts writes the marker the first time
+ * SideFX answers 404, and this reads it.
+ *
+ * Only the agent-facing shapes go through here — `.md` and the RSC payloads.
+ * A person who mistypes a `/docs/` URL still gets the site's own 404 page.
+ *
+ * Stale mirrored content plus a marker means the page was removed upstream, so
+ * 404 is the right answer for that pair too.
+ */
+async function goneAnswer(slug: string, content: Bucket): Promise<Response | null> {
+  const object = await content.get(goneKey(slug)).catch(() => null);
+  if (!object) return null;
+  const marker = await new Response(object.body).text().catch(() => "");
+  return goneIsCurrent(marker) ? new Response(null, { status: 404 }) : null;
+}
+
 /** The stored answer for this request, or null to let Next answer. */
 export async function storedAnswer(
   request: Request,
@@ -411,7 +433,9 @@ export async function storedAnswer(
   if (ask.kind === "redirect") {
     return new Response(null, { status: 302, headers: { location: ask.to } });
   }
-  if (ask.kind === "markdown") return markdown(ask.slug, ask.cacheControl, content);
+  if (ask.kind === "markdown") {
+    return (await markdown(ask.slug, ask.cacheControl, content)) ?? (await goneAnswer(ask.slug, content));
+  }
   if (ask.kind === "meta") return meta(ask.slug, content);
   if (ask.kind === "card") {
     const object = await cache.get(`og/${await sha256Hex(ask.key)}.png`).catch(() => null);
@@ -420,7 +444,11 @@ export async function storedAnswer(
   }
 
   const entry = await entryFor(ask.path, cache);
-  if (!entry) return null;
+  if (!entry) {
+    return ask.kind === "rsc" || ask.kind === "prefetch"
+      ? goneAnswer(ask.path.replace(/^\/docs\/?/, ""), content)
+      : null;
+  }
 
   if (ask.kind === "route") {
     if (typeof entry.body !== "string") return null;
