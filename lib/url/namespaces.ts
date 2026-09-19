@@ -22,6 +22,25 @@
 /** Doc trees the mirror carries. Adding one here is a deliberate act. */
 export const DOC_NAMESPACES = ["houdini", "hdk", "hengine", "api"] as const;
 
+/**
+ * A doxygen "source" listing: the whole C++ header, verbatim, under a name
+ * doxygen builds from the file — `hdk/_g_a___range_8h_source`, and the same
+ * shape under `hengine`.
+ *
+ * Not documentation, and not ours to carry. Every one of these pages opens with
+ * SideFX's own notice — proprietary, not to be reproduced or disclosed — so
+ * mirroring it publishes their source. It is also unbounded: there is one per
+ * header in the HDK, and a scraper pool walking them was measured on
+ * 2026-09-19 at 2.5M CPU-ms a day, four times the whole daily allowance, one
+ * scrape and one stored object at a time.
+ *
+ * Checked against the index before this rule landed: all 36 paths ending
+ * `_source` are doxygen listings, and no documentation page ends that way.
+ *
+ * The documentation page for the same header, without the suffix, is kept.
+ */
+const DOXYGEN_SOURCE = /_source$/;
+
 /** `houdini22.0`, `hdk19.5`, `hengine20.0` — a tree name with a version glued on. */
 const VERSIONED = /^([a-z]+)\d+(?:\.\d+)*$/;
 
@@ -41,6 +60,8 @@ export type NamespaceVerdict =
  */
 export function checkDocNamespace(slug: string): NamespaceVerdict {
   if (slug === "") return { kind: "allowed" };
+
+  if (DOXYGEN_SOURCE.test(slug)) return { kind: "unknown" };
 
   const slash = slug.indexOf("/");
   const namespace = slash === -1 ? slug : slug.slice(0, slash);
