@@ -31,7 +31,7 @@ import path from "node:path";
 import { DeleteObjectsCommand } from "@aws-sdk/client-s3";
 import { getConfig, getS3Client } from "../lib/r2/config";
 import { resolveSideFXUrl, PageNotFoundError } from "../lib/scraping";
-import { checkDocNamespace } from "../lib/url/namespaces";
+import { checkDocNamespace, isRetiredSlug } from "../lib/url/namespaces";
 import { contentPathForSlug } from "../lib/generator";
 import { listR2Slugs, fetchSearchIndex, putSearchIndex } from "./lib/regen";
 import { parseArgs, getNumber, c } from "./lib/cli";
@@ -77,6 +77,10 @@ const DOCS_ROOT_NAME = contentPathForSlug("").replace(/^content\//, "").replace(
 
 function isBadSlug(slug: string): boolean {
   if (slug === DOCS_ROOT_NAME) return false;
+  // A retired tree is refused by the gate but its pages are not junk: the site
+  // stopped serving them, and the mirror keeps them so the decision is
+  // reversible. See RETIRED_NAMESPACES.
+  if (isRetiredSlug(slug)) return false;
   return (
     slug.includes("#") ||
     slug.endsWith(".html") ||
