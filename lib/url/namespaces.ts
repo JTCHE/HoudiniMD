@@ -19,8 +19,16 @@
  * ISR entry behind.
  */
 
-/** Doc trees the mirror carries. Adding one here is a deliberate act. */
-export const DOC_NAMESPACES = ["houdini", "hdk", "hengine", "api"] as const;
+/**
+ * Doc trees the mirror carries. Adding one here is a deliberate act.
+ *
+ * `hdk` was dropped on 2026-09-19. It is doxygen output — one page per class,
+ * per header and per source file — so it has no floor, and a scraper pool
+ * walking it cost a scrape and a stored object per page at ~1 CPU-s each,
+ * measured at 2.0M CPU-ms a day against a 550k budget. The pages already
+ * mirrored stay in R2; only the way in is closed.
+ */
+export const DOC_NAMESPACES = ["houdini", "hengine", "api"] as const;
 
 /**
  * A doxygen "source" listing: the whole C++ header, verbatim, under a name
@@ -45,6 +53,25 @@ const DOXYGEN_SOURCE = /_source$/;
 const VERSIONED = /^([a-z]+)\d+(?:\.\d+)*$/;
 
 const ALLOWED: ReadonlySet<string> = new Set(DOC_NAMESPACES);
+
+/**
+ * Trees that were carried and are not any more. The gate refuses them like any
+ * tree we never had, so the way in is closed either way; this list exists so
+ * the cleanup script can tell "retired" from "junk" and leave the stored pages
+ * alone. Restoring one is putting its name back in DOC_NAMESPACES.
+ */
+export const RETIRED_NAMESPACES = ["hdk"] as const;
+
+const RETIRED: ReadonlySet<string> = new Set(RETIRED_NAMESPACES);
+
+/** Whether a slug belongs to a tree that was retired rather than never carried. */
+export function isRetiredSlug(slug: string): boolean {
+  const slash = slug.indexOf("/");
+  const namespace = slash === -1 ? slug : slug.slice(0, slash);
+  if (RETIRED.has(namespace)) return true;
+  const versionMatch = namespace.match(VERSIONED);
+  return Boolean(versionMatch && RETIRED.has(versionMatch[1]));
+}
 
 export type NamespaceVerdict =
   /** Carried. Render it. */
