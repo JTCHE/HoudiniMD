@@ -24,6 +24,7 @@ import { ListObjectsV2Command, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getConfig, getS3Client } from "../lib/r2/config";
 import { mutateSearchIndex, type SearchIndexEntry } from "../lib/r2/search-index";
 import { parseFrontmatter } from "../lib/markdown/frontmatter";
+import { pageMeta } from "../lib/og/params";
 import { checkDocNamespace } from "../lib/url/namespaces";
 import { parseArgs, getString, c } from "./lib/cli";
 
@@ -92,7 +93,11 @@ async function fetchSearchIndex(): Promise<SearchIndexEntry[]> {
  */
 function entryFromMarkdown(slug: string, markdown: string, lastModified?: Date): SearchIndexEntry | null {
   const { data } = parseFrontmatter(markdown);
-  if (!data.title) return null;
+  // Pages the older converter wrote carry no `title:` key and hold the title in
+  // the H1 alone. pageMeta() already reads a page's name either way, so it is
+  // the one place that knows the fallback.
+  const title = data.title || pageMeta(markdown, "").title;
+  if (!title) return null;
   const breadcrumbs = (data.breadcrumbs ?? "").split(" > ").filter(Boolean);
   // Houdini pages lead with the product and its version ("Houdini 22.0"), and
   // scraper.ts drops that crumb from the category. A sphinx or doxygen tree
@@ -101,7 +106,7 @@ function entryFromMarkdown(slug: string, markdown: string, lastModified?: Date):
   const version = breadcrumbs[0]?.match(/\d+\.\d+/)?.[0];
   return {
     path: slug,
-    title: data.title,
+    title,
     summary: data.description ?? "",
     category: version ? breadcrumbs.slice(1).join(" > ") : (breadcrumbs[0] ?? ""),
     version: version ?? "unknown",
