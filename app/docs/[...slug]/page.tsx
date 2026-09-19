@@ -23,6 +23,7 @@ import { decodeEntities } from "@/lib/markdown/entities";
 import { parseFrontmatter } from "@/lib/markdown/frontmatter";
 import { legacyWarningMarkdown } from "@/lib/markdown/legacy-warning";
 import { formatPageTitle } from "@/lib/markdown/page-title";
+import { pageMeta, ogParams } from "@/lib/og/params";
 import { remarkCallouts } from "@/lib/markdown/remark-callouts";
 import { remarkVex } from "@/lib/markdown/remark-vex";
 import { addSeeAlsoIcons, detectLanguage, normalizeIconLinks } from "@/lib/markdown/utils";
@@ -81,11 +82,6 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const metadataSlug = alias?.canonical ?? slugPath;
   const fallbackTitle = slug.at(-1)?.replace(/-/g, " ") ?? "SideFX documentation";
 
-  let title = fallbackTitle;
-  let nodeType: string | undefined;
-  let icon: string | undefined;
-  let description: string | undefined;
-
   // Derive metadata from the page's own markdown (already fetched by the page
   // component below — Next.js dedupes identical fetch() calls in one request)
   // instead of parsing the ~3MB search index, which was expensive enough to
@@ -97,36 +93,12 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     // R2 hiccup — degrade to the fallback title below, same as a real miss.
   }
   const contentReady = Boolean(rawMarkdown && cachedContentIsCurrent(metadataSlug, rawMarkdown));
-  if (contentReady && rawMarkdown) {
-    const { content, data } = parseFrontmatter(rawMarkdown);
-    const h1Match = content.match(/^#[ \t]+(\S[^\n]*)$/m);
-    // Prefer the frontmatter's own name/type split — the H1 is only their
-    // concatenation (`${title} ${nodeType}`), so reading it back keeps the
-    // metadata title correct without re-parsing text that already came apart
-    // cleanly at generation time. Fall back to the raw H1 for pages with no
-    // frontmatter (should not happen for generated docs, but degrade safely).
-    if (data.title) {
-      title = data.title;
-      nodeType = data.nodeType;
-      icon = data.icon ? localIconUrl(data.icon) : undefined;
-    } else if (h1Match) {
-      title = h1Match[1].trim();
-    }
-    const bodyAfterH1 = h1Match ? content.replace(/^#[ \t]+\S[^\n]*\r?\n+/m, "") : content;
-    const summaryMatch = bodyAfterH1.match(/^\s*>[ \t]+(?!\[!)([^\n]+)\n+/);
-    if (summaryMatch) description = summaryMatch[1].trim();
-  }
+  const meta = pageMeta(contentReady ? rawMarkdown : null, fallbackTitle);
+  const description = meta.description;
 
-  const pageTitle = `${formatPageTitle(title, nodeType)} | HoudiniMD`;
+  const pageTitle = `${formatPageTitle(meta.title, meta.nodeType)} | HoudiniMD`;
   const canonical = metadataSlug ? `${SITE_URL}/docs/${metadataSlug}` : `${SITE_URL}/docs`;
-  // The OG image keeps name and type as separate params — it renders its own
-  // bold-name/thin-type hierarchy (see lib/og/og-image.tsx), not the
-  // Title Cased/dash-joined <title> string.
-  const ogParams = new URLSearchParams({ path: slugPath, title });
-  if (nodeType) ogParams.set("type", nodeType);
-  if (description) ogParams.set("summary", description);
-  if (icon) ogParams.set("icon", icon);
-  const ogImage = `${SITE_URL}/api/og?${ogParams.toString()}`;
+  const ogImage = `${SITE_URL}/api/og?${ogParams(slugPath, meta).toString()}`;
 
   return {
     title: pageTitle,

@@ -69,6 +69,7 @@ const GENERATING_MARKER = "data-generating";
 /** Just the part of an R2 binding this module uses. */
 export interface Bucket {
   get(key: string): Promise<{ body: ReadableStream } | null>;
+  head(key: string): Promise<unknown | null>;
 }
 
 interface Entry {
@@ -126,6 +127,9 @@ const PROXIED_OBJECTS: ReadonlyMap<string, ProxiedObject> = new Map<string, Prox
     },
   }],
 ]);
+
+/** The site's own picture, for a card request that names no page of ours. */
+const cover = () => new Response(null, { status: 302, headers: { location: "/cover.png" } });
 
 /** What app/api/og/route.tsx sets on a card it drew. */
 const CARD_HEADERS: Record<string, string> = {
@@ -369,6 +373,27 @@ async function markdown(slug: string, cacheControl: string, content: Bucket): Pr
   }
 }
 
+/**
+ * Whether a card this bucket does not hold is worth drawing.
+ *
+ * Drawing one costs ~1.2 CPU-s and the key is the whole query, so any query at
+ * all buys a render and a stored object. Live traffic already shows the waste:
+ * a crawler reads the `og:image` out of the RSC payload beside the HTML, where
+ * `&` is written `\u0026`, and asks for `path=houdini/expressions/arclenu0026title=…`
+ * — a card no page will ever ask for again. So draw only for a path that names
+ * a page this site actually holds; everything else gets the site's own cover.
+ *
+ * scripts/prerender-og.ts draws every real page's card, so in practice this
+ * only admits a page added since the last run.
+ */
+async function cardIsForARealPage(query: string, content: Bucket): Promise<boolean> {
+  const path = new URLSearchParams(query).get("path");
+  if (path === null) return false;
+  if (path === "") return true; // the /docs index card
+  if (checkDocNamespace(path).kind !== "allowed") return false;
+  return Boolean(await content.head(`content/${path}.md`).catch(() => null));
+}
+
 /** The stored answer for this request, or null to let Next answer. */
 export async function storedAnswer(
   request: Request,
@@ -390,7 +415,8 @@ export async function storedAnswer(
   if (ask.kind === "meta") return meta(ask.slug, content);
   if (ask.kind === "card") {
     const object = await cache.get(`og/${await sha256Hex(ask.key)}.png`).catch(() => null);
-    return object ? new Response(object.body, { headers: CARD_HEADERS }) : null;
+    if (object) return new Response(object.body, { headers: CARD_HEADERS });
+    return (await cardIsForARealPage(ask.key, content)) ? null : cover();
   }
 
   const entry = await entryFor(ask.path, cache);
