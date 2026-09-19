@@ -56,6 +56,7 @@ import { VERIFIED_SLUG_REDIRECTS } from "./url/slug-redirects";
 import { parseFrontmatter } from "./markdown/frontmatter";
 import { wantsMarkdown } from "./wants-markdown";
 import { goneKey, goneIsCurrent } from "./gone";
+import { pageMeta, ogParams } from "./og/params";
 
 /** `segmentData` stores this one as null when it equals `rsc`. See lib/cache/compressed-r2-cache.ts. */
 const FULL_SEGMENT_KEY = "/_full";
@@ -375,24 +376,33 @@ async function markdown(slug: string, cacheControl: string, content: Bucket): Pr
 }
 
 /**
- * Whether a card this bucket does not hold is worth drawing.
+ * The one query that names this page's card, or null when there is no page.
  *
- * Drawing one costs ~1.2 CPU-s and the key is the whole query, so any query at
- * all buys a render and a stored object. Live traffic already shows the waste:
- * a crawler reads the `og:image` out of the RSC payload beside the HTML, where
- * `&` is written `\u0026`, and asks for `path=houdini/expressions/arclenu0026title=…`
- * — a card no page will ever ask for again. So draw only for a path that names
- * a page this site actually holds; everything else gets the site's own cover.
+ * Drawing a card costs ~1.2 CPU-s and the key is the whole query, so any query
+ * at all buys a render and a stored object. Two kinds of junk arrive. A crawler
+ * reads the `og:image` out of the RSC payload, where `&` is written `&`,
+ * and asks for `path=houdini/expressions/arclenu0026title=...`. And pages
+ * published before the JSON-LD fix named a second card built from the H1, which
+ * differs from the real one only in how the title was split — 11,947 of those
+ * are still in crawler caches, and rendering each on demand would cost 14M
+ * CPU-ms, half a month of the allowance.
  *
- * scripts/prerender-og.ts draws every real page's card, so in practice this
- * only admits a page added since the last run.
+ * So the query is not trusted. The page's own markdown is read and the query is
+ * derived from it, by the same function `generateMetadata` and
+ * scripts/prerender-og.ts use. A caller that asked for anything else is sent to
+ * the derived one, so every page converges on a single stored card and a render
+ * can only ever happen for a page added since the last prerender run.
  */
-async function cardIsForARealPage(query: string, content: Bucket): Promise<boolean> {
+async function canonicalCardQuery(query: string, content: Bucket): Promise<string | null> {
   const path = new URLSearchParams(query).get("path");
-  if (path === null) return false;
-  if (path === "") return true; // the /docs index card
-  if (checkDocNamespace(path).kind !== "allowed") return false;
-  return Boolean(await content.head(`content/${path}.md`).catch(() => null));
+  if (path === null || path === "") return null; // no path, or the /docs index card
+  if (checkDocNamespace(path).kind !== "allowed") return null;
+  const object = await content.get(`content/${path}.md`).catch(() => null);
+  if (!object) return null;
+  const markdown = await new Response(object.body).text().catch(() => null);
+  if (markdown === null) return null;
+  const fallbackTitle = path.split("/").at(-1)?.replace(/-/g, " ") ?? "SideFX documentation";
+  return ogParams(path, pageMeta(markdown, fallbackTitle)).toString();
 }
 
 /**
@@ -440,7 +450,12 @@ export async function storedAnswer(
   if (ask.kind === "card") {
     const object = await cache.get(`og/${await sha256Hex(ask.key)}.png`).catch(() => null);
     if (object) return new Response(object.body, { headers: CARD_HEADERS });
-    return (await cardIsForARealPage(ask.key, content)) ? null : cover();
+    // The `/docs` index card is the one query with no page behind it.
+    if (new URLSearchParams(ask.key).get("path") === "") return null;
+    const canonical = await canonicalCardQuery(ask.key, content);
+    if (canonical === null) return cover();
+    if (canonical === ask.key) return null; // a page added since the last prerender run
+    return new Response(null, { status: 302, headers: { location: `/api/og?${canonical}` } });
   }
 
   const entry = await entryFor(ask.path, cache);
