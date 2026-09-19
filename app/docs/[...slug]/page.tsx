@@ -291,7 +291,11 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
       author: { "@type": "Organization", name: "SideFX" },
       publisher: { "@type": "Organization", name: "HoudiniMD" },
       about: { "@type": "SoftwareApplication", name: "Houdini" },
-      image: `${SITE_URL}/api/og?${new URLSearchParams({ path: slugPath, title: mdTitle, ...(mdSummary ? { summary: mdSummary } : {}) }).toString()}`,
+      // The same card the page's own og:image names. Built here from the H1
+      // instead, this asked for a second card that differed only in how the
+      // title was split — so a crawler reading JSON-LD drew a whole second set,
+      // at ~1.2 CPU-s each, that no reader ever saw.
+      image: `${SITE_URL}/api/og?${ogParams(slugPath, pageMeta(rawMarkdown, slug.at(-1)?.replace(/-/g, " ") ?? "SideFX documentation")).toString()}`,
       mainEntityOfPage: canonical,
     };
 
