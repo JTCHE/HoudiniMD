@@ -1,16 +1,10 @@
-import { SITE_URL as ROOT } from "@/lib/site";
 import { NextRequest } from "next/server";
-import { getConfig } from "@/lib/r2/config";
 import { stageLogger } from "@/lib/perf-log";
-import { rankResults } from "@/lib/search/ranking";
-import { DOCS_KEY, type DocsTable } from "@/lib/search/bm25";
+import { searchDocs, SearchUnavailableError } from "@/lib/search/server";
 
-// The doc table is the only thing this route parses per isolate; postings are
-// fetched per query and cached inside lib/search/bm25. Previously the route
-// built a full Fuse index over ~10.5k entries on the first fuzzy query, which
-// is where 350-600ms of every cold search went.
-let cache: { table: DocsTable; expiry: number } | null = null;
-const TABLE_TTL = 5 * 60 * 1000;
+// The ranking, the R2 table and its per-isolate cache all live in
+// lib/search/server.ts, so a route inside the Worker can call the search
+// without paying for a second invocation. This is the HTTP face of it.
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -36,44 +30,21 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const config = getConfig();
-  if (!config) {
-    return Response.json(
-      { error: "Search index unavailable" },
-      { status: 503, headers: CORS_HEADERS }
-    );
-  }
-
   const mark = stageLogger("search", q);
   mark("start");
 
-  if (!cache || Date.now() >= cache.expiry) {
-    mark("fetch-docs:start");
-    const res = await fetch(`${config.publicUrl}/${DOCS_KEY}`);
-    mark("fetch-docs:done");
-    if (!res.ok) {
+  let results;
+  try {
+    results = await searchDocs(q, limit, category, mark);
+  } catch (err) {
+    if (err instanceof SearchUnavailableError) {
       return Response.json(
         { error: "Search index unavailable" },
         { status: 503, headers: CORS_HEADERS }
       );
     }
-    mark("parse-docs:start");
-    const table: DocsTable = await res.json();
-    mark("parse-docs:done");
-    cache = { table, expiry: Date.now() + TABLE_TTL };
-  } else {
-    mark("cache-hit");
+    throw err;
   }
-
-  mark("rank:start");
-  const ranked = await rankResults(cache.table, q, limit, category);
-  mark("rank:done");
-
-  const results = ranked.map((r) => ({
-    ...r,
-    docs_url: `${ROOT}/docs/${r.path}`,
-    raw_url: `${ROOT}/docs/${r.path}.md`,
-  }));
 
   return Response.json(
     { query: q, total: results.length, results },
