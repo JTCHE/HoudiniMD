@@ -4,6 +4,7 @@ import { LITE_INDEX_PATH, toLiteIndex, type LiteIndexEntry } from "@/lib/r2/sear
 import { stageLogger } from "@/lib/perf-log";
 import Fuse from "fuse.js";
 import { SIDEFX_DOCS_ROOT } from "@/lib/houdini";
+import { searchDocs } from "@/lib/search/server";
 
 // Ordered by how commonly nodes are looked up
 const CANDIDATE_PATTERNS = [
@@ -63,11 +64,9 @@ async function probeSlug(slug: string): Promise<boolean> {
   }
 }
 
-async function searchFallback(request: NextRequest, input: string): Promise<string | undefined> {
+async function searchFallback(input: string): Promise<string | undefined> {
   try {
-    const response = await fetch(new URL(`/api/search?q=${encodeURIComponent(input)}&limit=1`, request.url));
-    const body = await response.json() as { results?: Array<{ path?: string }> };
-    return response.ok ? body.results?.[0]?.path : undefined;
+    return (await searchDocs(input, 1))[0]?.path;
   } catch {
     return undefined;
   }
@@ -129,7 +128,7 @@ export async function GET(request: NextRequest) {
         // index intentionally omits categories to keep cold resolves under CPU limits.
         if (exactMatches.length > 1) {
           mark("search-ambiguous:start");
-          const slug = await searchFallback(request, input);
+          const slug = await searchFallback(input);
           if (slug) {
             mark("hit:search-ambiguous");
             return Response.json(
@@ -217,7 +216,7 @@ export async function GET(request: NextRequest) {
   // Reuse the full search ranker as the final fallback. It handles path intent
   // (for example, `houdini/nodes/sop/RBDcluster`) and ranks duplicate titles.
   mark("search-fallback:start");
-  const slug = await searchFallback(request, input);
+  const slug = await searchFallback(input);
   if (slug) {
     mark("hit:search-fallback");
     return Response.json(

@@ -1,5 +1,6 @@
 import { SITE_URL as ROOT } from "@/lib/site";
 import { NextRequest, NextResponse } from "next/server";
+import { searchDocs } from "@/lib/search/server";
 
 // Matches static-asset-shaped paths (stale /_next/static/chunks/*.js references
 // after a deploy, favicon requests, etc). These aren't doc-slug lookups — running
@@ -32,17 +33,10 @@ export async function GET(
     return new Response("Not found", { status: 404 });
   }
 
-  const searchUrl = new URL(`${ROOT}/api/search`);
-  searchUrl.searchParams.set("q", query);
-  searchUrl.searchParams.set("limit", "1");
-
   try {
-    const res = await fetch(searchUrl.toString());
-    if (res.ok) {
-      const data = await res.json();
-      if (data.results?.length > 0) {
-        return NextResponse.redirect(data.results[0].docs_url, 302);
-      }
+    const results = await searchDocs(query, 1);
+    if (results.length > 0) {
+      return NextResponse.redirect(results[0].docs_url, 302);
     }
   } catch {
     // fall through to hint response
