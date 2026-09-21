@@ -162,6 +162,13 @@ export default function DocLink({
             preventNextClick.current = true;
             return;
           }
+          // The Link still gets the click that follows this mousedown, and it
+          // starts a second navigation to the same href. The router folds both
+          // into one history entry, and in dev the payload is already
+          // prefetched, so nothing shows. On a cold link it is a second
+          // identical RSC request over the wire: measured two 200s per
+          // navigation on the live site. Claim the click here.
+          preventNextClick.current = true;
           startTransition(() => router.push(href!));
         }}
         onClick={(e) => {
