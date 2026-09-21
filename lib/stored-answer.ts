@@ -319,6 +319,24 @@ async function readEntry(path: string, cache: Bucket): Promise<Entry | null> {
   }
 }
 
+/**
+ * The `x-nextjs-*` headers the build wrote beside the entry.
+ *
+ * `x-nextjs-stale-time` is how long the client router may keep a prefetched
+ * answer. A prerendered doc page carries 4294967294, which is Next's way of
+ * saying it never goes stale. Drop the header and the router treats every
+ * prefetch as stale the moment it lands, so a click refetches the whole page
+ * it was just given: measured on the live site as one full RSC request per
+ * navigation, no matter how long the cursor rested on the link.
+ *
+ * The tag list is the exception. It drives revalidation inside Next and means
+ * nothing to a reader.
+ */
+function storedMeta(entry: Entry): Record<string, string> {
+  const { "x-next-cache-tags": _tags, ...rest } = entry.meta?.headers ?? {};
+  return rest;
+}
+
 async function entryFor(path: string, cache: Bucket): Promise<Entry | null> {
   const entry = await readEntry(path, cache);
   if (!entry) return null;
@@ -505,9 +523,9 @@ export async function storedAnswer(
 
   if (ask.kind === "route") {
     if (typeof entry.body !== "string") return null;
-    // The tag list drives revalidation inside Next and never leaves it.
-    const { "x-next-cache-tags": _tags, ...stored } = entry.meta?.headers ?? {};
-    return new Response(entry.body, { headers: { ...stored, vary: VARY, "x-nextjs-cache": "HIT" } });
+    return new Response(entry.body, {
+      headers: { ...storedMeta(entry), vary: VARY, "x-nextjs-cache": "HIT" },
+    });
   }
 
   if (ask.kind === "prefetch") {
@@ -516,16 +534,16 @@ export async function storedAnswer(
     // Null means the de-duplication dropped it because it equalled `rsc`.
     const payload = stored === null && ask.segment === FULL_SEGMENT_KEY ? entry.rsc : stored;
     if (typeof payload !== "string") return null;
-    return new Response(payload, { headers: PREFETCH_HEADERS });
+    return new Response(payload, { headers: { ...storedMeta(entry), ...PREFETCH_HEADERS } });
   }
 
   if (ask.kind === "rsc") {
     return typeof entry.rsc === "string"
-      ? new Response(entry.rsc, { headers: PREFETCH_HEADERS })
+      ? new Response(entry.rsc, { headers: { ...storedMeta(entry), ...PREFETCH_HEADERS } })
       : null;
   }
 
   if (typeof entry.html !== "string") return null;
   if (entry.html.includes(GENERATING_MARKER)) return null;
-  return new Response(entry.html, { headers: PAGE_HEADERS });
+  return new Response(entry.html, { headers: { ...storedMeta(entry), ...PAGE_HEADERS } });
 }
