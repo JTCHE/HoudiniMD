@@ -47,7 +47,16 @@ const nextConfig: NextConfig = {
     // Together they are 4840 bytes, inside the 10240 default bundle size, so
     // they become one request. Next 16.3 turns this on by default; 16.2 has the
     // flag and leaves it off.
-    prefetchInlining: true,
+    //
+    // The defaults leave the page segment out at 10901 bytes, and that is the
+    // one the click needs: measured on the live site, 36 full page fetches for
+    // 30 clicks even with the bundle on. The limits below take it in as well,
+    // so a prefetched link is a whole answer and the click asks for nothing.
+    //
+    // The cost is bytes, not requests. A doc page prefetches 4 to 10 links,
+    // because the viewport watcher only follows what is really in view and
+    // card grids are skipped, so this is about 60 KB more per page read.
+    prefetchInlining: { maxSize: 32768, maxBundleSize: 49152 },
     turbopackImportTypeText: true,
   },
   images: {
