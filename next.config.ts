@@ -36,6 +36,18 @@ const nextConfig: NextConfig = {
     staleTimes: {
       dynamic: 30,
     },
+    // Bundle the small segments of one prefetch into a single answer.
+    //
+    // A doc page prefetch asked for five segments separately: the tree at 322
+    // gzip bytes, `/docs` at 269, the head at 1008, the index at 1538 and the
+    // slug at 1703. Every one of them is a Worker request that reads the whole
+    // stored entry to return a few hundred bytes, and a click that lands before
+    // the last one arrives still has to fetch the page.
+    //
+    // Together they are 4840 bytes, inside the 10240 default bundle size, so
+    // they become one request. Next 16.3 turns this on by default; 16.2 has the
+    // flag and leaves it off.
+    prefetchInlining: true,
     turbopackImportTypeText: true,
   },
   images: {
