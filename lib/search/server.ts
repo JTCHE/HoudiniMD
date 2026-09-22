@@ -42,7 +42,13 @@ export async function searchDocs(
 
   if (!cache || Date.now() >= cache.expiry) {
     mark("fetch-docs:start");
-    const res = await fetch(`${config.publicUrl}/${DOCS_KEY}`);
+    // Held at the edge for the same five minutes the isolate holds it, so a
+    // cold isolate reads 4.5 MB from the colo rather than from the bucket. The
+    // table names the build every shard is keyed by, so a table this old is
+    // paired with postings of its own build, never a mix.
+    const res = await fetch(`${config.publicUrl}/${DOCS_KEY}`, {
+      cf: { cacheTtl: TABLE_TTL / 1000, cacheEverything: true },
+    } as RequestInit);
     mark("fetch-docs:done");
     if (!res.ok) throw new SearchUnavailableError(`docs table ${res.status}`);
     mark("parse-docs:start");
