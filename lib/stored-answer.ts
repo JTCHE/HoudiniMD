@@ -222,6 +222,11 @@ function read(request: Request, url: URL): Ask | null {
     return { kind: "meta", slug };
   }
 
+  // The installer address never varies on a query, and a download link is
+  // exactly the kind that arrives wearing one — a campaign tag, a referrer
+  // mark. Read it in front of the gate below or those asks pay a bootstrap.
+  if (url.pathname === "/download") return { kind: "download" };
+
   // A prerendered answer never varies on a query string, and the keys read
   // below carry none. The one exception is `_rsc`, the cache buster Next puts
   // on every RSC and prefetch request: the value never changes the answer.
@@ -234,8 +239,6 @@ function read(request: Request, url: URL): Ask | null {
   if (proxied) return { kind: "object", ...proxied };
 
   if (STORED_ROUTES.has(url.pathname)) return { kind: "route", path: url.pathname };
-
-  if (url.pathname === "/download") return { kind: "download" };
 
   const segment = request.headers.get("next-router-segment-prefetch");
   const rsc = request.headers.get("rsc");
