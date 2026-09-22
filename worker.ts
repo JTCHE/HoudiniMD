@@ -134,7 +134,9 @@ const worker = {
       const answer = rewriteNotice(stored);
       recordPageView(request, url, answer, env, ctx);
       if (key) keep(key, answer, ctx);
-      return answer;
+      // A HEAD is answered like the GET beside it and loses its body here, so
+      // every branch above can be written once.
+      return request.method === "HEAD" ? new Response(null, answer) : answer;
     }
 
     // The notice copy is written in here, not in the page, so changing it
