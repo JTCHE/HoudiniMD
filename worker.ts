@@ -35,6 +35,8 @@ interface Env {
   HOUDINIMD_ICONS: IconBucket;
   DB?: D1Database;
   VISITOR_SALT?: string;
+  /** The content bucket's public host, read by the search the Worker runs. */
+  R2_PUBLIC_URL?: string;
   [key: string]: unknown;
 }
 
@@ -121,7 +123,13 @@ const worker = {
     // here and Next is never started. This is where the meter is: the edge
     // cache above only catches the few requests that repeat inside one colo.
     // See lib/stored-answer.ts.
-    const stored = await storedAnswer(request, url, env.NEXT_INC_CACHE_R2_BUCKET, env.CONTENT);
+    const stored = await storedAnswer(
+      request,
+      url,
+      env.NEXT_INC_CACHE_R2_BUCKET,
+      env.CONTENT,
+      env.R2_PUBLIC_URL,
+    );
     if (stored) {
       const answer = rewriteNotice(stored);
       recordPageView(request, url, answer, env, ctx);

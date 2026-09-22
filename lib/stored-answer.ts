@@ -56,6 +56,7 @@ import { VERIFIED_SLUG_REDIRECTS } from "./url/slug-redirects";
 import { parseFrontmatter } from "./markdown/frontmatter";
 import { wantsMarkdown } from "./wants-markdown";
 import { goneKey, goneIsCurrent } from "./gone";
+import { searchDocs, SearchUnavailableError } from "./search/server";
 import { pageMeta, ogParams } from "./og/params";
 
 /** `segmentData` stores this one as null when it equals `rsc`. See lib/cache/compressed-r2-cache.ts. */
@@ -191,6 +192,7 @@ type Ask =
   | { kind: "download" }
   | { kind: "moved"; to: string }
   | { kind: "alias"; slug: string; markdown: boolean; search: string }
+  | { kind: "search"; q: string; limit: number; category?: string }
   | { kind: "redirect"; to: string };
 
 /**
@@ -213,6 +215,23 @@ function read(request: Request, url: URL): Ask | null {
   // gate below. `/api/meta-all` holds the same two fields for every page, but
   // the reader does not have it yet on the first hover, which is why this call
   // exists at all — and why it is worth answering without starting Next.
+  // A text query is a table read and a scoring pass, and it ran inside Next.
+  // Measured on the live site: the same query costs 88 CPU-ms on a warm
+  // isolate and 587 to 1,285 on a cold one, and these arrive a few an hour so
+  // the isolate is always cold. The work was never the cost — the bootstrap
+  // that ran before it was.
+  //
+  // Only a query that would have been answered comes through here. A missing
+  // `q`, or an index the bucket cannot serve, is left to the route, which
+  // already writes those answers.
+  if (url.pathname === "/api/search" && request.method === "GET") {
+    const q = url.searchParams.get("q")?.trim();
+    if (!q) return null;
+    const asked = parseInt(url.searchParams.get("limit") ?? "20", 10);
+    const limit = Number.isFinite(asked) ? Math.max(1, Math.min(asked, 100)) : 20;
+    return { kind: "search", q, limit, category: url.searchParams.get("category")?.trim() || undefined };
+  }
+
   if (url.pathname === "/api/meta") {
     const slug = url.searchParams.get("slug");
     const only = [...url.searchParams.keys()].join() === "slug";
@@ -557,6 +576,32 @@ async function aliasAnswer(
   });
 }
 
+/** The same headers app/api/search/route.ts sends, for the same answer. */
+const SEARCH_HEADERS: Record<string, string> = {
+  "content-type": "application/json",
+  "access-control-allow-origin": "*",
+  "access-control-allow-methods": "GET, OPTIONS",
+  "access-control-allow-headers": "Content-Type",
+  "cache-control": "public, max-age=60, s-maxage=86400, stale-while-revalidate=604800",
+};
+
+async function search(
+  ask: { q: string; limit: number; category?: string },
+  publicUrl: string | undefined,
+): Promise<Response | null> {
+  try {
+    const results = await searchDocs(ask.q, ask.limit, ask.category, undefined, publicUrl);
+    return new Response(JSON.stringify({ query: ask.q, total: results.length, results }), {
+      headers: SEARCH_HEADERS,
+    });
+  } catch (error) {
+    // A 503 is the route's to write, and so is anything unexpected.
+    if (error instanceof SearchUnavailableError) return null;
+    console.error(`Worker search failed: ${error}`);
+    return null;
+  }
+}
+
 /** A slug SideFX has already refused, answered without starting Next.
  *
  * Agents guess URLs. A guess that will never resolve booted the framework and
@@ -583,6 +628,7 @@ export async function storedAnswer(
   url: URL,
   cache: Bucket,
   content: Bucket,
+  publicUrl?: string,
 ): Promise<Response | null> {
   const ask = read(request, url);
   if (!ask) return null;
@@ -602,6 +648,7 @@ export async function storedAnswer(
   }
   if (ask.kind === "download") return download();
   if (ask.kind === "alias") return aliasAnswer(ask.slug, ask.markdown, ask.search, content);
+  if (ask.kind === "search") return search(ask, publicUrl);
   if (ask.kind === "markdown") {
     return (await markdown(ask.slug, ask.cacheControl, content)) ?? (await goneAnswer(ask.slug, content));
   }
