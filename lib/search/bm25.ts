@@ -176,7 +176,19 @@ async function loadShard(table: DocsTable, n: number): Promise<Shard> {
   if (!pending) {
     // `?v=` busts the browser and edge caches that would otherwise pair a fresh
     // table with postings from the previous build.
-    pending = fetch(`${table.origin}/${shardKey(n)}?v=${encodeURIComponent(table.build)}`)
+    //
+    // R2's public host answers a `.json` with no `cache-control`, so Cloudflare
+    // marks it DYNAMIC and caches nothing: every isolate fetched every shard it
+    // needed from the bucket. That is the whole cost of a text query — the same
+    // ranking runs in 660 ms against cold shards and 28 ms against warm ones —
+    // and the isolate cache never helps, because the queries arrive a few an
+    // hour and land on a different colo each time. `cacheTtl` puts the shards
+    // in the colo's cache instead, where the next isolate finds them. The build
+    // is already in the key above, so nothing stale can be paired with a fresh
+    // table.
+    pending = fetch(`${table.origin}/${shardKey(n)}?v=${encodeURIComponent(table.build)}`, {
+      cf: { cacheTtl: 86_400, cacheEverything: true },
+    } as RequestInit)
       .then((r) => (r.ok ? (r.json() as Promise<Shard>) : EMPTY))
       .then((s) => (s?.build === table.build ? s : EMPTY))
       // A missing, stale or unreachable shard degrades that token to no
