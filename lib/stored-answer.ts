@@ -188,6 +188,8 @@ type Ask =
   | { kind: "meta"; slug: string }
   | { kind: "card"; key: string }
   | { kind: "missing"; page: boolean }
+  | { kind: "download" }
+  | { kind: "moved"; to: string }
   | { kind: "redirect"; to: string };
 
 /**
@@ -233,6 +235,8 @@ function read(request: Request, url: URL): Ask | null {
 
   if (STORED_ROUTES.has(url.pathname)) return { kind: "route", path: url.pathname };
 
+  if (url.pathname === "/download") return { kind: "download" };
+
   const segment = request.headers.get("next-router-segment-prefetch");
   const rsc = request.headers.get("rsc");
 
@@ -257,7 +261,8 @@ function read(request: Request, url: URL): Ask | null {
 
   // Any path middleware would rewrite rather than render: an empty slug, a
   // trailing slash, or a `.html` extension. Each is a redirect, not a page.
-  if (slug === "" || slug.endsWith("/") || slug.endsWith(".html")) return null;
+  if (slug.endsWith("/")) return { kind: "moved", to: url.pathname.replace(/\/+$/, "") + url.search };
+  if (slug === "" || slug.endsWith(".html")) return null;
 
   // `/index` slugs are the ones middleware looks up in the source-alias table,
   // which can redirect them. That lookup reads R2 and is not repeated here.
@@ -461,6 +466,50 @@ async function missing(page: boolean, cache: Bucket): Promise<Response | null> {
   });
 }
 
+/**
+ * `/download` — the newest Windows installer, resolved without starting Next.
+ *
+ * GitHub has no "latest asset matching a pattern" URL and the bundler writes
+ * the version into the file name, so the address has to be resolved on every
+ * ask. That is one fetch and one array scan, and it ran inside Next: two asks
+ * in one hour of live log cost 689 and 393 CPU-ms, against 2 ms warm, because
+ * each landed on a colo with a cold isolate and paid the whole bootstrap to
+ * write one redirect.
+ *
+ * `cacheTtl` holds the GitHub answer at the edge, which keeps the call inside
+ * the 60-an-hour an unauthenticated address is allowed and makes most asks
+ * cost no subrequest at all. Five minutes is the delay between publishing a
+ * release and the link pointing at it.
+ */
+const RELEASES = "https://api.github.com/repos/JTCHE/HoudiniMD/releases/latest";
+/** Where the reader lands if GitHub cannot be asked. Never a dead link. */
+const RELEASES_PAGE = "https://github.com/JTCHE/HoudiniMD/releases/latest";
+
+async function download(): Promise<Response> {
+  let to = RELEASES_PAGE;
+  try {
+    const response = await fetch(RELEASES, {
+      headers: { accept: "application/vnd.github+json", "user-agent": "houdinimd.com" },
+      cf: { cacheTtl: 300, cacheEverything: true },
+    } as RequestInit);
+    if (response.ok) {
+      const release = (await response.json()) as {
+        assets?: { name?: string; browser_download_url?: string }[];
+      };
+      const installer = release.assets?.find(
+        (asset) => asset.name?.endsWith("-setup.exe") && asset.browser_download_url,
+      );
+      if (installer?.browser_download_url) to = installer.browser_download_url;
+    }
+  } catch {
+    // RELEASES_PAGE already holds the answer.
+  }
+  return new Response(null, {
+    status: 302,
+    headers: { location: to, "cache-control": "public, s-maxage=300" },
+  });
+}
+
 /** A slug SideFX has already refused, answered without starting Next.
  *
  * Agents guess URLs. A guess that will never resolve booted the framework and
@@ -498,6 +547,13 @@ export async function storedAnswer(
   if (ask.kind === "redirect") {
     return new Response(null, { status: 302, headers: { location: ask.to } });
   }
+  if (ask.kind === "moved") {
+    return new Response(null, {
+      status: 308,
+      headers: { location: ask.to, "cache-control": "public, max-age=3600, s-maxage=86400" },
+    });
+  }
+  if (ask.kind === "download") return download();
   if (ask.kind === "markdown") {
     return (await markdown(ask.slug, ask.cacheControl, content)) ?? (await goneAnswer(ask.slug, content));
   }
