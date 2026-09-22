@@ -190,6 +190,7 @@ type Ask =
   | { kind: "missing"; page: boolean }
   | { kind: "download" }
   | { kind: "moved"; to: string }
+  | { kind: "alias"; slug: string; markdown: boolean; search: string }
   | { kind: "redirect"; to: string };
 
 /**
@@ -267,9 +268,11 @@ function read(request: Request, url: URL): Ask | null {
   if (slug.endsWith("/")) return { kind: "moved", to: url.pathname.replace(/\/+$/, "") + url.search };
   if (slug === "" || slug.endsWith(".html")) return null;
 
-  // `/index` slugs are the ones middleware looks up in the source-alias table,
-  // which can redirect them. That lookup reads R2 and is not repeated here.
-  if (slug.endsWith("/index")) return null;
+  // `/index` slugs are the ones the source-alias table can point somewhere
+  // else, so the answer is a lookup rather than a rule. The lookup is one R2
+  // object, which is cheaper than the bootstrap Next paid to make the same
+  // read: three of these cost 110, 127 and 132 CPU-ms in one 45-minute tail.
+  if (slug.endsWith("/index")) return { kind: "alias", slug, markdown: isMarkdown, search: url.search };
 
   const verdict = checkDocNamespace(slug);
   // A tree this mirror does not carry, or one it has stopped carrying. The
@@ -513,6 +516,47 @@ async function download(): Promise<Response> {
   });
 }
 
+/**
+ * Where a `.../index` slug really lives, from the table that records it.
+ *
+ * SideFX authors a section under both its bare name and an `/index` twin, and
+ * which one is canonical is a fact about the scrape, not a rule a path can be
+ * rewritten by. `lib/source-aliases.ts` writes the pairing; this reads it.
+ *
+ * Null when the table says nothing. An unknown alias is Next's to answer, the
+ * same as before this existed.
+ */
+async function aliasAnswer(
+  slug: string,
+  markdown: boolean,
+  search: string,
+  content: Bucket,
+): Promise<Response | null> {
+  const object = await content.get(`metadata/source-aliases/${slug}.json`).catch(() => null);
+  if (!object) return null;
+  let canonical: string;
+  try {
+    const alias = JSON.parse(await new Response(object.body).text()) as {
+      alias?: string;
+      canonical?: string;
+    };
+    if (alias.alias !== slug || !alias.canonical) return null;
+    canonical = alias.canonical;
+  } catch {
+    return null;
+  }
+  // An alias naming itself would redirect to the address being asked for.
+  if (canonical === slug) return null;
+
+  return new Response(null, {
+    status: 308,
+    headers: {
+      location: `/docs/${canonical}${markdown ? ".md" : ""}${search}`,
+      "cache-control": "public, max-age=3600, s-maxage=86400",
+    },
+  });
+}
+
 /** A slug SideFX has already refused, answered without starting Next.
  *
  * Agents guess URLs. A guess that will never resolve booted the framework and
@@ -557,6 +601,7 @@ export async function storedAnswer(
     });
   }
   if (ask.kind === "download") return download();
+  if (ask.kind === "alias") return aliasAnswer(ask.slug, ask.markdown, ask.search, content);
   if (ask.kind === "markdown") {
     return (await markdown(ask.slug, ask.cacheControl, content)) ?? (await goneAnswer(ask.slug, content));
   }
