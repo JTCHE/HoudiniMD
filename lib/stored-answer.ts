@@ -193,14 +193,29 @@ type Ask =
   | { kind: "moved"; to: string }
   | { kind: "alias"; slug: string; markdown: boolean; search: string }
   | { kind: "search"; q: string; limit: number; category?: string }
+  | { kind: "notallowed" }
   | { kind: "redirect"; to: string };
 
 /**
  * What this request is, or null when it must go to Next. Mirrors what
  * middleware does to a `/docs/` path before it renders.
  */
+/** What the root answers to. Next reports the same pair in its `allow`. */
+const ROOT_METHODS = new Set(["GET", "HEAD"]);
+
 function read(request: Request, url: URL): Ask | null {
-  if (request.method !== "GET") return null;
+  // Bots post to the root. Nothing there takes a POST, and Next booted to say
+  // so: six of these cost 373 to 789 CPU-ms in one 45-minute tail, 23% of the
+  // window, for an answer that is a status and one header.
+  if (url.pathname === "/" && !ROOT_METHODS.has(request.method) && request.method !== "OPTIONS") {
+    return { kind: "notallowed" };
+  }
+
+  // HEAD asks the same question as GET and wants only the headers. It was sent
+  // to Next for the whole answer and then had the body thrown away: one HEAD
+  // for a `.md` twin cost 1,145 CPU-ms against 0 to 5 for the GET beside it.
+  // worker.ts drops the body once the answer is made.
+  if (request.method !== "GET" && request.method !== "HEAD") return null;
 
   // A social card already rendered. app/api/og/route.tsx stores every card it
   // draws under the hash of its own query, so the Worker can hand back the
@@ -649,6 +664,9 @@ export async function storedAnswer(
   if (ask.kind === "download") return download();
   if (ask.kind === "alias") return aliasAnswer(ask.slug, ask.markdown, ask.search, content);
   if (ask.kind === "search") return search(ask, publicUrl);
+  if (ask.kind === "notallowed") {
+    return new Response(null, { status: 405, headers: { allow: "GET,HEAD", vary: VARY } });
+  }
   if (ask.kind === "markdown") {
     return (await markdown(ask.slug, ask.cacheControl, content)) ?? (await goneAnswer(ask.slug, content));
   }
