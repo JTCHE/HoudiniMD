@@ -31,14 +31,20 @@ const TABLE_TTL = 5 * 60 * 1000;
 type Mark = (stage: string) => void;
 const noop: Mark = () => {};
 
+/**
+ * @param publicUrl  the bucket's public host, for a caller that has the binding
+ *   but not `process.env` — the Worker answers `/api/search` before Next runs,
+ *   and `getConfig()` reads variables Next populates on its way up.
+ */
 export async function searchDocs(
   q: string,
   limit = 20,
   category?: string,
   mark: Mark = noop,
+  publicUrl?: string,
 ): Promise<SearchHit[]> {
-  const config = getConfig();
-  if (!config) throw new SearchUnavailableError("no R2 config");
+  const origin = publicUrl ?? getConfig()?.publicUrl;
+  if (!origin) throw new SearchUnavailableError("no R2 config");
 
   if (!cache || Date.now() >= cache.expiry) {
     mark("fetch-docs:start");
@@ -46,7 +52,7 @@ export async function searchDocs(
     // cold isolate reads 4.5 MB from the colo rather than from the bucket. The
     // table names the build every shard is keyed by, so a table this old is
     // paired with postings of its own build, never a mix.
-    const res = await fetch(`${config.publicUrl}/${DOCS_KEY}`, {
+    const res = await fetch(`${origin}/${DOCS_KEY}`, {
       cf: { cacheTtl: TABLE_TTL / 1000, cacheEverything: true },
     } as RequestInit);
     mark("fetch-docs:done");
