@@ -55,7 +55,9 @@ import { checkDocNamespace, DOC_NAMESPACES } from "./url/namespaces";
 import { VERIFIED_SLUG_REDIRECTS } from "./url/slug-redirects";
 import { parseFrontmatter } from "./markdown/frontmatter";
 import { wantsMarkdown } from "./wants-markdown";
-import { goneKey, goneIsCurrent } from "./gone";
+import { goneKey, goneIsCurrent, goneMarker } from "./gone";
+import { resolveSideFXUrl } from "./scraping/resolve";
+import { PageNotFoundError } from "./scraping/scraper";
 import { searchDocs, SearchUnavailableError } from "./search/server";
 import { pageMeta, ogParams } from "./og/params";
 
@@ -73,6 +75,7 @@ const GENERATING_MARKER = "data-generating";
 export interface Bucket {
   get(key: string): Promise<{ body: ReadableStream } | null>;
   head(key: string): Promise<unknown | null>;
+  put(key: string, value: string): Promise<unknown>;
 }
 
 interface Entry {
@@ -621,8 +624,9 @@ async function search(
  *
  * Agents guess URLs. A guess that will never resolve booted the framework and
  * scraped SideFX again on every request: 130 requests over 11.2 hours of live
- * log, 68,637 CPU-ms a day. lib/generator.ts writes the marker the first time
- * SideFX answers 404, and this reads it.
+ * log, 68,637 CPU-ms a day. confirmGone() below writes the marker the first
+ * time SideFX answers 404 to a `.md` ask, lib/generator.ts on every other
+ * path, and this reads it.
  *
  * Only the agent-facing shapes go through here — `.md` and the RSC payloads.
  * A person who mistypes a `/docs/` URL still gets the site's own 404 page.
@@ -635,6 +639,28 @@ async function goneAnswer(slug: string, content: Bucket): Promise<Response | nul
   if (!object) return null;
   const marker = await new Response(object.body).text().catch(() => "");
   return goneIsCurrent(marker) ? new Response(null, { status: 404 }) : null;
+}
+
+/** The first ask for a slug with no markdown and no marker.
+ *
+ * Next answered this by booting to ask SideFX, then wrote the marker that makes
+ * every later ask free. The boot was the cost: `maketransform.md` took 1,730
+ * CPU-ms and three cancelled `.md` guesses 707 to 941 each, in one 45-minute
+ * tail. The question itself is one or two HEAD requests, which is wall time,
+ * not CPU. So ask here, and write the marker here.
+ *
+ * Only a plain "no" is answered. A page SideFX has, a redirect, or a failed
+ * fetch goes to Next, which scrapes it as before.
+ */
+async function confirmGone(slug: string, content: Bucket): Promise<Response | null> {
+  try {
+    await resolveSideFXUrl(slug);
+    return null;
+  } catch (error) {
+    if (!(error instanceof PageNotFoundError)) return null;
+  }
+  await content.put(goneKey(slug), goneMarker()).catch(() => {});
+  return new Response(null, { status: 404 });
 }
 
 /** The stored answer for this request, or null to let Next answer. */
@@ -668,7 +694,11 @@ export async function storedAnswer(
     return new Response(null, { status: 405, headers: { allow: "GET,HEAD", vary: VARY } });
   }
   if (ask.kind === "markdown") {
-    return (await markdown(ask.slug, ask.cacheControl, content)) ?? (await goneAnswer(ask.slug, content));
+    return (
+      (await markdown(ask.slug, ask.cacheControl, content)) ??
+      (await goneAnswer(ask.slug, content)) ??
+      (await confirmGone(ask.slug, content))
+    );
   }
   if (ask.kind === "meta") return meta(ask.slug, content);
   if (ask.kind === "missing") return missing(ask.page, cache);
