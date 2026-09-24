@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Components } from "react-markdown";
 import { assetUrl } from "@/lib/assets";
+import { openLightbox } from "@/lib/lightbox";
 import DocIconClient from "./DocIconClient";
 
 /** A figure on a help page. The Rust side resolved the path against the page,
@@ -32,7 +33,8 @@ export const Image: Components["img"] = function MarkdownImage({ src, alt, ...pr
       // The ground is a mid grey in both themes: many pictures are drawn on
       // a clear ground with dark lines and labels, which vanish on the dark
       // page, and a mid grey keeps both dark and light marks readable.
-      className={`markdown-media my-4 block h-auto max-w-full bg-neutral-500${fill ? " w-full" : ""}`}
+      className={`markdown-media my-4 block h-auto max-w-full cursor-zoom-in bg-neutral-500${fill ? " w-full" : ""}`}
+      onClick={(event) => openLightbox(event.currentTarget)}
       // `loading="lazy"` never fires in this app: every doc page scrolls
       // inside its own `overflow-y-auto` shell, not the window, and Chromium's
       // native lazy loader watches the window's viewport only — an image two

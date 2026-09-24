@@ -21,6 +21,7 @@ import { bookmarks, libraryLoaded } from "@/lib/store/library";
 import { warmIcons } from "@/lib/icons";
 import { isCommand, isTyping, useHotkey } from "@/lib/hotkeys";
 import { Onboarding, useOnboarding } from "@/components/onboarding/Onboarding";
+import { Lightbox } from "@/components/docs/Lightbox";
 import { TitleBar } from "./TitleBar";
 import { Sidebar, storedWidth } from "./Sidebar";
 import { StatusBar } from "./StatusBar";
@@ -172,6 +173,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               scrollbar under it still drags. */}
           <StatusBar className="pointer-events-none absolute inset-x-0 bottom-0 z-10 print:hidden [&>*]:pointer-events-auto" />
         </div>
+        <Lightbox />
       </div>
       )}
     </div>

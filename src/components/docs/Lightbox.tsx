@@ -1,0 +1,317 @@
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { cn } from "@/lib/utils";
+import { Icons } from "@/lib/ui/icons";
+import { closeLightbox, useLightbox, type LightboxState } from "@/lib/lightbox";
+
+const MAX_SCALE = 8;
+/** One wheel notch, one key press: the same step either way. */
+const STEP = 1.2;
+const DOUBLE_CLICK_SCALE = 2.5;
+/** A small figure is drawn larger to fill the stage, but no more than this:
+    past it a raster diagram turns to mush. */
+const MAX_UPSCALE = 2;
+const MOTION = { duration: 220, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" };
+
+const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+const ROUND_BUTTON =
+  "grid size-[36px] cursor-interactive place-items-center rounded-full bg-white/10 text-white/80 " +
+  "transition-colors duration-(--duration-fast) motion-reduce:transition-none " +
+  "pointer-hover:bg-white/20 pointer-hover:text-white " +
+  "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none";
+
+/**
+ * A page's pictures, one at a time, over the window.
+ *
+ * It grows out of the picture that was pressed and shrinks back into it. The
+ * wheel zooms at the pointer, a drag pans a zoomed picture, a double click
+ * zooms in or back out, and the arrows walk the page's pictures. Escape, the
+ * close button or a press on the dark ground puts it away.
+ *
+ * The title bar stays uncovered, so the window's own buttons still work.
+ */
+export function Lightbox() {
+  const open = useLightbox();
+  if (!open) return null;
+  return createPortal(<Viewer key={open.items.map((item) => item.src).join()} open={open} />, document.body);
+}
+
+function Viewer({ open }: { open: LightboxState }) {
+  const [index, setIndex] = useState(open.index);
+  const [view, setView] = useState({ scale: 1, x: 0, y: 0 });
+  const [closing, setClosing] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  const stage = useRef<HTMLDivElement>(null);
+  const frame = useRef<HTMLDivElement>(null);
+  const picture = useRef<HTMLImageElement>(null);
+  const drag = useRef<{ x: number; y: number; startX: number; startY: number } | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [size, setSize] = useState<{ width: number; height: number } | null>(null);
+  // The wheel listener is attached once and reads the scale of the moment.
+  const scaleNow = useRef(view.scale);
+  scaleNow.current = view.scale;
+
+  const item = open.items[index];
+  const count = open.items.length;
+  const zoomed = view.scale > 1;
+
+  /** Keeps a zoomed picture over the stage: it can be pushed to its own
+      edge and no further. */
+  const clamp = useCallback((scale: number, x: number, y: number) => {
+    const img = picture.current;
+    const box = stage.current;
+    if (!img || !box) return { scale, x, y };
+    const roomX = Math.max(0, (img.offsetWidth * scale - box.clientWidth) / 2);
+    const roomY = Math.max(0, (img.offsetHeight * scale - box.clientHeight) / 2);
+    return { scale, x: Math.min(roomX, Math.max(-roomX, x)), y: Math.min(roomY, Math.max(-roomY, y)) };
+  }, []);
+
+  /** Zoom to `next`, keeping the point under (`clientX`, `clientY`) still. */
+  const zoomAt = useCallback(
+    (next: number, clientX: number, clientY: number) => {
+      const box = stage.current;
+      if (!box) return;
+      const bounds = box.getBoundingClientRect();
+      const pointX = clientX - (bounds.left + bounds.width / 2);
+      const pointY = clientY - (bounds.top + bounds.height / 2);
+      setView((current) => {
+        const scale = Math.min(MAX_SCALE, Math.max(1, next));
+        if (scale === 1) return { scale: 1, x: 0, y: 0 };
+        const ratio = scale / current.scale;
+        return clamp(scale, pointX - (pointX - current.x) * ratio, pointY - (pointY - current.y) * ratio);
+      });
+    },
+    [clamp],
+  );
+
+  const zoomCentre = useCallback(
+    (next: number) => {
+      const bounds = stage.current?.getBoundingClientRect();
+      if (bounds) zoomAt(next, bounds.left + bounds.width / 2, bounds.top + bounds.height / 2);
+    },
+    [zoomAt],
+  );
+
+  const go = useCallback(
+    (step: number) => {
+      if (count < 2) return;
+      setIndex((current) => (current + step + count) % count);
+      setView({ scale: 1, x: 0, y: 0 });
+      setSize(null);
+    },
+    [count],
+  );
+
+  /** The rectangle to grow from or shrink into: the pressed picture, when
+      it is the one on screen and still on the page. */
+  const source = useCallback(() => {
+    const from = open.from;
+    if (!from?.isConnected || index !== open.index) return null;
+    const rect = from.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0 ? rect : null;
+  }, [open, index]);
+
+  /** The transform that lays the frame over `rect`. */
+  const over = (rect: DOMRect) => {
+    const target = frame.current!.getBoundingClientRect();
+    const scale = rect.width / target.width;
+    const x = rect.left + rect.width / 2 - (target.left + target.width / 2);
+    const y = rect.top + rect.height / 2 - (target.top + target.height / 2);
+    return `translate(${x}px, ${y}px) scale(${scale})`;
+  };
+
+  const close = useCallback(() => {
+    if (closing) return;
+    setClosing(true);
+    const done = () => {
+      closeLightbox();
+      open.from?.focus?.({ preventScroll: true });
+    };
+    const rect = source();
+    if (reducedMotion() || !frame.current) return done();
+    root.current?.animate([{ opacity: 1 }, { opacity: 0 }], { ...MOTION, fill: "forwards" });
+    const shrink = rect
+      ? frame.current.animate([{ transform: "none" }, { transform: over(rect) }], { ...MOTION, fill: "forwards" })
+      : frame.current.animate([{ opacity: 1 }, { opacity: 0 }], { ...MOTION, fill: "forwards" });
+    shrink.onfinish = done;
+    // `over` reads the frame, so it is defined inside the render; the
+    // callback only ever runs against the current one.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [closing, source, open]);
+
+  useLayoutEffect(() => {
+    root.current?.focus({ preventScroll: true });
+    if (!reducedMotion()) root.current?.animate([{ opacity: 0 }, { opacity: 1 }], MOTION);
+  }, []);
+
+  // Grow out of the pressed picture, once the picture has its size, and
+  // before that size is painted: the reader never sees it land first.
+  const grown = useRef(false);
+  useLayoutEffect(() => {
+    if (grown.current || !size) return;
+    grown.current = true;
+    const rect = source();
+    if (rect && frame.current && !reducedMotion()) {
+      frame.current.animate([{ transform: over(rect) }, { transform: "none" }], MOTION);
+    }
+    // Once, when the first size lands.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [size]);
+
+  // The wheel has to be a listener that is not passive, or the window
+  // scrolls behind the picture instead of zooming it.
+  useEffect(() => {
+    const box = root.current;
+    if (!box) return;
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      const scale = scaleNow.current;
+      zoomAt(event.deltaY < 0 ? scale * STEP : scale / STEP, event.clientX, event.clientY);
+    };
+    box.addEventListener("wheel", onWheel, { passive: false });
+    return () => box.removeEventListener("wheel", onWheel);
+  }, [zoomAt]);
+
+  /** The picture's size at scale 1: as large as the stage allows, up to
+      MAX_UPSCALE times its own. */
+  const fit = useCallback(() => {
+    const img = picture.current;
+    const box = stage.current;
+    if (!img?.naturalWidth || !box) return;
+    const ratio = Math.min(box.clientWidth / img.naturalWidth, box.clientHeight / img.naturalHeight, MAX_UPSCALE);
+    setSize({ width: Math.round(img.naturalWidth * ratio), height: Math.round(img.naturalHeight * ratio) });
+  }, []);
+
+  useLayoutEffect(() => {
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, [fit, index]);
+
+  function onKeyDown(event: React.KeyboardEvent) {
+    const keys: Record<string, () => void> = {
+      Escape: close,
+      ArrowLeft: () => go(-1),
+      ArrowRight: () => go(1),
+      "+": () => zoomCentre(view.scale * STEP),
+      "=": () => zoomCentre(view.scale * STEP),
+      "-": () => zoomCentre(view.scale / STEP),
+      "0": () => setView({ scale: 1, x: 0, y: 0 }),
+    };
+    const run = keys[event.key];
+    if (!run) return;
+    event.preventDefault();
+    event.stopPropagation();
+    run();
+  }
+
+  function onPointerDown(event: React.PointerEvent) {
+    if (event.button !== 0 || !zoomed) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    drag.current = { x: view.x, y: view.y, startX: event.clientX, startY: event.clientY };
+    setDragging(true);
+  }
+
+  function onPointerMove(event: React.PointerEvent) {
+    const held = drag.current;
+    if (!held) return;
+    setView(clamp(view.scale, held.x + event.clientX - held.startX, held.y + event.clientY - held.startY));
+  }
+
+  function endDrag() {
+    drag.current = null;
+    setDragging(false);
+  }
+
+  if (!item) return null;
+
+  return (
+    <div
+      ref={root}
+      role="dialog"
+      aria-modal="true"
+      aria-label={item.alt || "Picture"}
+      tabIndex={-1}
+      onKeyDown={onKeyDown}
+      className="fixed inset-x-0 top-titlebar bottom-0 z-[70] outline-none select-none"
+    >
+      {/* The ground. A press on it, and not a drag that ends on it, closes. */}
+      <div className="absolute inset-0 bg-black/95" onClick={close} />
+
+      {/* What the picture is, and where it sits among the page's. Out of the
+          way while the reader is looking closely. */}
+      <div
+        className={cn(
+          "pointer-events-none absolute inset-x-0 top-0 flex h-[52px] items-center justify-center gap-sm px-[96px]",
+          "text-meta text-white/70 transition-opacity duration-(--duration-fast) motion-reduce:transition-none",
+          zoomed && "opacity-0",
+        )}
+      >
+        {item.alt && <span className="truncate">{item.alt}</span>}
+        {count > 1 && (
+          <span className="shrink-0 tabular-nums text-white/45">
+            {index + 1} / {count}
+          </span>
+        )}
+      </div>
+
+      <button type="button" aria-label="Close" className={cn(ROUND_BUTTON, "absolute top-sm right-sm z-10")} onClick={close}>
+        <Icons.dismiss className="size-[18px]" />
+      </button>
+
+      <div
+        ref={stage}
+        className="pointer-events-none absolute inset-x-[64px] top-[52px] bottom-lg flex items-center justify-center"
+      >
+        <div ref={frame} className="flex max-h-full max-w-full items-center justify-center">
+          <img
+            ref={picture}
+            src={item.src}
+            alt={item.alt}
+            draggable={false}
+            onLoad={fit}
+            width={size?.width}
+            height={size?.height}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={endDrag}
+            onPointerCancel={endDrag}
+            onDoubleClick={(event) =>
+              zoomed ? setView({ scale: 1, x: 0, y: 0 }) : zoomAt(DOUBLE_CLICK_SCALE, event.clientX, event.clientY)
+            }
+            style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})` }}
+            className={cn(
+              // The same mid-grey ground the page gives a picture: many are
+              // drawn on a clear ground with dark lines.
+              "pointer-events-auto bg-neutral-500 object-contain",
+              zoomed ? (dragging ? "cursor-grabbing" : "cursor-grab") : "cursor-zoom-in",
+              !dragging && "transition-transform duration-(--duration-fast) ease-out motion-reduce:transition-none",
+            )}
+          />
+        </div>
+      </div>
+
+      {count > 1 && (
+        <>
+          <button
+            type="button"
+            aria-label="Previous picture"
+            className={cn(ROUND_BUTTON, "absolute top-1/2 left-sm -translate-y-1/2")}
+            onClick={() => go(-1)}
+          >
+            <Icons.stepBack className="size-[18px]" />
+          </button>
+          <button
+            type="button"
+            aria-label="Next picture"
+            className={cn(ROUND_BUTTON, "absolute top-1/2 right-sm -translate-y-1/2")}
+            onClick={() => go(1)}
+          >
+            <Icons.stepForward className="size-[18px]" />
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
