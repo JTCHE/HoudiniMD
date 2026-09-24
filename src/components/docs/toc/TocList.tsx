@@ -54,13 +54,18 @@ export function TocList({
             aria-current={active === i ? "location" : undefined}
             // Indent is data, and it has to beat the horizontal padding below.
             style={{ paddingLeft: `${(padded ? 0.625 : 0) + depth * 0.75}rem` }}
-            className={`block cursor-interactive no-underline leading-snug transition-colors ${
-              padded ? "truncate rounded-xl pr-2.5 hover:bg-accent/70" : ""
+            className={`grid cursor-interactive no-underline leading-snug transition-colors ${
+              padded ? "rounded-xl pr-2.5 hover:bg-accent/70" : ""
             } ${depth === 0 ? "text-sm" : "text-[0.8125rem]"} ${rowHit} ${startsSection ? sectionGap : ""} ${
               active === i ? "text-foreground font-medium" : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            {h.text}
+            {/* A bold copy, hidden, in the same cell: the row is always as
+                wide and as tall as its bold state, so marking it moves nothing. */}
+            <span aria-hidden className={`invisible col-start-1 row-start-1 font-medium ${padded ? "truncate" : ""}`}>
+              {h.text}
+            </span>
+            <span className={`col-start-1 row-start-1 ${padded ? "truncate" : ""}`}>{h.text}</span>
           </a>
         );
       })}
