@@ -123,7 +123,6 @@ a {
      own window sits beside this one, and a taller bar reads as a web page. */
   --spacing-titlebar: 32px;
   --spacing-statusbar: 44px;
-  --spacing-sidebar: 289px;
   --spacing-caption-w: 46px;
   /* ONE row height for the panel. A group header, a context, a page and the
      recents row are the same object at different depths, so they are the same
