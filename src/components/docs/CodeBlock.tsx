@@ -36,6 +36,22 @@ export function CodePanel({ children, language }: CodePanelProps) {
     hljs.highlightElement(code as HTMLElement);
   }, [language]);
 
+  // A panel that scrolls hangs its bar over the code's bottom padding instead
+  // of adding a lip under it: the last row gives back the bar's height. The
+  // height is read, not assumed, because the bar is the platform's.
+  useLayoutEffect(() => {
+    const scroller = panelRef.current?.querySelector<HTMLElement>(".code-panel");
+    const last = scroller?.lastElementChild as HTMLElement | null | undefined;
+    if (!scroller || !last) return;
+    const hang = () => {
+      const bar = scroller.offsetHeight - scroller.clientHeight - 2 * scroller.clientTop;
+      last.style.marginBottom = bar > 0 ? `${-bar}px` : "";
+    };
+    const observer = new ResizeObserver(hang);
+    observer.observe(scroller);
+    return () => observer.disconnect();
+  }, []);
+
   const handleCopy = useCallback(async () => {
     const panel = panelRef.current;
     if (!panel) return;
