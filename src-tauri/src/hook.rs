@@ -192,10 +192,15 @@ const PYTHONS: [&str; 5] = ["3.10", "3.11", "3.12", "3.13", "3.14"];
 /// reader's files, and removing the one package file undoes it all.
 fn start_with_houdini(data: &Path, prefs: &Path) -> Result<(), String> {
     let root = data.join("houdini");
-    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-    let script = startup_script(&exe);
-    for python in PYTHONS {
-        write(&root.join(format!("python{python}libs")).join("uiready.py"), &script)?;
+    // A debug build draws its window from the Vite dev server. Named here, it
+    // would start with Houdini after the dev server is gone and show
+    // "localhost refused to connect", so it leaves the script to the installed app.
+    if !cfg!(debug_assertions) {
+        let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+        let script = startup_script(&exe);
+        for python in PYTHONS {
+            write(&root.join(format!("python{python}libs")).join("uiready.py"), &script)?;
+        }
     }
     let package = serde_json::json!({ "hpath": root.to_string_lossy().replace('\\', "/") });
     let text = serde_json::to_string_pretty(&package).map_err(|e| e.to_string())?;
