@@ -107,6 +107,7 @@ export const Icons = {
   expanded: ChevronDown,
   collapsed: ChevronRight,
   stepBack: ChevronLeft,
+  stepForward: ChevronRight,
   versionPicker: ChevronsUpDown,
 
   /* Content */
