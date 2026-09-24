@@ -587,6 +587,11 @@ a {
      is known, then the real one wins. */
   aspect-ratio: auto 16 / 9;
 }
+/* A picture narrower than the column sits in its middle. One that fills the
+   column (`w-full`, see MarkdownImage) keeps the hang above. */
+img.markdown-media:not(.w-full) {
+  margin-inline: auto;
+}
 
 /* The controls sit on the picture, not on the page, so they are light in both
    themes. */

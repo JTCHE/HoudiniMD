@@ -681,6 +681,9 @@ fn asset_response(app: &tauri::AppHandle, request: Request<Vec<u8>>) -> Response
     let head = Response::builder()
         .header("Content-Type", media_type(&name))
         .header("Cache-Control", "max-age=31536000")
+        // The page reads a picture's pixels to choose its ground (lib/ground.ts),
+        // and the window is another origin.
+        .header("Access-Control-Allow-Origin", "*")
         .header("Accept-Ranges", "bytes");
 
     // A player asks for a range as soon as the reader drags the scrub bar, and

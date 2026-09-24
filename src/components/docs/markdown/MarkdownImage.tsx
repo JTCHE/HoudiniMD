@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Components } from "react-markdown";
 import { assetUrl } from "@/lib/assets";
 import { openLightbox } from "@/lib/lightbox";
+import { groundClass, groundFor, type Ground } from "@/lib/ground";
 import DocIconClient from "./DocIconClient";
 
 /** A figure on a help page. The Rust side resolved the path against the page,
@@ -10,6 +11,7 @@ import DocIconClient from "./DocIconClient";
     parser's `markdown.rs` — and `DocIconClient` draws it from `icons.zip`. */
 export const Image: Components["img"] = function MarkdownImage({ src, alt, ...props }) {
   const [fill, setFill] = useState(false);
+  const [ground, setGround] = useState<Ground | null>(null);
   const data = props as Record<string, unknown>;
   if (typeof data["data-icon"] === "string") {
     return (
@@ -30,10 +32,13 @@ export const Image: Components["img"] = function MarkdownImage({ src, alt, ...pr
       // screenshot 40px short of the text reads as a mistake. A small figure
       // — a single icon, a strip of buttons — keeps its own size, because
       // there is nothing to gain from a diagram blown up four times.
-      // The ground is a mid grey in both themes: many pictures are drawn on
-      // a clear ground with dark lines and labels, which vanish on the dark
-      // page, and a mid grey keeps both dark and light marks readable.
-      className={`markdown-media my-4 block h-auto max-w-full cursor-zoom-in bg-neutral-500${fill ? " w-full" : ""}`}
+      // The ground behind a clear picture is chosen from its own marks: see
+      // lib/ground. The lightbox reads it off `data-ground`.
+      className={`markdown-media my-4 block h-auto max-w-full cursor-zoom-in ${groundClass(ground)}${fill ? " w-full" : ""}`}
+      data-ground={ground ?? undefined}
+      // The ground is read from the pixels, and the app serves pictures from
+      // another origin (`himage:`), which answers with CORS for this.
+      crossOrigin="anonymous"
       onClick={(event) => openLightbox(event.currentTarget)}
       // `loading="lazy"` never fires in this app: every doc page scrolls
       // inside its own `overflow-y-auto` shell, not the window, and Chromium's
@@ -46,6 +51,7 @@ export const Image: Components["img"] = function MarkdownImage({ src, alt, ...pr
         const img = event.currentTarget;
         const box = img.parentElement?.clientWidth ?? 0;
         if (box > 0 && img.naturalWidth >= box * 0.6) setFill(true);
+        setGround(groundFor(img));
       }}
     />
   );

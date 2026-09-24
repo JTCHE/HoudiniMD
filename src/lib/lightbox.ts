@@ -1,9 +1,12 @@
 import { useSyncExternalStore } from "react";
+import type { Ground } from "./ground";
 
 /** One picture the lightbox can show. */
 export interface LightboxItem {
   src: string;
   alt: string;
+  /** The ground the page chose for it (lib/ground). */
+  ground?: Ground;
 }
 
 export interface LightboxState {
@@ -31,7 +34,7 @@ export function openLightbox(picture: HTMLImageElement) {
   const pictures = [...document.querySelectorAll<HTMLImageElement>(PAGE_PICTURES)];
   const index = Math.max(0, pictures.indexOf(picture));
   set({
-    items: pictures.map((img) => ({ src: img.currentSrc || img.src, alt: img.alt })),
+    items: pictures.map((img) => ({ src: img.currentSrc || img.src, alt: img.alt, ground: img.dataset.ground as Ground | undefined })),
     index,
     from: picture,
   });

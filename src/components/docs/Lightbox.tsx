@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { Icons } from "@/lib/ui/icons";
 import { closeLightbox, useLightbox, type LightboxState } from "@/lib/lightbox";
+import { groundClass } from "@/lib/ground";
 
 const MAX_SCALE = 8;
 /** One wheel notch, one key press: the same step either way. */
@@ -270,6 +271,7 @@ function Viewer({ open }: { open: LightboxState }) {
             src={item.src}
             alt={item.alt}
             draggable={false}
+            crossOrigin="anonymous"
             onLoad={fit}
             width={size?.width}
             height={size?.height}
@@ -282,9 +284,9 @@ function Viewer({ open }: { open: LightboxState }) {
             }
             style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})` }}
             className={cn(
-              // The same mid-grey ground the page gives a picture: many are
-              // drawn on a clear ground with dark lines.
-              "pointer-events-auto bg-neutral-500 object-contain",
+              // The same ground the page gave the picture.
+              "pointer-events-auto object-contain",
+              groundClass(item.ground),
               zoomed ? (dragging ? "cursor-grabbing" : "cursor-grab") : "cursor-zoom-in",
               !dragging && "transition-transform duration-(--duration-fast) ease-out motion-reduce:transition-none",
             )}
