@@ -69,14 +69,56 @@ export function jumpTo(el: HTMLElement) {
   if (box) box.scrollTo({ top: scrollTopFor(el, box) - readingLine() });
 }
 
+/**
+ * The row the reader last pressed, and the scroll position the jump left.
+ * A heading near the end of a page cannot reach the reading line, so the
+ * position alone would name an earlier one. Until the page moves again, the
+ * row the reader asked for is the answer.
+ */
+let pressed: { index: number; top: number } | null = null;
+
 /** Jump to a heading from the list of contents. */
 export function scrollToHeading(e: React.MouseEvent, index: number, id: string) {
   const el = headingEls()[index];
   if (!el || e.metaKey || e.ctrlKey || e.shiftKey) return;
   e.preventDefault();
   jumpTo(el);
+  const box = scroller();
+  if (box) {
+    pressed = { index, top: box.scrollTop };
+    // At the bottom of the page the jump does not move it, and no scroll
+    // ends to ask for the answer. Ask anyway.
+    box.dispatchEvent(new Event("scrollend"));
+  }
   // Keep the router's state: its `idx` is what says whether back leads anywhere.
   history.replaceState(history.state, "", `#${id}`);
+}
+
+/**
+ * The last heading at or above the reading line, found from where the
+ * headings are now. Headings sit in document order, so a binary search reads
+ * a handful of rects, not all of them. At the bottom of the page the line
+ * drops to the bottom edge: the last sections can never climb higher.
+ */
+function activeAt(box: HTMLElement, els: NodeListOf<HTMLElement>) {
+  if (pressed && Math.abs(box.scrollTop - pressed.top) < 1 && pressed.index < els.length) return pressed.index;
+  pressed = null;
+  const bounds = box.getBoundingClientRect();
+  const atBottom = box.scrollTop > 0 && box.scrollTop + box.clientHeight >= box.scrollHeight - 1;
+  const line = atBottom ? bounds.bottom : bounds.top + readingLine() + 8;
+  let found: number | undefined;
+  let low = 0;
+  let high = els.length - 1;
+  while (low <= high) {
+    const middle = (low + high) >> 1;
+    if (els[middle].getBoundingClientRect().top <= line) {
+      found = middle;
+      low = middle + 1;
+    } else {
+      high = middle - 1;
+    }
+  }
+  return found;
 }
 
 /** Position of the heading the reader is under, or nothing above the first one. */
@@ -94,35 +136,30 @@ export function useActiveIndex(headings: Heading[]) {
   useEffect(() => {
     const box = scroller();
     if (!box) return;
-    const els = [...headingEls()];
-    const at = new Map<Element, number>(els.map((el, i) => [el, i]));
-    // Read a rect on every scroll and the reader feels it: the index page is
-    // ten thousand nodes, and each read made the engine lay them out again.
-    // The observer reports a heading only when it crosses the reading line,
-    // and reports the rect it had at the crossing, so nothing is measured
-    // while the page moves.
-    const passed = new Set<Element>();
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          // `rootBounds` is the band, so its top IS the reading line.
-          if (entry.boundingClientRect.top <= entry.rootBounds!.top) passed.add(entry.target);
-          else passed.delete(entry.target);
-        }
-        let current: number | undefined;
-        for (const el of passed) {
-          const index = at.get(el)!;
-          if (current === undefined || index > current) current = index;
-        }
-        setActive(current);
-      },
-      // A band from the reading line to the bottom of the scroller: a heading
-      // enters it from below and leaves it at the line, so both crossings are
-      // reported. The scroller is the root — the window never moves.
-      { root: box, rootMargin: `-${readingLine() + 8}px 0px 0px 0px`, threshold: 0 },
-    );
-    for (const el of els) observer.observe(el);
-    return () => observer.disconnect();
+    pressed = null;
+    // Reading every heading on every scroll made the index page lay out ten
+    // thousand nodes again. So nothing is read while the page moves: a
+    // heading crossing the line, or the end of a scroll, asks for the answer
+    // again, from scratch. A jump crosses many headings and reports only
+    // some of them, so the answer is never built up from the crossings.
+    // The body is drawn a slice at a time, so the headings are looked up on
+    // each answer, and the ones drawn since the last are watched too.
+    const update = () => {
+      const els = headingEls();
+      for (const el of els) observer.observe(el);
+      setActive(activeAt(box, els));
+    };
+    const observer = new IntersectionObserver(update, {
+      root: box,
+      rootMargin: `-${readingLine() + 8}px 0px 0px 0px`,
+      threshold: 0,
+    });
+    update();
+    box.addEventListener("scrollend", update);
+    return () => {
+      observer.disconnect();
+      box.removeEventListener("scrollend", update);
+    };
   }, [headings]);
 
   return active;
