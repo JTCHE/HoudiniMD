@@ -240,6 +240,67 @@ fn show_telemetry_log(app: tauri::AppHandle) -> Result<(), String> {
     app.opener().open_path(log.to_string_lossy(), None::<&str>).map_err(|e| e.to_string())
 }
 
+/// The asset file an `examples/` page describes, beside its text in the help.
+pub fn example_file(install: &install::Install, path: &str) -> Option<std::path::PathBuf> {
+    if !path.starts_with("examples/") || path.split('/').any(|part| part.is_empty() || part == "." || part == "..") {
+        return None;
+    }
+    install
+        .help_roots()
+        .into_iter()
+        .flat_map(|root| ["otl", "hda"].map(|extension| root.join(format!("{path}.{extension}"))))
+        .find(|file| file.is_file())
+}
+
+/// Whether the page has an example file to launch.
+#[tauri::command]
+fn has_example(
+    state: State<Db>,
+    chosen: State<Arc<install::Chosen>>,
+    cache: State<Arc<install::Cache>>,
+    path: String,
+) -> Result<bool, String> {
+    let db = state.0.lock().map_err(|e| e.to_string())?;
+    Ok(example_file(&current(&db, &chosen, &cache)?, &path).is_some())
+}
+
+/// Starts a new Houdini with the page's example in it, the way Houdini's own
+/// help does its Launch button: `houdini waitforui loadHelpcardOTLExample.py
+/// /examples/….otl`. A new process, so the reader's open scene is not touched.
+#[tauri::command]
+fn launch_example(
+    state: State<Db>,
+    chosen: State<Arc<install::Chosen>>,
+    cache: State<Arc<install::Cache>>,
+    path: String,
+) -> Result<(), String> {
+    let db = state.0.lock().map_err(|e| e.to_string())?;
+    let install = current(&db, &chosen, &cache)?;
+    drop(db);
+    let file = example_file(&install, &path).ok_or_else(|| format!("No example file for {path}"))?;
+    let extension = file.extension().and_then(|e| e.to_str()).unwrap_or("otl");
+    // `python3.11libs`, `python3.13libs`: the one this build ships.
+    let script = std::fs::read_dir(install.root.join("houdini"))
+        .map_err(|e| e.to_string())?
+        .filter_map(Result::ok)
+        .map(|entry| entry.path().join("loadHelpcardOTLExample.py"))
+        .find(|script| script.is_file())
+        .ok_or("This Houdini has no example loader")?;
+    let houdini = install.root.join("bin").join(if cfg!(windows) { "houdini.exe" } else { "houdini" });
+    let mut command = std::process::Command::new(houdini);
+    // The folder the Start Menu shortcut starts Houdini in.
+    if let Some(home) = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }) {
+        command.current_dir(home);
+    }
+    command
+        .arg("waitforui")
+        .arg(script)
+        .arg(format!("/{path}.{extension}"))
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| format!("Could not start Houdini: {e}"))
+}
+
 /// Writes the page to a file under the temp folder and opens it in the app the
 /// reader has for that kind of file. `source` asks for the help text the page
 /// is made from, as a `.txt`; otherwise the Markdown, as a `.md`.
@@ -1053,6 +1114,8 @@ pub fn run() {
             show_telemetry_log,
             show_logs,
             open_page,
+            has_example,
+            launch_example,
             save_page,
             send_to_obsidian,
             new_window,

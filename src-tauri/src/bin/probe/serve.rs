@@ -290,6 +290,9 @@ fn command_response(state: &Serve, command: &str, query: &str) -> (u16, &'static
             read_meta(&state.db.lock().unwrap(), &install, &asked)
                 .and_then(|meta| serde_json::to_string(&meta).map_err(|e| e.to_string()))
         }
+        "has_example" => Ok(houdinimd_lib::example_file(&install, &param(query, "path").unwrap_or_default())
+            .is_some()
+            .to_string()),
         "link_preview" => tauri::async_runtime::block_on(houdinimd_lib::preview::fetch(
             &param(query, "url").unwrap_or_default(),
         ))
