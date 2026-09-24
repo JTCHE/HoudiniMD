@@ -31,6 +31,7 @@ import {
   Library,
   Workflow,
   PanelLeft,
+  Pin,
   Play,
   Search,
   Settings,
@@ -108,6 +109,9 @@ export const Icons = {
   collapsed: ChevronRight,
   stepBack: ChevronLeft,
   stepForward: ChevronRight,
+
+  /* Window */
+  pin: Pin,
   versionPicker: ChevronsUpDown,
 
   /* Content */
