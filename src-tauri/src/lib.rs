@@ -1,4 +1,3 @@
-pub mod context_menu;
 pub mod db;
 pub mod hook;
 pub mod log;
@@ -421,7 +420,7 @@ async fn new_window(app: tauri::AppHandle, path: Option<String>) -> Result<(), S
         }
         config.url = tauri::WebviewUrl::App(path.trim_start_matches('/').into());
     }
-    let window = tauri::WebviewWindowBuilder::from_config(&app, &config)
+    tauri::WebviewWindowBuilder::from_config(&app, &config)
         .map_err(|e| e.to_string())?
         .on_page_load(|window, load| {
             if load.event() == PageLoadEvent::Finished {
@@ -431,7 +430,6 @@ async fn new_window(app: tauri::AppHandle, path: Option<String>) -> Result<(), S
         })
         .build()
         .map_err(|e| e.to_string())?;
-    context_menu::hook(&window);
     Ok(())
 }
 
@@ -1010,9 +1008,6 @@ pub fn run() {
                     start_index(app.handle().clone(), data, install, false);
                 }
                 Err(reason) => crate::say!(Warn, "install", "no build to read: {reason}"),
-            }
-            if let Some(window) = app.get_webview_window("main") {
-                context_menu::hook(&window);
             }
             tray::build(app)?;
             telemetry::start(app.handle());

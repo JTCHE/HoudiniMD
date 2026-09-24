@@ -32,15 +32,7 @@ window.addEventListener("focus", idle);
 window.addEventListener("blur", idle);
 idle();
 
-// The webview brings a browser menu with it — reload, inspect, save picture —
-// and none of it belongs in a window that draws its own chrome. A field the
-// reader types in keeps its menu, because cut, copy and paste live there.
 if (import.meta.env.PROD) {
-  document.addEventListener("contextmenu", (event) => {
-    const at = event.target as HTMLElement | null;
-    if (at?.closest("input, textarea, [contenteditable='true']")) return;
-    event.preventDefault();
-  });
   // Ctrl J opens the webview's downloads list, which this window has no use for.
   document.addEventListener("keydown", (event) => {
     if (event.ctrlKey && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "j") event.preventDefault();
