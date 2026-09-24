@@ -71,7 +71,8 @@ pub fn releases(port: u16) -> Vec<Release> {
             continue;
         };
         let text = read(&path.join("houdini.pref")).unwrap_or_default();
-        let url = value(&text, EXTERNAL_URL);
+        // The pref file quotes the value; the reader is shown the address.
+        let url = value(&text, EXTERNAL_URL).map(|url| url.trim_matches('"').to_string());
         let external = value(&text, USE_EXTERNAL).as_deref() == Some("1");
         found.push(Release {
             ours: url.as_deref().is_some_and(|url| is_ours(url, port)),

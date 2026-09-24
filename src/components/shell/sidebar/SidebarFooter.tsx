@@ -5,15 +5,12 @@
  * It is pinned to the bottom rather than following the tree, so settings and
  * the theme switch are in the same place whether the tree is open or shut.
  */
+import { Link } from "react-router";
 import { cn } from "@/lib/utils";
 import { Icons } from "@/lib/ui/icons";
 import { toggleTheme, useTheme } from "@/lib/ui/theme";
 import { SidebarRow } from "./SidebarRow";
 import { BugReportButton } from "./BugReportButton";
-
-// Off for the beta — see spec "Cut settings pane from beta". Flip this back
-// on rather than re-writing the button when settings has something to show.
-const SETTINGS_BUTTON_PARKED = false;
 
 const FOOTER_BUTTON =
   "grid size-[30px] cursor-interactive place-items-center rounded-md text-neutral-500 " +
@@ -49,21 +46,9 @@ export function SidebarFooter({ recentCount, recentsOpen, onToggleRecents, class
       />
 
       <div className="flex items-center justify-between px-ms pt-ms">
-        {/* The settings button is parked here for when there is something to
-            set — cut from the beta, not deleted. See spec "Cut settings pane
-            from beta". Its slot is now the theme switch, moved over from the
-            right. */}
-        {SETTINGS_BUTTON_PARKED && (
-          <button
-            type="button"
-            aria-label="Settings"
-            title="Settings — nothing to set yet"
-            disabled
-            className={FOOTER_BUTTON}
-          >
-            <Icons.settings className="size-[18px]" />
-          </button>
-        )}
+        <Link to="/settings" aria-label="Settings" title="Settings" className={FOOTER_BUTTON}>
+          <Icons.settings className="size-[18px]" />
+        </Link>
         <button
           type="button"
           aria-label={theme === "dark" ? "Switch to the light theme" : "Switch to the dark theme"}
