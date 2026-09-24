@@ -75,7 +75,8 @@ export function scrollToHeading(e: React.MouseEvent, index: number, id: string) 
   if (!el || e.metaKey || e.ctrlKey || e.shiftKey) return;
   e.preventDefault();
   jumpTo(el);
-  history.replaceState(null, "", `#${id}`);
+  // Keep the router's state: its `idx` is what says whether back leads anywhere.
+  history.replaceState(history.state, "", `#${id}`);
 }
 
 /** Position of the heading the reader is under, or nothing above the first one. */
