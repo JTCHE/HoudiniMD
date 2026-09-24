@@ -98,6 +98,17 @@ const FLOWS: Flow[] = [
     },
   },
   {
+    // The reported case: a link to another branch, then back quickly. Every
+    // sidebar icon but the current page's flashed.
+    name: "back-quick",
+    from: "nodes/sop/reverse",
+    act: async (page) => {
+      await page.click('article a[href="/ref/panes/parms"]');
+      await page.waitForTimeout(600);
+      await page.goBack();
+    },
+  },
+  {
     // A breadcrumb to a long index page: the press must show at once.
     name: "crumb",
     from: "nodes/sop/box",
@@ -347,8 +358,10 @@ async function main() {
           .__TAURI_INTERNALS__.invoke("set_setting", { key: "onboarded", value: "done" }),
       );
       if (flow.from !== "about:blank") {
-        await page.goto(`${base()}${flow.from}`, { waitUntil: "networkidle" });
-        await page.waitForTimeout(800);
+        // Not "networkidle": the stub polls the index status every 250 ms,
+        // so the network never goes quiet.
+        await page.goto(`${base()}${flow.from}`, { waitUntil: "load" });
+        await page.waitForTimeout(2500);
       }
       const cdp = await context.newCDPSession(page);
       // The window keeps its own size; a flow that wants another one gets it
