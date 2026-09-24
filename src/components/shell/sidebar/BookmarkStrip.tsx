@@ -3,18 +3,21 @@
  *
  * Icon only, no name: a bookmark is a page the reader chose, so they already
  * know it by its mark, and six marks in the width of one row is the point of
- * putting them here rather than in a list. The name is one hover away.
+ * putting them here rather than in a list. The name is one hover away,
+ * in the tooltip every page link has.
  *
  * The strip holds its height with nothing in it. A panel that grows a row the
  * first time a reader keeps a page moves everything under it, and the row
  * below is the tree — the part of the panel the reader is looking at.
  */
+import { useRef, useState } from "react";
 import { Link } from "react-router";
 import { warm } from "@/lib/pages";
 import { COMMAND_KEY } from "@/lib/hotkeys";
 import { cn } from "@/lib/utils";
 import { Icons } from "@/lib/ui/icons";
 import DocIconClient from "@/components/docs/markdown/DocIconClient";
+import { DocTooltip } from "@/components/docs/Tooltip";
 import type { LibraryEntry } from "@/lib/store/library";
 import { Keycap, SMALL_KEY } from "@/components/ui/Keycap";
 
@@ -50,39 +53,54 @@ export function BookmarkStrip({ entries, className }: { entries: LibraryEntry[];
             to save a page.
           </p>
         ) : (
-          shown.map((entry) => (
-            <Link
-              key={entry.path}
-              to={`/${entry.path}`}
-              onPointerEnter={() => warm(entry.path)}
-              title={entry.title}
-              aria-label={entry.title}
-              className={cn(
-                // Square. A tile carries an icon and nothing else, so its
-                // width is its height and a row of them steps evenly.
-                "grid size-chip shrink-0 cursor-interactive place-items-center rounded-lg",
-                "border border-hairline bg-raised shadow-chip",
-                "transition-colors duration-(--duration-fast) motion-reduce:transition-none",
-                "pointer-hover:bg-neutral-100 active:bg-neutral-200",
-                "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-              )}
-            >
-              {entry.icon ? (
-                <DocIconClient
-                  src={entry.icon}
-                  alt=""
-                  className="size-[17px]"
-                  // The install ships a few pages whose icon file is not in
-                  // it. A blank tile reads as a fault.
-                  fallback={<Icons.page className="size-[17px] text-neutral-400" />}
-                />
-              ) : (
-                <Icons.page className="size-[17px] text-neutral-400" />
-              )}
-            </Link>
-          ))
+          shown.map((entry) => <BookmarkTile key={entry.path} entry={entry} />)
         )}
       </div>
     </section>
+  );
+}
+
+/** One kept page. Its name and what it is about show on hover, in the same
+    tooltip a link in the page shows, so the two never read differently. */
+function BookmarkTile({ entry }: { entry: LibraryEntry }) {
+  const tile = useRef<HTMLAnchorElement>(null);
+  const [hovered, setHovered] = useState(false);
+  return (
+    <>
+      <Link
+        to={`/${entry.path}`}
+        ref={tile}
+        onPointerEnter={() => warm(entry.path)}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        onFocus={() => setHovered(true)}
+        onBlur={() => setHovered(false)}
+        onClick={() => setHovered(false)}
+        aria-label={entry.title}
+        className={cn(
+          // Square. A tile carries an icon and nothing else, so its
+          // width is its height and a row of them steps evenly.
+          "grid size-chip shrink-0 cursor-interactive place-items-center rounded-lg",
+          "border border-hairline bg-raised shadow-chip",
+          "transition-colors duration-(--duration-fast) motion-reduce:transition-none",
+          "pointer-hover:bg-neutral-100 active:bg-neutral-200",
+          "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+        )}
+      >
+        {entry.icon ? (
+          <DocIconClient
+            src={entry.icon}
+            alt=""
+            className="size-[17px]"
+            // The install ships a few pages whose icon file is not in
+            // it. A blank tile reads as a fault.
+            fallback={<Icons.page className="size-[17px] text-neutral-400" />}
+          />
+        ) : (
+          <Icons.page className="size-[17px] text-neutral-400" />
+        )}
+      </Link>
+      {hovered && <DocTooltip slug={entry.path} anchorRef={tile} />}
+    </>
   );
 }
