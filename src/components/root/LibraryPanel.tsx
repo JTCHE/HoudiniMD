@@ -26,6 +26,8 @@ import { FadeList } from "@/components/ui/FadeList";
 import { forget, shortAgo, toggleBookmark, useLibrary, type LibraryEntry } from "@/lib/store/library";
 import { warm } from "@/lib/pages";
 import { ExploreColumns } from "@/components/root/ExploreColumns";
+import { Keycap, SMALL_KEY } from "@/components/ui/Keycap";
+import { COMMAND_KEY } from "@/lib/hotkeys";
 
 type Tab = "recents" | "bookmarks";
 
@@ -190,9 +192,18 @@ export function LibraryPanel({ className }: { className?: string }) {
       <div className="h-list min-h-0">
         {entries.length === 0 ? (
           <p className="px-sm py-md text-meta text-neutral-500">
-            {tab === "recents"
-              ? "Pages you open show up here."
-              : "Keep a page with the flag on the left of a row."}
+            {tab === "recents" ? (
+              "Pages you open show up here."
+            ) : (
+              <>
+                Press{" "}
+                <span className="inline-flex translate-y-[-1px] gap-2xs align-middle">
+                  <Keycap className={SMALL_KEY}>{COMMAND_KEY}</Keycap>
+                  <Keycap className={SMALL_KEY}>D</Keycap>
+                </span>{" "}
+                or the bookmark button on a page to save it for later.
+              </>
+            )}
           </p>
         ) : (
           <FadeList
