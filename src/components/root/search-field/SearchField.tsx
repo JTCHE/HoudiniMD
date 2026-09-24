@@ -3,6 +3,8 @@ import { useNavigate } from "react-router";
 import { cn } from "@/lib/utils";
 import { pastedPath, resolve, titles } from "@/lib/search";
 import { useSearch } from "@/lib/use-search";
+import { scopedInput } from "@/lib/scope";
+import { ScopeChip } from "@/components/search/ScopeChip";
 import { isCommand, useHotkey } from "@/lib/hotkeys";
 import {
   SEARCH_DROPDOWN_CLASS,
@@ -30,6 +32,7 @@ export function SearchField({ className, autoFocus = true }: { className?: strin
   const errorId = useId();
 
   const { hits } = useSearch(query);
+  const field = scopedInput(query, changeQuery);
   // The list opens on its own when there is something to show, and stays shut
   // until the next answer once the reader dismisses it.
   const open = !closed && hits.length > 0;
@@ -210,13 +213,16 @@ export function SearchField({ className, autoFocus = true }: { className?: strin
           }}
         />
 
-        <div className="relative min-w-0 flex-1 ">
+        <div className="relative flex min-w-0 flex-1 items-center gap-2">
+          {field.scope && <ScopeChip scope={field.scope} />}
           <input
             ref={inputRef}
             type="text"
-            value={query}
-            onChange={(event) => changeQuery(event.target.value)}
-            onKeyDown={handleKeyDown}
+            value={field.text}
+            onChange={(event) => field.change(event.target.value)}
+            onKeyDown={(event) => {
+              if (!field.key(event)) handleKeyDown(event);
+            }}
             aria-label="Search the Houdini documentation"
             aria-invalid={!!error}
             aria-describedby={error ? errorId : undefined}
@@ -238,7 +244,7 @@ export function SearchField({ className, autoFocus = true }: { className?: strin
       {open && (
         <SearchResultList
           hits={hits}
-          query={query}
+          query={field.text}
           selected={selected}
           onSelect={setSelected}
           onActivate={(row, rank) => {

@@ -19,6 +19,8 @@ import { Icons } from "@/lib/ui/icons";
 import { toggleTheme, useTheme } from "@/lib/ui/theme";
 import { pastedAnchor, pastedPath, resolve, titles, type Hit } from "@/lib/search";
 import { useSearch } from "@/lib/use-search";
+import { scopedInput } from "@/lib/scope";
+import { ScopeChip } from "@/components/search/ScopeChip";
 import { useSearchReport, used } from "@/lib/telemetry";
 import {
   SEARCH_LIST_CLASS,
@@ -167,6 +169,10 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
   }, [paste, trimmed]);
 
   const { hits: live } = useSearch(paste ? "" : query);
+  const field = scopedInput(query, (next) => {
+    setQuery(next);
+    setPicked(null);
+  });
   const hits = useMemo(
     () => (paste ? (direct ? [direct] : []) : live),
     [paste, direct, live],
@@ -330,7 +336,8 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
         className="w-full max-w-overlay mx-4 bg-background border rounded-xl shadow-2xl overflow-hidden pointer-events-auto transform-gpu"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="relative border-b">
+        <div className="relative flex items-center border-b">
+          {field.scope && <span className="pl-3"><ScopeChip scope={field.scope} /></span>}
           <input
             ref={inputRef}
             type="search"
@@ -339,16 +346,15 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
             autoCapitalize="off"
             autoCorrect="on"
             spellCheck={true}
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              setPicked(null);
+            value={field.text}
+            onChange={(e) => field.change(e.target.value)}
+            onKeyDown={(e) => {
+              if (!field.key(e)) onKeyDown(e);
             }}
-            onKeyDown={onKeyDown}
             placeholder="Search docs or paste a SideFX URL…"
             // [&::-webkit-search-cancel-button]:appearance-none hides the
             // native clear glyph; we render our own thin X.
-            className="w-full px-4 py-3 pr-11 text-sm bg-transparent outline-none [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:appearance-none"
+            className="w-full min-w-0 px-4 py-3 pr-11 text-sm bg-transparent outline-none [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:appearance-none"
           />
           {query && (
             <button
@@ -380,7 +386,7 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
         {showList && (
           <SearchResultList
             hits={results}
-            query={empty ? "" : query}
+            query={empty ? "" : field.text}
             // Recents are pages the reader already picked; their old heading
             // hits and excerpts are noise.
             withSubHits={!empty}
