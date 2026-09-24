@@ -890,10 +890,24 @@ async fn install_houdini_mcp(
         current(&db, &chosen, &cache)?
     };
     let release = hook::series_of(&install.version);
+    let key = agent.clone();
     tauri::async_runtime::spawn_blocking(move || mcp::install(&release, &agent))
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(|e| e.to_string())??;
+    // What the Settings pane can honestly say: the installer ran for this
+    // agent and reported success, at this time. Nothing reads the agent's
+    // own config back, so it never claims more than that.
+    let at = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|since| since.as_secs())
+        .unwrap_or(0);
+    let record = serde_json::json!({ "agent": key, "at": at }).to_string();
+    let db = state.0.lock().map_err(|e| e.to_string())?;
+    db::set_setting(&db, MCP_INSTALLED, &record)
 }
+
+/// The setting `install_houdini_mcp` writes when the installer succeeds.
+const MCP_INSTALLED: &str = "mcp_installed";
 
 /// Puts back what F1 pointed at before this app touched it, for the named
 /// releases.
