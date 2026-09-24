@@ -1,5 +1,6 @@
 import { MarkdownActions } from "@/components/docs/MarkdownActions";
 import { BookmarkButton } from "@/components/docs/BookmarkButton";
+import { LaunchExample } from "@/components/docs/LaunchExample";
 import type { LibraryEntry } from "@/lib/store/library";
 import { PageTitle } from "@/components/docs/PageTitle";
 import { NodeVersionSelector } from "@/components/docs/NodeVersionSelector";
@@ -34,6 +35,7 @@ export function PageHeader({ name, nodeType, icon, since, summary, markdown, ent
           <PageTitle name={name} nodeType={nodeType} icon={icon} />
         </div>
         <div className="flex shrink-0 items-center gap-2 pt-0.5 print:hidden">
+          <LaunchExample path={entry.path} />
           <BookmarkButton entry={entry} />
           <MarkdownActions markdown={markdown} path={entry.path} title={name} />
         </div>
