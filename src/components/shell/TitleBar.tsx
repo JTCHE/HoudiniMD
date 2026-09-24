@@ -101,12 +101,6 @@ export function TitleBar({ sidebarOpen, onToggleSidebar, showTrail, bare = false
         </span>
       </Link>
 
-      {/* Which build of the app this is, outside the name's plate: it is read,
-          not pressed. */}
-      <span data-tauri-drag-region className="ml-xs shrink-0 translate-y-[0.5px] text-caption text-neutral-500">
-        v{version}
-      </span>
-
       {/* The arrows say where the trail leads before they are pressed: a
           disabled arrow is the honest answer to "is there a page behind this
           one", and it never moves, so the bar does not reflow as the reader
@@ -142,6 +136,12 @@ export function TitleBar({ sidebarOpen, onToggleSidebar, showTrail, bare = false
         data-tauri-drag-region
         className="h-full flex-1"
       />
+
+      {/* Which build of the app this is, beside the window's own buttons:
+          it is read, not pressed, and the arrows stay next to the name. */}
+      <span data-tauri-drag-region className="mr-sm shrink-0 translate-y-[0.5px] text-caption text-neutral-500">
+        v{version}
+      </span>
 
       <WindowControls />
 
