@@ -24,9 +24,9 @@ export function excerptText(excerpt: string): string {
     --- | --- | | Input 1 | Choose...` becomes `Input 1 · Choose...`. */
 function untable(text: string): string {
   const rule = /(?:\|\s*:?-{3,}:?\s*)+\|/g;
-  // A row ends where the next begins: `| |`. Without one, or a rule, a pipe
-  // is prose or code (`a | b`) and stays.
-  if (!/\|\s+\|/.test(text)) return text;
+  // A cell edge is a pipe with space or an end on both sides. `a||b` is code
+  // and stays. ponytail: `a | b` in code reads as `a · b`; rare in the help.
+  if (!/(^|\s)\|(\s|$)/.test(text)) return text;
   let out = text;
   for (let found = rule.exec(out); found; found = rule.exec(out)) {
     // The head row has one pipe more than the rule has cells.
