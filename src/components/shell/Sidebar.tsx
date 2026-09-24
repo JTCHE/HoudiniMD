@@ -45,7 +45,9 @@ function useTree(): TreeBranch[] {
 }
 
 const WIDTH_KEY = "houdinimd.sidebar-width";
-const MIN_WIDTH = 232;
+/** The panel as it first opens: room for a node name, and no more. */
+const DEFAULT_WIDTH = 260;
+const MIN_WIDTH = 200;
 const MAX_WIDTH = 460;
 
 /** The width the reader left the panel at. The shell reads it to decide
@@ -57,7 +59,7 @@ export function storedWidth(): number {
   } catch {
     /* no store, no memory */
   }
-  return 289;
+  return DEFAULT_WIDTH;
 }
 
 export function Sidebar({
@@ -181,7 +183,7 @@ export function Sidebar({
         aria-orientation="vertical"
         aria-label="Resize the panel"
         onPointerDown={startDrag}
-        onDoubleClick={() => setWidth(289)}
+        onDoubleClick={() => setWidth(DEFAULT_WIDTH)}
         className={cn(
           "absolute inset-y-0 -right-[2px] w-[5px] cursor-col-resize",
           "transition-colors duration-(--duration-fast) motion-reduce:transition-none",
