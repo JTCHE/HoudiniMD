@@ -91,8 +91,8 @@ export default function DocIconClient({
           transition: state === "skeleton" || state === "loaded" ? "opacity 200ms" : undefined,
         }}
         // Committed in the event itself, so the icon shows in the next frame.
-        onLoad={() => {
-          loaded.add(src);
+        onLoad={(event) => {
+          loaded.set(src, event.currentTarget);
           flushSync(() => setState((current) => (current === "skeleton" ? "loaded" : "instant")));
         }}
         onError={() => {
