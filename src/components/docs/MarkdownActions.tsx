@@ -169,10 +169,13 @@ export function MarkdownActions({ markdown, path, title }: { markdown: string; p
           used("copy-markdown");
           void copy().then((done) => done && celebrate());
         })}
-        className="flex items-center gap-2 rounded-l-lg border border-input bg-muted/50 px-3 py-1.5 text-xs text-muted-foreground shadow-xs transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 cursor-interactive"
+        // In a tight column the button keeps its icon and gives its words to
+        // the page title. The header is the container.
+        aria-label={copied ? "Copied" : "Copy as Markdown"}
+        className="flex items-center gap-2 rounded-l-lg border border-input bg-muted/50 px-2.5 py-1.5 @min-[600px]:px-3 text-xs text-muted-foreground shadow-xs transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 cursor-interactive"
       >
         {copied ? <Check className="size-3.5" aria-hidden="true" /> : <Copy className="size-3.5" aria-hidden="true" />}
-        {copied ? "Copied" : "Copy as Markdown"}
+        <span className="hidden @min-[600px]:inline">{copied ? "Copied" : "Copy as Markdown"}</span>
       </button>
       <button
         ref={arrow}
