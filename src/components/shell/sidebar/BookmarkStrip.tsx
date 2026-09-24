@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { Icons } from "@/lib/ui/icons";
 import DocIconClient from "@/components/docs/markdown/DocIconClient";
 import type { LibraryEntry } from "@/lib/store/library";
+import { Keycap, SMALL_KEY } from "@/components/ui/Keycap";
 
 /** How many fit on the row at the panel's width. */
 const SHOWN = 6;
@@ -42,8 +43,11 @@ export function BookmarkStrip({ entries, className }: { entries: LibraryEntry[];
         {shown.length === 0 ? (
           // The same height as a row of tiles: the strip must not grow the
           // first time a page is kept, or the whole tree below it steps down.
-          <p className="flex h-chip w-full items-center rounded-lg border border-dashed border-hairline px-sm text-caption text-neutral-500">
-            Press {COMMAND_KEY} D on a page to keep it.
+          <p className="flex h-chip w-full items-center gap-2xs rounded-lg border border-dashed border-hairline px-sm text-caption text-neutral-500">
+            Press
+            <Keycap className={SMALL_KEY}>{COMMAND_KEY}</Keycap>
+            <Keycap className={SMALL_KEY}>D</Keycap>
+            to save a page.
           </p>
         ) : (
           shown.map((entry) => (
