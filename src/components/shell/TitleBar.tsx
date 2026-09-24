@@ -15,6 +15,7 @@ import { BrandLogo } from "@/components/brand/BrandLogo";
 import { useTrail } from "@/lib/nav";
 import { WindowControls } from "./WindowControls";
 import { TitleBarMenu } from "./TitleBarMenu";
+import { appWindow } from "@/lib/backend";
 import { version } from "../../../src-tauri/tauri.conf.json";
 
 /* A square icon button on the bar. Smaller than a caption button and rounded,
@@ -143,9 +144,37 @@ export function TitleBar({ sidebarOpen, onToggleSidebar, showTrail, bare = false
         v{version}
       </span>
 
+      <PinButton />
       <WindowControls />
 
       {menuAt && <TitleBarMenu at={menuAt} onClose={() => setMenuAt(null)} />}
     </header>
+  );
+}
+
+/** Keeps the window over every other one, Houdini's included, so the page
+    stays in sight while the reader works. Only in the app's own window: the
+    help pane is a panel inside Houdini. It lasts until the window closes. */
+function PinButton() {
+  const [pinned, setPinned] = useState(false);
+  if (!appWindow()) return null;
+  return (
+    <button
+      type="button"
+      tabIndex={-1}
+      aria-label={pinned ? "Stop keeping on top" : "Keep on top"}
+      aria-pressed={pinned}
+      title={pinned ? "Stop keeping on top" : "Keep on top"}
+      className={cn(BAR_BUTTON, "mr-xs", pinned && "text-brand")}
+      onClick={() => {
+        const next = !pinned;
+        void appWindow()
+          ?.setAlwaysOnTop(next)
+          .then(() => setPinned(next))
+          .catch(() => {});
+      }}
+    >
+      <Icons.pin className={cn("size-[14px]", pinned && "fill-current")} />
+    </button>
   );
 }
