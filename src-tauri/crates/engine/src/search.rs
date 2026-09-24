@@ -56,6 +56,15 @@ pub struct Meta {
 /// the list is a page of one result, and the reader has stopped comparing.
 const SECTIONS_PER_PAGE: usize = 3;
 
+/// A matching section row, with its page. `row_hit` reads it.
+const SECTION_ROWS: &str = "SELECT pages_fts.path, p.title, p.node_type, p.icon, p.summary,
+                    pages_fts.heading, pages_fts.slug,
+                    snippet(pages_fts, 5, '', '', '…', 14),
+                    bm25(pages_fts, 0.0, 0.0, 0.0, 4.0, 10.0, 1.0) AS rank
+             FROM pages_fts
+             JOIN pages p ON p.build = pages_fts.build AND p.path = pages_fts.path
+             WHERE pages_fts MATCH ?1 AND pages_fts.build = ?2";
+
 /// Full-text search over the page bodies, ranked with `bm25()`.
 ///
 /// A row of the index is a section, so the ranking is over sections and the
@@ -77,47 +86,113 @@ pub fn find(
     };
     let mut statement = db
         .prepare(
-            "SELECT pages_fts.path, p.title, p.node_type, p.icon, p.summary,
-                    pages_fts.heading, pages_fts.slug,
-                    snippet(pages_fts, 5, '', '', '…', 14),
-                    bm25(pages_fts, 0.0, 0.0, 0.0, 4.0, 10.0, 1.0) AS rank
-             FROM pages_fts
-             JOIN pages p ON p.build = pages_fts.build AND p.path = pages_fts.path
-             WHERE pages_fts MATCH ?1 AND pages_fts.build = ?2
-             ORDER BY rank
-             LIMIT ?3",
+            &format!("{SECTION_ROWS} ORDER BY rank LIMIT ?3"),
         )
         .map_err(|e| e.to_string())?;
 
     let wanted = limit as usize;
     let rows = statement
-        .query_map(
-            rusqlite::params![match_query, build, (wanted * SECTIONS_PER_PAGE * 4) as u32],
-            |row| {
-                Ok((
-                    Hit {
-                        path: row.get(0)?,
-                        title: row.get(1)?,
-                        node_type: row.get(2)?,
-                        icon: row.get(3)?,
-                        summary: row.get(4)?,
-                        headings: Vec::new(),
-                        // `bm25()` is more negative the better the match. The
-                        // front-end multiplies by a weight in 0..1, so the sign
-                        // is turned here and never there.
-                        score: -row.get::<_, f64>(8)?,
-                        place: Vec::new(),
-                    },
-                    Section {
-                        heading: row.get(5)?,
-                        slug: row.get(6)?,
-                        excerpt: row.get(7)?,
-                    },
-                ))
-            },
+        .query_map(rusqlite::params![match_query, build, (wanted * SECTIONS_PER_PAGE * 4) as u32], row_hit)
+        .map_err(|e| e.to_string())?;
+    let mut hits = group(rows, wanted)?;
+    drop(statement);
+
+    // A page the reader named, then a thing on it: "dop network time scale".
+    // Its title rides the first section only, so no single row holds all the
+    // words and the page never came up. It goes first: the reader said which
+    // page they meant.
+    let named = named(db, build, query)?;
+    if !named.is_empty() {
+        let top = hits.iter().map(|hit| hit.score).fold(1.0, f64::max);
+        hits.retain(|hit| !named.iter().any(|n| n.path == hit.path));
+        hits.splice(0..0, named.into_iter().map(|hit| Hit { score: top * 2.0 + hit.score, ..hit }));
+        hits.truncate(wanted);
+    }
+    Ok(hits)
+}
+
+/// The query split as a page's exact title and the words after it (or before
+/// it), and the sections of that page that hold those words. Empty when no
+/// such split names a page. The longest title wins.
+fn named(db: &rusqlite::Connection, build: &str, query: &str) -> Result<Vec<Hit>, String> {
+    let words = tokens(query);
+    let n = words.len();
+    if n < 2 {
+        return Ok(Vec::new());
+    }
+    let mut titled = db
+        .prepare("SELECT path, title FROM pages WHERE build = ?1 AND rank = 0 AND title LIKE ?2")
+        .map_err(|e| e.to_string())?;
+    let mut titles = |these: &[String]| -> Result<Vec<(String, Vec<String>)>, String> {
+        let pattern = format!("%{}%", these.join("%"));
+        let rows = titled
+            .query_map(rusqlite::params![build, pattern], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))
+            .map_err(|e| e.to_string())?;
+        Ok(rows.filter_map(Result::ok).map(|(path, title)| (path, tokens(&title))).collect())
+    };
+    // The whole query is the start of a title ("copy to points"): the reader
+    // is naming that page, and the plain ranking already answers it.
+    let (last, head) = words.split_last().expect("two words or more");
+    let typing = titles(&words)?.into_iter().any(|(_, title)| {
+        title.len() >= n && title[..n - 1] == *head && title[n - 1].starts_with(last.as_str())
+    });
+    if typing {
+        return Ok(Vec::new());
+    }
+    let mut sections = db
+        .prepare(
+            &format!("{SECTION_ROWS} AND pages_fts.path = ?3 ORDER BY rank LIMIT ?4"),
         )
         .map_err(|e| e.to_string())?;
+    for k in (1..n).rev() {
+        for (title, rest) in [(&words[..k], &words[k..]), (&words[n - k..], &words[..n - k])] {
+            let pages: Vec<String> =
+                titles(title)?.into_iter().filter(|(_, name)| name == title).map(|(path, _)| path).collect();
+            let Some(match_query) = db::match_query(&rest.join(" ")) else { continue };
+            let mut found = Vec::new();
+            for path in &pages {
+                let rows = sections
+                    .query_map(rusqlite::params![match_query, build, path, SECTIONS_PER_PAGE as u32], row_hit)
+                    .map_err(|e| e.to_string())?;
+                found.extend(group(rows, 1)?);
+            }
+            if !found.is_empty() {
+                return Ok(found);
+            }
+        }
+    }
+    Ok(Vec::new())
+}
 
+/// Lower-case words, split the way `db::match_query` splits them.
+fn tokens(text: &str) -> Vec<String> {
+    text.split(|c: char| !c.is_alphanumeric() && c != '_').filter(|w| !w.is_empty()).map(str::to_lowercase).collect()
+}
+
+fn row_hit(row: &rusqlite::Row) -> rusqlite::Result<(Hit, Section)> {
+    Ok((
+        Hit {
+            path: row.get(0)?,
+            title: row.get(1)?,
+            node_type: row.get(2)?,
+            icon: row.get(3)?,
+            summary: row.get(4)?,
+            headings: Vec::new(),
+            // `bm25()` is more negative the better the match. The front-end
+            // multiplies by a weight in 0..1, so the sign is turned here and
+            // never there.
+            score: -row.get::<_, f64>(8)?,
+            place: Vec::new(),
+        },
+        Section { heading: row.get(5)?, slug: row.get(6)?, excerpt: row.get(7)? },
+    ))
+}
+
+/// Section rows, best first, as pages with their sections under them.
+fn group(
+    rows: impl Iterator<Item = rusqlite::Result<(Hit, Section)>>,
+    wanted: usize,
+) -> Result<Vec<Hit>, String> {
     let mut hits: Vec<Hit> = Vec::new();
     let mut at: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
     for row in rows {
@@ -230,4 +305,44 @@ pub fn read_meta(
         });
     }
     Ok(found)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::find;
+
+    /// Two pages, each titled on its first section only, the way `index.rs`
+    /// writes them. Made up here: no doc text in the repo.
+    fn index() -> rusqlite::Connection {
+        let db = rusqlite::Connection::open_in_memory().unwrap();
+        crate::db::reset(&db).unwrap();
+        for (path, title, sections) in [
+            ("net", "Sim Net", [("", "Sim Net", "A network."), ("Timing", "", "Scale Time makes the clock loop fast.")]),
+            ("net_long", "Sim Net Long", [("", "Sim Net Long", "Another network."), ("Other", "", "Nothing here.")]),
+            ("mentions", "Clock", [("", "Clock", "A sim net can scale time too."), ("More", "", "Nothing.")]),
+        ] {
+            db.execute("INSERT INTO pages (build, path, title) VALUES ('b', ?1, ?2)", [path, title]).unwrap();
+            for (heading, name, body) in sections {
+                db.execute(
+                    "INSERT INTO pages_fts (build, path, slug, heading, title, body) VALUES ('b', ?1, '', ?2, ?3, ?4)",
+                    [path, heading, name, body],
+                )
+                .unwrap();
+            }
+        }
+        db
+    }
+
+    #[test]
+    fn a_named_page_and_a_thing_on_it_comes_first() {
+        let hits = find(&index(), "b", "sim net scale time", 6).unwrap();
+        assert_eq!(hits[0].path, "net");
+        assert_eq!(hits[0].headings[0].heading, "Timing");
+    }
+
+    #[test]
+    fn a_title_being_typed_is_left_to_the_plain_ranking() {
+        let hits = find(&index(), "b", "sim net lo", 6).unwrap();
+        assert_eq!(hits[0].path, "net_long");
+    }
 }
