@@ -7,13 +7,39 @@ import { invoke } from "./backend";
  * or half of a link where the snippet cut it.
  */
 export function excerptText(excerpt: string): string {
-  return excerpt
+  return untable(excerpt)
     // A tag the page writes as raw HTML (a video, a line break). Only a real
     // tag shape, so `a < b` in code keeps its text.
     .replace(/<\/?[a-z][^<>]*>/gi, " ")
     .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
     .replace(/\]\([^)\s]*\)?/g, "")
-    .replace(/\*\*|__|`|\[/g, "");
+    .replace(/\*\*|__|`|\[/g, "")
+    // A markdown escape or hard line break: `\*`, `floatmax\ The`. A `\n`
+    // in code keeps its backslash.
+    .replace(/\\(?=[\s\p{P}]|$)/gu, "");
+}
+
+/** A table the snippet crossed, as text: its head row and the `| --- |` row
+    under it go, and the cells read as a list. `| Parameter | Description | |
+    --- | --- | | Input 1 | Choose...` becomes `Input 1 · Choose...`. */
+function untable(text: string): string {
+  const rule = /(?:\|\s*:?-{3,}:?\s*)+\|/g;
+  // A row ends where the next begins: `| |`. Without one, or a rule, a pipe
+  // is prose or code (`a | b`) and stays.
+  if (!/\|\s+\|/.test(text)) return text;
+  let out = text;
+  for (let found = rule.exec(out); found; found = rule.exec(out)) {
+    // The head row has one pipe more than the rule has cells.
+    let pipes = (found[0].match(/-{3,}/g) ?? []).length + 1;
+    let start = found.index;
+    while (start > 0 && pipes > 0) if (out[--start] === "|") pipes -= 1;
+    out = out.slice(0, start) + out.slice(found.index + found[0].length);
+    rule.lastIndex = start;
+  }
+  return out
+    .replace(/\s*\|(?:\s*\|)*\s*/g, " · ")
+    .replace(/^ · | · $/g, "")
+    .replace(/ · …/g, "…");
 }
 
 export interface Section {
