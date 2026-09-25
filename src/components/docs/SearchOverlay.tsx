@@ -186,10 +186,12 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
     setPicked(null);
   }
 
+  // `vex:` with nothing after it is not a search yet: it lists the scope.
+  const words = field.text.trim();
   const empty = trimmed === "";
   const results = empty ? recent : hits;
   // A pasted link is already the answer; there is nothing further to search for.
-  const searchFor = !empty && !paste;
+  const searchFor = words !== "" && !paste;
   // Same flattening the list renders, so the arrow-key indices line up with it.
   const rows = useMemo(() => toRows(results, !empty), [results, empty]);
 
@@ -279,7 +281,7 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
    * reader their query is wrong when the search is what fell short.
    */
   const submit = useCallback(async () => {
-    if (!trimmed) return;
+    if (!words) return;
     const all = await titles();
     const hit = resolve(all, trimmed, hits[0]);
     if (!hit) {
@@ -290,7 +292,7 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
     tell(rows.findIndex((row) => row.hit.path === hit.path));
     if (location.pathname !== `/${hit.path}`) saveRecentSearch({ ...hit, headings: undefined });
     go(`${hit.path}${pastedAnchor(trimmed)}`);
-  }, [trimmed, hits, go, location.pathname, tell, rows]);
+  }, [trimmed, words, hits, go, location.pathname, tell, rows]);
 
   function onKeyDown(event: React.KeyboardEvent) {
     const total = skip + rows.length + (searchFor ? 1 : 0);
@@ -351,7 +353,7 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
             onKeyDown={(e) => {
               if (!field.key(e)) onKeyDown(e);
             }}
-            placeholder="Search docs or paste a SideFX URL…"
+            placeholder={field.scope ? `Search ${field.scope.label.toLowerCase()}…` : "Search docs or paste a SideFX URL…"}
             // [&::-webkit-search-cancel-button]:appearance-none hides the
             // native clear glyph; we render our own thin X.
             className="w-full min-w-0 px-4 py-3 pr-11 text-sm bg-transparent outline-none [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:appearance-none"
@@ -437,7 +439,7 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
                     onMouseMove={() => setPicked(skip + rows.length)}
                   >
                     <span className="text-xs shrink-0">Search for</span>
-                    <span className="text-sm font-mono truncate">&ldquo;{trimmed}&rdquo;</span>
+                    <span className="text-sm font-mono truncate">&ldquo;{words}&rdquo;</span>
                   </button>
                 </li>
               ) : null
