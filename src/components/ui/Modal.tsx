@@ -6,6 +6,7 @@ import { useEffect, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { Icons } from "@/lib/ui/icons";
+import { Hint } from "@/components/ui/Hint";
 
 export function Modal({
   label,
@@ -42,18 +43,20 @@ export function Modal({
           className,
         )}
       >
+        <Hint label="Close" keys="Esc" className="absolute top-sm right-sm z-10">
         <button
           type="button"
           aria-label="Close"
           onClick={onClose}
           className={cn(
-            "absolute top-sm right-sm z-10 grid size-[28px] cursor-interactive place-items-center rounded-md text-neutral-500",
+            "grid size-[28px] cursor-interactive place-items-center rounded-md text-neutral-500",
             "pointer-hover:bg-neutral-100 pointer-hover:text-neutral-800",
             "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
           )}
         >
           <Icons.dismiss className="size-4" />
         </button>
+        </Hint>
         {children}
       </div>
     </div>,

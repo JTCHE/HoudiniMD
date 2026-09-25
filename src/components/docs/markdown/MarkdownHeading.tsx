@@ -1,4 +1,5 @@
 import { Link2 } from "lucide-react";
+import { Hint } from "@/components/ui/Hint";
 import type { Components } from "react-markdown";
 import { useLocation } from "react-router";
 import { showToast } from "@/components/ui/toast-notification";
@@ -23,6 +24,7 @@ function heading(Tag: Tag): NonNullable<Components[Tag]> {
       <Tag {...props}>
         {children}
         {props.id && (
+          <Hint label="Copy the link to this section">
           <button
             type="button"
             aria-label="Copy the link to this section"
@@ -31,6 +33,7 @@ function heading(Tag: Tag): NonNullable<Components[Tag]> {
           >
             <Link2 className="size-[0.75em]" aria-hidden="true" />
           </button>
+          </Hint>
         )}
       </Tag>
     );
