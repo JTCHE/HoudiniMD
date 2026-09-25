@@ -234,7 +234,7 @@ function Panel({ at, onClose }: { at: { x: number; y: number; menu: Menu }; onCl
       style={place}
       className={cn(
         "fixed z-[80] min-w-56 rounded-lg outline-none border border-hairline bg-raised p-1 shadow-xl shadow-black/10",
-        "animate-[dropdown-in_120ms_cubic-bezier(0.2,0,0,1)] motion-reduce:animate-none",
+        "pop-in",
       )}
     >
       {groups}

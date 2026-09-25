@@ -199,7 +199,7 @@ export function TooltipBox({ anchorRef, hoverPosRef, className, children }: Anch
         transform: `translate(calc(-50% + ${place.x}px), ${place.below ? "0" : "-100%"})`,
       }}
       className={cn(
-        "[@media(hover:none)]:hidden rounded-lg fixed z-50 bg-background border border-border shadow-lg p-2 text-xs pointer-events-none whitespace-normal",
+        "pop-in [@media(hover:none)]:hidden rounded-lg fixed z-50 bg-background border border-border shadow-lg p-2 text-xs pointer-events-none whitespace-normal",
         className,
       )}
     >

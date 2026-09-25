@@ -16,6 +16,8 @@ import { useTrail } from "@/lib/nav";
 import { WindowControls } from "./WindowControls";
 import { TitleBarMenu } from "./TitleBarMenu";
 import { appWindow } from "@/lib/backend";
+import { COMMAND_KEY } from "@/lib/hotkeys";
+import { Hint } from "@/components/ui/Hint";
 import { version } from "../../../src-tauri/tauri.conf.json";
 
 /* A square icon button on the bar. Smaller than a caption button and rounded,
@@ -62,6 +64,7 @@ export function TitleBar({ sidebarOpen, onToggleSidebar, showTrail, bare = false
       )}
     >
       {!bare && (
+      <Hint label={sidebarOpen ? "Hide the sidebar" : "Show the sidebar"} keys={`${COMMAND_KEY}+B`}>
       <button
         type="button"
         tabIndex={-1}
@@ -75,6 +78,7 @@ export function TitleBar({ sidebarOpen, onToggleSidebar, showTrail, bare = false
       >
         <Icons.sidebarToggle className="size-4" />
       </button>
+      </Hint>
       )}
 
       {/* The name is the way home, the way a window title is in every app
@@ -89,8 +93,9 @@ export function TitleBar({ sidebarOpen, onToggleSidebar, showTrail, bare = false
         className={cn(
           // Same plate as BAR_BUTTON: 28px tall, same radius, same hover fill.
           // Only the horizontal padding differs, because a logo and a word
-          // need more room than one glyph.
-          "ml-sm flex h-[28px] shrink-0 cursor-interactive items-center gap-[6px] rounded-md px-sm",
+          // need more room than one glyph. A whole-pixel width: the text is a
+          // fraction wide, and the arrows after it drew soft on half pixels.
+          "ml-sm flex h-[28px] w-[98px] shrink-0 cursor-interactive items-center gap-[6px] rounded-md px-sm",
           "transition-colors duration-(--duration-fast) motion-reduce:transition-none",
           "pointer-hover:bg-neutral-200",
           "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
@@ -107,27 +112,32 @@ export function TitleBar({ sidebarOpen, onToggleSidebar, showTrail, bare = false
           one", and it never moves, so the bar does not reflow as the reader
           walks. They are absent on the landing page, which has no trail. */}
       {showArrows && (
-        <span className="ml-sm flex shrink-0 items-center gap-2xs">
-          <button
-            type="button"
-        tabIndex={-1}
-            aria-label="Back"
-            disabled={!canGoBack}
-            className={BAR_BUTTON}
-            onClick={(() => void navigate(-1))}
-          >
-            <Icons.back className="size-[15px]" />
-          </button>
-          <button
-            type="button"
-        tabIndex={-1}
-            aria-label="Forward"
-            disabled={!canGoForward}
-            className={BAR_BUTTON}
-            onClick={(() => void navigate(1))}
-          >
-            <Icons.forward className="size-[15px]" />
-          </button>
+        // 16px, not 15: an odd size in the 28px plate sat on a half pixel.
+        <span className="ml-xs flex shrink-0 items-center gap-2xs">
+          <Hint label="Back" keys="Alt+←">
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-label="Back"
+              disabled={!canGoBack}
+              className={BAR_BUTTON}
+              onClick={(() => void navigate(-1))}
+            >
+              <Icons.back className="size-4 -translate-y-px" />
+            </button>
+          </Hint>
+          <Hint label="Forward" keys="Alt+→">
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-label="Forward"
+              disabled={!canGoForward}
+              className={BAR_BUTTON}
+              onClick={(() => void navigate(1))}
+            >
+              <Icons.forward className="size-4 -translate-y-px" />
+            </button>
+          </Hint>
         </span>
       )}
 
@@ -159,13 +169,13 @@ function PinButton() {
   const [pinned, setPinned] = useState(false);
   if (!appWindow()) return null;
   return (
+    <Hint label={pinned ? "Stop keeping on top" : "Keep on top"}>
     <button
       type="button"
       tabIndex={-1}
       aria-label={pinned ? "Stop keeping on top" : "Keep on top"}
       aria-pressed={pinned}
-      title={pinned ? "Stop keeping on top" : "Keep on top"}
-      className={cn(BAR_BUTTON, "mr-xs", pinned && "text-brand")}
+      className={cn(BAR_BUTTON, pinned && "text-brand")}
       onClick={() => {
         const next = !pinned;
         void appWindow()
@@ -176,5 +186,6 @@ function PinButton() {
     >
       <Icons.pin className={cn("size-[14px]", pinned && "fill-current")} />
     </button>
+    </Hint>
   );
 }
