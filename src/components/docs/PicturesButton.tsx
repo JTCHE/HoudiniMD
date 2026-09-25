@@ -3,6 +3,8 @@ import type { Element, Root } from "hast";
 import { Paperclip } from "lucide-react";
 import { openLightbox } from "@/lib/lightbox";
 import { Hint } from "@/components/ui/Hint";
+import { cn } from "@/lib/utils";
+import { ACTION, ACTION_ICON, QUIET } from "@/lib/ui/button";
 
 /** Under this many pictures the page is its own gallery. */
 const MIN = 2;
@@ -34,9 +36,9 @@ export function PicturesButton({ tree }: { tree: Root }) {
         type="button"
         aria-label={`Open the ${total} pictures of this page`}
         onClick={(event) => openLightbox(event.currentTarget)}
-        className="flex h-8 shrink-0 cursor-interactive items-center gap-1 rounded-lg border border-input bg-muted/50 px-2 text-xs tabular-nums text-muted-foreground shadow-xs transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+        className={cn(ACTION, QUIET, "gap-1.5 px-2.5 tabular-nums")}
       >
-        <Paperclip className="size-3.5" aria-hidden="true" />
+        <Paperclip className={ACTION_ICON} aria-hidden="true" />
         {total}
       </button>
     </Hint>

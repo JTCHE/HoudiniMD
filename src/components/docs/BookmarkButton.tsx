@@ -2,6 +2,7 @@ import { cn } from "@/lib/utils";
 import { Icons } from "@/lib/ui/icons";
 import { COMMAND_KEY, isCommand, isTyping, useHotkey } from "@/lib/hotkeys";
 import { Hint } from "@/components/ui/Hint";
+import { ACTION, ACTION_ICON, QUIET } from "@/lib/ui/button";
 import { toggleBookmark, useLibrary, type LibraryEntry } from "@/lib/store/library";
 
 /**
@@ -29,16 +30,17 @@ export function BookmarkButton({ entry }: { entry: Omit<LibraryEntry, "at"> }) {
       aria-label={kept ? "Remove the bookmark" : "Keep this page"}
       onClick={(() => toggleBookmark(entry))}
       className={cn(
-        "grid size-8 shrink-0 cursor-interactive place-items-center rounded-lg border border-input",
+        ACTION,
+        QUIET,
+        "w-8 px-0",
         // The background only: the same button serves the next page, and a
         // faded colour drew a kept page as not kept for a moment.
-        "bg-muted/50 shadow-xs transition-[background-color] hover:bg-muted",
-        "focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none",
-        kept ? "text-brand" : "text-muted-foreground hover:text-foreground",
+        "transition-[background-color]",
+        kept && "text-brand hover:text-brand",
       )}
     >
       <Icons.bookmark
-        className="size-3.5"
+        className={ACTION_ICON}
         fill={kept ? "currentColor" : "none"}
         aria-hidden="true"
       />
