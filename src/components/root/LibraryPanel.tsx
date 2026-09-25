@@ -20,6 +20,7 @@
  */
 import { Link, useSearchParams } from "react-router";
 import { cn } from "@/lib/utils";
+import { Hint } from "@/components/ui/Hint";
 import { Icons } from "@/lib/ui/icons";
 import DocIconClient from "@/components/docs/markdown/DocIconClient";
 import { FadeList } from "@/components/ui/FadeList";
@@ -67,13 +68,14 @@ function LibraryRow({ entry, kept, onForget }: { entry: LibraryEntry; kept: bool
         className="absolute inset-0 cursor-interactive rounded-lg focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
       />
 
+      <Hint label={kept ? "Remove the bookmark" : "Bookmark"} className="absolute -left-[13px] top-1/2 -translate-y-1/2">
       <button
         type="button"
         aria-label={kept ? `Remove ${entry.title} from bookmarks` : `Bookmark ${entry.title}`}
         aria-pressed={kept}
         onClick={(() => toggleBookmark(entry))}
         className={cn(
-          "absolute -left-[13px] top-1/2 grid size-[15px] -translate-y-1/2 cursor-interactive place-items-center rounded-sm",
+          "grid size-[15px] cursor-interactive place-items-center rounded-sm",
           // An unkept row shows its flag only under the pointer or the
           // keyboard, so a list of unkept pages is a list of pages and not a
           // column of empty outlines.
@@ -89,6 +91,7 @@ function LibraryRow({ entry, kept, onForget }: { entry: LibraryEntry; kept: bool
           fill={kept ? "currentColor" : "none"}
         />
       </button>
+      </Hint>
 
       {entry.icon ? (
         <DocIconClient
@@ -114,6 +117,7 @@ function LibraryRow({ entry, kept, onForget }: { entry: LibraryEntry; kept: bool
           when the pointer crosses it. */}
       <span className="relative grid size-[15px] shrink-0 place-items-center">
         {onForget && (
+          <Hint label="Remove from recents">
           <button
             type="button"
             aria-label={`Remove ${entry.title} from recents`}
@@ -128,6 +132,7 @@ function LibraryRow({ entry, kept, onForget }: { entry: LibraryEntry; kept: bool
           >
             <Icons.dismiss className="size-[11px]" />
           </button>
+          </Hint>
         )}
       </span>
     </div>
