@@ -8,6 +8,18 @@ import { cn } from "@/lib/utils";
 import { Icons } from "@/lib/ui/icons";
 import { Hint } from "@/components/ui/Hint";
 
+/** The first line of a modal: its title and the close button stand on it.
+    A column that starts a modal starts with `MODAL_TOP` and puts its title in
+    a `MODAL_LINE`, so every title and the close button share one axis. */
+/** The ground behind every modal: the page dimmed and blurred, the same in
+    Settings, a question and the search overlay. The blur is dropped where the
+    window draws in software: see lib/ui/blur. What sits on top keeps a layer
+    of its own (`transform-gpu`). */
+export const SCRIM = "absolute inset-0 bg-black/50 scrim-blur";
+
+export const MODAL_TOP = "pt-[20px]";
+export const MODAL_LINE = "flex h-7 shrink-0 items-center";
+
 export function Modal({
   label,
   onClose,
@@ -31,25 +43,24 @@ export function Modal({
 
   return createPortal(
     <div className="fixed inset-0 z-[70] grid place-items-center p-md" onMouseDown={onClose}>
-      {/* A plain dim, not a blur: see SearchOverlay. */}
-      <div className="absolute inset-0 bg-black/50" />
+      <div className={SCRIM} />
       <div
         role="dialog"
         aria-modal="true"
         aria-label={label}
         onMouseDown={(event) => event.stopPropagation()}
         className={cn(
-          "pop-in relative flex max-h-full flex-col overflow-hidden rounded-xl border border-hairline bg-background shadow-2xl",
+          "pop-in relative flex max-h-full transform-gpu flex-col overflow-hidden rounded-xl border border-hairline bg-background shadow-2xl",
           className,
         )}
       >
-        <Hint label="Close" keys="Esc" className="absolute top-sm right-sm z-10">
+        <Hint label="Close" keys="Esc" className="absolute top-[20px] right-[20px] z-10">
         <button
           type="button"
           aria-label="Close"
           onClick={onClose}
           className={cn(
-            "grid size-[28px] cursor-interactive place-items-center rounded-md text-neutral-500",
+            "grid size-7 cursor-interactive place-items-center rounded-md text-neutral-500",
             "pointer-hover:bg-neutral-100 pointer-hover:text-neutral-800",
             "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
           )}

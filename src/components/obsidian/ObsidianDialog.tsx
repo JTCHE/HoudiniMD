@@ -3,10 +3,11 @@
  * the pictures, which writes into a vault folder, or send the text alone.
  * The answer can be kept; Settings changes it back.
  */
-import { useEffect, useState } from "react";
-import { Modal } from "@/components/ui/Modal";
+import { useEffect, useRef, useState } from "react";
+import { Modal, MODAL_LINE, MODAL_TOP } from "@/components/ui/Modal";
+import { cn } from "@/lib/utils";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
-import { ChoiceRow } from "@/components/onboarding/ChoiceRow";
+import { CHOICE_HANG, ChoiceRow } from "@/components/onboarding/ChoiceRow";
 import { SettingRow } from "@/components/onboarding/SettingRow";
 import { showToast } from "@/components/ui/toast-notification";
 import { invoke } from "@/lib/backend";
@@ -32,7 +33,7 @@ export function VaultPicker({ value, onChange }: { value: string | null; onChang
     ? [{ path: value, name: value.split(/[\\/]/).filter(Boolean).pop() ?? value }, ...listed]
     : listed;
   return (
-    <div className="flex flex-wrap gap-sm">
+    <div className={cn(CHOICE_HANG, "flex flex-wrap gap-sm")}>
       {all.map((vault) => (
         <ChoiceRow key={vault.path} compact label={vault.name} chosen={vault.path === value} onClick={() => onChange(vault.path)} />
       ))}
@@ -50,11 +51,22 @@ export function ObsidianDialog({ title, markdown, onClose }: { title: string; ma
   const [vault, setVault] = useState<string | null>(null);
   const [keep, setKeep] = useState(false);
   const [busy, setBusy] = useState(false);
+  const sendButton = useRef<HTMLButtonElement>(null);
+  const focused = useRef(false);
 
   // The vault used last time, else the one Obsidian opened last.
   useEffect(() => {
     void rememberedVault().then(async (path) => setVault(path ?? (await vaults())[0]?.path ?? null));
   }, []);
+
+  // Send takes the focus as soon as it can be pressed, so Enter sends. It
+  // waits while the vault is still being read.
+  useEffect(() => {
+    const button = sendButton.current;
+    if (focused.current || !button || button.disabled) return;
+    focused.current = true;
+    button.focus();
+  });
 
   async function send() {
     setBusy(true);
@@ -72,13 +84,13 @@ export function ObsidianDialog({ title, markdown, onClose }: { title: string; ma
 
   return (
     <Modal label="Send to Obsidian" onClose={onClose} className="w-full max-w-[440px]">
-      <div className="flex flex-col gap-lg p-lg">
-        <header className="flex flex-col gap-2xs pr-lg">
-          <h2 className="text-[17px] leading-6 font-semibold tracking-[-0.01em] text-neutral-950">Send to Obsidian</h2>
-          <p className="text-meta text-neutral-500">This page has pictures. A note sent as text links to them but does not hold them.</p>
+      <div className={cn("flex flex-col gap-lg px-lg pb-lg", MODAL_TOP)}>
+        <header className="flex flex-col gap-2xs">
+          <h2 className={cn(MODAL_LINE, "pr-lg text-[17px] font-semibold tracking-[-0.01em] text-neutral-950")}>Send to Obsidian</h2>
+          <p className="text-meta text-neutral-500">This page contains media elements. Choose how you want to import them into Obsidian.</p>
         </header>
 
-        <div role="radiogroup" aria-label="Pictures" className="flex flex-col gap-sm">
+        <div role="radiogroup" aria-label="Pictures" className={cn(CHOICE_HANG, "flex flex-col gap-sm")}>
           <ChoiceRow
             label="Bring the pictures"
             detail="Writes the note and its pictures into your vault folder"
@@ -95,10 +107,10 @@ export function ObsidianDialog({ title, markdown, onClose }: { title: string; ma
           </div>
         )}
 
-        <SettingRow label="Always do this" detail="Change it in Settings" checked={keep} onChange={setKeep} />
+        <SettingRow label="Remember my choice" detail="Change it in Settings" checked={keep} onChange={setKeep} />
 
         <div className="flex justify-end">
-          <PrimaryButton disabled={busy || (bring && !vault)} onClick={() => void send()}>
+          <PrimaryButton ref={sendButton} disabled={busy || (bring && !vault)} onClick={() => void send()}>
             {busy ? "Sending…" : "Send"}
           </PrimaryButton>
         </div>

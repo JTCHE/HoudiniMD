@@ -9,11 +9,13 @@
  */
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { invoke, inTauri } from "@/lib/backend";
+import { isCommand, useHotkey } from "@/lib/hotkeys";
 import { cn } from "@/lib/utils";
 import { Icons } from "@/lib/ui/icons";
-import { Modal } from "@/components/ui/Modal";
+import { Modal, MODAL_LINE, MODAL_TOP } from "@/components/ui/Modal";
+import { SidebarRow } from "@/components/shell/sidebar/SidebarRow";
 import { Toggle } from "@/components/ui/Toggle";
-import { ChoiceRow } from "@/components/onboarding/ChoiceRow";
+import { CHOICE_HANG, ChoiceRow } from "@/components/onboarding/ChoiceRow";
 import { showToast } from "@/components/ui/toast-notification";
 import { TELEMETRY } from "@/components/onboarding/Onboarding";
 import { VaultPicker } from "@/components/obsidian/ObsidianDialog";
@@ -42,31 +44,31 @@ export function SettingsDialog() {
     window.addEventListener(OPEN, show);
     return () => window.removeEventListener(OPEN, show);
   }, []);
+  // Ctrl or ⌘ with a comma, as in most desktop apps.
+  useHotkey((event) => {
+    if (event.key !== "," || !isCommand(event) || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    setOpen(true);
+  });
   if (!open) return null;
 
   return (
     <Modal label="Settings" onClose={() => setOpen(false)} className="h-[min(560px,100%)] w-full max-w-[760px] flex-row">
-      <nav className="flex w-[190px] shrink-0 flex-col gap-2xs border-r border-hairline bg-neutral-50 p-sm">
-        <span className="px-sm pt-2xs pb-xs text-caption text-neutral-500">Settings</span>
+      {/* The panel's own rows, on the panel's own ground: the sections are
+          places, as the sidebar's rows are. */}
+      <nav className={cn("flex w-[190px] shrink-0 flex-col gap-2xs border-r border-hairline bg-neutral-100 px-ms pb-ms", MODAL_TOP)}>
+        <span className={cn(MODAL_LINE, "px-sm text-caption text-neutral-500")}>Settings</span>
         {SECTIONS.map((section) => (
-          <button
+          <SidebarRow
             key={section.key}
-            type="button"
-            aria-current={shown === section.key ? "page" : undefined}
+            label={section.label}
+            selected={shown === section.key}
+            mark={<section.icon className={cn("size-[15px]", shown === section.key ? "text-brand" : "text-neutral-500")} />}
             onClick={() => setShown(section.key)}
-            className={cn(
-              "flex cursor-interactive items-center gap-sm rounded-md px-sm py-[7px] text-left text-[13px] text-neutral-700",
-              "transition-colors duration-(--duration-fast) motion-reduce:transition-none",
-              "pointer-hover:bg-neutral-100 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-              shown === section.key && "bg-neutral-200 font-medium text-neutral-950 pointer-hover:bg-neutral-200",
-            )}
-          >
-            <section.icon className="size-[15px] shrink-0 text-neutral-500" />
-            {section.label}
-          </button>
+          />
         ))}
       </nav>
-      <div className="min-w-0 flex-1 overflow-y-auto px-xl py-lg">
+      <div className={cn("min-w-0 flex-1 overflow-y-auto px-xl pb-lg", MODAL_TOP)}>
         {!inTauri ? (
           <p className="text-meta text-neutral-500">Settings live in the HoudiniMD app, not in Houdini's help pane.</p>
         ) : shown === "houdini" ? (
@@ -86,12 +88,13 @@ export function SettingsDialog() {
 function Section({ title, detail, action, children }: { title: string; detail: string; action?: ReactNode; children: ReactNode }) {
   return (
     <section className="flex flex-col gap-md">
-      <header className="flex items-start gap-md pr-lg">
-        <div className="flex min-w-0 flex-1 flex-col gap-2xs">
-          <h2 className="text-[17px] leading-6 font-semibold tracking-[-0.01em] text-neutral-950">{title}</h2>
-          <p className="text-meta text-neutral-500">{detail}</p>
+      <header className="flex flex-col gap-2xs">
+        {/* The close button sits at the end of this line. */}
+        <div className={cn(MODAL_LINE, "gap-md pr-lg")}>
+          <h2 className="min-w-0 flex-1 text-[17px] font-semibold tracking-[-0.01em] text-neutral-950">{title}</h2>
+          {action}
         </div>
-        {action}
+        <p className="text-meta text-neutral-500">{detail}</p>
       </header>
       <div className="flex flex-col">{children}</div>
     </section>
@@ -101,7 +104,7 @@ function Section({ title, detail, action, children }: { title: string; detail: s
 /** One setting: what it is, what it says now, and its control. */
 function Row({ label, detail, children }: { label: string; detail?: ReactNode; children?: ReactNode }) {
   return (
-    <div className="flex items-center gap-md border-b border-hairline py-ms last:border-b-0">
+    <div className={cn(ROW, "flex items-center gap-md")}>
       <div className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-[14px] font-medium text-neutral-950">{label}</span>
         {detail && <span className="text-caption text-neutral-500">{detail}</span>}
@@ -110,6 +113,10 @@ function Row({ label, detail, children }: { label: string; detail?: ReactNode; c
     </div>
   );
 }
+
+/** A row of a section. Its line runs past the text on both sides, as a
+    list of chips hangs past it (`CHOICE_HANG`). */
+const ROW = "-mx-ms border-b border-hairline px-ms py-ms last:border-b-0";
 
 function Empty({ children }: { children: ReactNode }) {
   return <p className="py-ms text-meta text-neutral-500">{children}</p>;
@@ -270,16 +277,16 @@ function ObsidianSection() {
   ];
   return (
     <Section title="Obsidian" detail="Send to Obsidian sends a page with no pictures as text. For a page with pictures, it can write the pictures into your vault too.">
-      <div className="flex flex-col gap-sm border-b border-hairline py-ms">
+      <div className={cn(ROW, "flex flex-col gap-sm")}>
         <span className="text-[14px] font-medium text-neutral-950">Pictures</span>
-        <div role="radiogroup" aria-label="Pictures" className="flex flex-wrap gap-sm">
+        <div role="radiogroup" aria-label="Pictures" className={cn(CHOICE_HANG, "flex flex-wrap gap-sm")}>
           {choice &&
             choices.map((one) => (
               <ChoiceRow key={one.value} compact label={one.label} chosen={choice === one.value} onClick={() => void pick(one.value)} />
             ))}
         </div>
       </div>
-      <div className="flex flex-col gap-sm py-ms">
+      <div className={cn(ROW, "flex flex-col gap-sm")}>
         <span className="flex flex-col">
           <span className="text-[14px] font-medium text-neutral-950">Vault</span>
           <span className="text-caption text-neutral-500">Where the pictures go. Obsidian's own vaults are listed first.</span>

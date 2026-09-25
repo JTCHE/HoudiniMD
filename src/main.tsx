@@ -8,6 +8,7 @@ import { AppShell } from "./components/shell/AppShell";
 import { ToastListener } from "./components/ui/toast-notification";
 import { startTheme } from "./lib/ui/theme";
 import { startPress } from "./lib/ui/press";
+import { startBlurCheck } from "./lib/ui/blur";
 import "./styles/globals.css";
 
 // `bun run app --clean` starts the app as a machine that has never run it.
@@ -22,6 +23,7 @@ if (await invoke<boolean>("clean_start").catch(() => false)) {
 // Light or dark before the first paint, so the window never flashes the
 // other theme on the way in.
 startTheme();
+startBlurCheck();
 
 // An animation that runs against a window nobody is reading is pure cost, so
 // the body says when the window is idle and the stylesheet pauses the motion.

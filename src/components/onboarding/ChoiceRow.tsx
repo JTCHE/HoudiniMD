@@ -1,6 +1,11 @@
 import { cn } from "@/lib/utils";
 import { Icons } from "@/lib/ui/icons";
 
+/** The margin a list of these gives back, so the text in a row stands on the
+    same line as the text above the list: the row's padding and its border
+    hang out into the gutter. */
+export const CHOICE_HANG = "-mx-[13px]";
+
 /**
  * One row of a list the setup asks the reader to choose from: a Houdini build,
  * an agent. `chosen` is left out for a row that is an action, not a choice.
