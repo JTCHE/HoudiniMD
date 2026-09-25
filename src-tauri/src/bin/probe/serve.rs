@@ -383,7 +383,7 @@ fn command_response(state: &Serve, command: &str, query: &str) -> (u16, &'static
         // Read-only, so the Settings screen draws. Nothing here hooks F1 or
         // installs the MCP: that would change the reader's real Houdini.
         "mcp_agents" => serde_json::to_string(&houdinimd_lib::mcp::agents()).map_err(|e| e.to_string()),
-        "houdini_releases" => serde_json::to_string(&houdinimd_lib::hook::releases(0)).map_err(|e| e.to_string()),
+        "houdini_releases" => serde_json::to_string(&houdinimd_lib::hook::releases(0, &[install.version.clone()])).map_err(|e| e.to_string()),
         other => Err(format!("no command {other}")),
     };
     match value {

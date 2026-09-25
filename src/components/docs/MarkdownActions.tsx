@@ -10,6 +10,8 @@ import { isCommand, isTyping, useHotkey } from "@/lib/hotkeys";
 import { used } from "@/lib/telemetry";
 import { openWeb } from "@/lib/web";
 import { setPageActions } from "@/lib/page-actions";
+import { hasMedia, picturesChoice, rememberedVault, sendText, sendWithPictures } from "@/lib/obsidian";
+import { ObsidianDialog } from "@/components/obsidian/ObsidianDialog";
 
 function ClaudeIcon({ className }: { className?: string }) {
   return (
@@ -43,6 +45,7 @@ function ObsidianIcon({ className }: { className?: string }) {
  */
 export function MarkdownActions({ markdown, path, title }: { markdown: string; path: string; title: string }) {
   const [copied, setCopied] = useState(false);
+  const [asking, setAsking] = useState(false);
   const { open, setOpen, container, menu, trigger: arrow, onKeyDown: onMenuKey } = useMenu();
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const button = useRef<HTMLButtonElement>(null);
@@ -100,12 +103,15 @@ export function MarkdownActions({ markdown, path, title }: { markdown: string; p
     return () => setPageActions(null);
   }, [path, title, copy, save]);
 
-  // A note in the reader's vault, its pictures beside it. The obsidian://
-  // URI carries text alone, and a doc page's pictures are what the clipboard
-  // trick could not bring across, so this writes straight into the vault
-  // instead — asked for once, not named on every note.
+  // A page with no pictures goes as text, with no question. One with pictures
+  // asks whether to bring them, unless the reader kept an answer. See lib/obsidian.
   const toObsidian = useCallback(async () => {
-    if (await invoke<boolean>("send_to_obsidian", { title, markdown })) showToast("Sent to Obsidian");
+    const choice = hasMedia(markdown) ? await picturesChoice() : "text";
+    const vault = choice === "bring" ? await rememberedVault() : null;
+    if (choice === "ask" || (choice === "bring" && !vault)) return setAsking(true);
+    if (vault) await sendWithPictures(vault, title, markdown);
+    else await sendText(title, markdown);
+    showToast("Sent to Obsidian");
   }, [markdown, title]);
 
   // Ctrl/Cmd+S. The webview binds it to its own "save page", which writes the
@@ -241,6 +247,7 @@ export function MarkdownActions({ markdown, path, title }: { markdown: string; p
           </button>
         </div>
       )}
+      {asking && <ObsidianDialog title={title} markdown={markdown} onClose={() => setAsking(false)} />}
     </div>
   );
 }

@@ -3,7 +3,6 @@ import { invoke, inTauri } from "./lib/backend";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes } from "react-router";
 import Home from "./routes/Home";
-import Settings from "./routes/Settings";
 import Page from "./routes/Page";
 import { AppShell } from "./components/shell/AppShell";
 import { ToastListener } from "./components/ui/toast-notification";
@@ -111,7 +110,6 @@ createRoot(document.getElementById("root")!).render(
       <AppShell>
         <Routes>
           <Route path="/" element={<Home />} />
-          <Route path="/settings" element={<Settings />} />
           <Route path="/*" element={<Page />} />
         </Routes>
       </AppShell>
