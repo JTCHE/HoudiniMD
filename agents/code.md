@@ -13,6 +13,12 @@ the front-end consumes it. Do not re-derive it in TypeScript.
 If you find the same value in two files, that is a bug. Fix the duplication
 before you fix the symptom.
 
+The same holds for UI. A control that shows in two places is one component:
+every menu draws through `MenuList`, every tooltip through `TooltipBox`, every
+icon button's name through `Hint`, every page-header button through the classes
+in `lib/ui/button.ts`. When a control looks or acts different in one place,
+make that place use the shared one. Do not restyle the copy.
+
 ## Small modules
 
 Split by purpose, not by size. A module does one thing and says so in its name.

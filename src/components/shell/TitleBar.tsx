@@ -56,7 +56,11 @@ export function TitleBar({ sidebarOpen, onToggleSidebar, showTrail, bare = false
         // No gap on the row itself: the caption buttons have to reach the
         // window's right edge, and a row gap would leave a strip of bar
         // beside the close button that no click can ever hit.
-        "flex h-titlebar shrink-0 items-center pl-sm print:hidden",
+        "flex h-titlebar shrink-0 items-center print:hidden",
+        // The sidebar button is concentric with the window's corner: 2px from
+        // the top of the 32px bar, so 2px from the left too, and its 6px
+        // radius is the window's 8px less that inset.
+        bare ? "pl-sm" : "pl-[2px]",
         // The hairline is drawn INSIDE the bar. A border would take a pixel
         // off the row, and the caption buttons would stop a pixel short of
         // the bottom of the window's own bar.
@@ -83,6 +87,7 @@ export function TitleBar({ sidebarOpen, onToggleSidebar, showTrail, bare = false
 
       {/* The name is the way home, the way a window title is in every app
           that has a home to go to. */}
+      <Hint label="Home. Right-click for the app menu">
       <Link
         to="/"
         tabIndex={-1}
@@ -106,6 +111,7 @@ export function TitleBar({ sidebarOpen, onToggleSidebar, showTrail, bare = false
           HoudiniMD
         </span>
       </Link>
+      </Hint>
 
       {/* The arrows say where the trail leads before they are pressed: a
           disabled arrow is the honest answer to "is there a page behind this
@@ -184,7 +190,7 @@ function PinButton() {
           .catch(() => {});
       }}
     >
-      <Icons.pin strokeWidth={1} absoluteStrokeWidth className={cn("size-4", pinned && "fill-current")} />
+      <Icons.pin strokeWidth={1} absoluteStrokeWidth className={cn("size-[13px]", pinned && "fill-current")} />
     </button>
     </Hint>
   );

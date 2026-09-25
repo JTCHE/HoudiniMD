@@ -19,6 +19,9 @@ Project information: @README.md
   or state a limit. Do not answer from memory. Prefer the site's own `llms.txt`
   or `index.md`; otherwise prefix the link with `markdown.new/` for clean raw
   text. Cloudflare publishes every page as `<url>/index.md`.
+- One source of truth, in code and in UI. A value, a rule or a control that
+  shows in two places lives in one module that both import — see
+  [Code](agents/code.md).
 - Use ASD-STE100 Simplified Technical English in all writing: replies, comments,
   commits, pull requests.
 - Do not keep backward compatibility. Delete the old path. Do not add fallbacks,
