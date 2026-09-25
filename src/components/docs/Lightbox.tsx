@@ -252,6 +252,9 @@ function Viewer({ open }: { open: LightboxState }) {
     >
       {/* The ground. A press on it, and not a drag that ends on it, closes. */}
       <div className="absolute inset-0 bg-black/95" onClick={close} />
+      {/* The title bar goes dark with the page, as it does under every modal;
+          a light bar over the dark ground read as a second window. */}
+      <div className="fixed inset-x-0 top-0 h-titlebar bg-black/95" onClick={close} />
 
       {/* What the picture is, and where it sits among the page's. Out of the
           way while the reader is looking closely. */}
