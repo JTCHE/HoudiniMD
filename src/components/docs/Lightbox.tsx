@@ -33,7 +33,8 @@ const ROUND_BUTTON =
  * in or back out, and the arrows walk the page's pictures. Escape, the
  * close button or a press on the dark ground puts it away.
  *
- * The title bar stays uncovered, so the window's own buttons still work.
+ * The title bar stays uncovered, so the window's own buttons still work: the
+ * dialog clips a zoomed picture to its own box, below the title bar.
  */
 export function Lightbox() {
   const open = useLightbox();
@@ -248,7 +249,7 @@ function Viewer({ open }: { open: LightboxState }) {
       aria-modal="true"
       aria-label={item.alt || "Picture"}
       tabIndex={-1}
-      className="fixed inset-x-0 top-titlebar bottom-0 z-[70] outline-none select-none"
+      className="fixed inset-x-0 top-titlebar bottom-0 z-[70] overflow-hidden outline-none select-none"
     >
       {/* The ground. A press on it, and not a drag that ends on it, closes. */}
       <div className="absolute inset-0 bg-black/95" onClick={close} />
@@ -260,7 +261,7 @@ function Viewer({ open }: { open: LightboxState }) {
           way while the reader is looking closely. */}
       <div
         className={cn(
-          "pointer-events-none absolute inset-x-0 top-0 flex h-[52px] items-center justify-center gap-sm px-[96px]",
+          "pointer-events-none absolute inset-x-0 top-0 z-10 flex h-[52px] items-center justify-center gap-sm px-[96px]",
           "text-meta text-white/70 transition-opacity duration-(--duration-fast) motion-reduce:transition-none",
           zoomed && "opacity-0",
         )}
