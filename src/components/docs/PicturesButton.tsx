@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import type { Element, Root } from "hast";
 import { Paperclip } from "lucide-react";
-import { openLightbox, PAGE_PICTURES } from "@/lib/lightbox";
+import { openLightbox } from "@/lib/lightbox";
 import { Hint } from "@/components/ui/Hint";
 
 /** Under this many pictures the page is its own gallery. */
@@ -33,10 +33,7 @@ export function PicturesButton({ tree }: { tree: Root }) {
       <button
         type="button"
         aria-label={`Open the ${total} pictures of this page`}
-        onClick={() => {
-          const first = document.querySelector<HTMLImageElement>(PAGE_PICTURES);
-          if (first) openLightbox(first);
-        }}
+        onClick={(event) => openLightbox(event.currentTarget)}
         className="flex h-8 shrink-0 cursor-interactive items-center gap-1 rounded-lg border border-input bg-muted/50 px-2 text-xs tabular-nums text-muted-foreground shadow-xs transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
       >
         <Paperclip className="size-3.5" aria-hidden="true" />

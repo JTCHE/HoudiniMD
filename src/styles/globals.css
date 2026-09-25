@@ -586,9 +586,19 @@ a {
      is known, then the real one wins. */
   aspect-ratio: auto 16 / 9;
 }
-/* A picture keeps its own size, up to the column, and sits in its middle.
-   A video fills the column and keeps the hang above. */
+/* A picture keeps its own width (`--natural`, set by MarkdownImage), sits in
+   the middle of the text, and once it is wider than the text it hangs into
+   the gutter by as much as a video does, and no further. Before the file
+   arrives there is no width, and the box holds the text's. */
 img.markdown-media {
+  --w: var(--natural, 100%);
+  width: min(var(--w), calc(100% + 2rem));
+  max-width: none;
+  margin-inline: max(-1rem, calc((100% - var(--w)) / 2));
+}
+/* A cell and a column are boxes of their own: no hang out of them. */
+:is(td, th, .column) img.markdown-media {
+  width: min(var(--w), 100%);
   margin-inline: auto;
 }
 
