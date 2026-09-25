@@ -53,7 +53,7 @@ export function SidebarFooter({ recentCount, recentsOpen, onToggleRecents, class
       <div className="flex items-center gap-2xs px-ms pt-ms">
         <Hint label="Settings">
           <button type="button" aria-label="Settings" className={FOOTER_BUTTON} onClick={openSettings}>
-            <Icons.settings className="size-[18px]" />
+            <Icons.settings strokeWidth={1} absoluteStrokeWidth className="size-[18px]" />
           </button>
         </Hint>
         <Hint label={theme === "dark" ? "Light theme" : "Dark theme"}>
@@ -69,12 +69,14 @@ export function SidebarFooter({ recentCount, recentsOpen, onToggleRecents, class
           {theme === "dark" ? (
             <Icons.themeLight
               className="size-md"
-              strokeWidth="2"
+              strokeWidth={1}
+              absoluteStrokeWidth
             />
           ) : (
             <Icons.themeDark
               className="size-md"
-              strokeWidth="2"
+              strokeWidth={1}
+              absoluteStrokeWidth
             />
           )}
         </button>
@@ -82,7 +84,7 @@ export function SidebarFooter({ recentCount, recentsOpen, onToggleRecents, class
         <span className="flex-1" />
         <Hint label="File a bug on GitHub">
           <a href={ISSUES} target="_blank" rel="noopener noreferrer" aria-label="File a bug" className={FOOTER_BUTTON}>
-            <Icons.bugReport strokeWidth="1.5" className="size-4.5" />
+            <Icons.bugReport strokeWidth={1} absoluteStrokeWidth className="size-4.5" />
           </a>
         </Hint>
       </div>
