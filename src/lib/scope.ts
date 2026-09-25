@@ -6,14 +6,19 @@
  * The scope stays in the query text (`vex:noise`), so every field keeps one
  * string of state; the field draws the part before the colon as a chip.
  */
+import { recents } from "@/lib/store/library";
+
 export interface Scope {
   key: string;
   label: string;
   /** Path prefixes a hit must start with. */
   paths: string[];
+  /** The pages read, most recent first, in place of `paths`: `h:`. */
+  history?: boolean;
 }
 
-const SCOPES: { keys: string[]; label: string; paths: string[] }[] = [
+const SCOPES: { keys: string[]; label: string; paths: string[]; history?: boolean }[] = [
+  { keys: ["h", "history"], label: "History", paths: [], history: true },
   { keys: ["v", "vex"], label: "VEX functions", paths: ["vex/functions/"] },
   { keys: ["vop"], label: "VOP nodes", paths: ["nodes/vop/"] },
   { keys: ["sop"], label: "Geometry nodes", paths: ["nodes/sop/"] },
@@ -39,11 +44,18 @@ export function parseScope(query: string): { scope: Scope | null; rest: string }
   const key = found?.[1].toLowerCase();
   const entry = key ? SCOPES.find((scope) => scope.keys.includes(key)) : undefined;
   if (!found || !key || !entry) return { scope: null, rest: query };
-  return { scope: { key, label: entry.label, paths: entry.paths }, rest: query.slice(found[0].length) };
+  return { scope: { key, ...entry }, rest: query.slice(found[0].length) };
 }
 
-export function inScope(scope: Scope | null, path: string): boolean {
-  return !scope || scope.paths.some((prefix) => path.startsWith(prefix));
+/** Whether a path is in a scope. Made once per list: the history is read
+    into a set, not searched again for each of ten thousand titles. */
+export function scopeTest(scope: Scope | null): (path: string) => boolean {
+  if (!scope) return () => true;
+  if (scope.history) {
+    const read = new Set(recents().map((entry) => entry.path));
+    return (path) => read.has(path);
+  }
+  return (path) => scope.paths.some((prefix) => path.startsWith(prefix));
 }
 
 /**

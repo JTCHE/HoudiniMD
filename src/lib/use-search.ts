@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { bodies, match, titles, type Hit } from "@/lib/search";
-import { inScope, parseScope, type Scope } from "@/lib/scope";
+import { parseScope, scopeTest, type Scope } from "@/lib/scope";
+import { recents } from "@/lib/store/library";
 
 /** The body search waits this long after the last key. The title pick does not
  *  wait at all — it reads a list that is already in memory. */
@@ -23,10 +24,18 @@ const MIN_BODY_QUERY = 3;
 const cuts = new WeakMap<Hit[], Map<string, Hit[]>>();
 
 function scoped(all: Hit[], scope: Scope): Hit[] {
+  // The history changes as the reader reads; it is fifty pages, cheap to cut.
+  if (scope.history) {
+    const at = new Map(recents().map((entry, i) => [entry.path, i]));
+    return all.filter((hit) => at.has(hit.path)).sort((a, b) => at.get(a.path)! - at.get(b.path)!);
+  }
   let byScope = cuts.get(all);
   if (!byScope) cuts.set(all, (byScope = new Map()));
   let cut = byScope.get(scope.label);
-  if (!cut) byScope.set(scope.label, (cut = all.filter((hit) => inScope(scope, hit.path))));
+  if (!cut) {
+    const test = scopeTest(scope);
+    byScope.set(scope.label, (cut = all.filter((hit) => test(hit.path))));
+  }
   return cut;
 }
 
@@ -58,11 +67,15 @@ export function useSearch(query: string): Found {
     const { scope, rest } = parseScope(query.trim());
     const wanted = rest.trim();
     const answer = query.trim();
-    if (!wanted) {
-      setFound(NONE);
-      return;
-    }
     let live = true;
+    // A shorthand alone lists what it holds: `h:` is the pages read, newest first.
+    if (!wanted) {
+      if (!scope) setFound(NONE);
+      else titles().then((all) => live && setFound({ query: answer, hits: scoped(all, scope).slice(0, 20) }));
+      return () => {
+        live = false;
+      };
+    }
     const pick = (all: Hit[]) => match(scope ? scoped(all, scope) : all, wanted);
 
     titles().then((all) => {
@@ -74,7 +87,8 @@ export function useSearch(query: string): Found {
     const timer = window.setTimeout(async () => {
       // A scope throws most of the ranking away, so it asks for more of it.
       const [all, texts] = await Promise.all([titles(), bodies(wanted, scope ? 40 : undefined)]);
-      const found = scope ? texts.filter((hit) => inScope(scope, hit.path)).slice(0, 6) : texts;
+      const test = scopeTest(scope);
+      const found = scope ? texts.filter((hit) => test(hit.path)).slice(0, 6) : texts;
       if (!live) return;
       const picked = pick(all);
       const seen = new Set(picked.map((hit) => hit.path));
