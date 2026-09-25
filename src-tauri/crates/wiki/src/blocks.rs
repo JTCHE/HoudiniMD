@@ -972,7 +972,20 @@ fn fold_headings(blocks: Vec<Block>) -> Vec<Block> {
             Block::Section { .. } => Some(1),
             _ => None,
         };
+        // A heading written with its body indented under it owns that body
+        // and no more. `shelf/box` has `== Placing == (placing)`, an indented
+        // body, then a line at the margin: the include of `#placing` in the
+        // Box node page must not carry that line, which the node page writes
+        // again.
+        let indented = matches!(&block, Block::Heading { children, .. } if !children.is_empty());
         match level {
+            Some(level) if indented => {
+                close(level, &mut stack, &mut out);
+                match stack.last_mut() {
+                    Some((_, parent)) => children_of(parent).push(block),
+                    None => out.push(block),
+                }
+            }
             Some(level) => {
                 close(level, &mut stack, &mut out);
                 stack.push((level, block));
