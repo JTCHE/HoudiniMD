@@ -6,7 +6,6 @@ import { cn } from "@/lib/utils";
 import { Breadcrumbs } from "@/components/docs/Breadcrumbs";
 import SearchOverlay, { type SearchOverlayRef } from "@/components/docs/SearchOverlay";
 import { PageHeader } from "@/components/docs/PageHeader";
-import { PictureStrip } from "@/components/docs/PictureStrip";
 import { TableOfContents } from "@/components/docs/TableOfContents";
 import { CodeBlock } from "@/components/docs/CodeBlock";
 import { markdownComponents } from "@/components/docs/markdown";
@@ -390,13 +389,13 @@ export default function Page() {
                     summary={page.summary}
                     markdown={page.markdown}
                     versions={page.nodeVersions}
+                    tree={page.tree}
                   />
                   {/* NOT keyed on the page. React 19 leaves a keyed child's
                       nodes in the document when the child that replaces it
                       draws nothing, so the last page's list stayed on a page
                       that has none. TableOfContents puts its own state back
                       when the list changes. */}
-                  {page.tree && <PictureStrip tree={page.tree} />}
                   <TableOfContents headings={headings} />
                   {body}
                 </article>
