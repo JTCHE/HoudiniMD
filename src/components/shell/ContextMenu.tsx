@@ -10,8 +10,9 @@
  */
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
-import { ArrowLeft, ArrowRight, Copy, Download, ExternalLink, Image, Link2, SquareArrowOutUpRight } from "lucide-react";
-import { MENU_ICON, MENU_ITEM } from "@/lib/ui/menu";
+import { ArrowLeft, ArrowRight, Copy, Download, ExternalLink, Image, Link2, ListTree, SquareArrowOutUpRight } from "lucide-react";
+import { accelerators, MENU_ICON, MENU_ITEM } from "@/lib/ui/menu";
+import { revealInSidebar } from "@/components/shell/sidebar/PageTree";
 import { cn } from "@/lib/utils";
 import { useTrail } from "@/lib/nav";
 import { pageActions } from "@/lib/page-actions";
@@ -76,20 +77,28 @@ export function ContextMenu() {
       const picture = target?.closest<HTMLImageElement>(PAGE_PICTURES);
       if (picture) menu.push([{ label: "Open picture", icon: Image, run: () => openLightbox(picture) }]);
 
-      const selected = window.getSelection()?.toString() ?? "";
-      if (selected.trim()) {
-        menu.push([{ label: "Copy", icon: Copy, keys: "Ctrl+C", run: () => copyText(selected, "Copied") }]);
+      const page = pageActions();
+      if (page && target?.closest("[data-current-crumb]")) {
+        menu.push([{ label: "Reveal in sidebar", icon: ListTree, run: revealInSidebar }]);
       }
 
-      const page = pageActions();
+      // One Copy, as Ctrl C does: the selection when there is one, else the
+      // whole page as Markdown.
+      const selected = window.getSelection()?.toString().trim() ? window.getSelection()!.toString() : "";
+      const copy: Item = {
+        label: "Copy",
+        icon: Copy,
+        keys: "Ctrl+C",
+        run: () =>
+          selected || !page
+            ? copyText(selected, "Copied")
+            : page.copy().then((done) => done && showToast("Markdown copied to clipboard")),
+      };
+      if (!page && selected) menu.push([copy]);
+
       if (page) {
         const group: Item[] = [
-          {
-            label: "Copy as Markdown",
-            icon: Copy,
-            keys: selected.trim() ? undefined : "Ctrl+C",
-            run: () => page.copy().then((done) => done && showToast("Markdown copied to clipboard")),
-          },
+          copy,
           {
             label: "Copy page link",
             icon: Link2,
@@ -148,14 +157,31 @@ function Panel({ at, onClose }: { at: { x: number; y: number; menu: Menu }; onCl
     };
   }, [onClose]);
 
+  const items = at.menu.flat();
+  const letters = accelerators(items.map((item) => item.label));
+
+  function run(item: Item) {
+    onClose();
+    used("right-click");
+    void Promise.resolve(item.run()).catch((reason) => showToast(String(reason), "error"));
+  }
+
   function onKeyDown(event: React.KeyboardEvent) {
-    const items = [...(panel.current?.querySelectorAll<HTMLElement>("[role=menuitem]:not(:disabled)") ?? [])];
-    const now = items.indexOf(document.activeElement as HTMLElement);
+    // A letter runs the item it is underlined in.
+    const key = event.key.toLowerCase();
+    const hit = items.findIndex((item, i) => letters[i] >= 0 && item.label[letters[i]].toLowerCase() === key);
+    if (hit >= 0 && !event.ctrlKey && !event.altKey && !event.metaKey) {
+      event.preventDefault();
+      if (!items[hit].disabled) run(items[hit]);
+      return;
+    }
+    const buttons = [...(panel.current?.querySelectorAll<HTMLElement>("[role=menuitem]:not(:disabled)") ?? [])];
+    const now = buttons.indexOf(document.activeElement as HTMLElement);
     const step = { ArrowDown: 1, ArrowUp: -1 }[event.key];
     if (step) {
       event.preventDefault();
-      const next = now < 0 ? (step > 0 ? 0 : items.length - 1) : (now + step + items.length) % items.length;
-      items[next]?.focus();
+      const next = now < 0 ? (step > 0 ? 0 : buttons.length - 1) : (now + step + buttons.length) % buttons.length;
+      buttons[next]?.focus();
     } else if (event.key === "Escape" || event.key === "Tab") {
       event.preventDefault();
       onClose();
@@ -163,10 +189,12 @@ function Panel({ at, onClose }: { at: { x: number; y: number; menu: Menu }; onCl
   }
 
   const groups: ReactNode[] = [];
+  let n = 0;
   at.menu.forEach((group, index) => {
     if (index > 0) groups.push(<div key={`line-${index}`} role="separator" className="mx-sm my-1 h-px bg-hairline" />);
     for (const item of group) {
       const Icon = item.icon;
+      const letter = letters[n++];
       groups.push(
         <button
           key={`${index}-${item.label}`}
@@ -174,14 +202,21 @@ function Panel({ at, onClose }: { at: { x: number; y: number; menu: Menu }; onCl
           role="menuitem"
           disabled={item.disabled}
           className={cn(MENU_ITEM, "disabled:pointer-events-none disabled:text-neutral-400")}
-          onClick={() => {
-            onClose();
-            used("right-click");
-            void Promise.resolve(item.run()).catch((reason) => showToast(String(reason), "error"));
-          }}
+          aria-keyshortcuts={letter >= 0 ? item.label[letter].toUpperCase() : undefined}
+          onClick={() => run(item)}
         >
           <Icon className={cn(MENU_ICON, item.disabled && "text-neutral-300")} aria-hidden="true" />
-          <span className="flex-1">{item.label}</span>
+          <span className="flex-1">
+            {letter < 0 ? (
+              item.label
+            ) : (
+              <>
+                {item.label.slice(0, letter)}
+                <u className="underline-offset-2">{item.label[letter]}</u>
+                {item.label.slice(letter + 1)}
+              </>
+            )}
+          </span>
           {item.keys && <span className="pl-md text-caption text-neutral-500">{item.keys}</span>}
         </button>,
       );
