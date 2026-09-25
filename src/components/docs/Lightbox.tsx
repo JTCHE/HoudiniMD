@@ -8,7 +8,9 @@ import { groundClass } from "@/lib/ground";
 const MAX_SCALE = 8;
 /** One wheel notch, one key press: the same step either way. */
 const STEP = 1.2;
-const DOUBLE_CLICK_SCALE = 2.5;
+const CLICK_SCALE = 2.5;
+/** A press that moves further than this is a pan, not a click. */
+const CLICK_SLOP = 4;
 /** A small figure is drawn larger to fill the stage, but no more than this:
     past it a raster diagram turns to mush. */
 const MAX_UPSCALE = 2;
@@ -26,8 +28,8 @@ const ROUND_BUTTON =
  * A page's pictures, one at a time, over the window.
  *
  * It grows out of the picture that was pressed and shrinks back into it. The
- * wheel zooms at the pointer, a drag pans a zoomed picture, a double click
- * zooms in or back out, and the arrows walk the page's pictures. Escape, the
+ * wheel zooms at the pointer, a drag pans a zoomed picture, a click zooms
+ * in or back out, and the arrows walk the page's pictures. Escape, the
  * close button or a press on the dark ground puts it away.
  *
  * The title bar stays uncovered, so the window's own buttons still work.
@@ -47,6 +49,7 @@ function Viewer({ open }: { open: LightboxState }) {
   const frame = useRef<HTMLDivElement>(null);
   const picture = useRef<HTMLImageElement>(null);
   const drag = useRef<{ x: number; y: number; startX: number; startY: number } | null>(null);
+  const moved = useRef(false);
   const [dragging, setDragging] = useState(false);
   const [size, setSize] = useState<{ width: number; height: number } | null>(null);
   // The wheel listener is attached once and reads the scale of the moment.
@@ -190,7 +193,9 @@ function Viewer({ open }: { open: LightboxState }) {
     return () => window.removeEventListener("resize", fit);
   }, [fit, index]);
 
-  function onKeyDown(event: React.KeyboardEvent) {
+  // On the window, not the dialog: the keys work wherever the focus went.
+  const onKey = useRef<(event: KeyboardEvent) => void>(() => {});
+  onKey.current = (event) => {
     const keys: Record<string, () => void> = {
       Escape: close,
       ArrowLeft: () => go(-1),
@@ -205,10 +210,17 @@ function Viewer({ open }: { open: LightboxState }) {
     event.preventDefault();
     event.stopPropagation();
     run();
-  }
+  };
+  useEffect(() => {
+    const listener = (event: KeyboardEvent) => onKey.current(event);
+    window.addEventListener("keydown", listener, true);
+    return () => window.removeEventListener("keydown", listener, true);
+  }, []);
 
   function onPointerDown(event: React.PointerEvent) {
-    if (event.button !== 0 || !zoomed) return;
+    if (event.button !== 0) return;
+    moved.current = false;
+    if (!zoomed) return;
     event.currentTarget.setPointerCapture(event.pointerId);
     drag.current = { x: view.x, y: view.y, startX: event.clientX, startY: event.clientY };
     setDragging(true);
@@ -217,6 +229,7 @@ function Viewer({ open }: { open: LightboxState }) {
   function onPointerMove(event: React.PointerEvent) {
     const held = drag.current;
     if (!held) return;
+    if (Math.hypot(event.clientX - held.startX, event.clientY - held.startY) > CLICK_SLOP) moved.current = true;
     setView(clamp(view.scale, held.x + event.clientX - held.startX, held.y + event.clientY - held.startY));
   }
 
@@ -234,7 +247,6 @@ function Viewer({ open }: { open: LightboxState }) {
       aria-modal="true"
       aria-label={item.alt || "Picture"}
       tabIndex={-1}
-      onKeyDown={onKeyDown}
       className="fixed inset-x-0 top-titlebar bottom-0 z-[70] outline-none select-none"
     >
       {/* The ground. A press on it, and not a drag that ends on it, closes. */}
@@ -279,9 +291,11 @@ function Viewer({ open }: { open: LightboxState }) {
             onPointerMove={onPointerMove}
             onPointerUp={endDrag}
             onPointerCancel={endDrag}
-            onDoubleClick={(event) =>
-              zoomed ? setView({ scale: 1, x: 0, y: 0 }) : zoomAt(DOUBLE_CLICK_SCALE, event.clientX, event.clientY)
-            }
+            onClick={(event) => {
+              if (moved.current) return;
+              if (zoomed) setView({ scale: 1, x: 0, y: 0 });
+              else zoomAt(CLICK_SCALE, event.clientX, event.clientY);
+            }}
             style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})` }}
             className={cn(
               // The same ground the page gave the picture.
