@@ -31,9 +31,10 @@
 *.pem
 
 # debug
-*log*
-# The module that writes the log is source, not a log.
-!src-tauri/src/log.rs
+# Log files, not every name with "log" in it: that matched Dialog and Logo.
+*.log
+*.log.*
+logs/
 
 # env files (can opt-in for committing if needed)
 .env*
