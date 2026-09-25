@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import { Icons } from "@/lib/ui/icons";
 import { closeLightbox, useLightbox, type LightboxState } from "@/lib/lightbox";
 import { groundClass } from "@/lib/ground";
+import { Hint } from "@/components/ui/Hint";
 
 const MAX_SCALE = 8;
 /** One wheel notch, one key press: the same step either way. */
@@ -269,9 +270,11 @@ function Viewer({ open }: { open: LightboxState }) {
         )}
       </div>
 
-      <button type="button" aria-label="Close" className={cn(ROUND_BUTTON, "absolute top-sm right-sm z-10")} onClick={close}>
-        <Icons.dismiss className="size-[18px]" />
-      </button>
+      <Hint label="Close" keys="Esc" className="absolute top-sm right-sm z-10">
+        <button type="button" aria-label="Close" className={ROUND_BUTTON} onClick={close}>
+          <Icons.dismiss className="size-[18px]" />
+        </button>
+      </Hint>
 
       <div
         ref={stage}
@@ -310,22 +313,16 @@ function Viewer({ open }: { open: LightboxState }) {
 
       {count > 1 && (
         <>
-          <button
-            type="button"
-            aria-label="Previous picture"
-            className={cn(ROUND_BUTTON, "absolute top-1/2 left-sm -translate-y-1/2")}
-            onClick={() => go(-1)}
-          >
-            <Icons.stepBack className="size-[18px]" />
-          </button>
-          <button
-            type="button"
-            aria-label="Next picture"
-            className={cn(ROUND_BUTTON, "absolute top-1/2 right-sm -translate-y-1/2")}
-            onClick={() => go(1)}
-          >
-            <Icons.stepForward className="size-[18px]" />
-          </button>
+          <Hint label="Previous" keys="←" className="absolute top-1/2 left-sm -translate-y-1/2">
+            <button type="button" aria-label="Previous picture" className={ROUND_BUTTON} onClick={() => go(-1)}>
+              <Icons.stepBack className="size-[18px]" />
+            </button>
+          </Hint>
+          <Hint label="Next" keys="→" className="absolute top-1/2 right-sm -translate-y-1/2">
+            <button type="button" aria-label="Next picture" className={ROUND_BUTTON} onClick={() => go(1)}>
+              <Icons.stepForward className="size-[18px]" />
+            </button>
+          </Hint>
         </>
       )}
     </div>

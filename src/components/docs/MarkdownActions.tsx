@@ -6,7 +6,8 @@ import { invoke, inTauri } from "@/lib/backend";
 import { HOUDINIMD_DOCS_ROOT } from "@/lib/houdini";
 import { pageHtml } from "@/lib/markdown/html";
 import { showToast } from "@/components/ui/toast-notification";
-import { isCommand, isTyping, useHotkey } from "@/lib/hotkeys";
+import { COMMAND_KEY, isCommand, isTyping, useHotkey } from "@/lib/hotkeys";
+import { Hint } from "@/components/ui/Hint";
 import { used } from "@/lib/telemetry";
 import { openWeb } from "@/lib/web";
 import { setPageActions } from "@/lib/page-actions";
@@ -144,6 +145,7 @@ export function MarkdownActions({ markdown, path, title }: { markdown: string; p
 
   return (
     <div ref={container} onKeyDown={onMenuKey} className="relative inline-flex print:hidden">
+      <Hint label="Copy as Markdown" keys={`${COMMAND_KEY}+C`}>
       <button
         ref={button}
         type="button"
@@ -159,6 +161,8 @@ export function MarkdownActions({ markdown, path, title }: { markdown: string; p
         {copied ? <Check className="size-3.5" aria-hidden="true" /> : <Copy className="size-3.5" aria-hidden="true" />}
         <span className="hidden @min-[600px]:inline">{copied ? "Copied" : "Copy as Markdown"}</span>
       </button>
+      </Hint>
+      <Hint label="More">
       <button
         ref={arrow}
         type="button"
@@ -173,6 +177,7 @@ export function MarkdownActions({ markdown, path, title }: { markdown: string; p
           aria-hidden="true"
         />
       </button>
+      </Hint>
 
       {open && (
         <div

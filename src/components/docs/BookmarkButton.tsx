@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils";
 import { Icons } from "@/lib/ui/icons";
 import { COMMAND_KEY, isCommand, isTyping, useHotkey } from "@/lib/hotkeys";
+import { Hint } from "@/components/ui/Hint";
 import { toggleBookmark, useLibrary, type LibraryEntry } from "@/lib/store/library";
 
 /**
@@ -21,11 +22,11 @@ export function BookmarkButton({ entry }: { entry: Omit<LibraryEntry, "at"> }) {
   });
 
   return (
+    <Hint label={kept ? "Remove the bookmark" : "Bookmark"} keys={`${COMMAND_KEY}+D`}>
     <button
       type="button"
       aria-pressed={kept}
       aria-label={kept ? "Remove the bookmark" : "Keep this page"}
-      title={`${kept ? "Remove the bookmark" : "Keep this page"} (${COMMAND_KEY} D)`}
       onClick={(() => toggleBookmark(entry))}
       className={cn(
         "grid size-8 shrink-0 cursor-interactive place-items-center rounded-lg border border-input",
@@ -42,5 +43,6 @@ export function BookmarkButton({ entry }: { entry: Omit<LibraryEntry, "at"> }) {
         aria-hidden="true"
       />
     </button>
+    </Hint>
   );
 }

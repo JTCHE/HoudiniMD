@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { Hint } from "@/components/ui/Hint";
 import { createPortal, flushSync } from "react-dom";
 import { useLocation, useNavigate } from "react-router";
 import { BrandLogo } from "@/components/brand/BrandLogo";
@@ -359,6 +360,7 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
             className="w-full min-w-0 px-4 py-3 pr-11 text-sm bg-transparent outline-none [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:appearance-none"
           />
           {query && (
+            <Hint label="Clear" className="absolute right-3 top-1/2 -translate-y-1/2">
             <button
               type="button"
               aria-label="Clear search"
@@ -366,7 +368,7 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
                 setQuery("");
                 inputRef.current?.focus();
               })}
-              className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center size-6 rounded text-muted-foreground hover:text-foreground transition-colors"
+              className="flex items-center justify-center size-6 rounded text-muted-foreground hover:text-foreground transition-colors"
             >
               <svg
                 width="15"
@@ -382,6 +384,7 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
                 <path d="M18 6 6 18M6 6l12 12" />
               </svg>
             </button>
+            </Hint>
           )}
         </div>
 
