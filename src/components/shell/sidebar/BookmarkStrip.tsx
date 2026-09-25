@@ -94,13 +94,33 @@ function BookmarkTile({ entry }: { entry: LibraryEntry }) {
             className="size-[17px]"
             // The install ships a few pages whose icon file is not in
             // it. A blank tile reads as a fault.
-            fallback={<Icons.page className="size-[17px] text-neutral-400" />}
+            fallback={<Initials title={entry.title} />}
           />
         ) : (
-          <Icons.page className="size-[17px] text-neutral-400" />
+          <Initials title={entry.title} />
         )}
       </Link>
       {hovered && <DocTooltip slug={entry.path} anchorRef={tile} />}
     </>
+  );
+}
+
+/** Two letters for a page with no icon: a row of the same page glyph tells
+    the pages apart by position only. `Group by Range` gives GR, `AddItUp`
+    gives AI, `Solaris` gives So. */
+function initials(title: string): string {
+  const words = title.split(/[\s._\-/:]+/).filter(Boolean);
+  if (words.length > 1) return (words[0][0] + words[1][0]).toUpperCase();
+  const word = words[0] ?? "";
+  const capitals = word.match(/[A-Z]/g);
+  if (capitals && capitals.length > 1) return capitals[0] + capitals[1];
+  return word.slice(0, 1).toUpperCase() + word.slice(1, 2);
+}
+
+function Initials({ title }: { title: string }) {
+  return (
+    <span aria-hidden="true" className="text-[11px] leading-none font-semibold tracking-[-0.02em] text-neutral-500">
+      {initials(title)}
+    </span>
   );
 }
