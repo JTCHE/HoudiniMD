@@ -29,13 +29,14 @@ function set(next: LightboxState | null) {
   for (const listener of listeners) listener();
 }
 
-/** Opens on the page picture at `src` (by default the one `from` shows), with
-    every picture of the page behind it. `from` is what it grows out of: the
-    picture itself, or its thumbnail in the page's strip. */
-export function openLightbox(from: HTMLImageElement, src = from.currentSrc || from.src) {
+/** Opens on the page picture `from`, with every picture of the page behind
+    it, growing out of that picture. `from` can also be the control that asked
+    — the pictures button — which opens on the first picture and grows out of
+    the control. */
+export function openLightbox(from: HTMLElement) {
   const pictures = [...document.querySelectorAll<HTMLImageElement>(PAGE_PICTURES)];
-  const own = pictures.indexOf(from);
-  const index = Math.max(0, own >= 0 ? own : pictures.findIndex((img) => (img.currentSrc || img.src) === src));
+  if (pictures.length === 0) return;
+  const index = Math.max(0, pictures.indexOf(from as HTMLImageElement));
   set({
     items: pictures.map((img) => ({ src: img.currentSrc || img.src, alt: img.alt, ground: img.dataset.ground as Ground | undefined })),
     index,

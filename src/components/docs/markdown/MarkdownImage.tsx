@@ -25,19 +25,20 @@ export const Image: Components["img"] = function MarkdownImage({ src, alt, ...pr
   if (!src || typeof src !== "string") return null;
   // A drawing small enough to be a glyph stays a glyph.
   const vector = /\.svg$/i.test(src) && (natural === 0 || natural >= 120);
+  const width = vector ? "100vw" : natural ? `${natural}px` : "";
   return (
     <img
       src={assetUrl(src)}
       alt={alt ?? ""}
-      // A raster keeps its own size, or the column's where the column is
-      // narrower: the same rule in the body, a table cell and a column,
-      // because a raster drawn larger than its file only turns soft. A
-      // drawing (SVG) is sharp at any size, and SideFX draws its diagrams
-      // small, so it fills the column.
+      // A raster keeps its own size: drawn larger than its file it only
+      // turns soft. A drawing (SVG) is sharp at any size, and SideFX draws
+      // its diagrams small, so it takes the full width. The stylesheet does
+      // the rest from `--natural` (`img.markdown-media`): a picture as wide
+      // as the text hangs into the gutter as a video does.
       // The ground behind a clear picture is chosen from its own marks: see
       // lib/ground. The lightbox reads it off `data-ground`.
-      className={`markdown-media my-4 block h-auto max-w-full cursor-zoom-in${vector ? " w-full" : ""} ${groundClass(ground)}`}
-      style={natural && !vector ? { maxWidth: `min(100%, ${natural}px)` } : undefined}
+      className={`markdown-media my-4 block h-auto cursor-zoom-in ${groundClass(ground)}`}
+      style={width ? ({ "--natural": width } as React.CSSProperties) : undefined}
       data-ground={ground ?? undefined}
       // The ground is read from the pixels, and the app serves pictures from
       // another origin (`himage:`), which answers with CORS for this.
