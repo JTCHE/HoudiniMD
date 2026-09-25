@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
+import { Hint } from "@/components/ui/Hint";
 import { Icons } from "@/lib/ui/icons";
 import { DISPLAY_TITLE } from "@/lib/ui/type";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
@@ -56,6 +57,7 @@ export function StepFrame({
     <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
       {step !== undefined && (
         <div className="absolute top-xl left-xl flex items-center gap-ms">
+          <Hint label="Back">
           <button
             type="button"
             aria-label="Go back a step"
@@ -72,6 +74,7 @@ export function StepFrame({
           >
             <Icons.stepBack className="size-md" />
           </button>
+          </Hint>
           <span className="text-meta font-medium text-neutral-500">Step {step} of 5</span>
         </div>
       )}
