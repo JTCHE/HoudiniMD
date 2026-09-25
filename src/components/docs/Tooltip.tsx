@@ -185,7 +185,11 @@ export function TooltipBox({ anchorRef, hoverPosRef, className, children }: Anch
     const x =
       left < margin ? margin - left : left + width > window.innerWidth - margin ? window.innerWidth - margin - (left + width) : 0;
     const below = line.top - 4 - height < margin && line.bottom + 4 + height <= window.innerHeight - margin;
-    setPlace((p) => (p.x === x && p.below === below ? p : { x, below }));
+    // Whole pixels, and a change under one is no change: the pop-in scale
+    // makes the measured width jitter in the fifth decimal, and an exact
+    // compare set the state on every render until React gave up (#185).
+    const shift = Math.round(x);
+    setPlace((p) => (Math.abs(p.x - shift) < 1 && p.below === below ? p : { x: shift, below }));
   });
 
   if (!line) return null;
