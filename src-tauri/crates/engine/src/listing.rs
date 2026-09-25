@@ -67,15 +67,10 @@ fn build(roots: &[PathBuf]) -> Vec<Card> {
 
 fn card(path: &str, source: &str) -> Card {
     let page = head(source);
-    // A few pages carry no title line; the reader still needs a name.
-    let title = match page.title_text.is_empty() {
-        true => path.rsplit('/').next().unwrap_or(path).to_string(),
-        false => page.title_text,
-    };
     Card {
         path: format!("/{path}"),
-        title,
-        summary: page.summary.map(|s| wiki::inline::plain(&s)),
+        title: crate::page::name(path, &page),
+        summary: crate::page::summary(&page),
         props: page.props,
     }
 }
@@ -123,7 +118,7 @@ pub fn resolve(roots: &[PathBuf], page: &str, blocks: &mut Vec<Block>) {
     let mut at = 0;
     while at < blocks.len() {
         if let Block::Item { name, props, .. } = &blocks[at]
-            && (name == "list" || name == "suite_list")
+            && matches!(name.as_str(), "list" | "suite_list" | "list_examples")
             && let Some(query) = wiki::model::prop(props, "query").and_then(Query::parse)
         {
             let listed = list(roots, page, &query, props);
@@ -158,13 +153,24 @@ fn list(roots: &[PathBuf], page: &str, query: &Query, props: &Props) -> Vec<Bloc
     let labels = wiki::model::prop(props, "labels").map(|file| labels(roots, page, file)).unwrap_or_default();
     let mut groups: Vec<(String, Vec<&Card>)> = Vec::new();
     for card in found {
-        let key = wiki::model::prop(&card.props, grouped_by).unwrap_or("").trim().to_string();
+        let key = group_key(card, grouped_by);
         match groups.iter_mut().find(|(k, _)| *k == key) {
             Some((_, cards)) => cards.push(card),
             None => groups.push((key, vec![card])),
         }
     }
-    let label = |key: &str| labels.get(key).cloned().unwrap_or_else(|| key.to_string());
+    // A group named by page paths (`examplefor`, one or more) reads as those
+    // pages' titles.
+    let label = |key: &str| {
+        labels.get(key).cloned().unwrap_or_else(|| match key.starts_with('/') {
+            true => key
+                .split_whitespace()
+                .map(|path| title(roots, path.trim_start_matches('/')).unwrap_or_else(|| path.rsplit('/').next().unwrap_or(path).to_string()))
+                .collect::<Vec<_>>()
+                .join(", "),
+            false => key.to_string(),
+        })
+    };
     // Named groups in label order; what carries no group comes last.
     groups.sort_by_cached_key(|(key, _)| (key.is_empty(), label(key).to_lowercase()));
     groups
@@ -213,12 +219,30 @@ pub(crate) fn labels(roots: &[PathBuf], page: &str, file: &str) -> HashMap<Strin
         .collect()
 }
 
+/// The group a page falls in. An example page names no `#examplefor:`; the
+/// folder it sits in is the node it is for, as in Houdini's own help:
+/// `/examples/nodes/sop/platonic/PlatonicSolidsTypes` is for `/nodes/sop/platonic`.
+fn group_key(card: &Card, name: &str) -> String {
+    match wiki::model::prop(&card.props, name) {
+        Some(key) => key.trim().to_string(),
+        None if name == "examplefor" => example_for(&card.path).unwrap_or_default(),
+        None => String::new(),
+    }
+}
+
+fn example_for(path: &str) -> Option<String> {
+    let rest = path.strip_prefix("/examples/")?;
+    let (folder, _) = rest.rsplit_once('/')?;
+    Some(format!("/{folder}"))
+}
+
 /// What a query's `field:` reads on one page, lower-cased.
 fn field(card: &Card, name: &str) -> Option<String> {
     let value = match name {
         "path" => Some(card.path.clone()),
         "title" => Some(card.title.clone()),
         "isindex" => Some(card.path.ends_with("/index").to_string()),
+        "examplefor" => Some(group_key(card, "examplefor")).filter(|key| !key.is_empty()),
         "sortkey" => wiki::model::prop(&card.props, "sortkey").map(str::to_string).or(Some(card.title.clone())),
         // A Python page names its module in its title: `hapi.addAttribute`.
         "py_parent" => wiki::model::prop(&card.props, "py_parent")

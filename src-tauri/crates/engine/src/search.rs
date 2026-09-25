@@ -298,9 +298,9 @@ pub fn read_meta(
         };
         let parsed = wiki::parse(&source);
         found.push(Meta {
+            title: crate::page::name(&path, &parsed),
             path,
-            title: parsed.title_text.clone(),
-            summary: parsed.summary.as_ref().map(|s| wiki::inline::plain(s)),
+            summary: crate::page::summary(&parsed),
             icon: wiki::model::prop(&parsed.props, "icon").map(|icon| format!("{icon}.svg")),
         });
     }

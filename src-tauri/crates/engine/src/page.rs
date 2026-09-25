@@ -72,12 +72,12 @@ pub fn read(install: &install::Install, path: &str) -> Result<PageView, PageErro
     assets::rewrite(&path, &mut parsed.blocks, &links);
     let prop = |name: &str| wiki::model::prop(&parsed.props, name).map(str::to_string);
     Ok(PageView {
+        name: name(&path, &parsed),
         path,
-        name: parsed.title_text.clone(),
         node_type: node_type(&parsed.props),
         icon: prop("icon").map(|icon| format!("{icon}.svg")),
         since: prop("since"),
-        summary: parsed.summary.as_ref().map(|s| wiki::inline::plain(s)),
+        summary: summary(&parsed),
         markdown: wiki::markdown::blocks(&parsed.blocks, 1),
         version: install.version.clone(),
         node_versions: Vec::new(),
@@ -106,4 +106,28 @@ pub fn node_type(props: &wiki::Props) -> Option<String> {
         other => return Some(format!("{other} node")),
     };
     Some(label.to_string())
+}
+
+/// A page's name: its title line, or its file name where it has none. An
+/// example page carries only `#exampleFile:` and its text.
+pub fn name(path: &str, parsed: &wiki::Page) -> String {
+    match parsed.title_text.is_empty() {
+        true => path.rsplit('/').next().unwrap_or(path).to_string(),
+        false => parsed.title_text.clone(),
+    }
+}
+
+/// What a page is about: its summary, or, on a page with no title line, its
+/// first paragraph, which is where an example page says what it shows.
+pub fn summary(parsed: &wiki::Page) -> Option<String> {
+    if let Some(summary) = &parsed.summary {
+        return Some(wiki::inline::plain(summary));
+    }
+    if !parsed.title_text.is_empty() {
+        return None;
+    }
+    parsed.blocks.iter().find_map(|block| match block {
+        wiki::Block::Paragraph { text } => Some(wiki::inline::plain(text)).filter(|t| !t.trim().is_empty()),
+        _ => None,
+    })
 }

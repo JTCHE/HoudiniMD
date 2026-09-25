@@ -193,10 +193,10 @@ fn row(
     let markdown = wiki::markdown::blocks(&parsed.blocks, 1);
     Some(Row {
         path: path.clone(),
-        title: parsed.title_text.clone(),
+        title: crate::page::name(path, &parsed),
         node_type: crate::page::node_type(&parsed.props),
         icon: wiki::model::prop(&parsed.props, "icon").map(|icon| format!("{icon}.svg")),
-        summary: parsed.summary.as_ref().map(|s| wiki::inline::plain(s)),
+        summary: crate::page::summary(&parsed),
         sections: crate::sections::split(&markdown),
         mark: crate::versions::mark(path, &parsed.props),
         place: map.place(path, &parsed.props, menu),
