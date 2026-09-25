@@ -1,8 +1,44 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router";
 import { Play } from "lucide-react";
 import { invoke, inTauri } from "@/lib/backend";
 import { showToast } from "@/components/ui/toast-notification";
 import { used } from "@/lib/telemetry";
+import { PrimaryButton } from "@/components/ui/PrimaryButton";
+import { titleOf, warmTitleIndex } from "@/lib/search";
+
+/** The page an example is for: the folder it sits in, as in Houdini's own
+    help. `examples/nodes/sop/divide/X` is for `nodes/sop/divide`. The engine
+    reads it the same way (`listing.rs`, `example_for`). */
+export function exampleFor(path: string): string | null {
+  if (!path.startsWith("examples/")) return null;
+  const folder = path.slice("examples/".length, path.lastIndexOf("/"));
+  return folder.includes("/") ? folder : null;
+}
+
+/** A pill that links an example back to its page, once the title list has
+    that page. */
+export function ExampleFor({ path }: { path: string }) {
+  const target = exampleFor(path);
+  const [title, setTitle] = useState(() => target && titleOf(target));
+  useEffect(() => {
+    if (!target) return;
+    let live = true;
+    void warmTitleIndex().then(() => live && setTitle(titleOf(target)));
+    return () => {
+      live = false;
+    };
+  }, [target]);
+  if (!target || !title) return null;
+  return (
+    <Link
+      to={`/${target}`}
+      className="inline-flex shrink-0 items-center rounded-md border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground no-underline transition-colors hover:text-foreground"
+    >
+      Example for {title}
+    </Link>
+  );
+}
 
 /**
  * Opens an example page's file in a new Houdini, the same as the Launch
@@ -27,8 +63,7 @@ export function LaunchExample({ path }: { path: string }) {
 
   if (!has) return null;
   return (
-    <button
-      type="button"
+    <PrimaryButton
       disabled={starting}
       onClick={() => {
         used("launch-example");
@@ -40,10 +75,10 @@ export function LaunchExample({ path }: { path: string }) {
           // so a second press does not start a second Houdini.
           .finally(() => setTimeout(() => setStarting(false), 4000));
       }}
-      className="flex cursor-interactive items-center gap-2 rounded-lg border border-input bg-muted/50 px-3 py-1.5 text-xs text-muted-foreground shadow-xs transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-wait disabled:opacity-60"
+      className="flex h-8 items-center gap-1.5 px-3 py-0 text-xs disabled:opacity-60"
     >
       <Play className="size-3.5" aria-hidden="true" />
-      Launch in Houdini
-    </button>
+      {starting ? "Starting…" : "Launch in Houdini"}
+    </PrimaryButton>
   );
 }

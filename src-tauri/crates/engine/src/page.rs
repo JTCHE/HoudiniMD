@@ -77,7 +77,9 @@ pub fn read(install: &install::Install, path: &str) -> Result<PageView, PageErro
         node_type: node_type(&parsed.props),
         icon: prop("icon").map(|icon| format!("{icon}.svg")),
         since: prop("since"),
-        summary: summary(&parsed),
+        // The declared summary only: the fallback repeats the body's first
+        // paragraph right above it. Search and listings use `summary()`.
+        summary: parsed.summary.as_ref().map(|text| wiki::inline::plain(text)),
         markdown: wiki::markdown::blocks(&parsed.blocks, 1),
         version: install.version.clone(),
         node_versions: Vec::new(),
