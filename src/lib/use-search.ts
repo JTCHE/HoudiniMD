@@ -39,6 +39,15 @@ function scoped(all: Hit[], scope: Scope): Hit[] {
   return cut;
 }
 
+/** Whether a query is a page's whole title plus more words, before or after. */
+function names(query: string, title: string): boolean {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const name = title.toLowerCase().split(/\s+/).filter(Boolean);
+  if (name.length === 0 || words.length <= name.length) return false;
+  const same = (from: number) => name.every((word, i) => words[from + i] === word);
+  return same(0) || same(words.length - name.length);
+}
+
 /** A result set, with the query it answers. */
 export interface Found {
   query: string;
@@ -90,11 +99,19 @@ export function useSearch(query: string): Found {
       const test = scopeTest(scope);
       const found = scope ? texts.filter((hit) => test(hit.path)).slice(0, 6) : texts;
       if (!live) return;
-      const picked = pick(all);
+      // "box size" names the Box page and a thing on it. The body search
+      // ranks that page first (see `named` in search.rs); the title list,
+      // which reads "box size" as one name, must not bury it under getbbox_size.
+      // Not while the words are the start of a title: "copy to points".
+      const typing = wanted.toLowerCase();
+      const lead = all.some((hit) => hit.title.toLowerCase().startsWith(typing))
+        ? undefined
+        : found.find((hit) => names(wanted, hit.title));
+      const picked = pick(all).filter((hit) => hit.path !== lead?.path);
       const seen = new Set(picked.map((hit) => hit.path));
       setFound({
         query: answer,
-        hits: [...picked, ...found.filter((hit) => !seen.has(hit.path))],
+        hits: [...(lead ? [lead] : []), ...picked, ...found.filter((hit) => !seen.has(hit.path) && hit !== lead)],
       });
     }, BODY_SEARCH_DELAY);
 
