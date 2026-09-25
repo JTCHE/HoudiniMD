@@ -25,6 +25,7 @@ import { Lightbox } from "@/components/docs/Lightbox";
 import { ContextMenu } from "./ContextMenu";
 import { TitleBar } from "./TitleBar";
 import { Sidebar, storedWidth } from "./Sidebar";
+import { REVEAL } from "./sidebar/PageTree";
 import { StatusBar } from "./StatusBar";
 
 /** The page needs this much width beside the panel, or its lines wrap every
@@ -93,6 +94,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     // The first path only: this is the way in, not every page.
   }, []);
   const toggleSidebar = () => (tight ? setFloating((open) => !open) : setSidebarOpen((open) => !open));
+
+  useEffect(() => {
+    const show = () => (tight ? setFloating(true) : setSidebarOpen(true));
+    window.addEventListener(REVEAL, show);
+    return () => window.removeEventListener(REVEAL, show);
+  }, [tight]);
 
   const card = useRef<HTMLDivElement>(null);
   useEffect(() => {

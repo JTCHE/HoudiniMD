@@ -100,6 +100,14 @@ let kept: Open = [];
     on the same page does not open again what the reader has closed. */
 let followed: string | undefined;
 
+/** Shows the page on screen in the panel again, whatever the reader closed
+    or scrolled since. The shell opens the panel on the same event. */
+export const REVEAL = "houdinimd:reveal";
+export function revealInSidebar() {
+  followed = undefined;
+  window.dispatchEvent(new Event(REVEAL));
+}
+
 export function PageTree({ groups, currentPath, bookmarked, className }: PageTreeProps) {
   // Open onto a new page from the first render: opened from the effect below,
   // the panel drew its closed groups for a frame first.
@@ -119,6 +127,13 @@ export function PageTree({ groups, currentPath, bookmarked, className }: PageTre
      Opening every folder the page sits in makes the panel say where the reader
      IS, not where they last clicked. Before the paint, so the list is never
      drawn with the new page and the old folders. */
+  const [asked, setAsked] = useState(0);
+  useEffect(() => {
+    const ask = () => setAsked((n) => n + 1);
+    window.addEventListener(REVEAL, ask);
+    return () => window.removeEventListener(REVEAL, ask);
+  }, []);
+
   useLayoutEffect(() => {
     if (!currentPath || currentPath === followed || groups.length === 0) return;
     // Once for a page, found or not. A category that lands late must not open
@@ -126,7 +141,8 @@ export function PageTree({ groups, currentPath, bookmarked, className }: PageTre
     followed = currentPath;
     const path = pathTo(groups, currentPath);
     if (path) setOpen(path);
-  }, [currentPath, groups]);
+    revealed.current = undefined;
+  }, [currentPath, groups, asked]);
 
   /* Where that page sits in the list, so the list can scroll to it — ONCE,
      on arriving. Opening a folder further down moves that row, and a list
