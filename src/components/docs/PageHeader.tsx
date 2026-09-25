@@ -1,10 +1,12 @@
 import { MarkdownActions } from "@/components/docs/MarkdownActions";
 import { BookmarkButton } from "@/components/docs/BookmarkButton";
-import { LaunchExample } from "@/components/docs/LaunchExample";
+import { ExampleFor, exampleFor, LaunchExample } from "@/components/docs/LaunchExample";
 import type { LibraryEntry } from "@/lib/store/library";
 import { PageTitle } from "@/components/docs/PageTitle";
 import { NodeVersionSelector } from "@/components/docs/NodeVersionSelector";
 import type { NodeVersion } from "@/lib/pages";
+import type { Root } from "hast";
+import { PicturesButton } from "@/components/docs/PicturesButton";
 
 interface PageHeaderProps {
   /** Page name, left exactly as written in the help source. */
@@ -21,11 +23,13 @@ interface PageHeaderProps {
   entry: Omit<LibraryEntry, "at">;
   /** Every version of this node, newest first. */
   versions: NodeVersion[];
+  /** The page body, for the pictures button. */
+  tree?: Root;
 }
 
 /** Single source of truth for a docs page's header row: icon, name + type,
  *  the "Since" badge, the copy-as-markdown action, and the summary caption. */
-export function PageHeader({ name, nodeType, icon, since, summary, markdown, entry, versions }: PageHeaderProps) {
+export function PageHeader({ name, nodeType, icon, since, summary, markdown, entry, versions, tree }: PageHeaderProps) {
   return (
     <header className="@container not-prose border-b border-border pb-3 mb-6">
       {/* The actions hold the right of the title line at every width. What
@@ -36,6 +40,7 @@ export function PageHeader({ name, nodeType, icon, since, summary, markdown, ent
         </div>
         <div className="flex shrink-0 items-center gap-2 pt-0.5 print:hidden">
           <LaunchExample path={entry.path} />
+          {tree && <PicturesButton tree={tree} />}
           <BookmarkButton entry={entry} />
           <MarkdownActions markdown={markdown} path={entry.path} title={name} />
         </div>
@@ -43,10 +48,11 @@ export function PageHeader({ name, nodeType, icon, since, summary, markdown, ent
             otherwise take for themselves under the title. The pills keep the
             right of the row and go under a summary too long to leave them
             room. The version sits beside Since: both say which node this is. */}
-        {(summary || since || versions.length > 1) && (
+        {(summary || since || versions.length > 1 || exampleFor(entry.path)) && (
           <div className="flex w-full basis-full flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
             {summary && <p className="m-0 min-w-0 flex-1 text-sm italic text-muted-foreground">{summary}</p>}
             <div className="flex shrink-0 items-center gap-2">
+              <ExampleFor path={entry.path} />
               <NodeVersionSelector versions={versions} path={entry.path} />
               {since && (
                 <span className="inline-flex shrink-0 items-center rounded-md border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
