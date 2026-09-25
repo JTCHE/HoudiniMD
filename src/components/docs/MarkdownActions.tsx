@@ -1,7 +1,9 @@
-import { Check, ChevronDown, Copy, Download, FileText, SquareArrowOutUpRight } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Check, ChevronDown, Copy, Download, FileText, Link2, SquareArrowOutUpRight } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
-import { MENU_ICON, MENU_ITEM, MENU_PANEL, useMenu } from "@/lib/ui/menu";
+import { MENU_PANEL, useMenu } from "@/lib/ui/menu";
+import { MenuList, type MenuEntry } from "@/components/ui/MenuList";
+import { sideFxUrl } from "@/lib/sidefx";
 import { invoke, inTauri } from "@/lib/backend";
 import { HOUDINIMD_DOCS_ROOT } from "@/lib/houdini";
 import { pageHtml } from "@/lib/markdown/html";
@@ -98,11 +100,6 @@ export function MarkdownActions({ markdown, path, title }: { markdown: string; p
     if (await invoke<boolean>("save_page", { name, markdown, html })) showToast("Page saved");
   }, [markdown, path, title]);
 
-  // The right-click menu runs these same two.
-  useEffect(() => {
-    setPageActions({ path, title, copy, save: inTauri ? save : undefined });
-    return () => setPageActions(null);
-  }, [path, title, copy, save]);
 
   // A page with no pictures goes as text, with no question. One with pictures
   // asks whether to bring them, unless the reader kept an answer. See lib/obsidian.
@@ -126,22 +123,67 @@ export function MarkdownActions({ markdown, path, title }: { markdown: string; p
     void save().catch((reason) => showToast(String(reason), "error"));
   });
 
-  function run(name: string, action: () => Promise<unknown>) {
-    setOpen(false);
-    used(name);
-    void action().catch((reason) => showToast(String(reason), "error"));
-  }
+  // Ctrl/Cmd+L copies the page's web address, as the menus say.
+  const copyLink = useCallback(async () => {
+    await navigator.clipboard.writeText(`${HOUDINIMD_DOCS_ROOT}/${path}`);
+    showToast("Link copied");
+  }, [path]);
+  useHotkey((event) => {
+    if (event.key.toLowerCase() !== "l" || !isCommand(event) || event.shiftKey || event.altKey) return;
+    if (isTyping(event.target)) return;
+    event.preventDefault();
+    void copyLink().catch(() => showToast("Couldn't copy", "error"));
+  });
 
-  // The same short request both assistants get: read this page, then answer.
-  const ask = (assistant: (prompt: string) => string) =>
-    run("ask-assistant", () =>
-      openWeb(
-        assistant(
-          `Please read the Houdini docs page for "${title}" at ${HOUDINIMD_DOCS_ROOT}/${path}.md.\n\n` +
-            "Concisely tell me about it using Simplified Technical English (ASD-STE100).",
-        ),
-      ),
-    );
+  // Every action on the page, once: the drop-down below and the right-click
+  // menu draw from this.
+  const actions = useMemo(() => {
+    const named = (name: string, entry: MenuEntry): MenuEntry => ({
+      ...entry,
+      run: () => {
+        used(name);
+        return entry.run();
+      },
+    });
+    // The same short request both assistants get: read this page, then answer.
+    const prompt =
+      `Please read the Houdini docs page for "${title}" at ${HOUDINIMD_DOCS_ROOT}/${path}.md.
+
+` +
+      "Concisely tell me about it using Simplified Technical English (ASD-STE100).";
+    return {
+      path,
+      title,
+      copy,
+      copyLink: named("copy-link", { label: "Copy page link", icon: Link2, keys: `${COMMAND_KEY}+L`, run: copyLink }),
+      openOnSideFx: named("open-sidefx", { label: "Open on sidefx.com", icon: SquareArrowOutUpRight, run: () => openWeb(sideFxUrl(path)) }),
+      openMarkdown: named("open-markdown", {
+        label: "Open as Markdown",
+        icon: SquareArrowOutUpRight,
+        run: () => (inTauri ? invoke("open_page", { path, source: false }) : window.open(`/${path}.md`, "_blank")),
+      }),
+      ...(inTauri && {
+        openSource: named("open-source", { label: "Open the help source", icon: FileText, run: () => invoke("open_page", { path, source: true }) }),
+        save: named("save-as", { label: "Save as…", icon: Download, keys: `${COMMAND_KEY}+S`, run: save }),
+        obsidian: named("send-to-obsidian", { label: "Send to Obsidian", icon: ObsidianIcon, run: toObsidian }),
+      }),
+      askClaude: named("ask-assistant", {
+        label: "Ask Claude",
+        icon: ClaudeIcon,
+        run: () => openWeb(`https://claude.ai/new?q=${encodeURIComponent(prompt)}`),
+      }),
+      askChatGpt: named("ask-assistant", {
+        label: "Ask ChatGPT",
+        icon: ChatGPTIcon,
+        run: () => openWeb(`https://chatgpt.com/?q=${encodeURIComponent(prompt)}`),
+      }),
+    };
+  }, [path, title, copy, copyLink, save, toObsidian]);
+
+  useEffect(() => {
+    setPageActions(actions);
+    return () => setPageActions(null);
+  }, [actions]);
 
   return (
     <div ref={container} onKeyDown={onMenuKey} className="relative inline-flex print:hidden">
@@ -180,77 +222,19 @@ export function MarkdownActions({ markdown, path, title }: { markdown: string; p
       </Hint>
 
       {open && (
-        <div
+        <MenuList
           ref={menu}
-          role="menu"
-          aria-label="Page actions"
-          className={cn(MENU_PANEL, "w-52")}
-        >
-          <button
-            type="button"
-            role="menuitem"
-            className={MENU_ITEM}
-            onClick={() =>
-              run("open-markdown", async () =>
-                inTauri ? invoke("open_page", { path, source: false }) : window.open(`/${path}.md`, "_blank"),
-              )
-            }
-          >
-            <SquareArrowOutUpRight className={MENU_ICON} aria-hidden="true" />
-            Open as Markdown
-          </button>
-          {/* Houdini's pane cannot open a file or show a save dialog. */}
-          {inTauri && (
-            <>
-              <button
-                type="button"
-                role="menuitem"
-                className={MENU_ITEM}
-                onClick={() => run("open-source", () => invoke("open_page", { path, source: true }))}
-              >
-                <FileText className={MENU_ICON} aria-hidden="true" />
-                Open the help source
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                className={MENU_ITEM}
-                onClick={() => run("save-as", save)}
-              >
-                <Download className={MENU_ICON} aria-hidden="true" />
-                Save as…
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                className={MENU_ITEM}
-                onClick={() => run("send-to-obsidian", toObsidian)}
-              >
-                <ObsidianIcon className={MENU_ICON} />
-                Send to Obsidian
-              </button>
-            </>
-          )}
-          <div role="separator" className="mx-sm my-1 h-px bg-hairline" />
-          <button
-            type="button"
-            role="menuitem"
-            className={MENU_ITEM}
-            onClick={() => ask((prompt) => `https://claude.ai/new?q=${encodeURIComponent(prompt)}`)}
-          >
-            <ClaudeIcon className={MENU_ICON} />
-            Ask Claude
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            className={MENU_ITEM}
-            onClick={() => ask((prompt) => `https://chatgpt.com/?q=${encodeURIComponent(prompt)}`)}
-          >
-            <ChatGPTIcon className={MENU_ICON} />
-            Ask ChatGPT
-          </button>
-        </div>
+          label="Page actions"
+          className={cn(MENU_PANEL, "min-w-52")}
+          onClose={() => {
+            setOpen(false);
+            arrow.current?.focus();
+          }}
+          groups={[
+            [actions.openMarkdown, actions.openSource, actions.save, actions.obsidian].filter((entry) => entry !== undefined),
+            [actions.askClaude, actions.askChatGpt],
+          ]}
+        />
       )}
       {asking && <ObsidianDialog title={title} markdown={markdown} onClose={() => setAsking(false)} />}
     </div>
