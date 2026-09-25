@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 
 export const MENU_PANEL =
   "absolute top-[calc(100%+4px)] right-0 z-50 origin-top-right rounded-lg border border-hairline bg-raised p-1 " +
-  "shadow-xl shadow-black/10 animate-[dropdown-in_120ms_cubic-bezier(0.2,0,0,1)] motion-reduce:animate-none";
+  "shadow-xl shadow-black/10 pop-in";
 
 export const MENU_ITEM =
   "flex w-full cursor-interactive items-center gap-2.5 rounded-md px-sm py-[7px] text-left text-[13px] " +
