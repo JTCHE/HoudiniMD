@@ -58,8 +58,11 @@ export async function sendText(title: string, markdown: string) {
   await openWeb(`obsidian://new?file=${encodeURIComponent(fileName(title))}&clipboard=true`);
 }
 
-/** The note and its pictures, written into `vault`, which is then remembered. */
+/** The note and its pictures, written into `vault`, which is then remembered.
+    Obsidian then opens the note, as it does for the text alone: `path` finds
+    the vault that holds the file. */
 export async function sendWithPictures(vault: string, title: string, markdown: string) {
-  await invoke("send_to_obsidian", { vault, title, markdown });
+  const note = await invoke<string>("send_to_obsidian", { vault, title, markdown });
   await invoke("set_setting", { key: OBSIDIAN_VAULT, value: vault });
+  await openWeb(`obsidian://open?path=${encodeURIComponent(note)}`);
 }

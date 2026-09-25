@@ -420,12 +420,13 @@ fn obsidian_vaults() -> Vec<Vault> {
 
 /// Writes the page into the vault at `vault`, under `HoudiniMD/`, its
 /// pictures beside it under `HoudiniMD/attachments/`. The reader picks the
-/// vault in the app (see `ObsidianDialog`); this only writes.
+/// vault in the app (see `ObsidianDialog`); this only writes, and returns the
+/// note's path for the app to open it.
 ///
 /// Pictures come out of the zip the app already reads pages from, not off the
 /// screen, so nothing has to leave the app just to come back as bytes.
 #[tauri::command]
-async fn send_to_obsidian(app: tauri::AppHandle, vault: String, title: String, markdown: String) -> Result<(), String> {
+async fn send_to_obsidian(app: tauri::AppHandle, vault: String, title: String, markdown: String) -> Result<String, String> {
     let vault = std::path::PathBuf::from(vault);
     if !vault.is_dir() {
         return Err(format!("{} is not a folder", vault.display()));
@@ -452,8 +453,9 @@ async fn send_to_obsidian(app: tauri::AppHandle, vault: String, title: String, m
 
     let safe: String = title.chars().map(|c| if "\\/:*?\"<>|".contains(c) { ' ' } else { c }).collect();
     let safe = safe.trim();
-    std::fs::write(folder.join(format!("{}.md", if safe.is_empty() { "page" } else { safe })), note)
-        .map_err(|e| e.to_string())
+    let path = folder.join(format!("{}.md", if safe.is_empty() { "page" } else { safe }));
+    std::fs::write(&path, note).map_err(|e| e.to_string())?;
+    Ok(path.to_string_lossy().into_owned())
 }
 
 /// Every `<kind>path/to/file.ext` substring `text` carries, ending at the
