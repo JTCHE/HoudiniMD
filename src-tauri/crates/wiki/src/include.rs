@@ -58,12 +58,81 @@ fn expand(blocks: &mut Vec<Block>, from: &str, load: &Load, open: &mut Vec<Strin
             out.push(block);
             continue;
         }
+        borrow(&mut block, from, load, open, depth);
         for children in children(&mut block) {
             expand(children, from, load, open, depth);
         }
         out.push(block);
     }
     *blocks = out;
+}
+
+/// A parameter written as `#contentfrom: /nodes/dop/volumesource#voperator#`
+/// and no text of its own takes the text of the parameter it names, the way
+/// an include does. One with text of its own keeps it.
+fn borrow(block: &mut Block, from: &str, load: &Load, open: &mut Vec<String>, depth: usize) {
+    let Block::Definition { props, children, .. } = block else { return };
+    if !children.is_empty() || depth >= DEPTH {
+        return;
+    }
+    let Some((path, id)) = prop(props, "contentfrom").and_then(|link| link.split_once('#')) else {
+        return;
+    };
+    // `#id=karma:global:autoraybias` names what `#karma:global:autoraybias` does.
+    let id = id.strip_prefix("id=").unwrap_or(id);
+    let target = absolute(from, path);
+    if target != *from && open.contains(&target) {
+        return;
+    }
+    let Some(page) = load(&target) else { return };
+    let mut page = Vec::clone(&*page);
+    open.push(target.clone());
+    // The block alone where the page writes it out. Where the page only
+    // includes it from a third page, the page is expanded first to reach it.
+    let found = match named(&mut page, id) {
+        Some(block) => Some(block),
+        None if target != *from => {
+            expand(&mut page, &target, load, open, depth + 1);
+            named(&mut page, id)
+        }
+        None => None,
+    };
+    let Some(found) = found else {
+        open.pop();
+        return;
+    };
+    // Expanded as a block, so a parameter that itself borrows is filled.
+    let mut found = vec![found];
+    expand(&mut found, &target, load, open, depth + 1);
+    open.pop();
+    rebase(&mut found, dir(&target));
+    if let Some(Block::Definition { children: text, .. }) = found.pop() {
+        *children = text;
+    }
+}
+
+/// The block an ID names, or else the definition whose term it is: the VEX
+/// context pages name a global by its term alone (`::Cl:`).
+fn named(blocks: &mut Vec<Block>, id: &str) -> Option<Block> {
+    find(blocks, id).or_else(|| find_term(blocks, id))
+}
+
+fn find_term(blocks: &mut Vec<Block>, id: &str) -> Option<Block> {
+    for at in 0..blocks.len() {
+        if let Block::Definition { term, .. } = &blocks[at]
+            && crate::inline::plain(term).trim().trim_matches(':') == id
+        {
+            return Some(blocks.remove(at));
+        }
+    }
+    for block in blocks {
+        for children in children(block) {
+            if let Some(found) = find_term(children, id) {
+                return Some(found);
+            }
+        }
+    }
+    None
 }
 
 /// The blocks of `target`, or the one block named by `id` inside it.
@@ -255,6 +324,15 @@ mod tests {
             ),
             "shelf/deep" => Some(":include /nodes/sop/_common#geometry:\n".into()),
             "shelf/loop" => Some(":include /shelf/loop:\n".into()),
+            "nodes/sop/pyro" => Some(
+                "@parameters\n\nOperation:\n    #id: op\n    #contentfrom: /nodes/dop/volumesource#voperator#\n\n\
+                 Again:\n    #contentfrom: #op\n\n\
+                 Own:\n    #contentfrom: #op\n\n    Its own words.\n"
+                    .into(),
+            ),
+            "nodes/dop/volumesource" => {
+                Some("@parameters\n\nOperation:\n    #id: voperator#\n    The merging operation.\n".into())
+            }
             _ => None,
         }
     }
@@ -295,6 +373,13 @@ mod tests {
     fn an_include_inside_an_include_is_resolved() {
         let out = text(":include /shelf/deep:\n", "nodes/sop/box");
         assert!(out.contains("Read from here."), "{out}");
+    }
+
+    #[test]
+    fn a_parameter_takes_the_text_it_names_with_contentfrom() {
+        let out = text(":include /nodes/sop/pyro:\n", "nodes/sop/box");
+        assert_eq!(out.matches("The merging operation.").count(), 2, "{out}");
+        assert!(out.contains("Its own words."), "{out}");
     }
 
     #[test]
