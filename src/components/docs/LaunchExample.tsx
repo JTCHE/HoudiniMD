@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
-import { Play } from "lucide-react";
+import { CornerLeftUp, Play } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { ACTION, ACTION_ICON, QUIET } from "@/lib/ui/button";
+import { Hint } from "@/components/ui/Hint";
 import { invoke, inTauri } from "@/lib/backend";
 import { showToast } from "@/components/ui/toast-notification";
 import { used } from "@/lib/telemetry";
@@ -16,8 +19,8 @@ export function exampleFor(path: string): string | null {
   return folder.includes("/") ? folder : null;
 }
 
-/** A pill that links an example back to its page, once the title list has
-    that page. */
+/** A button beside Launch that goes up to the page the example is for, once
+    the title list has that page. */
 export function ExampleFor({ path }: { path: string }) {
   const target = exampleFor(path);
   const [title, setTitle] = useState(() => target && titleOf(target));
@@ -31,12 +34,12 @@ export function ExampleFor({ path }: { path: string }) {
   }, [target]);
   if (!target || !title) return null;
   return (
-    <Link
-      to={`/${target}`}
-      className="inline-flex shrink-0 items-center rounded-md border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground no-underline transition-colors hover:text-foreground"
-    >
-      Example for {title}
-    </Link>
+    <Hint label={`This example is for ${title}`}>
+      <Link to={`/${target}`} className={cn(ACTION, QUIET, "no-underline")}>
+        <CornerLeftUp className={ACTION_ICON} aria-hidden="true" />
+        {title}
+      </Link>
+    </Hint>
   );
 }
 
@@ -75,10 +78,10 @@ export function LaunchExample({ path }: { path: string }) {
           // so a second press does not start a second Houdini.
           .finally(() => setTimeout(() => setStarting(false), 4000));
       }}
-      className="flex h-8 items-center gap-1.5 px-3 py-0 text-xs disabled:opacity-60"
+      className={cn(ACTION, "py-0 disabled:opacity-60")}
     >
-      <Play className="size-3.5" aria-hidden="true" />
-      {starting ? "Starting…" : "Launch in Houdini"}
+      <Play className={ACTION_ICON} aria-hidden="true" />
+      {starting ? "Startingâ€¦" : "Launch in Houdini"}
     </PrimaryButton>
   );
 }

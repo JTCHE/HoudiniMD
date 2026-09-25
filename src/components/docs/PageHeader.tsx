@@ -1,6 +1,6 @@
 import { MarkdownActions } from "@/components/docs/MarkdownActions";
 import { BookmarkButton } from "@/components/docs/BookmarkButton";
-import { ExampleFor, exampleFor, LaunchExample } from "@/components/docs/LaunchExample";
+import { ExampleFor, LaunchExample } from "@/components/docs/LaunchExample";
 import type { LibraryEntry } from "@/lib/store/library";
 import { PageTitle } from "@/components/docs/PageTitle";
 import { NodeVersionSelector } from "@/components/docs/NodeVersionSelector";
@@ -39,6 +39,7 @@ export function PageHeader({ name, nodeType, icon, since, summary, markdown, ent
           <PageTitle name={name} nodeType={nodeType} icon={icon} />
         </div>
         <div className="flex shrink-0 items-center gap-2 pt-0.5 print:hidden">
+          <ExampleFor path={entry.path} />
           <LaunchExample path={entry.path} />
           {tree && <PicturesButton tree={tree} />}
           <BookmarkButton entry={entry} />
@@ -48,11 +49,10 @@ export function PageHeader({ name, nodeType, icon, since, summary, markdown, ent
             otherwise take for themselves under the title. The pills keep the
             right of the row and go under a summary too long to leave them
             room. The version sits beside Since: both say which node this is. */}
-        {(summary || since || versions.length > 1 || exampleFor(entry.path)) && (
+        {(summary || since || versions.length > 1) && (
           <div className="flex w-full basis-full flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
             {summary && <p className="m-0 min-w-0 flex-1 text-sm italic text-muted-foreground">{summary}</p>}
             <div className="flex shrink-0 items-center gap-2">
-              <ExampleFor path={entry.path} />
               <NodeVersionSelector versions={versions} path={entry.path} />
               {since && (
                 <span className="inline-flex shrink-0 items-center rounded-md border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
