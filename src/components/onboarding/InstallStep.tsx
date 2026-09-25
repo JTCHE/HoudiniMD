@@ -1,7 +1,8 @@
+import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
 import { invoke } from "@/lib/backend";
 import { pickInstall, type Install } from "@/lib/install";
-import { ChoiceRow } from "./ChoiceRow";
+import { CHOICE_HANG, ChoiceRow } from "./ChoiceRow";
 
 /**
  * The first thing the app asks for: which Houdini it reads.
@@ -65,9 +66,9 @@ export function InstallStep({
   }
 
   return (
-    <div className="-mx-ms flex flex-col gap-sm">
+    <div className={cn(CHOICE_HANG, "flex flex-col gap-sm")}>
       {installs.length === 0 && (
-        <p className="px-ms text-meta text-neutral-500">
+        <p className="px-[13px] text-meta text-neutral-500">
           No Houdini install found on this machine. Install Houdini, or pick the folder of one.
         </p>
       )}

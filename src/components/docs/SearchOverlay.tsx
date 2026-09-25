@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { SCRIM } from "@/components/ui/Modal";
 import { Hint } from "@/components/ui/Hint";
 import { createPortal, flushSync } from "react-dom";
 import { useLocation, useNavigate } from "react-router";
@@ -328,10 +329,7 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
   // `fixed` meaning the viewport and keeps this out of that column entirely.
   return createPortal(
     <div className="fixed inset-0 z-[60]" onClick={() => setOpen(false)}>
-      {/* A plain scrim, not a blurred one. A backdrop-filter over the whole
-          window is drawn again on every keystroke: it made a keystroke here
-          cost 71ms against 31ms in the landing field. */}
-      <div className="absolute inset-0 bg-black/50" />
+      <div className={SCRIM} />
       <div className="relative h-full flex items-start justify-center pt-4 sm:pt-[20vh] pointer-events-none">
       <div
         // transform-gpu keeps the panel on a layer of its own, so a keystroke

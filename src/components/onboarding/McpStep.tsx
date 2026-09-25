@@ -1,7 +1,8 @@
+import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
 import { invoke } from "@/lib/backend";
 import { SettingRow } from "./SettingRow";
-import { ChoiceRow } from "./ChoiceRow";
+import { CHOICE_HANG, ChoiceRow } from "./ChoiceRow";
 
 const MCP_REPO = "https://github.com/JTCHE/houdini-mcp";
 
@@ -77,7 +78,7 @@ export function McpStep({
       {/* Chips that wrap: the picture above shares the fixed column, and a
           list of full rows would squeeze it to a strip. */}
       {on && (
-        <div className="-mx-ms flex flex-wrap gap-sm">
+        <div className={cn(CHOICE_HANG, "flex flex-wrap gap-sm")}>
           {/* While the scan runs, empty chips hold the line the list takes, so
               the picture above does not jump when it lands. */}
           {agents === null &&

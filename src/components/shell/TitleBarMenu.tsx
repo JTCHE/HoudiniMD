@@ -7,37 +7,29 @@
  * In every build, not only in a development one. See spec: Right click on
  * HoudiniMD in title bar.
  */
-import { useEffect, useState } from "react";
-import { cn } from "@/lib/utils";
+import { useEffect, useRef } from "react";
+import { DatabaseZap, FileText, Settings, Trash2 } from "lucide-react";
 import { invoke } from "@/lib/backend";
+import { COMMAND_KEY } from "@/lib/hotkeys";
 import { showToast } from "@/components/ui/toast-notification";
 import { openSettings } from "@/components/settings/SettingsDialog";
-
-const ITEM =
-  "flex w-full cursor-interactive items-center rounded-md px-sm py-[7px] text-left text-[13px] " +
-  "text-neutral-800 transition-colors duration-(--duration-fast) motion-reduce:transition-none " +
-  "pointer-hover:bg-neutral-100 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none";
+import { MenuList } from "@/components/ui/MenuList";
 
 export function TitleBarMenu({ at, onClose }: { at: { x: number; y: number }; onClose: () => void }) {
-  const [busy, setBusy] = useState(false);
+  const panel = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const shut = () => onClose();
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+    panel.current?.focus({ preventScroll: true });
+    const outside = (event: MouseEvent) => {
+      if (!panel.current?.contains(event.target as Node)) onClose();
     };
-    document.addEventListener("mousedown", shut);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", shut);
-      document.removeEventListener("keydown", onKey);
-    };
+    document.addEventListener("mousedown", outside);
+    return () => document.removeEventListener("mousedown", outside);
   }, [onClose]);
 
   /** Answered on the click, not after the backend: the pass reports its own
       progress, and every count falls to nothing and climbs back with it. */
   function resetIndex() {
     showToast("Index cleared. Reading the install again…");
-    onClose();
     invoke("reset_index").catch((reason) => showToast(String(reason), "error"));
   }
 
@@ -50,69 +42,29 @@ export function TitleBarMenu({ at, onClose }: { at: { x: number; y: number }; on
       "Bookmarks, recent pages, and every setting are removed. This cannot be undone.",
       { title: "Reset user data", kind: "warning", okLabel: "Reset" },
     );
-    if (!sure) {
-      onClose();
-      return;
+    if (!sure) return;
+    await invoke("reset_user_data");
+    for (const key of Object.keys(localStorage)) {
+      if (key.startsWith("houdinimd.")) localStorage.removeItem(key);
     }
-    setBusy(true);
-    try {
-      await invoke("reset_user_data");
-      for (const key of Object.keys(localStorage)) {
-        if (key.startsWith("houdinimd.")) localStorage.removeItem(key);
-      }
-      window.location.reload();
-    } catch (reason) {
-      showToast(String(reason), "error");
-      setBusy(false);
-    }
+    window.location.reload();
   }
 
   return (
-    <div
-      role="menu"
+    <MenuList
+      ref={panel}
+      label="HoudiniMD"
+      onClose={onClose}
       style={{ top: at.y, left: at.x }}
-      onMouseDown={(event) => event.stopPropagation()}
-      className={cn(
-        "fixed z-50 w-[200px] overflow-hidden rounded-lg border border-hairline",
-        "bg-raised p-1 shadow-xl shadow-black/10",
-      )}
-    >
-      <button
-        type="button"
-        role="menuitem"
-        className={ITEM}
-        onClick={() => {
-          openSettings();
-          onClose();
-        }}
-      >
-        Settings
-      </button>
-      <div role="separator" className="mx-sm my-1 h-px bg-hairline" />
-      <button
-        type="button"
-        role="menuitem"
-        className={ITEM}
-        onClick={() => {
-          void invoke("show_logs").catch((reason) => showToast(String(reason), "error"));
-          onClose();
-        }}
-      >
-        Open logs
-      </button>
-      <div role="separator" className="mx-sm my-1 h-px bg-hairline" />
-      <button type="button" role="menuitem" disabled={busy} className={ITEM} onClick={resetIndex}>
-        Reset index
-      </button>
-      <button
-        type="button"
-        role="menuitem"
-        disabled={busy}
-        className={cn(ITEM, "text-destructive")}
-        onClick={() => void resetUserData()}
-      >
-        Reset user data
-      </button>
-    </div>
+      className="fixed z-50 min-w-52"
+      groups={[
+        [{ label: "Settings", icon: Settings, keys: `${COMMAND_KEY}+,`, run: openSettings }],
+        [{ label: "Open logs", icon: FileText, run: () => invoke("show_logs") }],
+        [
+          { label: "Reset index", icon: DatabaseZap, run: resetIndex },
+          { label: "Reset user data", icon: Trash2, run: resetUserData },
+        ],
+      ]}
+    />
   );
 }

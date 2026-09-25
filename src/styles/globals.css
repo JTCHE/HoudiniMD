@@ -1185,6 +1185,15 @@ button:active kbd.kbd-button {
   }
 }
 
+/* The blur behind a modal (SCRIM in Modal.tsx). Off where the window draws in
+   software, which blurs it again on every keystroke: see lib/ui/blur. */
+@utility scrim-blur {
+  backdrop-filter: blur(8px);
+  :root[data-no-blur] & {
+    backdrop-filter: none;
+  }
+}
+
 @utility pop-in {
   animation: pop-in 120ms cubic-bezier(0.2, 0, 0, 1);
   @media (prefers-reduced-motion: reduce) {
