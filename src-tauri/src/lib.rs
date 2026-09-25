@@ -377,45 +377,59 @@ async fn save_page(
     Ok(true)
 }
 
-/// The setting that remembers the reader's vault, so the folder is asked for
-/// once, not on every note.
-const OBSIDIAN_VAULT_KEY: &str = "obsidian-vault";
+/// The vaults Obsidian knows, most recently opened first, read from its own
+/// `obsidian.json`. Only paths that are still folders; none where Obsidian is
+/// not installed.
+#[derive(serde::Serialize)]
+struct Vault {
+    path: String,
+    name: String,
+}
 
-/// Writes the page into the reader's Obsidian vault, under `HoudiniMD/`, its
-/// pictures beside it under `HoudiniMD/attachments/`.
-///
-/// The vault is a folder on disk, not a URI a browser can carry, so this is a
-/// second door next to `save_page` rather than a use of it: the reader is
-/// never asked where, only once which vault. Pictures come out of the zip the
-/// app already reads pages from, not off the screen, so nothing has to leave
-/// the app just to come back as bytes.
 #[tauri::command]
-async fn send_to_obsidian(app: tauri::AppHandle, window: tauri::WebviewWindow, title: String, markdown: String) -> Result<bool, String> {
-    let db = app.state::<Db>();
-    let remembered = {
-        let conn = db.0.lock().map_err(|e| e.to_string())?;
-        db::get_setting(&conn, OBSIDIAN_VAULT_KEY)
+fn obsidian_vaults() -> Vec<Vault> {
+    let config = if cfg!(windows) {
+        std::env::var_os("APPDATA").map(std::path::PathBuf::from)
+    } else if cfg!(target_os = "macos") {
+        std::env::var_os("HOME").map(|home| std::path::Path::new(&home).join("Library/Application Support"))
+    } else {
+        std::env::var_os("XDG_CONFIG_HOME")
+            .map(std::path::PathBuf::from)
+            .or_else(|| std::env::var_os("HOME").map(|home| std::path::Path::new(&home).join(".config")))
     };
-    let vault = match remembered {
-        Some(path) if std::path::Path::new(&path).is_dir() => std::path::PathBuf::from(path),
-        _ => {
-            use tauri_plugin_dialog::DialogExt;
-            let Some(picked) = app
-                .dialog()
-                .file()
-                .set_parent(&window)
-                .set_title("Choose your Obsidian vault")
-                .blocking_pick_folder()
-            else {
-                return Ok(false);
-            };
-            let picked = picked.into_path().map_err(|e| e.to_string())?;
-            let conn = db.0.lock().map_err(|e| e.to_string())?;
-            db::set_setting(&conn, OBSIDIAN_VAULT_KEY, &picked.to_string_lossy())?;
-            picked
-        }
+    let Some(text) = config.and_then(|dir| std::fs::read_to_string(dir.join("obsidian/obsidian.json")).ok()) else {
+        return Vec::new();
     };
+    let json: serde_json::Value = serde_json::from_str(&text).unwrap_or_default();
+    let mut vaults: Vec<(i64, Vault)> = json["vaults"]
+        .as_object()
+        .into_iter()
+        .flat_map(|all| all.values())
+        .filter_map(|vault| {
+            let path = vault["path"].as_str()?;
+            let dir = std::path::Path::new(path);
+            dir.is_dir().then(|| {
+                let name = dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| path.to_string());
+                (vault["ts"].as_i64().unwrap_or(0), Vault { path: path.to_string(), name })
+            })
+        })
+        .collect();
+    vaults.sort_by(|a, b| b.0.cmp(&a.0));
+    vaults.into_iter().map(|(_, vault)| vault).collect()
+}
 
+/// Writes the page into the vault at `vault`, under `HoudiniMD/`, its
+/// pictures beside it under `HoudiniMD/attachments/`. The reader picks the
+/// vault in the app (see `ObsidianDialog`); this only writes.
+///
+/// Pictures come out of the zip the app already reads pages from, not off the
+/// screen, so nothing has to leave the app just to come back as bytes.
+#[tauri::command]
+async fn send_to_obsidian(app: tauri::AppHandle, vault: String, title: String, markdown: String) -> Result<(), String> {
+    let vault = std::path::PathBuf::from(vault);
+    if !vault.is_dir() {
+        return Err(format!("{} is not a folder", vault.display()));
+    }
     let folder = vault.join("HoudiniMD");
     let attachments = folder.join("attachments");
     std::fs::create_dir_all(&attachments).map_err(|e| e.to_string())?;
@@ -439,8 +453,7 @@ async fn send_to_obsidian(app: tauri::AppHandle, window: tauri::WebviewWindow, t
     let safe: String = title.chars().map(|c| if "\\/:*?\"<>|".contains(c) { ' ' } else { c }).collect();
     let safe = safe.trim();
     std::fs::write(folder.join(format!("{}.md", if safe.is_empty() { "page" } else { safe })), note)
-        .map_err(|e| e.to_string())?;
-    Ok(true)
+        .map_err(|e| e.to_string())
 }
 
 /// Every `<kind>path/to/file.ext` substring `text` carries, ending at the
@@ -897,8 +910,13 @@ fn reset_user_data(state: State<Db>) -> Result<(), String> {
 /// Every Houdini release series on this machine, and whether F1 already points
 /// here. The onboarding step draws this list.
 #[tauri::command]
-fn houdini_releases(state: State<Port>) -> Vec<hook::Release> {
-    hook::releases(state.0)
+fn houdini_releases(state: State<Port>, cache: State<Arc<install::Cache>>) -> Vec<hook::Release> {
+    hook::releases(state.0, &installed(&cache))
+}
+
+/// The builds on this machine, as the version picker lists them.
+fn installed(cache: &install::Cache) -> Vec<String> {
+    cache.get().into_iter().map(|install| install.version).collect()
 }
 
 /// Turns F1 towards this app for the named releases. Idempotent, so onboarding
@@ -952,24 +970,11 @@ async fn install_houdini_mcp(
         current(&db, &chosen, &cache)?
     };
     let release = hook::series_of(&install.version);
-    let key = agent.clone();
+    // Settings reads the agent's config back to say what is installed.
     tauri::async_runtime::spawn_blocking(move || mcp::install(&release, &agent))
         .await
-        .map_err(|e| e.to_string())??;
-    // What the Settings pane can honestly say: the installer ran for this
-    // agent and reported success, at this time. Nothing reads the agent's
-    // own config back, so it never claims more than that.
-    let at = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|since| since.as_secs())
-        .unwrap_or(0);
-    let record = serde_json::json!({ "agent": key, "at": at }).to_string();
-    let db = state.0.lock().map_err(|e| e.to_string())?;
-    db::set_setting(&db, MCP_INSTALLED, &record)
+        .map_err(|e| e.to_string())?
 }
-
-/// The setting `install_houdini_mcp` writes when the installer succeeds.
-const MCP_INSTALLED: &str = "mcp_installed";
 
 /// Puts back what F1 pointed at before this app touched it, for the named
 /// releases.
@@ -981,11 +986,11 @@ fn unhook_houdini(data: State<DataDir>, releases: Vec<String>) -> Result<Vec<Str
 /// `--hook` turns F1 towards this app for every release series on the
 /// machine. It takes the port the server just took, so the app is already
 /// serving when the preference names it. `--unhook` is in `run`.
-fn hook_from_the_command_line(data: &std::path::Path, port: u16) {
+fn hook_from_the_command_line(data: &std::path::Path, port: u16, cache: &install::Cache) {
     if !std::env::args().any(|argument| argument == "--hook") {
         return;
     }
-    let all: Vec<String> = hook::releases(port).into_iter().map(|r| r.release).collect();
+    let all: Vec<String> = hook::releases(port, &installed(cache)).into_iter().map(|r| r.release).collect();
     match hook::apply(data, port, &all) {
         Ok(releases) => println!("houdini {}", releases.join(", ")),
         Err(reason) => eprintln!("{reason}"),
@@ -1062,7 +1067,7 @@ pub fn run() {
                 }
             };
             app.manage(Port(port));
-            hook_from_the_command_line(&data, port);
+            hook_from_the_command_line(&data, port, &cache);
             match current_for(&app.handle().clone()) {
                 Ok(install) => {
                     crate::say!(Info, "install", "reading Houdini {} at {}", install.version, install.root.display());
@@ -1118,6 +1123,7 @@ pub fn run() {
             launch_example,
             save_page,
             send_to_obsidian,
+            obsidian_vaults,
             new_window,
             close_window,
             open_devtools

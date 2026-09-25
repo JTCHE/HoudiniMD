@@ -26,6 +26,7 @@ import { ContextMenu } from "./ContextMenu";
 import { TitleBar } from "./TitleBar";
 import { Sidebar, storedWidth } from "./Sidebar";
 import { REVEAL } from "./sidebar/PageTree";
+import { SettingsDialog } from "@/components/settings/SettingsDialog";
 import { StatusBar } from "./StatusBar";
 
 /** The page needs this much width beside the panel, or its lines wrap every
@@ -183,6 +184,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
         <Lightbox />
         <ContextMenu />
+        <SettingsDialog />
       </div>
       )}
     </div>

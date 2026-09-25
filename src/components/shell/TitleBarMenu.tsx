@@ -11,6 +11,7 @@ import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { invoke } from "@/lib/backend";
 import { showToast } from "@/components/ui/toast-notification";
+import { openSettings } from "@/components/settings/SettingsDialog";
 
 const ITEM =
   "flex w-full cursor-interactive items-center rounded-md px-sm py-[7px] text-left text-[13px] " +
@@ -76,6 +77,18 @@ export function TitleBarMenu({ at, onClose }: { at: { x: number; y: number }; on
         "bg-raised p-1 shadow-xl shadow-black/10",
       )}
     >
+      <button
+        type="button"
+        role="menuitem"
+        className={ITEM}
+        onClick={() => {
+          openSettings();
+          onClose();
+        }}
+      >
+        Settings
+      </button>
+      <div role="separator" className="mx-sm my-1 h-px bg-hairline" />
       <button
         type="button"
         role="menuitem"

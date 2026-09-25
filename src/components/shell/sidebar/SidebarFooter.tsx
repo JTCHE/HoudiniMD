@@ -5,12 +5,15 @@
  * It is pinned to the bottom rather than following the tree, so settings and
  * the theme switch are in the same place whether the tree is open or shut.
  */
-import { Link } from "react-router";
+import { openSettings } from "@/components/settings/SettingsDialog";
 import { cn } from "@/lib/utils";
 import { Icons } from "@/lib/ui/icons";
 import { toggleTheme, useTheme } from "@/lib/ui/theme";
+import { Hint } from "@/components/ui/Hint";
 import { SidebarRow } from "./SidebarRow";
-import { BugReportButton } from "./BugReportButton";
+
+/* Bugs go to GitHub issues, in the reader's own browser. See spec: Bug Filing Button. */
+const ISSUES = "https://github.com/JTCHE/HoudiniMD/issues/new";
 
 const FOOTER_BUTTON =
   "grid size-[30px] cursor-interactive place-items-center rounded-md text-neutral-500 " +
@@ -45,10 +48,15 @@ export function SidebarFooter({ recentCount, recentsOpen, onToggleRecents, class
         onClick={onToggleRecents}
       />
 
-      <div className="flex items-center justify-between px-ms pt-ms">
-        <Link to="/settings" aria-label="Settings" title="Settings" className={FOOTER_BUTTON}>
-          <Icons.settings className="size-[18px]" />
-        </Link>
+      {/* The two that change the app side by side; the bug report, which
+          leaves it, apart in the far corner. */}
+      <div className="flex items-center gap-2xs px-ms pt-ms">
+        <Hint label="Settings">
+          <button type="button" aria-label="Settings" className={FOOTER_BUTTON} onClick={openSettings}>
+            <Icons.settings className="size-[18px]" />
+          </button>
+        </Hint>
+        <Hint label={theme === "dark" ? "Light theme" : "Dark theme"}>
         <button
           type="button"
           aria-label={theme === "dark" ? "Switch to the light theme" : "Switch to the dark theme"}
@@ -70,7 +78,13 @@ export function SidebarFooter({ recentCount, recentsOpen, onToggleRecents, class
             />
           )}
         </button>
-        <BugReportButton />
+        </Hint>
+        <span className="flex-1" />
+        <Hint label="File a bug on GitHub">
+          <a href={ISSUES} target="_blank" rel="noopener noreferrer" aria-label="File a bug" className={FOOTER_BUTTON}>
+            <Icons.bugReport strokeWidth="1.5" className="size-4.5" />
+          </a>
+        </Hint>
       </div>
     </div>
   );

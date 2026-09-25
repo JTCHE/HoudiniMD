@@ -51,10 +51,12 @@ struct Record {
     releases: BTreeMap<String, Previous>,
 }
 
-/// Every release series with a preferences directory on this machine, newest
-/// first. A directory with no `houdini.pref` still counts: Houdini writes that
-/// file on exit, and the hook can create it.
-pub fn releases(port: u16) -> Vec<Release> {
+/// Every release series that is installed and has a preferences directory,
+/// newest first. `installed` is the builds the version picker lists, so the
+/// two never disagree: preferences left behind by an uninstalled Houdini do
+/// not count. A directory with no `houdini.pref` still counts: Houdini writes
+/// that file on exit, and the hook can create it.
+pub fn releases(port: u16, installed: &[String]) -> Vec<Release> {
     let mut found: Vec<Release> = Vec::new();
     let Some(parent) = prefs_root() else {
         return found;
@@ -67,7 +69,7 @@ pub fn releases(port: u16) -> Vec<Release> {
         if !path.is_dir() {
             continue;
         }
-        let Some(release) = series(&path) else {
+        let Some(release) = series(&path).filter(|release| installed.iter().any(|build| series_of(build) == *release)) else {
             continue;
         };
         let text = read(&path.join("houdini.pref")).unwrap_or_default();
@@ -104,10 +106,8 @@ pub fn apply(data: &Path, port: u16, wanted: &[String]) -> Result<Vec<String>, S
     let url = format!("http://localhost:{port}/");
     let mut changed = Vec::new();
 
-    for release in releases(port) {
-        if !wanted.is_empty() && !wanted.contains(&release.release) {
-            continue;
-        }
+    // `wanted` names release series, and a series is its own series.
+    for release in releases(port, wanted) {
         if running(&release.release) {
             return Err(format!(
                 "Houdini {} is open. It writes houdini.pref when it exits, which would undo this. Close it first.",
