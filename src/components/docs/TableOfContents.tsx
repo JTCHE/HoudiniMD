@@ -93,7 +93,10 @@ export function TableOfContents({ headings }: { headings: Heading[] }) {
       setFloating(false);
       return;
     }
-    watch.current = new IntersectionObserver(([entry]) => setFloating(!entry.isIntersecting), {
+    // A list hidden by the wide layout has no box and never intersects. That
+    // is not a list scrolled away: counted as one, the pill came on while the
+    // gutter held the list, and flashed when the sidebar narrowed the column.
+    watch.current = new IntersectionObserver(([entry]) => setFloating(!entry.isIntersecting && entry.boundingClientRect.height > 0), {
       root,
     });
     watch.current.observe(el);
