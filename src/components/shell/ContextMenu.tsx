@@ -8,31 +8,19 @@
  * copy and paste live there. In a development build Shift keeps it too, for
  * Inspect.
  */
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
-import { ArrowLeft, ArrowRight, Copy, Download, ExternalLink, Image, Link2, ListTree, SquareArrowOutUpRight } from "lucide-react";
-import { accelerators, MENU_ICON, MENU_ITEM } from "@/lib/ui/menu";
+import { AppWindow, ArrowLeft, ArrowRight, Copy, ExternalLink, Image, Link2, ListTree } from "lucide-react";
 import { revealInSidebar } from "@/components/shell/sidebar/PageTree";
-import { cn } from "@/lib/utils";
+import { MenuList, type MenuEntry, type MenuGroups } from "@/components/ui/MenuList";
 import { useTrail } from "@/lib/nav";
 import { pageActions } from "@/lib/page-actions";
 import { HOUDINIMD_DOCS_ROOT } from "@/lib/houdini";
-import { sideFxUrl } from "@/lib/sidefx";
-import { openWeb } from "@/lib/web";
+import { COMMAND_KEY } from "@/lib/hotkeys";
+import { invoke, inTauri } from "@/lib/backend";
 import { openLightbox, PAGE_PICTURES } from "@/lib/lightbox";
 import { showToast } from "@/components/ui/toast-notification";
 import { used } from "@/lib/telemetry";
-
-interface Item {
-  label: string;
-  icon: typeof Copy;
-  keys?: string;
-  disabled?: boolean;
-  run: () => unknown;
-}
-
-/** Groups, drawn with a line between them. */
-type Menu = Item[][];
 
 /** The web address of a link the app draws: the site's copy of the page. */
 function shareable(href: string): string {
@@ -50,7 +38,7 @@ async function copyText(text: string, said: string) {
 }
 
 export function ContextMenu() {
-  const [at, setAt] = useState<{ x: number; y: number; menu: Menu } | null>(null);
+  const [at, setAt] = useState<{ x: number; y: number; menu: MenuGroups } | null>(null);
   const navigate = useNavigate();
   const { canGoBack, canGoForward } = useTrail();
   // The listener is attached once and reads the trail of the moment.
@@ -65,14 +53,24 @@ export function ContextMenu() {
       if (target?.closest("input, textarea, [contenteditable='true']")) return;
       if (import.meta.env.DEV && event.shiftKey) return;
       event.preventDefault();
-      const menu: Menu = [];
+      const menu: MenuGroups = [];
 
       const link = target?.closest<HTMLAnchorElement>("a[href]");
       if (link) {
-        menu.push([
-          { label: "Open link", icon: ExternalLink, run: () => link.click() },
-          { label: "Copy link address", icon: Link2, run: () => copyText(shareable(link.href), "Link copied") },
-        ]);
+        const url = new URL(link.href, location.href);
+        const group: MenuEntry[] = [{ label: "Open link", icon: ExternalLink, run: () => link.click() }];
+        // A page of the app opens in a window of its own, as Ctrl-click does
+        // (main.tsx). An outside address has only the browser.
+        if (inTauri && url.origin === location.origin) {
+          group.push({
+            label: "Open in new window",
+            icon: AppWindow,
+            keys: `${COMMAND_KEY}+Click`,
+            run: () => invoke("new_window", { path: `${url.pathname}${url.hash}` }),
+          });
+        }
+        group.push({ label: "Copy link address", icon: Link2, run: () => copyText(shareable(link.href), "Link copied") });
+        menu.push(group);
       }
       const picture = target?.closest<HTMLImageElement>(PAGE_PICTURES);
       if (picture) menu.push([{ label: "Open picture", icon: Image, run: () => openLightbox(picture) }]);
@@ -85,10 +83,10 @@ export function ContextMenu() {
       // One Copy, as Ctrl C does: the selection when there is one, else the
       // whole page as Markdown.
       const selected = window.getSelection()?.toString().trim() ? window.getSelection()!.toString() : "";
-      const copy: Item = {
+      const copy: MenuEntry = {
         label: "Copy",
         icon: Copy,
-        keys: "Ctrl+C",
+        keys: `${COMMAND_KEY}+C`,
         run: () =>
           selected || !page
             ? copyText(selected, "Copied")
@@ -96,19 +94,11 @@ export function ContextMenu() {
       };
       if (!page && selected) menu.push([copy]);
 
+      // The page's own actions, the same items as the header's drop-down.
       if (page) {
-        const group: Item[] = [
-          copy,
-          {
-            label: "Copy page link",
-            icon: Link2,
-            run: () => copyText(`${HOUDINIMD_DOCS_ROOT}/${page.path}`, "Link copied"),
-          },
-          { label: "Open on sidefx.com", icon: SquareArrowOutUpRight, run: () => openWeb(sideFxUrl(page.path)) },
-        ];
-        const { save } = page;
-        if (save) group.push({ label: "Save as…", icon: Download, keys: "Ctrl+S", run: save });
-        menu.push(group);
+        menu.push([copy, page.copyLink, page.openOnSideFx]);
+        const keep = [page.save, page.obsidian].filter((entry) => entry !== undefined);
+        if (keep.length) menu.push(keep);
       }
 
       menu.push([
@@ -125,7 +115,7 @@ export function ContextMenu() {
   return <Panel at={at} onClose={() => setAt(null)} />;
 }
 
-function Panel({ at, onClose }: { at: { x: number; y: number; menu: Menu }; onClose: () => void }) {
+function Panel({ at, onClose }: { at: { x: number; y: number; menu: MenuGroups }; onClose: () => void }) {
   const panel = useRef<HTMLDivElement>(null);
   const [place, setPlace] = useState({ left: at.x, top: at.y });
 
@@ -157,87 +147,15 @@ function Panel({ at, onClose }: { at: { x: number; y: number; menu: Menu }; onCl
     };
   }, [onClose]);
 
-  const items = at.menu.flat();
-  const letters = accelerators(items.map((item) => item.label));
-
-  function run(item: Item) {
-    onClose();
-    used("right-click");
-    void Promise.resolve(item.run()).catch((reason) => showToast(String(reason), "error"));
-  }
-
-  function onKeyDown(event: React.KeyboardEvent) {
-    // A letter runs the item it is underlined in.
-    const key = event.key.toLowerCase();
-    const hit = items.findIndex((item, i) => letters[i] >= 0 && item.label[letters[i]].toLowerCase() === key);
-    if (hit >= 0 && !event.ctrlKey && !event.altKey && !event.metaKey) {
-      event.preventDefault();
-      if (!items[hit].disabled) run(items[hit]);
-      return;
-    }
-    const buttons = [...(panel.current?.querySelectorAll<HTMLElement>("[role=menuitem]:not(:disabled)") ?? [])];
-    const now = buttons.indexOf(document.activeElement as HTMLElement);
-    const step = { ArrowDown: 1, ArrowUp: -1 }[event.key];
-    if (step) {
-      event.preventDefault();
-      const next = now < 0 ? (step > 0 ? 0 : buttons.length - 1) : (now + step + buttons.length) % buttons.length;
-      buttons[next]?.focus();
-    } else if (event.key === "Escape" || event.key === "Tab") {
-      event.preventDefault();
-      onClose();
-    }
-  }
-
-  const groups: ReactNode[] = [];
-  let n = 0;
-  at.menu.forEach((group, index) => {
-    if (index > 0) groups.push(<div key={`line-${index}`} role="separator" className="mx-sm my-1 h-px bg-hairline" />);
-    for (const item of group) {
-      const Icon = item.icon;
-      const letter = letters[n++];
-      groups.push(
-        <button
-          key={`${index}-${item.label}`}
-          type="button"
-          role="menuitem"
-          disabled={item.disabled}
-          className={cn(MENU_ITEM, "disabled:pointer-events-none disabled:text-neutral-400")}
-          aria-keyshortcuts={letter >= 0 ? item.label[letter].toUpperCase() : undefined}
-          onClick={() => run(item)}
-        >
-          <Icon className={cn(MENU_ICON, item.disabled && "text-neutral-300")} aria-hidden="true" />
-          <span className="flex-1">
-            {letter < 0 ? (
-              item.label
-            ) : (
-              <>
-                {item.label.slice(0, letter)}
-                <u className="underline-offset-2">{item.label[letter]}</u>
-                {item.label.slice(letter + 1)}
-              </>
-            )}
-          </span>
-          {item.keys && <span className="pl-md text-caption text-neutral-500">{item.keys}</span>}
-        </button>,
-      );
-    }
-  });
-
   return (
-    <div
+    <MenuList
       ref={panel}
-      role="menu"
-      aria-label="Actions"
-      tabIndex={-1}
-      onKeyDown={onKeyDown}
-      onContextMenu={(event) => event.preventDefault()}
+      label="Actions"
+      groups={at.menu}
       style={place}
-      className={cn(
-        "fixed z-[80] min-w-56 rounded-lg outline-none border border-hairline bg-raised p-1 shadow-xl shadow-black/10",
-        "pop-in",
-      )}
-    >
-      {groups}
-    </div>
+      className="fixed z-[80] min-w-56"
+      onClose={onClose}
+      onRun={() => used("right-click")}
+    />
   );
 }
