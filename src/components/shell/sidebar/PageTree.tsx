@@ -28,7 +28,7 @@ import { useNavigate } from "react-router";
 import { cn } from "@/lib/utils";
 import { groupIcon } from "@/lib/ui/icons";
 import { VirtualList } from "@/components/ui/VirtualList";
-import type { TreeBranch } from "@/lib/landing/tree";
+import { rowsOf, type TreeBranch } from "@/lib/landing/tree";
 import type { Hit } from "@/lib/search";
 import { SidebarRow } from "./SidebarRow";
 
@@ -70,6 +70,7 @@ function linesOf(folders: TreeBranch[], open: Open, depth = 0, lines: Line[] = [
     const isOpen = open[depth] === folder.id;
     lines.push({ kind: "folder", folder, depth, open: isOpen });
     if (!isOpen) continue;
+    if (folder.lead) lines.push({ kind: "page", page: folder.lead, depth: depth + 1 });
     linesOf(folder.branches, open, depth + 1, lines);
     for (const page of folder.pages) lines.push({ kind: "page", page, depth: depth + 1 });
   }
@@ -79,7 +80,7 @@ function linesOf(folders: TreeBranch[], open: Open, depth = 0, lines: Line[] = [
 /** The ids of the folders around a page, outermost first, or null. */
 function pathTo(folders: TreeBranch[], path: string): Open | null {
   for (const folder of folders) {
-    if (folder.pages.some((page) => page.path === path)) return [folder.id];
+    if (rowsOf(folder).some((page) => page.path === path)) return [folder.id];
     const inner = pathTo(folder.branches, path);
     if (inner) return [folder.id, ...inner];
   }
@@ -88,7 +89,7 @@ function pathTo(folders: TreeBranch[], path: string): Open | null {
 
 /** Every page under a folder, in the order the panel draws them. */
 function pagesUnder(folder: TreeBranch): Hit[] {
-  return [...folder.branches.flatMap(pagesUnder), ...folder.pages];
+  return [...(folder.lead ? [folder.lead] : []), ...folder.branches.flatMap(pagesUnder), ...folder.pages];
 }
 
 /* What the tree has open, kept outside it: the panel unmounts when it is

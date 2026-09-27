@@ -91,9 +91,18 @@ impl Map {
         for depth in branch_depth(path)..leaf {
             let dir = parts[..=depth].join("/");
             let (heading, order) = self.listing(&parts[..depth].join("/"), &dir);
-            folders.extend(heading);
             let title = self.dirs.get(&dir).map(|d| d.title.clone()).filter(|t| !t.is_empty());
-            folders.push(Folder { label: title.unwrap_or_else(|| readable(parts[depth])), order });
+            let label = title.unwrap_or_else(|| readable(parts[depth]));
+            // An index that lists a directory under a heading of the directory's
+            // own name would open "Karma User Guide" onto "Karma User Guide".
+            folders.extend(heading.filter(|heading| heading.label != label));
+            folders.push(Folder { label, order });
+        }
+
+        // An index page opens its own directory's folder. The index above it
+        // does not list it, and no group or submenu applies to an overview.
+        if parts[leaf] == "index" {
+            return Place { folders, rank: 0, grouped: true };
         }
 
         let dir = parts[..leaf].join("/");
@@ -435,6 +444,28 @@ mod tests {
         let labels: Vec<&str> = len.folders.iter().map(|f| f.label.as_str()).collect();
         assert_eq!(labels, ["Reference", "Functions"]);
         assert!(!len.grouped);
+        let index = map.place("lang/functions/index", &Vec::new(), &menu);
+        assert_eq!(index.folders, len.folders);
+        assert!(index.grouped);
+    }
+
+    #[test]
+    fn a_heading_of_the_directory_name_is_not_a_second_folder() {
+        let map = map(&[
+            ("lang/index", "= Lang =
+
+@subtopics
+
+== Guide ==
+
+:: [guide/]
+"),
+            ("lang/guide/index", "= Guide =
+"),
+        ]);
+        let place = map.place("lang/guide/intro", &Vec::new(), &Menu(HashMap::new()));
+        let labels: Vec<&str> = place.folders.iter().map(|f| f.label.as_str()).collect();
+        assert_eq!(labels, ["Guide"]);
     }
 
     #[test]

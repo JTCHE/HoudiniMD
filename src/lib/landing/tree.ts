@@ -27,6 +27,9 @@ export interface TreeBranch {
   branches: TreeBranch[];
   /** The pages directly under it. */
   pages: Hit[];
+  /** The index page of the directory it stands for: the overview, drawn
+      first, above its folders. */
+  lead?: Hit;
   /** Icon path inside `icons.zip`. Only the branches this file names have
       one; a branch with no icon draws the app's own page glyph. */
   icon?: string;
@@ -93,12 +96,11 @@ function context(hit: Hit): string {
 }
 
 /** A branch and the folders inside it, from the `place` of each page. A page
-    named `index` lists the others and is never a row of its own. */
+    named `index` leads the folder its `place` ends in. */
 function branch(id: string, label: string, hits: Hit[], icon?: string): TreeBranch {
   const root: TreeBranch = { id, label, count: 0, branches: [], pages: [], icon };
   const children = new Map<TreeBranch, Map<string, TreeBranch>>();
   for (const hit of hits) {
-    if (hit.path.endsWith("/index")) continue;
     let at = root;
     for (const name of hit.place ?? []) {
       let known = children.get(at);
@@ -111,7 +113,8 @@ function branch(id: string, label: string, hits: Hit[], icon?: string): TreeBran
       }
       at = next;
     }
-    at.pages.push(hit);
+    if (hit.path.endsWith("/index") && !at.lead) at.lead = hit;
+    else at.pages.push(hit);
   }
   return settle(root);
 }
@@ -121,12 +124,14 @@ function branch(id: string, label: string, hits: Hit[], icon?: string): TreeBran
 function settle(folder: TreeBranch): TreeBranch {
   const branches: TreeBranch[] = [];
   for (const child of folder.branches.map(settle)) {
-    if (child.pages.length === 1 && child.branches.length === 0) folder.pages.push(child.pages[0]);
-    else if (child.pages.length === 0 && child.branches.length === 1) branches.push(child.branches[0]);
+    const rows = rowsOf(child);
+    if (rows.length === 1 && child.branches.length === 0) folder.pages.push(rows[0]);
+    else if (rows.length === 0 && child.branches.length === 1) branches.push(child.branches[0]);
     else branches.push(child);
   }
   folder.branches = branches;
-  folder.count = folder.pages.length + branches.reduce((sum, child) => sum + child.count, 0);
+  folder.count =
+    (folder.lead ? 1 : 0) + folder.pages.length + branches.reduce((sum, child) => sum + child.count, 0);
   return folder;
 }
 
@@ -136,7 +141,8 @@ function nodeBranches(hits: Hit[]): TreeBranch[] {
   const byContext = new Map<string, Hit[]>();
   for (const hit of hits) {
     const key = context(hit);
-    if (!key) continue;
+    // `nodes/index` is the group's own page, not a context.
+    if (!key || hit.path === "nodes/index") continue;
     const bucket = byContext.get(key);
     if (bucket) bucket.push(hit);
     else byContext.set(key, [hit]);
@@ -201,16 +207,24 @@ export function buildTree(all: Hit[]): TreeBranch[] {
       ? hits.filter((hit) => group.sections!.includes(section(hit)))
       : hits.filter((hit) => !claimed.has(section(hit)));
 
-    if (group.id === "nodes") return tier(group.id, group.label, nodeBranches(inGroup));
+    if (group.id === "nodes") {
+      const lead = inGroup.find((hit) => hit.path === "nodes/index");
+      return tier(group.id, group.label, nodeBranches(inGroup), lead);
+    }
     if (group.id === "languages") return tier(group.id, group.label, languageBranches(inGroup));
     return tier(group.id, group.label, sectionBranches(inGroup, titleOf));
   });
 }
 
-/** A group: its branches, and no pages of its own. */
-function tier(id: string, label: string, branches: TreeBranch[]): TreeBranch {
-  const count = branches.reduce((sum, child) => sum + child.count, 0);
-  return { id, label, count, branches, pages: [] };
+/** A group: its branches, and no pages of its own but an overview. */
+function tier(id: string, label: string, branches: TreeBranch[], lead?: Hit): TreeBranch {
+  const count = (lead ? 1 : 0) + branches.reduce((sum, child) => sum + child.count, 0);
+  return { id, label, count, branches, pages: [], lead };
+}
+
+/** The pages directly under a folder, in the order the panel draws them. */
+export function rowsOf(folder: TreeBranch): Hit[] {
+  return folder.lead ? [folder.lead, ...folder.pages] : folder.pages;
 }
 
 /** The tree the panel draws, built once per title list for every panel that
@@ -232,8 +246,9 @@ export function treeOf(all: Hit[]): TreeBranch[] {
 export function warmRows(path: string): Promise<void> {
   const folder = folderOf(built.tree ?? [], path);
   if (!folder) return Promise.resolve();
-  const at = folder.pages.findIndex((page) => page.path === path);
-  const near = folder.pages.slice(Math.max(0, at - 24), at + 25);
+  const rows = rowsOf(folder);
+  const at = rows.findIndex((page) => page.path === path);
+  const near = rows.slice(Math.max(0, at - 24), at + 25);
   // The node contexts too: a branch row sits above every page row, and there
   // are only a couple of dozen of them.
   const branches = (built.tree ?? []).flatMap((group) => group.branches);
@@ -242,7 +257,7 @@ export function warmRows(path: string): Promise<void> {
 
 function folderOf(folders: TreeBranch[], path: string): TreeBranch | undefined {
   for (const folder of folders) {
-    if (folder.pages.some((page) => page.path === path)) return folder;
+    if (rowsOf(folder).some((page) => page.path === path)) return folder;
     const inner = folderOf(folder.branches, path);
     if (inner) return inner;
   }
