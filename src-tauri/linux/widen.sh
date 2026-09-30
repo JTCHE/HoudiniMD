@@ -62,6 +62,20 @@ for f in libcairo.so.2 libwebkit2gtk-4.1.so.0 libjavascriptcoregtk-4.1.so.0; do
   python3 "$HERE/downver.py" "$APPDIR/usr/lib/$f" libm.so.6 GLIBC_2.35 GLIBC_2.2.5
 done
 
+# The build runner's own umask has shipped a tool-written file — AppRun.wrapped
+# — at mode 0770: no execute for "other", so a reader's own sandbox refuses it
+# ("AppRun.wrapped: Permission denied", caught by the AppImage catalog test).
+# Force the bit back on every ELF and shebang file before packing, and fail
+# loudly rather than ship one still missing it.
+is_elf() { head -c4 "$1" 2>/dev/null | cmp -s - <(printf '\x7fELF'); }
+is_shebang() { [ "$(head -c2 "$1" 2>/dev/null)" = '#!' ]; }
+while IFS= read -r -d '' f; do
+  if is_elf "$f" || is_shebang "$f"; then
+    chmod a+rx "$f"
+    [ -x "$f" ] || { echo "still not executable after chmod: $f" >&2; exit 1; }
+  fi
+done < <(find "$APPDIR" -type f -print0)
+
 export APPIMAGE_EXTRACT_AND_RUN=1
 export OUTPUT=${OUTPUT:-HoudiniMD.AppImage}
 "$TOOLS/linuxdeploy-plugin-appimage.AppImage" --appdir "$APPDIR"
