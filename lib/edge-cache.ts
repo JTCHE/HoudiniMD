@@ -16,19 +16,13 @@
  * WHAT GOES IN.
  *
  * Only an answer that is the same for every reader, and for HTML only once the
- * ISR cache reports a hit. A page that is still being generated answers 200
- * with a progress view (see GeneratingPage), and freezing that for an hour
- * would leave the page stuck on it. `x-nextjs-cache: HIT` is how a finished
- * page says so.
+ * ISR cache reports a hit: `x-nextjs-cache: HIT` is how a prerendered page
+ * says so.
  *
  * The key carries a build stamp, so a deploy is not waited out: the new build
- * reads new keys and the old entries expire unseen. It carries the notice
- * version for the same reason: the Worker writes the notice into the answer
- * before it is stored, so new wording needs keys the old entries do not hold.
+ * reads new keys and the old entries expire unseen.
  */
-import { wantsMarkdown } from "./wants-markdown";
 import { BUILD_STAMP } from "./build-stamp";
-import { NOTICE_VERSION } from "./notice-copy";
 import { platformForPath } from "./download";
 
 /** How long an entry lives when the answer asks for nothing longer. */
@@ -60,52 +54,17 @@ function cacheablePath(p: string): boolean {
     p === "/" ||
     p === "/docs" ||
     p.startsWith("/docs/") ||
-    p === "/docs.md" ||
     p === "/privacy" ||
     p === "/privacy.md" ||
-    p === "/llms.txt" ||
     p === "/robots.txt" ||
     p === "/sitemap.xml" ||
-    p === "/api/meta-all" ||
-    p === "/api/search-index" ||
-    p === "/api/search" ||
-    p === "/api/index" ||
     platformForPath(p) !== null
   );
 }
 
 /** The query a path is allowed to carry, and still be one answer per build. */
 function queryVariant(url: URL): string | null {
-  // One query, one answer, until the next deploy rebuilds the index. The route
-  // already asks to be held (see app/api/search/route.ts); without this the
-  // key was refused and two identical queries cost 1385 and 1237 CPU-ms.
-  if (url.pathname === "/api/search") {
-    const q = url.searchParams.get("q")?.trim();
-    if (!q) return null;
-    for (const key of url.searchParams.keys()) {
-      if (key !== "q" && key !== "limit" && key !== "category") return null;
-    }
-    return `search/${encodeURIComponent(q)}/${url.searchParams.get("limit") ?? ""}/${url.searchParams.get("category") ?? ""}`;
-  }
-
-  // The corpus listing llms.txt points agents at. Same shape as the search
-  // above: three parameters, one answer per build.
-  if (url.pathname === "/api/index") {
-    for (const key of url.searchParams.keys()) {
-      if (key !== "category" && key !== "page" && key !== "limit") return null;
-    }
-    const part = (key: string) => encodeURIComponent(url.searchParams.get(key) ?? "");
-    return `index/${part("category")}/${part("page")}/${part("limit")}`;
-  }
-
   if (!url.search) return "";
-
-  // One tooltip, one slug. The answer is the page's own title and summary.
-  if (url.pathname === "/api/meta") {
-    const slug = url.searchParams.get("slug");
-    const only = [...url.searchParams.keys()].length === 1;
-    return slug && only ? `meta/${encodeURIComponent(slug)}` : null;
-  }
 
   // An RSC payload. `_rsc` is Next's own build-and-route stamp.
   const rsc = url.searchParams.get("_rsc");
@@ -113,29 +72,23 @@ function queryVariant(url: URL): string | null {
   return rsc && only && cacheablePath(url.pathname) ? `rsc/${rsc}` : null;
 }
 
-/**
- * The key, or null when the request must not be served from the cache.
- *
- * A reader and an agent get different answers on the same doc address —
- * middleware sends the agent to the `.md` twin — so the decision is part of
- * the key. It is the same call middleware makes, on the same headers.
- */
+/** The key, or null when the request must not be served from the cache. */
 export function cacheKey(request: Request, url: URL): Request | null {
   if (request.method !== "GET") return null;
   if (request.headers.get("range") || request.headers.get("authorization")) return null;
-  if (url.pathname !== "/api/meta" && !cacheablePath(url.pathname)) return null;
+  if (!cacheablePath(url.pathname)) return null;
 
   const query = queryVariant(url);
   if (query === null) return null;
 
-  let variant = wantsMarkdown(request.headers.get("user-agent"), request.headers) ? "md" : "html";
+  let variant = "html";
   for (const header of RSC_VARY) {
     const value = request.headers.get(header);
     if (value) variant += `,${header}=${value}`;
   }
   if (variant.length > MAX_VARIANT) return null;
 
-  return new Request(`https://edge.houdinimd/${BUILD_STAMP}.${NOTICE_VERSION}/${encodeURIComponent(variant)}/${query}${url.pathname}`);
+  return new Request(`https://edge.houdinimd/${BUILD_STAMP}/${encodeURIComponent(variant)}/${query}${url.pathname}`);
 }
 
 /** The stored answer, with the reader-facing headers put back. */
@@ -156,14 +109,11 @@ function storable(response: Response): boolean {
   const cc = response.headers.get("cache-control") ?? "";
   if (cc.includes("no-store") || cc.includes("private")) return false;
 
-  // A redirect is cheap to keep and saves the same bootstrap: the agent
-  // redirect to the `.md` twin is one of the commonest answers the site gives.
+  // A redirect is cheap to keep and saves the same bootstrap.
   if (response.status === 301 || response.status === 302 || response.status === 308) return true;
   if (response.status !== 200) return false;
 
-  // A page answer is only final once the ISR cache holds the page. Anything
-  // else is a render in progress. An API answer has no such marker and needs
-  // none: it reads R2 and returns what it found.
+  // A page answer is only final once the ISR cache holds the page.
   const type = response.headers.get("content-type") ?? "";
   const page = type.includes("text/html") || type.includes("text/x-component");
   return page ? response.headers.get("x-nextjs-cache") === "HIT" : true;
@@ -171,10 +121,7 @@ function storable(response: Response): boolean {
 
 /**
  * How long to hold it. An answer that names an `s-maxage` is naming the age a
- * shared cache may serve it at, and this is a shared cache. `/api/meta-all`
- * asks for a day: it is one projection of the search index, it costs 574
- * CPU-ms to build from the 3 MB index, and an hourly TTL made every colo pay
- * that again 24 times a day.
+ * shared cache may serve it at, and this is a shared cache.
  */
 function ttl(response: Response): number {
   const asked = Number(/s-maxage=(\d+)/.exec(response.headers.get("cache-control") ?? "")?.[1]);

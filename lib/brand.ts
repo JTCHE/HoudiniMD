@@ -1,7 +1,7 @@
 // The product name and its home, in one place for the rename. Safe in client
 // code: nothing here reads the environment.
 
-export const SITE_NAME = "NodebookMD";
+export const SITE_NAME = "HoudiniMD";
 
 export const REPO_URL = "https://github.com/JTCHE/HoudiniMD";
 

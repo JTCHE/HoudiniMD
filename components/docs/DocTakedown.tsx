@@ -1,7 +1,7 @@
 import { LucideArrowUpRight } from "lucide-react";
-import { PageTitle } from "@/components/docs/PageTitle";
 import { DownloadKey, OpenInApp } from "@/components/ui/download-key";
 import { APP_SCHEME, SITE_NAME } from "@/lib/brand";
+import { GONE, REASON } from "@/lib/takedown";
 
 /** Static grey bars in the shape of a doc page. No shimmer: nothing is loading. */
 const BARS: { w: string; h?: string; gap?: string }[] = [
@@ -42,7 +42,7 @@ export function TakedownNotice({ slug, sourceUrl }: { slug: string; sourceUrl: s
   return (
     <section className="flex shrink-0 flex-col items-start gap-md">
       <div className="flex flex-col gap-2xs">
-        <p className="text-muted-foreground">This page is no longer available here.</p>
+        <p className="text-muted-foreground">{GONE}</p>
         <h2 className="text-xl font-semibold tracking-tight text-foreground">
           Read this page in {SITE_NAME}, the free desktop app.
         </h2>
@@ -55,7 +55,7 @@ export function TakedownNotice({ slug, sourceUrl }: { slug: string; sourceUrl: s
         <OpenInApp href={`${APP_SCHEME}://docs/${slug}`} />
       </div>
       <p className="text-meta text-muted-foreground">
-        At the request of SideFX, its documentation is no longer hosted on this site.{" "}
+        {REASON}{" "}
         <a
           href={sourceUrl}
           className="group inline-flex items-center text-foreground/80 hover:text-foreground transition-colors"
@@ -74,21 +74,16 @@ export function TakedownNotice({ slug, sourceUrl }: { slug: string; sourceUrl: s
 export function DocTakedown({
   slug,
   name,
-  nodeType,
   sourceUrl,
 }: {
   slug: string;
   name: string;
-  nodeType?: string;
   sourceUrl: string;
 }) {
   return (
     <main className="mx-auto flex min-h-0 w-full min-w-0 max-w-page flex-1 flex-col gap-lg px-page-x pt-6 pb-lg md:pt-10">
       <header className="shrink-0 border-b border-border pb-3">
-        <PageTitle
-          name={name}
-          nodeType={nodeType}
-        />
+        <h1 className="m-0 text-2xl font-bold leading-tight tracking-tight wrap-break-word">{name}</h1>
       </header>
       <Skeleton />
       <TakedownNotice

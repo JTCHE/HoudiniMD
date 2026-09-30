@@ -4,9 +4,9 @@ description: What HoudiniMD collects, what it does not collect, how long data is
 ---
 # Privacy Policy
 
-Last updated: August 2026.
+Last updated: September 2026.
 
-HoudiniMD is an independent, unofficial mirror of SideFX's Houdini documentation. It is run by one person, John C. This page tells you what data HoudiniMD collects, why, and what it does not collect.
+HoudiniMD is a free, open-source desktop app for the Houdini docs, and this site is its home page. It is independent and unofficial, and it is run by one person, John C. This page tells you what data HoudiniMD collects, why, and what it does not collect.
 
 ## What we collect, and why
 
@@ -18,13 +18,13 @@ We keep server logs to run the site and to see which pages are useful. Each page
 - Your country and city. Cloudflare, our host, provides this from your connection.
 - Which browser referring page sent you here (the site only, never the page path).
 
-If you use search, we also record the text you typed, where you searched from, the page it took you to, and how many results came back. We only record a search after you submit it. We never record what you type as you type it.
+Until September 2026 this site also had a search. For a search you submitted, we recorded the text you typed, where you searched from, the page it took you to, and how many results came back. Those records are deleted with the other logs, after 90 days.
 
-This data helps us fix broken pages, see which docs need work, and understand real usage. It is the same kind of basic traffic log most web servers keep. Under the GDPR, our lawful basis is legitimate interest: we need basic traffic figures to keep the site working and useful.
+This data helps us fix broken pages and understand real usage. It is the same kind of basic traffic log most web servers keep. Under the GDPR, our lawful basis is legitimate interest: we need basic traffic figures to keep the site working and useful.
 
 ## The app release list
 
-HoudiniMD closes on 1 January 2027. If you give us your email address to hear about the desktop app that replaces it, we store:
+Until September 2026, you could give us your email address to hear about the desktop app. The site no longer takes addresses. For an address you gave, we store:
 
 - The address you typed, in readable form. We need it readable to send you the mail.
 - The date you gave it.
@@ -43,14 +43,9 @@ We send one email, when the app is released. We do not send anything else, we do
 
 ## What we store on your device
 
-HoudiniMD stores two small things in your browser, on your device only. Neither is sent to us:
+HoudiniMD stores one small thing in your browser, on your device only, and it is not sent to us: your choice of light or dark theme, in `localStorage`.
 
-- **Search history for ranking.** When you open a search result, your browser remembers the search term and the page you picked, using `localStorage`. This makes your next search better. It never leaves your browser.
-- **An offline page cache.** Your browser caches recently viewed doc pages using a service worker, so repeat visits load faster. This is a copy of the page content, not personal data.
-
-- **Whether you closed the closing notice.** If you dismiss the banner about the site closing, your browser remembers that so it stays closed. It never leaves your browser.
-
-You can clear all three at any time by clearing your browser's site data for HoudiniMD.
+Earlier versions of the site also kept an offline copy of the doc pages you viewed, and your search history. On your next visit, the site removes the offline copy. You can clear everything at any time by clearing your browser's site data for HoudiniMD.
 
 ## How long we keep it
 

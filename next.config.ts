@@ -27,11 +27,6 @@ const nextConfig: NextConfig = {
   generateBuildId: () =>
     JSON.parse(readFileSync(join(process.cwd(), "lib/build-id.json"), "utf8"))
       .buildId,
-  // Prerendering all ~10.5k doc pages fetches each one's markdown from R2 over
-  // the network. The default 60s per-page export timeout is occasionally
-  // exceeded when a single R2 fetch stalls, which aborts the entire build.
-  // Give slow fetches more headroom so the built-in 3-attempt retry can recover.
-  staticPageGenerationTimeout: 180,
   experimental: {
     staleTimes: {
       dynamic: 30,
@@ -61,27 +56,6 @@ const nextConfig: NextConfig = {
   },
   images: {
     minimumCacheTTL: 31536000,
-  },
-  async headers() {
-    return [
-      {
-        source: "/docs/:path*",
-        headers: [
-          {
-            key: "Cache-Control",
-            value: process.env.NODE_ENV === "development"
-              ? "no-store"
-              : "public, max-age=0, must-revalidate, s-maxage=86400, stale-while-revalidate=2592000",
-          },
-        ],
-      },
-      {
-        source: "/sitemap.xml",
-        headers: [
-          { key: "Cache-Control", value: "public, max-age=0, s-maxage=3600, stale-while-revalidate=86400" },
-        ],
-      },
-    ];
   },
 };
 

@@ -93,5 +93,3 @@ shots/
 # database files
 *.db
 *.sql*
-# Written by scripts/write-build-stamp.ts on every build.
-/public/sw.js

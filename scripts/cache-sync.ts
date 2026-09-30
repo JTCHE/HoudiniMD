@@ -15,14 +15,8 @@
  *      compared on the `srchash` metadata (hash of the uncompressed source)
  *      instead. A content-stable deploy uploads nothing.
  *
- * Only `.cache` entries are synced. Next also writes a `__fetch/` cache, one
- * entry per page, and those were being uploaded too: 11,423 PUTs on every
- * deploy, the larger half of its cost. They were never readable. The build
- * fetches each page's markdown with `?b=<BUILD_STAMP>` (lib/r2/read.ts) so the
- * build cannot read a stale copy through the CDN, which makes every fetch key
- * new on every build — and the runtime, which adds no such query, computes a
- * different key again and so never matches what the build stored. A page that
- * revalidates just reads R2 again, which is one class B operation.
+ * Only `.cache` entries are synced. Next can also write a `__fetch/` cache,
+ * which the runtime never reads.
  *   3. Delete orphans — any object under the prefix that no current asset maps
  *      to. This reclaims old random-build-id prefixes and removed pages.
  *

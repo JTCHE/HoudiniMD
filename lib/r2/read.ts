@@ -1,175 +1,26 @@
-import { BUILD_STAMP } from '../build-stamp';
-import { CACHE_INVALIDATE_BEFORE, generatedAtIsCurrent } from '../content-freshness';
 import { getConfig, getS3Client } from './config';
-import type { SearchIndexEntry, LiteIndexEntry } from './search-index';
-import { LITE_INDEX_PATH, toLiteIndex } from './search-index';
-
-/** Re-exported so `scripts/regenerate.ts` keeps one import for its R2 reads. */
-export { CACHE_INVALIDATE_BEFORE };
-
-let indexCache: { data: string; expiry: number } | null = null;
-const INDEX_CACHE_TTL = 5 * 60 * 1000;
-
-export async function fetchIndexJson(): Promise<string | null> {
-  if (indexCache && Date.now() < indexCache.expiry) return indexCache.data;
-  const raw = await fetchFromR2("content/index.json", true); // noValidate: JSON has no frontmatter
-  if (raw) indexCache = { data: raw, expiry: Date.now() + INDEX_CACHE_TTL };
-  return raw;
-}
-
-// Warm-isolate cache of the parsed (not just raw-string) index. Parsing the
-// ~2.9MB index is the expensive step (can brush the 10ms CPU limit on its
-// own) — share this across any route that needs entries by path, so only the
-// first request per warm isolate pays it.
-let parsedIndexCache: { entries: SearchIndexEntry[]; expiry: number } | null = null;
-
-export async function fetchIndexEntries(): Promise<SearchIndexEntry[] | null> {
-  if (parsedIndexCache && Date.now() < parsedIndexCache.expiry) return parsedIndexCache.entries;
-  const raw = await fetchIndexJson();
-  if (!raw) return null;
-  const entries: SearchIndexEntry[] = JSON.parse(raw);
-  parsedIndexCache = { entries, expiry: Date.now() + INDEX_CACHE_TTL };
-  return entries;
-}
-
-// Warm-isolate cache of the parsed lite index (~34% the size of the full
-// index — see LiteIndexEntry). Request paths that only need `path`, `title`
-// or `icon` (e.g. the `## See Also` icon lookup on doc pages) should read
-// this instead of `fetchIndexEntries()`: parsing the full ~3MB index on a
-// cold isolate risks the Workers CPU limit (Error 1102), same failure mode
-// as /api/resolve hit before it switched to the lite index.
-let parsedLiteIndexCache: { entries: LiteIndexEntry[]; expiry: number } | null = null;
-
-export async function fetchLiteIndexEntries(): Promise<LiteIndexEntry[] | null> {
-  if (parsedLiteIndexCache && Date.now() < parsedLiteIndexCache.expiry) return parsedLiteIndexCache.entries;
-  const raw = await fetchFromR2(LITE_INDEX_PATH, true); // noValidate: JSON has no frontmatter
-  let entries: LiteIndexEntry[];
-  if (raw) {
-    entries = JSON.parse(raw);
-  } else {
-    // Falls back to deriving the lite shape from the full index if the lite
-    // artifact is missing (e.g. a deploy landing before the next write).
-    const full = await fetchIndexEntries();
-    if (!full) return null;
-    entries = toLiteIndex(full);
-  }
-  parsedLiteIndexCache = { entries, expiry: Date.now() + INDEX_CACHE_TTL };
-  return entries;
-}
-
 
 /**
- * Check if a file exists in R2
+ * One object from the content bucket, or null when it is not there. Read over
+ * the public URL, and over the S3 API once that is closed.
  */
-export async function fileExistsInR2(filePath: string): Promise<boolean> {
-  const config = getConfig();
-  const client = await getS3Client();
-  if (!config || !client) return false;
-
-  const { HeadObjectCommand } = await import('@aws-sdk/client-s3');
-  try {
-    await client.send(new HeadObjectCommand({
-      Bucket: config.bucketName,
-      Key: filePath,
-    }));
-    return true;
-  } catch (error: unknown) {
-    if (error && typeof error === 'object' && 'name' in error && error.name === 'NotFound') {
-      return false;
-    }
-    // Also check for $metadata.httpStatusCode === 404
-    if (error && typeof error === 'object' && '$metadata' in error) {
-      const metadata = (error as { $metadata?: { httpStatusCode?: number } }).$metadata;
-      if (metadata?.httpStatusCode === 404) {
-        return false;
-      }
-    }
-    throw error;
-  }
-}
-
-/**
- * A per-build query on every content read, and only while prerendering.
- *
- * Cloudflare CI restores `.next` from the build cache, so Next answers a
- * prerender's `fetch` from the fetch cache it wrote on the last deploy. A page
- * that `bun run regen` rewrote in R2 since then renders from the old markdown
- * and ships stale. The stamp changes each build, so the cached entry is never
- * the one a prerender reads.
- *
- * Runtime reads keep the bare URL: the query would also miss the CDN cache in
- * front of R2, and at runtime there is nothing stale to miss.
- */
-function buildCacheBuster(): string {
-  return process.env.NEXT_PHASE === "phase-production-build" ? `?b=${BUILD_STAMP}` : "";
-}
-
-/**
- * Fetch file content from R2 using the public URL (faster for reads).
- * Returns null if the file is missing or its content predates CACHE_INVALIDATE_BEFORE.
- */
-export async function fetchFromR2(filePath: string, noValidate = false): Promise<string | null> {
+export async function readObject(key: string): Promise<string | null> {
   const config = getConfig();
   if (!config) return null;
 
-  try {
-    // Use public URL for reads (faster, no auth required)
-    const publicUrl = `${config.publicUrl}/${filePath}`;
-    const response = await fetch(publicUrl + buildCacheBuster());
+  const response = await fetch(`${config.publicUrl}/${key}`).catch(() => null);
+  if (response?.ok) return response.text();
+  if (response?.status === 404) return null;
 
-    if (!response.ok) {
-      if (response.status === 404) {
-        return null;
-      }
-      throw new Error(`Failed to fetch from R2: ${response.status} ${response.statusText}`);
-    }
-
-    const text = await response.text();
-
-    // Invalidate stale content based on generated_at frontmatter (skip for metadata reads)
-    if (!noValidate && !generatedAtIsCurrent(text)) return null;
-
-    return text;
-  } catch (error: unknown) {
-    // Network errors or 404s
-    if (error instanceof Error && error.message.includes('404')) {
-      return null;
-    }
-    // If public URL fails, try S3 API as fallback
-    return fetchFromR2WithS3Api(filePath);
-  }
-}
-
-/**
- * Fallback: Fetch using S3 API (authenticated)
- */
-async function fetchFromR2WithS3Api(filePath: string): Promise<string | null> {
-  const config = getConfig();
   const client = await getS3Client();
-  if (!config || !client) return null;
-
+  if (!client) return null;
   const { GetObjectCommand } = await import('@aws-sdk/client-s3');
   try {
-    const response = await client.send(new GetObjectCommand({
-      Bucket: config.bucketName,
-      Key: filePath,
-    }));
-
-    if (!response.Body) {
-      return null;
-    }
-
-    return await response.Body.transformToString('utf-8');
+    const object = await client.send(new GetObjectCommand({ Bucket: config.bucketName, Key: key }));
+    return (await object.Body?.transformToString('utf-8')) ?? null;
   } catch (error: unknown) {
-    if (error && typeof error === 'object' && 'name' in error && error.name === 'NoSuchKey') {
-      return null;
-    }
-    if (error && typeof error === 'object' && '$metadata' in error) {
-      const metadata = (error as { $metadata?: { httpStatusCode?: number } }).$metadata;
-      if (metadata?.httpStatusCode === 404) {
-        return null;
-      }
-    }
+    const status = (error as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode;
+    if (status === 404) return null;
     throw error;
   }
 }

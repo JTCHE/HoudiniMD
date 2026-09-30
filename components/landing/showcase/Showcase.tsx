@@ -125,7 +125,8 @@ export function Showcase() {
                     className={cn("absolute top-0 left-0 origin-top-left transition-[scale,width,height]", motion)}
                     style={{
                       width: app?.window ?? base.w,
-                      height: app ? (app.h * app.window) / app.w : base.h,
+                      // A slide that shrinks the app to nothing has no ratio to keep.
+                      height: app?.w ? (app.h * app.window) / app.w : base.h,
                       scale: String(app ? app.w / app.window : 1),
                     }}
                   >

@@ -3,8 +3,8 @@
 /_next/static/*
   Cache-Control: public,max-age=31536000,immutable
 
-# The browser has to see a new service worker to start the update that swaps its
-# cache. A cached sw.js keeps the previous build's cache alive.
+# A browser that installed the old service worker must see this one, which
+# removes it. A cached sw.js keeps the old one serving doc pages.
 /sw.js
   Cache-Control: no-cache
 

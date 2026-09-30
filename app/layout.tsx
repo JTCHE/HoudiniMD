@@ -1,12 +1,9 @@
+import { SITE_NAME } from "@/lib/brand";
 import { SITE_URL } from "@/lib/site";
-import { NOTICE_HEAD_SCRIPT } from "@/lib/notice";
 import { THEME_HEAD_SCRIPT } from "@/lib/theme";
 import type { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
-import Script from "next/script";
 import "./globals.css";
-import ServiceWorkerRegistration from "@/components/ServiceWorker";
-import { ToastListener } from "@/components/ui/toast-notification";
 
 export const viewport: Viewport = {
   maximumScale: 1,
@@ -17,17 +14,16 @@ export const viewport: Viewport = {
 };
 
 const websiteInfo = {
-  title: "HoudiniMD - Houdini Documentation for AI",
+  title: `${SITE_NAME} - The Houdini docs, instant and offline`,
   description:
-    "A clean Markdown mirror of the Houdini docs. Built for Humans to read, and Agents to understand. VEX functions, Python API, nodes, and more in clean markdown following the llms.txt standard.",
+    "A free, open-source desktop app for the Houdini docs. It reads the docs that come with your own Houdini install. Instant, and offline.",
 };
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: websiteInfo.title,
   description: websiteInfo.description,
-  keywords: ["Houdini", "VEX", "SideFX", "documentation", "LLM", "AI", "llms.txt", "Python API", "HOM"],
-  authors: [{ name: "HoudiniMD" }],
+  authors: [{ name: SITE_NAME }],
   // Named here, not by the app/ file conventions. A file under app/ is a route,
   // and a route is a Worker invocation that starts Next: /icon.svg, /apple-icon.png
   // and /manifest.webmanifest cost one bootstrap each, on every first visit.
@@ -45,7 +41,7 @@ export const metadata: Metadata = {
     title: websiteInfo.title,
     description: websiteInfo.description,
     url: SITE_URL,
-    siteName: "HoudiniMD",
+    siteName: SITE_NAME,
     type: "website",
     images: ["/cover.png"],
   },
@@ -61,18 +57,6 @@ const geist = Geist({
   subsets: ["latin"],
 });
 
-const websiteJsonLd = {
-  "@context": "https://schema.org",
-  "@type": "WebSite",
-  name: "HoudiniMD",
-  url: SITE_URL,
-  potentialAction: {
-    "@type": "SearchAction",
-    target: `${SITE_URL}/api/search?q={search_term_string}`,
-    "query-input": "required name=search_term_string",
-  },
-};
-
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -82,23 +66,11 @@ export default function RootLayout({
     <html
       lang="en"
       className={geist.className}
-      // The head script below writes `data-notice` here before React hydrates.
-      // React compares the attribute it rendered with the one in the document
-      // and reports the difference; the difference is the point.
+      // The theme script below writes its attribute here before React
+      // hydrates. React reports the difference; the difference is the point.
       suppressHydrationWarning
     >
       <head>
-        <link
-          rel="alternate"
-          type="text/plain"
-          href="/llms.txt"
-          title="API guide for AI agents"
-        />
-        <Script
-          id="website-jsonld"
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }}
-        />
         {/* A deploy renames every chunk, so the last navigation served by the
             outgoing service worker gets HTML that names files which no longer
             exist. Reload that page one time, on the evidence that a chunk
@@ -119,15 +91,9 @@ export default function RootLayout({
             }}
           />
         )}
-        {/* Before the first paint, so a notice this reader closed, or one they
-            already signed, never draws and never moves the page under them.
-            Inline because a module loads too late to beat the paint. */}
-        <script dangerouslySetInnerHTML={{ __html: NOTICE_HEAD_SCRIPT }} />
         <script dangerouslySetInnerHTML={{ __html: THEME_HEAD_SCRIPT }} />
       </head>
       <body>
-        <ServiceWorkerRegistration />
-        <ToastListener />
         {children}
       </body>
     </html>

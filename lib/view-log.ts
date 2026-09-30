@@ -11,7 +11,7 @@
  * The worker counts document loads and this counts navigations, so a page is
  * counted exactly once however the browser got to it.
  *
- * Fire-and-forget, like `lib/search/log.ts`: a dropped view must never delay or
+ * Fire-and-forget: a dropped view must never delay or
  * break a navigation.
  */
 

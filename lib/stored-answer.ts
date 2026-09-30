@@ -1,83 +1,37 @@
 /**
- * Answer a doc request from R2, without starting Next.
+ * Answer a prerendered request from R2, without starting Next.
  *
- * WHY IT IS WORTH THE CODE.
+ * Next serves a prerendered page by reading one R2 object and returning bytes
+ * it already holds. The cost is the bootstrap: on a cold isolate Next must be
+ * evaluated first, and Cloudflare bills that to the request that meets it.
+ * Measured on the live Worker with `wrangler tail`, 17 September 2026: a page
+ * cost 326 CPU-ms on average, against 1-3 for an answer written in `worker.ts`.
  *
- * Next serves a finished doc page by reading one R2 object and returning bytes
- * it already holds. The difference is the bootstrap: on a cold isolate Next
- * must be evaluated first, and Cloudflare bills that to the request that meets
- * it. Measured on the live Worker with `wrangler tail`, 17 September 2026: a
- * doc page costs 326 CPU-ms on average and a `.md` twin 380, against 1-3 for
- * an answer written inside `worker.ts`.
- *
- * Five request shapes are answered here:
- *
- *  - A segment prefetch, from `segmentData` in the ISR entry. Measured 17
- *    September 2026, 73% of requests carried `next-router-segment-prefetch`,
- *    and the commonest one (`/_tree`) answers in 691 bytes.
- *  - The full RSC payload, from `rsc` in the same entry. Verified against the
- *    live site: the answer is the same bytes for every router state tree, with
- *    and without `next-router-prefetch`, because the route is prerendered.
- *  - A full page, from `html`. The doc route is `revalidate = false`, so there
- *    is no staleness to lose by not asking Next: the entry changes only when a
- *    deploy or a revalidate writes it.
- *  - The `.md` twin, and `/api/raw/<slug>` behind it, from the content object
- *    that route would read. Byte-identical to what it returns — see
- *    `markdown()`. The two differ only in the `cache-control` they carry.
- *  - An agent asking for a doc page, which middleware answers with a 302 to
- *    the `.md` twin. That one needs no object at all, only the gates.
- *  - `/api/search-index`, which is a proxy of one R2 object and nothing else.
+ * Answered here: a page, its RSC payload and its segment prefetches, from the
+ * ISR entry; `/robots.txt` and `/sitemap.xml`; `/download`; and a doc address
+ * the build did not prerender, which gets the `/docs` notice.
  *
  * WHY THE EDGE CACHE DOES NOT ALREADY COVER THIS.
  *
- * `caches.default` is per colo. The mirror is ~21k pages and the traffic is
- * thin and spread over the world, so a page is usually asked for once in any
- * one colo and never again while the entry lives: 7% of prefetches hit it.
- * Raising its TTL does not help — the second request is in another colo, not
- * later in the same one. R2 is a single store behind every colo, so a page
- * costs a render once and is cheap everywhere after.
+ * `caches.default` is per colo. The traffic is thin and spread over the world,
+ * so a page is usually asked for once in any one colo: 7% of prefetches hit
+ * it. R2 is a single store behind every colo.
  *
  * WHAT IT REFUSES.
  *
  * Everything it is not certain about, by returning null — the caller then
- * hands the request to Next exactly as before. The gates below repeat the ones
- * middleware applies, because answering here skips middleware: the build id is
- * pinned (see lib/build-id.json), so R2 still holds entries written under slugs
- * that are now redirected, and serving one would strand a reader on a page the
- * site no longer admits to having.
+ * hands the request to Next.
  */
 import buildId from "./build-id.json";
-import { META_ALL_KEY, META_ALL_PATH, SITEMAP_KEY, SITEMAP_PATH } from "./meta-all";
-import { DOCS_KEY } from "./search/bm25";
-import { generatedAtIsCurrent } from "./content-freshness";
-import { SIDEFX_DOCS_ROOT } from "./houdini";
-import { checkDocNamespace, DOC_NAMESPACES } from "./url/namespaces";
-import { VERIFIED_SLUG_REDIRECTS } from "./url/slug-redirects";
-import { parseFrontmatter } from "./markdown/frontmatter";
-import { wantsMarkdown } from "./wants-markdown";
-import { goneKey, goneIsCurrent, goneMarker } from "./gone";
-import { resolveSideFXUrl } from "./scraping/resolve";
-import { PageNotFoundError } from "./scraping/scraper";
-import { searchDocs, SearchUnavailableError } from "./search/server";
-import { pageMeta, ogParams } from "./og/params";
 import { PLATFORMS, platformForPath, type Platform } from "./download";
 import { RELEASES_API, REPO_URL } from "./brand";
 
 /** `segmentData` stores this one as null when it equals `rsc`. See lib/cache/compressed-r2-cache.ts. */
 const FULL_SEGMENT_KEY = "/_full";
 
-/**
- * Written into the progress view by components/docs/GeneratingPage.tsx. An
- * entry holding one is a page that had no content when it was rendered, and
- * only Next can decide whether that is still true.
- */
-const GENERATING_MARKER = "data-generating";
-
 /** Just the part of an R2 binding this module uses. */
 export interface Bucket {
   get(key: string): Promise<{ body: ReadableStream } | null>;
-  head(key: string): Promise<unknown | null>;
-  put(key: string, value: string): Promise<unknown>;
 }
 
 interface Entry {
@@ -94,56 +48,6 @@ const VARY = "rsc, next-router-state-tree, next-router-prefetch, next-router-seg
 
 /** The value `worker.ts` rewrites a Next page answer to. Both paths agree. */
 const PAGE_CACHE_CONTROL = "public, max-age=0, must-revalidate";
-
-/** Set by next.config.ts `headers()` for `/docs/:path*`, and kept for `.md`. */
-const MARKDOWN_CACHE_CONTROL =
-  "public, max-age=0, must-revalidate, s-maxage=86400, stale-while-revalidate=2592000";
-
-/** What `/api/raw` sets on its own answers, where the `/docs/` rule does not reach. */
-const RAW_CACHE_CONTROL = "public, max-age=2592000";
-
-/**
- * Routes that are one R2 object and nothing else: the BM25 doc table and the
- * title/summary map. Each is written by a deploy (scripts/build-search-index.ts)
- * and never changes between deploys, so the Worker streams the object rather
- * than starting Next to build the same bytes again.
- */
-type ProxiedObject = { key: string; headers: Record<string, string> };
-const PROXIED_OBJECTS: ReadonlyMap<string, ProxiedObject> = new Map<string, ProxiedObject>([
-  ["/api/search-index", {
-    key: DOCS_KEY,
-    headers: {
-      "access-control-allow-origin": "*",
-      "access-control-allow-methods": "GET, OPTIONS",
-      "access-control-allow-headers": "Content-Type",
-      "content-type": "application/json; charset=utf-8",
-      "cache-control": "public, max-age=300, s-maxage=86400, stale-while-revalidate=604800",
-    },
-  }],
-  [META_ALL_PATH, {
-    key: META_ALL_KEY,
-    headers: {
-      "content-type": "application/json; charset=utf-8",
-      "cache-control": "public, max-age=3600, s-maxage=86400",
-    },
-  }],
-  [SITEMAP_PATH, {
-    key: SITEMAP_KEY,
-    headers: {
-      "content-type": "application/xml; charset=utf-8",
-      "cache-control": "public, max-age=3600, s-maxage=86400",
-    },
-  }],
-]);
-
-/** The site's own picture, for a card request that names no page of ours. */
-const cover = () => new Response(null, { status: 302, headers: { location: "/cover.png" } });
-
-/** What app/api/og/route.tsx sets on a card it drew. */
-const CARD_HEADERS: Record<string, string> = {
-  "content-type": "image/png",
-  "cache-control": "public, max-age=31536000, immutable",
-};
 
 const PREFETCH_HEADERS: Record<string, string> = {
   "content-type": "text/x-component",
@@ -165,8 +69,8 @@ async function sha256Hex(text: string): Promise<string> {
 }
 
 /**
- * Paths outside `/docs/` whose answer is one prerendered entry per build, and
- * the name Next stores that entry under. The root is `/index`, not `/`.
+ * Paths whose answer is one prerendered entry per build, and the name Next
+ * stores that entry under. The root is `/index`, not `/`.
  */
 const FIXED_PAGES: ReadonlyMap<string, string> = new Map([
   ["/", "/index"],
@@ -177,34 +81,18 @@ const FIXED_PAGES: ReadonlyMap<string, string> = new Map([
 /**
  * Route handlers Next prerenders whole: the entry carries the body and the
  * headers the route itself set, so nothing here decides what they say.
- *
- * `/sitemap.xml` is not one of these. next.config.ts gives it a different
- * `cache-control` than the entry stores, and copying that rule here would put
- * it in two places.
  */
-const STORED_ROUTES: ReadonlySet<string> = new Set(["/robots.txt"]);
+const STORED_ROUTES: ReadonlySet<string> = new Set(["/robots.txt", "/sitemap.xml"]);
 
 type Ask =
-  | { kind: "object"; key: string; headers: Record<string, string> }
   | { kind: "route"; path: string }
   | { kind: "page"; path: string }
   | { kind: "rsc"; path: string }
   | { kind: "prefetch"; path: string; segment: string }
-  | { kind: "markdown"; slug: string; cacheControl: string }
-  | { kind: "meta"; slug: string }
-  | { kind: "card"; key: string }
-  | { kind: "missing"; page: boolean }
   | { kind: "download"; platform: Platform }
   | { kind: "moved"; to: string }
-  | { kind: "alias"; slug: string; markdown: boolean; search: string }
-  | { kind: "search"; q: string; limit: number; category?: string }
-  | { kind: "notallowed" }
-  | { kind: "redirect"; to: string };
+  | { kind: "notallowed" };
 
-/**
- * What this request is, or null when it must go to Next. Mirrors what
- * middleware does to a `/docs/` path before it renders.
- */
 /** What the root answers to. Next reports the same pair in its `allow`. */
 const ROOT_METHODS = new Set(["GET", "HEAD"]);
 
@@ -222,46 +110,6 @@ function read(request: Request, url: URL): Ask | null {
   // worker.ts drops the body once the answer is made.
   if (request.method !== "GET" && request.method !== "HEAD") return null;
 
-  // A social card already rendered. app/api/og/route.tsx stores every card it
-  // draws under the hash of its own query, so the Worker can hand back the
-  // bytes instead of starting Next to find them in the same place: that route
-  // was 32% of one hour's CPU, and three requests for one card cost 889, 545
-  // and 486 ms because each paid the bootstrap again.
-  if (url.pathname === "/api/og" && url.search) {
-    return { kind: "card", key: url.searchParams.toString() };
-  }
-
-  // The tooltip's first paint. It carries a query, so it is read before the
-  // gate below. `/api/meta-all` holds the same two fields for every page, but
-  // the reader does not have it yet on the first hover, which is why this call
-  // exists at all — and why it is worth answering without starting Next.
-  // A text query is a table read and a scoring pass, and it ran inside Next.
-  // Measured on the live site: the same query costs 88 CPU-ms on a warm
-  // isolate and 587 to 1,285 on a cold one, and these arrive a few an hour so
-  // the isolate is always cold. The work was never the cost — the bootstrap
-  // that ran before it was.
-  //
-  // Only a query that would have been answered comes through here. A missing
-  // `q`, or an index the bucket cannot serve, is left to the route, which
-  // already writes those answers.
-  if (url.pathname === "/api/search" && request.method === "GET") {
-    const q = url.searchParams.get("q")?.trim();
-    if (!q) return null;
-    const asked = parseInt(url.searchParams.get("limit") ?? "20", 10);
-    const limit = Number.isFinite(asked) ? Math.max(1, Math.min(asked, 100)) : 20;
-    return { kind: "search", q, limit, category: url.searchParams.get("category")?.trim() || undefined };
-  }
-
-  if (url.pathname === "/api/meta") {
-    const slug = url.searchParams.get("slug");
-    const only = [...url.searchParams.keys()].join() === "slug";
-    if (!slug || !only) return null;
-    if (slug.endsWith("/") || slug.endsWith(".md") || slug.endsWith("/index")) return null;
-    if (checkDocNamespace(slug).kind !== "allowed") return null;
-    if (slug in VERIFIED_SLUG_REDIRECTS) return null;
-    return { kind: "meta", slug };
-  }
-
   // The installer address never varies on a query, and a download link is
   // exactly the kind that arrives wearing one — a campaign tag, a referrer
   // mark. Read it in front of the gate below or those asks pay a bootstrap.
@@ -274,18 +122,11 @@ function read(request: Request, url: URL): Ask | null {
   // Anything else arriving with a query is Next's business.
   if (url.search && [...url.searchParams.keys()].join() !== "_rsc") return null;
 
-  // One R2 object, streamed through. The route does the same, and the only
-  // reason it is a route is that the browser needs it same-origin.
-  const proxied = PROXIED_OBJECTS.get(url.pathname);
-  if (proxied) return { kind: "object", ...proxied };
-
   if (STORED_ROUTES.has(url.pathname)) return { kind: "route", path: url.pathname };
 
   const segment = request.headers.get("next-router-segment-prefetch");
   const rsc = request.headers.get("rsc");
 
-  // Neither of these is under the `/docs/:path*` matcher, so middleware never
-  // redirects an agent away from them: everyone gets the page.
   const fixed = FIXED_PAGES.get(url.pathname);
   if (fixed) {
     if (segment) return { kind: "prefetch", path: fixed, segment };
@@ -293,60 +134,13 @@ function read(request: Request, url: URL): Ask | null {
     return { kind: "page", path: fixed };
   }
 
-  // `/api/raw/<slug>` is the route middleware rewrites a `.md` path to, and
-  // agents also reach it directly from llms.txt. Same object, same gates, and
-  // the route's own `cache-control` rather than the one `/docs/` carries.
-  const raw = url.pathname.startsWith("/api/raw/");
-  if (!raw && !url.pathname.startsWith("/docs/")) return null;
-
-  const asked = url.pathname.slice(raw ? "/api/raw/".length : "/docs/".length);
-  const isMarkdown = raw || asked.endsWith(".md");
-  const slug = asked.endsWith(".md") ? asked.slice(0, -3) : asked;
-
-  // Any path middleware would rewrite rather than render: an empty slug, a
-  // trailing slash, or a `.html` extension. Each is a redirect, not a page.
+  if (!url.pathname.startsWith("/docs/")) return null;
+  const slug = url.pathname.slice("/docs/".length);
+  // A trailing slash or a `.html` is a redirect, and middleware writes it.
   if (slug.endsWith("/")) return { kind: "moved", to: url.pathname.replace(/\/+$/, "") + url.search };
   if (slug === "" || slug.endsWith(".html")) return null;
-
-  // `/index` slugs are the ones the source-alias table can point somewhere
-  // else, so the answer is a lookup rather than a rule. The lookup is one R2
-  // object, which is cheaper than the bootstrap Next paid to make the same
-  // read: three of these cost 110, 127 and 132 CPU-ms in one 45-minute tail.
-  if (slug.endsWith("/index")) return { kind: "alias", slug, markdown: isMarkdown, search: url.search };
-
-  const verdict = checkDocNamespace(slug);
-  // A tree this mirror does not carry, or one it has stopped carrying. The
-  // answer is 404 either way, and middleware already gives that answer — but it
-  // spends the whole framework to say it. A doxygen crawl walking a retired
-  // tree made that the site's largest cost on 2026-09-19: 94% of the CPU left
-  // after the tree was closed was Next booting to write a 404.
-  if (verdict.kind === "unknown") {
-    return { kind: "missing", page: !isMarkdown && !rsc && !segment };
-  }
-  if (verdict.kind !== "allowed") return null;
-  if (slug in VERIFIED_SLUG_REDIRECTS) return null;
-
-  if (isMarkdown) {
-    return { kind: "markdown", slug, cacheControl: raw ? RAW_CACHE_CONTROL : MARKDOWN_CACHE_CONTROL };
-  }
   if (segment) return { kind: "prefetch", path: url.pathname, segment };
   if (rsc) return { kind: "rsc", path: url.pathname };
-
-  // An agent is sent to the `.md` twin by middleware, and that redirect is one
-  // of the commonest answers the site gives. It needs no object at all.
-  //
-  // A tree root is the exception. `/docs/houdini.md` and its three siblings are
-  // answered in front of this Worker with a 301 back to `/docs/houdini`, so
-  // sending an agent to the twin puts it in a redirect loop: one hour of tail
-  // showed a single client asking for `/docs/hdk` 132 times. Give the root its
-  // rendered page instead, which is what a tree root holds anyway — a list of
-  // links, not prose an agent would rather have as markdown.
-  if (
-    !DOC_NAMESPACES.includes(slug as (typeof DOC_NAMESPACES)[number]) &&
-    wantsMarkdown(request.headers.get("user-agent"), request.headers)
-  ) {
-    return { kind: "redirect", to: `${url.pathname}.md` };
-  }
   return { kind: "page", path: url.pathname };
 }
 
@@ -393,123 +187,9 @@ async function entryFor(path: string, cache: Bucket): Promise<Entry | null> {
   if (!entry) return null;
 
   // A stored 404 or 500 is Next's to give: that status carries headers and
-  // a no-store rule this file does not reproduce. The one exception is the
-  // 404 page itself, read by missing() below, which asks for it on purpose.
+  // a no-store rule this file does not reproduce.
   if (entry.meta?.status !== undefined && entry.meta.status !== 200) return null;
   return entry;
-}
-
-/**
- * Title and summary for one page, from the same content object app/api/meta
- * reads. The H1 carries title and node type together, which is what the
- * tooltip heading shows, so it is read instead of the frontmatter `title`.
- *
- * A slug this cannot find is a source alias (`.../index` forms), which needs
- * an R2 lookup this file does not do — null sends it to the route.
- */
-const TITLE_LINE = /^#[ \t]+(\S[^\n]*)$/m;
-
-async function meta(slug: string, content: Bucket): Promise<Response | null> {
-  try {
-    const object = await content.get(`content/${slug}.md`);
-    if (!object) return null;
-
-    const text = await new Response(object.body).text();
-    if (!generatedAtIsCurrent(text)) return null;
-
-    return Response.json(
-      {
-        title: TITLE_LINE.exec(text)?.[1]?.trim() ?? "",
-        summary: parseFrontmatter(text).data.description ?? "",
-      },
-      { headers: { "cache-control": "private, max-age=86400" } },
-    );
-  } catch {
-    return null;
-  }
-}
-
-/**
- * The `.md` twin, straight from the content object.
- *
- * `/api/raw` puts that object through two transforms before answering, and
- * both are no-ops for every slug `read()` admits: `cachedContentIsCurrent`
- * only tests the empty slug, which is refused above, and `insertLegacyWarning`
- * only fires on a version-suffixed root, which the namespace gate refuses. The
- * `generated_at` test is the one check that does bite, so it is repeated.
- */
-async function markdown(slug: string, cacheControl: string, content: Bucket): Promise<Response | null> {
-  try {
-    const object = await content.get(`content/${slug}.md`);
-    if (!object) return null;
-
-    const text = await new Response(object.body).text();
-    if (!generatedAtIsCurrent(text)) return null;
-
-    return new Response(text, {
-      headers: {
-        "content-type": "text/markdown; charset=utf-8",
-        "cache-control": cacheControl,
-        vary: VARY,
-        "x-content-type-options": "nosniff",
-        "x-source-url": `${SIDEFX_DOCS_ROOT}/${slug}`,
-      },
-    });
-  } catch {
-    return null;
-  }
-}
-
-/**
- * The one query that names this page's card, or null when there is no page.
- *
- * Drawing a card costs ~1.2 CPU-s and the key is the whole query, so any query
- * at all buys a render and a stored object. Two kinds of junk arrive. A crawler
- * reads the `og:image` out of the RSC payload, where `&` is written `&`,
- * and asks for `path=houdini/expressions/arclenu0026title=...`. And pages
- * published before the JSON-LD fix named a second card built from the H1, which
- * differs from the real one only in how the title was split — 11,947 of those
- * are still in crawler caches, and rendering each on demand would cost 14M
- * CPU-ms, half a month of the allowance.
- *
- * So the query is not trusted. The page's own markdown is read and the query is
- * derived from it, by the same function `generateMetadata` and
- * scripts/prerender-og.ts use. A caller that asked for anything else is sent to
- * the derived one, so every page converges on a single stored card and a render
- * can only ever happen for a page added since the last prerender run.
- */
-async function canonicalCardQuery(query: string, content: Bucket): Promise<string | null> {
-  const path = new URLSearchParams(query).get("path");
-  if (path === null || path === "") return null; // no path, or the /docs index card
-  if (checkDocNamespace(path).kind !== "allowed") return null;
-  const object = await content.get(`content/${path}.md`).catch(() => null);
-  if (!object) return null;
-  const markdown = await new Response(object.body).text().catch(() => null);
-  if (markdown === null) return null;
-  const fallbackTitle = path.split("/").at(-1)?.replace(/-/g, " ") ?? "SideFX documentation";
-  return ogParams(path, pageMeta(markdown, fallbackTitle)).toString();
-}
-
-/**
- * The site's own 404 page, for a path under a tree the mirror does not carry.
- *
- * Next prerenders that page like any other, so it is already in the cache under
- * `/_not-found` and the reader gets the real thing rather than a bare status.
- * Only a browser navigation is worth the read: the `.md` and RSC shapes are
- * asked for by agents and prefetches, which want the status and nothing else.
- */
-const NOT_FOUND_PATH = "/_not-found";
-
-async function missing(page: boolean, cache: Bucket): Promise<Response | null> {
-  if (!page) return new Response(null, { status: 404 });
-  const entry = await readEntry(NOT_FOUND_PATH, cache);
-  // Next stores this page with its own 404 status, which is the whole point of
-  // reading it here. Anything else under that key is not the page we want.
-  if (entry?.meta?.status !== 404 || typeof entry.html !== "string") return null;
-  return new Response(entry.html, {
-    status: 404,
-    headers: { ...PAGE_HEADERS, "cache-control": "public, max-age=60, s-maxage=3600" },
-  });
 }
 
 /**
@@ -556,134 +236,15 @@ async function download(platform: Platform): Promise<Response> {
   });
 }
 
-/**
- * Where a `.../index` slug really lives, from the table that records it.
- *
- * SideFX authors a section under both its bare name and an `/index` twin, and
- * which one is canonical is a fact about the scrape, not a rule a path can be
- * rewritten by. `lib/source-aliases.ts` writes the pairing; this reads it.
- *
- * Null when the table says nothing. An unknown alias is Next's to answer, the
- * same as before this existed.
- */
-async function aliasAnswer(
-  slug: string,
-  markdown: boolean,
-  search: string,
-  content: Bucket,
-): Promise<Response | null> {
-  const object = await content.get(`metadata/source-aliases/${slug}.json`).catch(() => null);
-  if (!object) return null;
-  let canonical: string;
-  try {
-    const alias = JSON.parse(await new Response(object.body).text()) as {
-      alias?: string;
-      canonical?: string;
-    };
-    if (alias.alias !== slug || !alias.canonical) return null;
-    canonical = alias.canonical;
-  } catch {
-    return null;
-  }
-  // An alias naming itself would redirect to the address being asked for.
-  if (canonical === slug) return null;
-
-  return new Response(null, {
-    status: 308,
-    headers: {
-      location: `/docs/${canonical}${markdown ? ".md" : ""}${search}`,
-      "cache-control": "public, max-age=3600, s-maxage=86400",
-    },
-  });
-}
-
-/** The same headers app/api/search/route.ts sends, for the same answer. */
-const SEARCH_HEADERS: Record<string, string> = {
-  "content-type": "application/json",
-  "access-control-allow-origin": "*",
-  "access-control-allow-methods": "GET, OPTIONS",
-  "access-control-allow-headers": "Content-Type",
-  "cache-control": "public, max-age=60, s-maxage=86400, stale-while-revalidate=604800",
-};
-
-async function search(
-  ask: { q: string; limit: number; category?: string },
-  publicUrl: string | undefined,
-): Promise<Response | null> {
-  try {
-    const results = await searchDocs(ask.q, ask.limit, ask.category, undefined, publicUrl);
-    return new Response(JSON.stringify({ query: ask.q, total: results.length, results }), {
-      headers: SEARCH_HEADERS,
-    });
-  } catch (error) {
-    // A 503 is the route's to write, and so is anything unexpected.
-    if (error instanceof SearchUnavailableError) return null;
-    console.error(`Worker search failed: ${error}`);
-    return null;
-  }
-}
-
-/** A slug SideFX has already refused, answered without starting Next.
- *
- * Agents guess URLs. A guess that will never resolve booted the framework and
- * scraped SideFX again on every request: 130 requests over 11.2 hours of live
- * log, 68,637 CPU-ms a day. confirmGone() below writes the marker the first
- * time SideFX answers 404 to a `.md` ask, lib/generator.ts on every other
- * path, and this reads it.
- *
- * Only the agent-facing shapes go through here — `.md` and the RSC payloads.
- * A person who mistypes a `/docs/` URL still gets the site's own 404 page.
- *
- * Stale mirrored content plus a marker means the page was removed upstream, so
- * 404 is the right answer for that pair too.
- */
-async function goneAnswer(slug: string, content: Bucket): Promise<Response | null> {
-  const object = await content.get(goneKey(slug)).catch(() => null);
-  if (!object) return null;
-  const marker = await new Response(object.body).text().catch(() => "");
-  return goneIsCurrent(marker) ? new Response(null, { status: 404 }) : null;
-}
-
-/** The first ask for a slug with no markdown and no marker.
- *
- * Next answered this by booting to ask SideFX, then wrote the marker that makes
- * every later ask free. The boot was the cost: `maketransform.md` took 1,730
- * CPU-ms and three cancelled `.md` guesses 707 to 941 each, in one 45-minute
- * tail. The question itself is one or two HEAD requests, which is wall time,
- * not CPU. So ask here, and write the marker here.
- *
- * Only a plain "no" is answered. A page SideFX has, a redirect, or a failed
- * fetch goes to Next, which scrapes it as before.
- */
-async function confirmGone(slug: string, content: Bucket): Promise<Response | null> {
-  try {
-    await resolveSideFXUrl(slug);
-    return null;
-  } catch (error) {
-    if (!(error instanceof PageNotFoundError)) return null;
-  }
-  await content.put(goneKey(slug), goneMarker()).catch(() => {});
-  return new Response(null, { status: 404 });
-}
-
 /** The stored answer for this request, or null to let Next answer. */
 export async function storedAnswer(
   request: Request,
   url: URL,
   cache: Bucket,
-  content: Bucket,
-  publicUrl?: string,
 ): Promise<Response | null> {
   const ask = read(request, url);
   if (!ask) return null;
 
-  if (ask.kind === "object") {
-    const object = await content.get(ask.key).catch(() => null);
-    return object ? new Response(object.body, { headers: ask.headers }) : null;
-  }
-  if (ask.kind === "redirect") {
-    return new Response(null, { status: 302, headers: { location: ask.to } });
-  }
   if (ask.kind === "moved") {
     return new Response(null, {
       status: 308,
@@ -691,37 +252,15 @@ export async function storedAnswer(
     });
   }
   if (ask.kind === "download") return download(ask.platform);
-  if (ask.kind === "alias") return aliasAnswer(ask.slug, ask.markdown, ask.search, content);
-  if (ask.kind === "search") return search(ask, publicUrl);
   if (ask.kind === "notallowed") {
     return new Response(null, { status: 405, headers: { allow: "GET,HEAD", vary: VARY } });
   }
-  if (ask.kind === "markdown") {
-    return (
-      (await markdown(ask.slug, ask.cacheControl, content)) ??
-      (await goneAnswer(ask.slug, content)) ??
-      (await confirmGone(ask.slug, content))
-    );
-  }
-  if (ask.kind === "meta") return meta(ask.slug, content);
-  if (ask.kind === "missing") return missing(ask.page, cache);
-  if (ask.kind === "card") {
-    const object = await cache.get(`og/${await sha256Hex(ask.key)}.png`).catch(() => null);
-    if (object) return new Response(object.body, { headers: CARD_HEADERS });
-    // The `/docs` index card is the one query with no page behind it.
-    if (new URLSearchParams(ask.key).get("path") === "") return null;
-    const canonical = await canonicalCardQuery(ask.key, content);
-    if (canonical === null) return cover();
-    if (canonical === ask.key) return null; // a page added since the last prerender run
-    return new Response(null, { status: 302, headers: { location: `/api/og?${canonical}` } });
-  }
-
-  const entry = await entryFor(ask.path, cache);
-  if (!entry) {
-    return ask.kind === "rsc" || ask.kind === "prefetch"
-      ? goneAnswer(ask.path.replace(/^\/docs\/?/, ""), content)
-      : null;
-  }
+  // A doc address the build did not prerender is a page the mirror never
+  // held, or a spelling of one. It gets the notice without a title, and never
+  // starts Next to say so.
+  const doc = ask.path.startsWith("/docs/");
+  const entry = (await entryFor(ask.path, cache)) ?? (doc ? await entryFor("/docs", cache) : null);
+  if (!entry) return null;
 
   if (ask.kind === "route") {
     if (typeof entry.body !== "string") return null;
@@ -746,6 +285,5 @@ export async function storedAnswer(
   }
 
   if (typeof entry.html !== "string") return null;
-  if (entry.html.includes(GENERATING_MARKER)) return null;
   return new Response(entry.html, { headers: { ...storedMeta(entry), ...PAGE_HEADERS } });
 }
