@@ -190,7 +190,7 @@ function PinButton() {
           .catch(() => {});
       }}
     >
-      <Icons.pin strokeWidth={1} absoluteStrokeWidth className={cn("size-[13px]", pinned && "fill-current")} />
+      <Icons.pin className={cn("size-[13px]", pinned && "fill-current")} />
     </button>
     </Hint>
   );

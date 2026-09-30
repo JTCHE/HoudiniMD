@@ -522,6 +522,20 @@ a {
   }
 }
 
+/* ONE line weight for every line icon, lucide's and the ones the app draws,
+   whatever size the icon has. `non-scaling-stroke` makes the width a width on
+   the screen, not a part of the icon box. `lib/ui/icon-stroke.ts` keeps the
+   value on whole device pixels. */
+:root {
+  --icon-stroke: 1px;
+}
+svg[stroke="currentColor"] {
+  stroke-width: var(--icon-stroke);
+}
+svg[stroke="currentColor"] * {
+  vector-effect: non-scaling-stroke;
+}
+
 /* Text selection in the brand, the one colour the window owns. */
 ::selection {
   background: var(--brand-700);

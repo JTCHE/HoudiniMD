@@ -53,7 +53,7 @@ export function SidebarFooter({ recentCount, recentsOpen, onToggleRecents, class
       <div className="flex items-center gap-2xs px-ms pt-ms">
         <Hint label="Settings">
           <button type="button" aria-label="Settings" className={FOOTER_BUTTON} onClick={openSettings}>
-            <Icons.settings strokeWidth={1} absoluteStrokeWidth className="size-[18px]" />
+            <Icons.settings className="size-[18px]" />
           </button>
         </Hint>
         <Hint label={theme === "dark" ? "Light theme" : "Dark theme"}>
@@ -67,24 +67,16 @@ export function SidebarFooter({ recentCount, recentsOpen, onToggleRecents, class
               eight rays around it, so drawn at the same size the moon reads
               as the smaller, lighter icon of the two. */}
           {theme === "dark" ? (
-            <Icons.themeLight
-              className="size-md"
-              strokeWidth={1}
-              absoluteStrokeWidth
-            />
+            <Icons.themeLight className="size-md" />
           ) : (
-            <Icons.themeDark
-              className="size-md"
-              strokeWidth={1}
-              absoluteStrokeWidth
-            />
+            <Icons.themeDark className="size-md" />
           )}
         </button>
         </Hint>
         <span className="flex-1" />
         <Hint label="File a bug on GitHub">
           <a href={ISSUES} target="_blank" rel="noopener noreferrer" aria-label="File a bug" className={FOOTER_BUTTON}>
-            <Icons.bugReport strokeWidth={1} absoluteStrokeWidth className="size-4.5" />
+            <Icons.bugReport className="size-4.5" />
           </a>
         </Hint>
       </div>

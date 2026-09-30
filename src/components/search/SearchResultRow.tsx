@@ -12,8 +12,9 @@ import { excerptText } from "@/lib/search";
  */
 
 /**
- * One icon set, drawn on the Solar Linear grid: 24 viewBox, 1.5 stroke, round
- * caps, `currentColor`. Sharing the grid is what makes them look related — a
+ * One icon set, drawn on the Solar Linear grid: 24 viewBox, round caps,
+ * `currentColor`, and the one line weight of the chrome (see
+ * `lib/ui/icon-stroke.ts`). Sharing the grid is what makes them look related — a
  * heavier stroke or a different viewBox reads as a different family even at the
  * same pixel size.
  */
@@ -24,7 +25,6 @@ function SolarIcon({ className, children }: { className?: string; children: Reac
       className={className}
       fill="none"
       stroke="currentColor"
-      strokeWidth="1.5"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"

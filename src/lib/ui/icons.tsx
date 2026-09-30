@@ -46,23 +46,24 @@ export type IconComponent = LucideIcon | ((props: { className?: string }) => Rea
 /**
  * The Windows 11 caption buttons.
  *
- * Drawn rather than aliased: the OS shapes are 1px strokes on a 10px box with
- * square caps, and lucide's rounded 2px caps read as a different application's
- * buttons sitting in the title bar. `shape-rendering` keeps the strokes on the
- * pixel grid at the small size they are used at.
+ * Drawn rather than aliased: the OS shapes have square caps on a 10px box, and
+ * lucide's round caps read as a different application's buttons sitting in the
+ * title bar. The line weight comes from the stylesheet, as for every icon, and
+ * `crispEdges` puts the straight lines on whole device pixels. The box does not
+ * clip: a line on its edge would be cut at a part of a device pixel, and blur.
  */
 function CaptionMinimize({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 10 10" className={className} shapeRendering="crispEdges" aria-hidden="true">
-      <path d="M0 5h10" stroke="currentColor" strokeWidth="1" />
+    <svg viewBox="0 0 10 10" className={className} fill="none" stroke="currentColor" shapeRendering="crispEdges" overflow="visible" aria-hidden="true">
+      <path d="M0 5h10" />
     </svg>
   );
 }
 
 function CaptionMaximize({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 10 10" className={className} shapeRendering="crispEdges" aria-hidden="true">
-      <rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="currentColor" strokeWidth="1" />
+    <svg viewBox="0 0 10 10" className={className} fill="none" stroke="currentColor" shapeRendering="crispEdges" overflow="visible" aria-hidden="true">
+      <rect x="0.5" y="0.5" width="9" height="9" />
     </svg>
   );
 }
@@ -70,17 +71,17 @@ function CaptionMaximize({ className }: { className?: string }) {
 /** Two offset squares, the shape Windows uses once a window is maximized. */
 function CaptionRestore({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 10 10" className={className} shapeRendering="crispEdges" aria-hidden="true">
-      <path d="M2.5 2.5V0.5h7v7h-2" fill="none" stroke="currentColor" strokeWidth="1" />
-      <rect x="0.5" y="2.5" width="7" height="7" fill="none" stroke="currentColor" strokeWidth="1" />
+    <svg viewBox="0 0 10 10" className={className} fill="none" stroke="currentColor" shapeRendering="crispEdges" overflow="visible" aria-hidden="true">
+      <path d="M2.5 2.5V0.5h7v7h-2" />
+      <rect x="0.5" y="2.5" width="7" height="7" />
     </svg>
   );
 }
 
 function CaptionClose({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 10 10" className={className} aria-hidden="true">
-      <path d="M0 0l10 10M10 0L0 10" stroke="currentColor" strokeWidth="1" />
+    <svg viewBox="0 0 10 10" className={className} fill="none" stroke="currentColor" aria-hidden="true">
+      <path d="M0 0l10 10M10 0L0 10" />
     </svg>
   );
 }

@@ -368,19 +368,7 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
               })}
               className="flex items-center justify-center size-6 rounded text-muted-foreground hover:text-foreground transition-colors"
             >
-              <svg
-                width="15"
-                height="15"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M18 6 6 18M6 6l12 12" />
-              </svg>
+              <Icons.dismiss className="size-[15px]" />
             </button>
             </Hint>
           )}
