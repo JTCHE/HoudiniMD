@@ -375,7 +375,9 @@ export default function Page() {
           {error?.missing ? (
             <NotFoundPage path={path} />
           ) : (
-            <main className="w-full min-w-0 px-page-x pt-7 pb-[calc(2.5rem+var(--spacing-statusbar))] print:p-0">
+            // A narrow page's breadcrumbs wrap, and fill the bar down to its
+            // foot: the title then comes close under them.
+            <main className="w-full min-w-0 px-page-x pt-7 pb-[calc(2.5rem+var(--spacing-statusbar))] @max-xl:pt-2 print:p-0">
               {error && <p className="text-sm text-muted-foreground">{error.message}</p>}
               {page && (
                 <article className="prose prose-neutral dark:prose-invert max-w-none">
