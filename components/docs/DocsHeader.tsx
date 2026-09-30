@@ -2,21 +2,11 @@
 
 import { LucideArrowUpRight } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useRef } from "react";
-import { HeaderSearchButton } from "./HeaderSearchButton";
-import type { SearchOverlayRef } from "./SearchOverlay";
+import { useEffect, useRef } from "react";
+import { SITE_NAME } from "@/lib/brand";
 
-interface DocsHeaderProps {
-  sourceUrl: string;
-  searchRef: React.RefObject<SearchOverlayRef>;
-}
-
-export function DocsHeader({ sourceUrl, searchRef }: DocsHeaderProps) {
+export function DocsHeader({ sourceUrl }: { sourceUrl: string }) {
   const header = useRef<HTMLElement>(null);
-
-  const handleSearchClick = useCallback(() => {
-    searchRef.current?.openSearch();
-  }, [searchRef]);
 
   // Publish the real header height. Anchor targets clear it via --header-h
   // (globals.css) — it changes with the font and the device, so no rem
@@ -53,17 +43,13 @@ export function DocsHeader({ sourceUrl, searchRef }: DocsHeaderProps) {
       ref={header}
       className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur print:static print:bg-background"
     >
-      <div className="mx-auto grid max-w-page grid-cols-[auto_1fr_auto] items-center gap-3 px-page-x py-3 text-xs text-muted-foreground">
+      <div className="mx-auto flex max-w-page justify-between items-center gap-3 px-page-x py-3 text-xs text-muted-foreground">
         <Link
           href="/"
           className="shrink-0 font-semibold text-foreground hover:opacity-70 transition-opacity"
         >
-          HoudiniMD
+          {SITE_NAME}
         </Link>
-
-        <div className="flex justify-center print:hidden">
-          <HeaderSearchButton onOpenSearch={handleSearchClick} />
-        </div>
 
         <div className="flex items-center justify-end gap-3 shrink-0 print:hidden">{externalLinks}</div>
       </div>

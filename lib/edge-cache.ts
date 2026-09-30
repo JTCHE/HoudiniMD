@@ -29,6 +29,7 @@
 import { wantsMarkdown } from "./wants-markdown";
 import { BUILD_STAMP } from "./build-stamp";
 import { NOTICE_VERSION } from "./notice-copy";
+import { platformForPath } from "./download";
 
 /** How long an entry lives when the answer asks for nothing longer. */
 const TTL_SECONDS = 3600;
@@ -69,7 +70,7 @@ function cacheablePath(p: string): boolean {
     p === "/api/search-index" ||
     p === "/api/search" ||
     p === "/api/index" ||
-    p === "/download"
+    platformForPath(p) !== null
   );
 }
 

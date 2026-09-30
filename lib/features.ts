@@ -1,0 +1,19 @@
+// Features whose front end ships ahead of the part that makes it work.
+//
+// Each one stays `false` until its other half is live. `scripts/check-gates.ts`
+// runs in the deploy and fails it when a switch is on and its `requires` does
+// not hold against the live release, so a button with nothing behind it cannot
+// reach production. Turn a switch on in the same change that meets its need.
+
+export const FEATURES = {
+  /** "Open in app" beside the download key. Needs an app release that registers the link scheme. */
+  openInApp: false,
+  /** The macOS download. Needs a `.dmg` on the latest release. */
+  macosDownload: false,
+} as const;
+
+/** What each switch needs from the latest GitHub release. */
+export const REQUIRES: Record<keyof typeof FEATURES, { asset?: string; minAppVersion?: string; why: string }> = {
+  openInApp: { minAppVersion: "0.1.0-beta.9", why: "the app release that registers the link scheme" },
+  macosDownload: { asset: ".dmg", why: "a macOS build on the release" },
+};

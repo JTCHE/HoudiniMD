@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 import Link from "next/link";
-import { SIDEFX_DOCS_ROOT } from "@/lib/houdini";
+import { REPO_URL, SITE_NAME } from "@/lib/brand";
 
 const DONATION_URL = "https://github.com/sponsors/JTCHE?frequency=one-time";
 
@@ -13,7 +13,7 @@ export function Footer({ className }: FooterProps) {
     <footer className={cn("border-t bg-background text-muted-foreground text-xs py-4 print:py-1.5", className)}>
       <div className="max-w-page mx-auto px-page-x">
         <div className="flex flex-wrap gap-x-0.5 md:gap-x-2 gap-y-1">
-          <span className="hidden print:inline font-semibold text-foreground/80">HoudiniMD</span>
+          <span className="hidden print:inline font-semibold text-foreground/80">{SITE_NAME}</span>
           <span
             className="hidden print:inline text-muted-foreground/40"
             aria-hidden
@@ -38,21 +38,7 @@ export function Footer({ className }: FooterProps) {
             ∙
           </span>
           <a
-            href={SIDEFX_DOCS_ROOT}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-foreground/80 hover:text-foreground transition-colors underline-offset-4 hover:underline"
-          >
-            <span>Docs &copy; SideFX</span>
-          </a>
-          <span
-            className="text-muted-foreground/40 print:hidden"
-            aria-hidden
-          >
-            ∙
-          </span>
-          <a
-            href="https://github.com/JTCHE/houdinimd"
+            href={REPO_URL}
             target="_blank"
             rel="noopener noreferrer"
             className="print:hidden text-foreground/80 hover:text-foreground transition-colors underline-offset-4 hover:underline"
@@ -87,7 +73,7 @@ export function Footer({ className }: FooterProps) {
           </Link>
         </div>
         <p className="mt-1.5 text-[11px] leading-tight text-muted-foreground/60">
-          HoudiniMD is an unofficial, independent project, and isn&apos;t affiliated with or endorsed by SideFX.
+          {SITE_NAME}{" "}is an unofficial, independent project, and isn&apos;t affiliated with or endorsed by SideFX.
         </p>
       </div>
     </footer>

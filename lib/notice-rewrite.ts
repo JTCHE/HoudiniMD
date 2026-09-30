@@ -79,7 +79,6 @@ export function rewriteNotice(response: Response): Response {
     .on(`[${SLOT}="body"]`, text(copy.body))
     .on(`[${SLOT}="submitLabel"]`, text(copy.submitLabel))
     .on(`[${SLOT}="signedLabel"]`, text(copy.signedLabel))
-    .on(`[${SLOT}="ctaLabel"]`, text(copy.ctaLabel))
     .on(`[${SLOT}="linkLabel"]`, {
       element(element) {
         element.setInnerContent(copy.linkLabel);
@@ -89,11 +88,6 @@ export function rewriteNotice(response: Response): Response {
     .on(`[${SLOT}="placeholder"]`, {
       element(element) {
         element.setAttribute("placeholder", copy.placeholder);
-      },
-    })
-    .on(`[${SLOT}="ctaHref"]`, {
-      element(element) {
-        element.setAttribute("href", copy.ctaHref);
       },
     })
     .transform(response);

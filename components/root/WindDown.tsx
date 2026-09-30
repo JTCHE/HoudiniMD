@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ControlButton } from "@/components/ui/control-button";
+import { DownloadKey } from "@/components/ui/download-key";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { DOC_LINK_CLASS_NAME } from "@/components/docs/DocLink";
@@ -65,43 +66,6 @@ function kind(): NoticeKind | undefined {
   return process.env.NODE_ENV === "development" ? NOTICE_KIND : undefined;
 }
 
-/** Windows. Not in lucide, which carries no brand marks. */
-function WindowsMark({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="currentColor"
-      aria-hidden="true"
-      className={className}
-    >
-      <path d="M3 5.6 10.4 4.6V11.4H3V5.6ZM11.6 4.4 21 3v8.4h-9.4V4.4ZM3 12.6h7.4v6.8L3 18.4v-5.8ZM11.6 12.6H21V21l-9.4-1.4v-7Z" />
-    </svg>
-  );
-}
-
-function GitHubMark({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="currentColor"
-      aria-hidden="true"
-      className={className}
-    >
-      <path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.61.07-.61 1 .07 1.53 1.03 1.53 1.03.9 1.53 2.36 1.09 2.93.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02a9.5 9.5 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0 0 12 2Z" />
-    </svg>
-  );
-}
-
-/** The platform does not change while the page is open, so nothing to watch. */
-function subscribeNothing() {
-  return () => {};
-}
-
-function readWindows() {
-  const data = (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData;
-  return /win/i.test(data?.platform ?? navigator.userAgent);
-}
-
 function saveState(next: { dismissed?: string; signed?: boolean }) {
   try {
     const saved = JSON.parse(localStorage.getItem(NOTICE_STATE_KEY) ?? "{}") as Record<string, unknown>;
@@ -133,12 +97,6 @@ export function WindDown({ variant = "banner" }: { variant?: "banner" | "bar" })
   const [email, setEmail] = useState("");
   const [state, setState] = useState<State>("idle");
   const [message, setMessage] = useState("");
-  // Windows is the prerendered answer, because the installer is the point of
-  // the notice and most readers are on Windows. Everybody else is corrected at
-  // hydration: `useSyncExternalStore` takes the server answer and the client
-  // answer as two snapshots, which is how React allows the two to differ.
-  const windows = useSyncExternalStore(subscribeNothing, readWindows, () => true);
-
   const live = kind();
   const text = copy();
   // No answer means this is the build's own render, and the build must draw
@@ -188,9 +146,6 @@ export function WindDown({ variant = "banner" }: { variant?: "banner" | "bar" })
   }
 
   if (closed) return null;
-
-  const ctaLabel = windows ? text.ctaLabel : text.altLabel;
-  const ctaHref = windows ? text.ctaHref : text.altHref;
 
   const card = (
     <aside
@@ -320,17 +275,10 @@ export function WindDown({ variant = "banner" }: { variant?: "banner" | "bar" })
           )}
 
           {showDownload && (
-            <ControlButton
-              href={ctaHref ?? "/download"}
-              icon={windows ? <WindowsMark className="size-4" /> : <GitHubMark className="size-4" />}
-              // `leading-none` stops the label's line box, which is taller than
-              // its glyphs, from adding half-leading at the top and the bottom
-              // only.
-              className="w-full justify-center px-md py-sm leading-none md:w-auto"
-              {...{ [BRANCH]: "download", [SLOT]: "ctaHref" }}
-            >
-              <span {...{ [SLOT]: "ctaLabel" }}>{ctaLabel}</span>
-            </ControlButton>
+            <DownloadKey
+              className="w-full md:w-auto"
+              {...{ [BRANCH]: "download" }}
+            />
           )}
 
           {variant === "bar" && (

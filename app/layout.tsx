@@ -1,5 +1,6 @@
 import { SITE_URL } from "@/lib/site";
 import { NOTICE_HEAD_SCRIPT } from "@/lib/notice";
+import { THEME_HEAD_SCRIPT } from "@/lib/theme";
 import type { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
 import Script from "next/script";
@@ -122,6 +123,7 @@ export default function RootLayout({
             already signed, never draws and never moves the page under them.
             Inline because a module loads too late to beat the paint. */}
         <script dangerouslySetInnerHTML={{ __html: NOTICE_HEAD_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: THEME_HEAD_SCRIPT }} />
       </head>
       <body>
         <ServiceWorkerRegistration />

@@ -6,6 +6,7 @@ import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import rehypeSlug from "rehype-slug";
 import { PageHeader } from "@/components/docs/PageHeader";
+import { DocTakedown } from "@/components/docs/DocTakedown";
 import { PrintPagination } from "@/components/docs/PrintPagination";
 import { TableOfContents } from "@/components/docs/TableOfContents";
 import { VisitRecorder } from "@/components/docs/VisitRecorder";
@@ -206,6 +207,14 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
   // same 500 a reader would have gotten; this only makes it visible.
   try {
     const { content: rawContent, data: frontmatter } = parseFrontmatter(rawMarkdown);
+    return (
+      <DocTakedown
+        slug={slugPath}
+        name={frontmatter.title ? decodeEntities(frontmatter.title) : (slug.at(-1) ?? "")}
+        nodeType={frontmatter.title ? frontmatter.nodeType : undefined}
+        sourceUrl={rawMarkdown.match(/\nsource:\s*(\S+)/)?.[1] ?? "https://www.sidefx.com/docs/houdini/"}
+      />
+    );
     const pageIcon = frontmatter.icon ? localIconUrl(frontmatter.icon) : undefined;
     const pageBanner = frontmatter.banner;
     const since = frontmatter.since;

@@ -67,6 +67,8 @@ export default async function BreadcrumbsAsync({ slug }: { slug: string }) {
   const parentSegments = rawSegments.filter(
     (label, i) => i === 0 || label.trim().toLowerCase() !== rawSegments[i - 1].trim().toLowerCase(),
   );
+  // The root crumb names the SideFX product and version ("Houdini 22.0").
+  if (/^houdini \d/i.test(parentSegments[0] ?? "")) parentSegments.shift();
 
   // On index pages the page title repeats the final breadcrumb — drop it so we
   // don't render "… > Houdini 21.0 > Houdini 21.0".

@@ -4,6 +4,10 @@
 
 /* Hover only where a pointer can actually hover, so a tap on a phone does not
    leave a chip or card stuck in its hover state until the next tap elsewhere. */
+/* The theme is the root's `data-theme`, as in the app, not the media query:
+   the reader's choice in the app on the landing page wins over the system. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 @custom-variant pointer-hover {
   @media (hover: hover) {
     &:hover {
@@ -15,7 +19,7 @@
 html {
   scrollbar-gutter: stable;
   background: var(--background);
-  color-scheme: light dark;
+  color-scheme: light;
 }
 
 @theme inline {
@@ -89,6 +93,7 @@ html {
      product, so it must not shift when the ramp flips. */
   --color-brand: var(--brand);
   --color-brand-bright: var(--brand-bright);
+  --color-brand-700: var(--brand-700);
   --color-brand-foreground: var(--brand-foreground);
   --color-brand-plate: var(--brand-plate);
 
@@ -202,8 +207,10 @@ html {
   --neutral-950: oklch(0.145 0 0);
 
   /* Brand — #f05f04 converted to OKLCH. Identical in both themes. */
-  --brand: oklch(0.664 0.195 43.1);
-  --brand-bright: oklch(0.71 0.19 43.1);
+  --brand: oklch(0.680 0.174 52);
+  --brand-bright: oklch(0.720 0.185 52);
+  /* Small brand text on a light surface: 4.6:1. */
+  --brand-700: oklch(0.575 0.147 52);
   --brand-foreground: oklch(0.985 0 0);
 
   /* Surfaces.
@@ -297,8 +304,11 @@ html {
   }
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
+:root {
+  /* `data-theme`, written before the first paint by `lib/theme.ts`. */
+  @variant dark {
+    color-scheme: dark;
+
     /* The ramp reverses. Everything expressed against it follows for free. */
     --neutral-0: oklch(0.145 0 0);
     --neutral-50: oklch(0.175 0 0);

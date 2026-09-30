@@ -35,11 +35,6 @@ export interface NoticeCopy {
   placeholder: string;
   submitLabel: string;
   signedLabel: string;
-  /** The download key. A reader who is not on Windows gets the `alt` pair. */
-  ctaLabel: string;
-  ctaHref: string;
-  altLabel: string;
-  altHref: string;
 }
 
 const WAITLIST: NoticeCopy = {
@@ -50,10 +45,6 @@ const WAITLIST: NoticeCopy = {
   placeholder: "you@studio.com",
   submitLabel: "Notify me",
   signedLabel: "You are on the list. One email at release.",
-  ctaLabel: "Download for Windows",
-  ctaHref: "/download",
-  altLabel: "View on GitHub",
-  altHref: "https://github.com/JTCHE/HoudiniMD",
 };
 
 const DOWNLOAD: NoticeCopy = {

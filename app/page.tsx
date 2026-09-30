@@ -1,142 +1,63 @@
-import { Suspense } from "react";
-import { Footer } from "@/components/Footer";
-import { BrandLogo } from "@/components/brand/BrandLogo";
-import { AsciiBackground } from "@/components/root/AsciiBackground";
-import { NoiseOverlay } from "@/components/root/NoiseOverlay";
-import { QuickLinks } from "@/components/root/QuickLinks";
-import { SearchField } from "@/components/root/search-field/SearchField";
-import { Carousel } from "@/components/root/carousel/Carousel";
-import { FeatureCards } from "@/components/root/feature-cards/FeatureCards";
-import { QUICK_LINKS, resolveCollection } from "@/lib/landing/collections";
+import { ArrowUpRight } from "lucide-react";
 import { ViewRecorder } from "@/components/ViewRecorder";
-import { WindDown } from "@/components/root/WindDown";
+import { AppIcon } from "@/components/landing/AppIcon";
+import { Showcase } from "@/components/landing/showcase/Showcase";
+import { ThemeToggle } from "@/components/landing/ThemeToggle";
+import { DownloadKey } from "@/components/ui/download-key";
+import { MCP_URL, REPO_URL, SITE_NAME } from "@/lib/brand";
 
-/**
- * The landing page is static except for one thing: which curated collection the
- * carousel shows. Rebuilding hourly rotates it without making every visit pay
- * for the index parse.
- */
-// Frozen with the doc route — see app/docs/[...slug]/page.tsx.
 export const revalidate = false;
 
-/**
- * Mirrors Carousel's real markup (label row + one row of chip-shaped
- * placeholders) so the reserved height matches what streams in exactly,
- * instead of guessing a pixel value that drifts out of sync with the real
- * component and causes a slight shift when it resolves.
- */
-function CarouselSkeleton() {
-  return (
-    <div className="flex flex-col gap-xs md:gap-ms">
-      <div
-        className="h-[0.75lh] w-32 animate-pulse rounded bg-muted"
-        aria-hidden="true"
-      />
-      <div className="flex gap-sm -mx-ms">
-        {Array.from({ length: 6 }, (_, index) => (
-          <div
-            key={index}
-            className="inline-flex items-center gap-sm rounded-lg border border-hairline bg-surface px-ms py-sm"
-            aria-hidden="true"
-          >
-            <span className="size-md shrink-0 animate-pulse rounded-xs bg-muted" />
-            <span className="h-[0.75lh] w-12 animate-pulse rounded bg-muted" />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/**
- * The carousel is the only part that reads the search index, so it is the only
- * part behind a Suspense boundary. Everything above it — the mark, the type,
- * the quick links, the search field shell — is in the first byte.
- */
-async function CarouselSection() {
-  try {
-    const collection = await resolveCollection(Math.floor(Date.now() / 3_600_000));
-    return (
-      <>
-        {/* Icons are only known once the collection resolves, so hint the
-            browser the moment we have the URLs rather than waiting for
-            Carousel to render — Next hoists <link> tags anywhere in the tree
-            to <head>, so this fetch overlaps the rest of the streamed page. */}
-        {collection?.chips.map((chip) => (
-          <link
-            key={chip.icon}
-            rel="preload"
-            as="image"
-            href={chip.icon}
-          />
-        ))}
-        <Carousel collection={collection} />
-      </>
-    );
-  } catch {
-    return null;
-  }
-}
-
+/** One screen, no scroll: what the app is, how to get it, and the app itself.
+    The header sizes by the screen's height, so a short screen keeps its room
+    for the app. */
 export default function Home() {
   return (
-    <main className="relative flex min-h-dvh flex-col overflow-hidden">
-      {/* Fetch the fixed quick-link icons with the first page resources. */}
-      {QUICK_LINKS.map((link) => (
-        <link
-          key={link.icon}
-          rel="preload"
-          as="image"
-          href={link.icon}
-        />
-      ))}
-
-      {/* The landing page is counted like any doc page, and a reader who comes
-          back to it mid-session arrives out of the router cache — so it has to
-          report itself. Renders nothing. */}
+    <main className="relative flex h-dvh flex-col overflow-hidden">
       <ViewRecorder path="/" />
+      <ThemeToggle className="absolute top-sm right-sm z-10" />
 
-      <AsciiBackground />
-
-      <NoiseOverlay />
-
-      <div className="relative flex flex-1 flex-col justify-center py-xl lg:py-lg">
-        <div className="mx-auto flex w-full max-w-page flex-col gap-md px-page-x md:gap-lg">
-          {/* Above the title, not under it. The site closes, and that outranks
-              the description of what the site is. */}
-          <WindDown />
-
-          <header className="flex flex-col gap-2xs">
-            <h1 className="flex items-center gap-sm text-display font-semibold text-foreground">
-              HoudiniMD
-              <BrandLogo className="h-[0.92em] w-auto" />
-            </h1>
-            <p className="text-lede text-muted-foreground">A clean Markdown mirror of the Houdini docs.</p>
-          </header>
-
-          {/* Order is a real design decision, not a discrepancy: a phone reader
-              wants the field under their thumb before the categories; a desktop
-              reader scans the categories first and drops to the field. */}
-          <div className="order-2 lg:order-1">
-            <QuickLinks />
+      <div className="relative mx-auto flex min-h-0 w-full max-w-[84rem] flex-1 flex-col items-center gap-lg px-page-x pt-lg pb-md">
+        <header className="flex shrink-0 flex-col items-center text-center">
+          <h1 className="flex items-center gap-[0.2em] text-[clamp(34px,6vh,50px)] leading-none max-sm:text-[36px] font-semibold tracking-[-0.04em] text-foreground">
+            <AppIcon className="size-[1.16em]" />
+            {SITE_NAME}
+          </h1>
+          <p className="mt-[clamp(10px,1.8vh,18px)] text-[clamp(19px,3vh,27px)] leading-tight max-sm:text-[19px] font-semibold tracking-[-0.025em] text-foreground">
+            The Houdini docs, instant and offline.
+          </p>
+          <p className="mt-xs max-w-[34rem] text-[clamp(15px,2vh,17px)] leading-normal max-sm:text-[14px] text-muted-foreground">
+            Houdini&apos;s help takes seconds to open a page. This free,{" "}
+            <a
+              href={REPO_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="text-foreground underline decoration-hairline underline-offset-4 transition-colors hover:decoration-foreground"
+            >
+              open-source
+            </a>{" "}
+            app opens the same docs, from your install, in a tenth of a second.
+          </p>
+          <div className="mt-[clamp(12px,2.2vh,22px)] flex flex-wrap items-center justify-center gap-x-md gap-y-sm">
+            <DownloadKey />
+            <a
+              href={MCP_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="group flex items-center gap-1 text-label font-medium text-muted-foreground transition-colors hover:text-foreground"
+            >
+              Connect your agent
+              <ArrowUpRight className="size-3.5 transition-transform group-hover:translate-x-px group-hover:-translate-y-px" />
+            </a>
           </div>
-          <div className="order-1 lg:order-2">
-            <SearchField />
-          </div>
+        </header>
 
-          <div className="order-3">
-            <Suspense fallback={<CarouselSkeleton />}>
-              <CarouselSection />
-            </Suspense>
-          </div>
-
-          <div className="order-4">
-            <FeatureCards />
-          </div>
-        </div>
+        <Showcase />
       </div>
 
-      <Footer className="relative" />
+      <footer className="relative shrink-0 pb-sm text-center text-caption text-muted-foreground">
+        {`${SITE_NAME} is an unofficial, independent project, and isn't affiliated with or endorsed by SideFX.`}
+      </footer>
     </main>
   );
 }

@@ -60,6 +60,8 @@ import { resolveSideFXUrl } from "./scraping/resolve";
 import { PageNotFoundError } from "./scraping/scraper";
 import { searchDocs, SearchUnavailableError } from "./search/server";
 import { pageMeta, ogParams } from "./og/params";
+import { PLATFORMS, platformForPath, type Platform } from "./download";
+import { RELEASES_API, REPO_URL } from "./brand";
 
 /** `segmentData` stores this one as null when it equals `rsc`. See lib/cache/compressed-r2-cache.ts. */
 const FULL_SEGMENT_KEY = "/_full";
@@ -192,7 +194,7 @@ type Ask =
   | { kind: "meta"; slug: string }
   | { kind: "card"; key: string }
   | { kind: "missing"; page: boolean }
-  | { kind: "download" }
+  | { kind: "download"; platform: Platform }
   | { kind: "moved"; to: string }
   | { kind: "alias"; slug: string; markdown: boolean; search: string }
   | { kind: "search"; q: string; limit: number; category?: string }
@@ -263,7 +265,8 @@ function read(request: Request, url: URL): Ask | null {
   // The installer address never varies on a query, and a download link is
   // exactly the kind that arrives wearing one — a campaign tag, a referrer
   // mark. Read it in front of the gate below or those asks pay a bootstrap.
-  if (url.pathname === "/download") return { kind: "download" };
+  const platform = platformForPath(url.pathname);
+  if (platform) return { kind: "download", platform };
 
   // A prerendered answer never varies on a query string, and the keys read
   // below carry none. The one exception is `_rsc`, the cache buster Next puts
@@ -524,11 +527,11 @@ async function missing(page: boolean, cache: Bucket): Promise<Response | null> {
  * cost no subrequest at all. Five minutes is the delay between publishing a
  * release and the link pointing at it.
  */
-const RELEASES = "https://api.github.com/repos/JTCHE/HoudiniMD/releases/latest";
+const RELEASES = `${RELEASES_API}/latest`;
 /** Where the reader lands if GitHub cannot be asked. Never a dead link. */
-const RELEASES_PAGE = "https://github.com/JTCHE/HoudiniMD/releases/latest";
+const RELEASES_PAGE = `${REPO_URL}/releases/latest`;
 
-async function download(): Promise<Response> {
+async function download(platform: Platform): Promise<Response> {
   let to = RELEASES_PAGE;
   try {
     const response = await fetch(RELEASES, {
@@ -540,7 +543,7 @@ async function download(): Promise<Response> {
         assets?: { name?: string; browser_download_url?: string }[];
       };
       const installer = release.assets?.find(
-        (asset) => asset.name?.endsWith("-setup.exe") && asset.browser_download_url,
+        (asset) => asset.name?.endsWith(PLATFORMS[platform].asset) && asset.browser_download_url,
       );
       if (installer?.browser_download_url) to = installer.browser_download_url;
     }
@@ -687,7 +690,7 @@ export async function storedAnswer(
       headers: { location: ask.to, "cache-control": "public, max-age=3600, s-maxage=86400" },
     });
   }
-  if (ask.kind === "download") return download();
+  if (ask.kind === "download") return download(ask.platform);
   if (ask.kind === "alias") return aliasAnswer(ask.slug, ask.markdown, ask.search, content);
   if (ask.kind === "search") return search(ask, publicUrl);
   if (ask.kind === "notallowed") {

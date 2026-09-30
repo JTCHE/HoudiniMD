@@ -1,0 +1,7 @@
+{
+  "nodes/sop/scatter": { "title": "Scatter", "summary": "Places points at random over a surface, or inside a volume." },
+  "nodes/sop/copytopoints": { "title": "Copy to Points", "summary": "Puts a copy of one geometry on every point of another." },
+  "nodes/sop/attribwrangle": { "title": "Attribute Wrangle", "summary": "Runs a VEX snippet on every point, primitive or vertex." },
+  "vex/functions/noise": { "title": "noise", "summary": "Smooth noise in one to four dimensions, between 0 and 1." },
+  "nodes/sop/box": { "title": "Box", "summary": "Makes a box, or a box that fits around its input." }
+}

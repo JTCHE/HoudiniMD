@@ -35,6 +35,15 @@ same CI image as `deploy`, so it makes the same hash and needs no cache sync.
 Nothing triggers it automatically — run it by hand when you want a version
 uploaded without a release.
 
+## Half-built features
+
+A control whose other half is not live yet (an app release, a build on the
+release page) sits behind a switch in `lib/features.ts`, off. `bun run deploy`
+runs `scripts/check-gates.ts` first. It fails the deploy while a switch is on
+and the latest GitHub release does not meet that switch's need, so nothing
+half-built reaches production. Turn a switch on in the same change that meets
+its need.
+
 ## Reading a build
 
 A finished build reports status `stopped`, not `success`. Read the log to tell a
