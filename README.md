@@ -1,6 +1,6 @@
 # HoudiniMD
 
-![The SideFX Box node docs page (left) beside HoudiniMD's clean rendering (right)](public/cover.png)
+![The HoudiniMD home page, with the app open on a sample page](public/cover.png)
 
 ## A blazing-fast, clutter free, clean Markdown mirror of the Houdini docs.<br>Built for humans to read, and agents to understand.<br><br>
 
