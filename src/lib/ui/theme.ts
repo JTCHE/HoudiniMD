@@ -54,6 +54,12 @@ export function startTheme() {
     paint(system());
     for (const notify of listeners) notify();
   });
+  // Another window of the same origin switched: this one follows.
+  window.addEventListener("storage", (event) => {
+    if (event.key !== KEY) return;
+    paint(current());
+    for (const notify of listeners) notify();
+  });
 }
 
 /** The other theme, from now on. */
