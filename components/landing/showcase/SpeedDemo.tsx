@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { RotateCcw } from "lucide-react";
-import type { DemoProps } from "@/components/landing/showcase/Showcase";
+import { Gauge } from "lucide-react";
+import { enter, usePlayed, type DemoProps } from "@/components/landing/showcase/layout";
 import { SITE_NAME } from "@/lib/brand";
 import { cn } from "@/lib/utils";
 
@@ -17,130 +16,171 @@ const ROWS = [
   { page: "VEX noise()", server: 0.96, app: 0.12 },
   { page: "FLIP Tank tool", server: 1.46, app: 0.19 },
 ];
-/** The headline: the median of the rows' own ratios, so it is the rows' claim. */
-const MEDIAN = ROWS.map((r) => r.server / r.app).sort((a, b) => a - b)[ROWS.length >> 1];
+
+const median = (values: number[]) => [...values].sort((a, b) => a - b)[values.length >> 1];
+/** Every number in the headline comes from the rows. */
+const SERVER = median(ROWS.map((r) => r.server));
+const APP = median(ROWS.map((r) => r.app));
+const FASTER = median(ROWS.map((r) => r.server / r.app));
 /** A phone has room for three rows. */
 const PHONE_ROWS = 3;
-/** Seconds the widest bar stands for. */
-const SPAN = 4.4;
-/** A character of the 15px mono face, and the room a row keeps for its label,
-    its time and its padding, in the tab's pixels. */
-const CELL = 9.2;
-const AROUND = { desk: 400, phone: 110 };
-const NOISE = "+×*:=#%";
 
-/** A bar drawn in characters: settled cells, and a live edge of noise while
-    it grows. */
-function bar(seconds: number, now: number, fill: string, width: number) {
-  const done = Math.min(seconds, now);
-  const cells = Math.max(1, Math.round((done / SPAN) * width));
-  const growing = now < seconds;
-  let out = fill.repeat(Math.max(0, cells - (growing ? 3 : 0)));
-  if (growing) for (let i = 0; i < 3; i++) out += NOISE[(Math.random() * NOISE.length) | 0];
-  return out;
+/** A time, its unit in the number's own colour, faded. */
+const seconds = (value: number) => (
+  <>
+    {value.toFixed(2)}
+    <span className="opacity-50">s</span>
+  </>
+);
+
+/** The race's lanes, top to bottom. Each runs its whole course before the
+    next starts, so the order here is the order of the race. */
+const LANES = [
+  { label: SITE_NAME, time: APP, brand: true },
+  { label: "Houdini's help", time: SERVER, brand: false },
+];
+/** A lane's run, in seconds from the start of the race: a longer time takes
+    longer to draw, and the next lane waits a beat after it. */
+const RUNS = LANES.reduce<{ from: number; for: number }[]>((runs, lane) => {
+  const last = runs.at(-1);
+  return [...runs, { from: last ? last.from + last.for + 0.3 : 0, for: 0.8 + (0.6 * lane.time) / SERVER }];
+}, []);
+/** The race waits for the lanes to come in, in ms. */
+const START = 700;
+const END = Math.max(...RUNS.map((run) => run.from + run.for));
+/** The race clock, in seconds, from the tab's clock. */
+const raceTime = (ms: number) => Math.min(END, Math.max(0, ms - START) / 1000);
+
+/** Fast from the first frame and slow to rest: a count leaves 0 at once, and
+    the bar and the count share it, so the number is always the bar's. */
+const easeOut = (t: number) => 1 - (1 - Math.min(1, Math.max(0, t))) ** 4;
+
+/** One side of the race: a pill that fills, its time counting at its end. */
+function Lane({
+  label,
+  time,
+  now,
+  run,
+  order,
+  brand,
+}: {
+  label: string;
+  time: number;
+  now: number;
+  run: { from: number; for: number };
+  order: number;
+  brand?: boolean;
+}) {
+  const reach = easeOut((now - run.from) / run.for);
+  return (
+    <div
+      style={enter(order)}
+      className="enter grid grid-cols-[150px_1fr] items-center gap-4 max-sm:grid-cols-[110px_1fr] max-sm:gap-3"
+    >
+      <span className={cn("text-[15px]", brand ? "font-medium text-foreground" : "text-muted-foreground")}>{label}</span>
+      <div
+        className="relative h-9 max-sm:h-6"
+        // The pill's full length. The time needs about 64px past the longest
+        // one. The least is a short pill, not a dot, and no longer than it
+        // must be: a longer one would tell a smaller lead.
+        style={{ "--bar": `max(36px, calc((100% - 76px) * ${time / SERVER}))` } as React.CSSProperties}
+      >
+        {/* The pill at its full length is the mask, and draws nothing. The
+            fill inside starts a whole pill left of it, and its round end
+            comes in through the mask's round end: it grows, with no pop. */}
+        <div className="h-full w-(--bar) overflow-hidden rounded-full">
+          <div
+            className={cn("-ml-[100%] h-full rounded-full", brand ? "bg-brand" : "bg-foreground/15")}
+            style={{ width: `${100 * (1 + reach)}%` }}
+          />
+        </div>
+        {/* Nothing before its turn: a time of 0 tells nothing. */}
+        <span
+          className={cn(
+            "absolute top-1/2 -translate-y-1/2 text-[15px] tabular-nums transition-opacity duration-(--duration-fast)",
+            brand ? "font-medium text-brand-700 dark:text-brand-bright" : "text-foreground",
+            reach <= 0 && "opacity-0",
+          )}
+          style={{ left: `calc(var(--bar) * ${reach} + 12px)` }}
+        >
+          {seconds(time * reach)}
+        </span>
+      </div>
+    </div>
+  );
 }
 
-export function SpeedDemo({ base }: DemoProps) {
+export function SpeedDemo({ base, clock }: DemoProps) {
   const { phone } = base;
-  // A short window packs the rows closer, so all five fit.
+  // A short window packs the parts closer, so the whole table fits.
   const short = !phone && base.h < 680;
-  const width = Math.floor((base.w - (phone ? AROUND.phone : AROUND.desk)) / CELL);
   const rows = phone ? ROWS.slice(0, PHONE_ROWS) : ROWS;
-  // The race clock, in seconds since the press.
-  const [now, setNow] = useState(0);
-  const [hover, setHover] = useState<number | null>(null);
-  const [run, setRun] = useState(0);
-  const started = useRef(0);
-
-  useEffect(() => {
-    if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      setNow(SPAN);
-      return;
-    }
-    setNow(0);
-    let frame = 0;
-    const tick = (time: number) => {
-      started.current ||= time;
-      const seconds = (time - started.current) / 1000;
-      setNow(seconds);
-      if (seconds < SPAN) frame = requestAnimationFrame(tick);
-    };
-    const delay = setTimeout(() => (frame = requestAnimationFrame(tick)), 400);
-    return () => {
-      clearTimeout(delay);
-      cancelAnimationFrame(frame);
-      started.current = 0;
-    };
-  }, [run]);
-
-  const row = hover === null ? null : ROWS[hover];
+  const played = usePlayed(clock, raceTime);
+  // Less motion: the race as it ends.
+  const now = matchMedia("(prefers-reduced-motion: reduce)").matches ? END : played;
 
   return (
-    <div className={cn("flex h-full flex-col", phone ? "px-6 pt-5 pb-4" : short ? "px-16 pt-9 pb-6" : "px-16 pt-14 pb-10")}>
-      <div className={cn("flex justify-between", phone ? "flex-col gap-5" : "items-end gap-10")}>
-        <div>
-          <p className="font-mono text-[13px] tracking-wide text-muted-foreground uppercase">[ F1 → a page you can read ]</p>
-          <h3 className={cn("mt-4 leading-none font-semibold tracking-tight text-foreground", phone ? "text-[30px] leading-tight" : "text-[44px]")}>
-            <span className="text-brand tabular-nums">{(row ? row.server / row.app : MEDIAN).toFixed(1)}×</span>{" "}
-            faster than Houdini&apos;s own help
-          </h3>
-          <p className="mt-3 text-[16px] text-muted-foreground">
-            {row
-              ? `${row.page}: ${row.server.toFixed(2)} s against ${row.app.toFixed(2)} s.`
-              : `Houdini's help pane, pointed at ${SITE_NAME} instead of its own help server.`}
+    <div className={cn("flex h-full flex-col", phone ? "gap-5 px-5 py-6" : short ? "gap-6 px-14 py-8" : "gap-9 px-14 py-12")}>
+      <div
+        style={enter(0)}
+        className="enter"
+      >
+        <p className="flex items-center gap-2 text-[14px] text-muted-foreground">
+            <Gauge
+              className="size-4"
+              strokeWidth={1.5}
+            />
+            F1 in Houdini&apos;s help pane
           </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setRun((n) => n + 1)}
-          className="group flex shrink-0 cursor-pointer items-center gap-2 self-start rounded-full border border-hairline px-4 py-2 text-[14px] text-muted-foreground transition-colors pointer-hover:text-foreground"
-        >
-          <RotateCcw className="size-3.5 transition-transform duration-300 group-hover:-rotate-90" />
-          Replay
-        </button>
+          <p className={cn("mt-3 max-w-[720px] leading-snug tracking-tight text-muted-foreground", phone ? "text-[21px]" : "text-[30px]")}>
+            <span className="font-semibold text-foreground">{FASTER.toFixed(1)}× faster</span>{" "}
+            than Houdini&apos;s own help server.
+          </p>
       </div>
 
-      <div
-        className={cn("flex flex-col", phone ? "mt-3 gap-0" : short ? "mt-5 gap-0.5" : "mt-12 gap-2")}
-        onPointerLeave={() => setHover(null)}
-      >
-        {rows.map((r, i) => (
-          <div
-            key={r.page}
-            onPointerEnter={() => setHover(i)}
-            className={cn(
-              "grid cursor-default items-start rounded-lg transition-[background-color,opacity]",
-              phone ? "gap-1 px-2 py-2" : cn("grid-cols-[180px_1fr] gap-6 px-4", short ? "py-1.5" : "py-3"),
-              hover === i && "bg-foreground/[0.04]",
-              hover !== null && hover !== i && "opacity-40",
-            )}
-          >
-            <span className="text-[16px] leading-[22px] font-medium text-foreground">{r.page}</span>
-            <div className="flex flex-col gap-1 font-mono text-[15px] leading-[22px] whitespace-pre">
-              <div className="flex gap-3">
-                <span className="text-muted-foreground">{bar(r.server, now, "=", width)}</span>
-                <span className="text-muted-foreground tabular-nums">{Math.min(r.server, now).toFixed(2)} s</span>
-              </div>
-              <div className="flex gap-3">
-                <span className="text-brand">{bar(r.app, now, "#", width)}</span>
-                <span className="font-medium text-brand tabular-nums">{Math.min(r.app, now).toFixed(2)} s</span>
-              </div>
-            </div>
-          </div>
+      <div className="flex flex-col gap-3">
+        {LANES.map((lane, i) => (
+          <Lane
+            key={lane.label}
+            {...lane}
+            now={now}
+            run={RUNS[i]}
+            order={i + 1}
+          />
         ))}
       </div>
 
-      <div className={cn("mt-auto flex justify-between gap-2 font-mono text-[12px] text-muted-foreground", phone ? "flex-col" : "items-center")}>
-        <span className="flex items-center gap-5">
-          <span>
-            <span>===</span>{" "}Houdini&apos;s help server
-          </span>
-          <span>
-            <span className="text-brand">###</span>{" "}{SITE_NAME}
-          </span>
-        </span>
-        <span>Houdini 22.0.368 · the same machine · median of 5 presses per page</span>
-      </div>
+      <table
+        style={enter(3)}
+        className="enter w-full border-collapse text-[15px] tabular-nums">
+        <thead>
+          <tr className="border-b border-hairline text-left text-[13px] text-muted-foreground">
+            <th className="py-2 font-normal">Page</th>
+            <th className="py-2 text-right font-normal">Houdini&apos;s help</th>
+            <th className="py-2 text-right font-normal">{SITE_NAME}</th>
+            {!phone && <th className="py-2 text-right font-normal">Faster</th>}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr
+              key={r.page}
+              className="border-b border-hairline/60 transition-colors last:border-0 hover:bg-foreground/[0.03]"
+            >
+              <td className="py-2 text-foreground">{r.page}</td>
+              <td className="py-2 text-right text-muted-foreground">{seconds(r.server)}</td>
+              <td className="py-2 text-right font-medium text-brand-700 dark:text-brand-bright">{seconds(r.app)}</td>
+              {!phone && <td className="py-2 text-right text-foreground">{(r.server / r.app).toFixed(1)}×</td>}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <p
+        style={enter(4)}
+        className="enter mt-auto text-[12px] text-muted-foreground">
+        Median of 5 presses of F1. Houdini 22.0.368. Measured on 1 machine.
+      </p>
     </div>
   );
 }

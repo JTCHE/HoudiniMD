@@ -5,7 +5,11 @@ interface KeycapProps {
   className?: string;
 }
 
-/** A physically-raised key. The one source of truth for a key in the landing page. */
+/** The small key of a hint row: the status bar and the search overlay's footer. */
+export const SMALL_KEY = "rounded-md px-sm py-xs text-caption leading-none";
+
+/** A physically-raised key: the app's own (`src/components/ui/Keycap.tsx`), so a key
+    on the page is the key in the app. */
 export function Keycap({ children, className }: KeycapProps) {
   return (
     <span

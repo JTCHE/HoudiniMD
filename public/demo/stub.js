@@ -44,18 +44,75 @@
   /* The data. */
   const json = (path) => fetch(BASE + path).then((answer) => answer.json());
   let titles = null;
-  /** The title list, with a line under the titles this site wrote one for. */
+  /** The title list, with a line under the titles this site wrote one for,
+      and a stand-in row for every page it left out (`counts.json`), so the
+      sidebar counts what an install holds. A stand-in is never drawn: its
+      folder is shut, see `shut`. */
   const allTitles = () =>
-    (titles ??= Promise.all([json("titles.json"), json("pages/summaries.json"), json("pages/index.json")]).then(
-      ([all, lines, pages]) =>
-        all.map((row) => {
-          const summary = pages[row.path]?.summary ?? lines[row.path];
-          return summary ? { ...row, summary } : row;
-        }),
-    ));
+    (titles ??= Promise.all([
+      json("titles.json"),
+      json("pages/summaries.json"),
+      json("pages/index.json"),
+      json("counts.json"),
+    ]).then(([all, lines, pages, counts]) => {
+      const rows = all.map((row) => {
+        const summary = pages[row.path]?.summary ?? lines[row.path];
+        return summary ? { ...row, summary } : row;
+      });
+      let n = 0;
+      for (const [key, count] of Object.entries(counts)) {
+        const [branch, ...place] = key.split("|");
+        for (let i = 0; i < count; i++) {
+          // A long path of blanks: a search that reaches a stand-in at all
+          // (by its section) ranks it after every real page, and `hide`
+          // takes it off the list.
+          rows.push({ path: `${branch}/${STAND_IN}${n++}`, title: STAND_IN, place: place.length ? place : undefined, standIn: true });
+        }
+      }
+      open = new Set([
+        ...OPEN,
+        ...all.flatMap((row) => row.place ?? []),
+        ...all.filter((row) => /^[^/]+\/index$/.test(row.path)).map((row) => row.title),
+      ]);
+      return rows;
+    }));
+
+  /* The folders the tour opens, by the label the sidebar gives them: the
+     groups, and the branches that hold a page this site keeps. The app names
+     these two itself (`src/lib/landing/tree.ts`). Every other folder holds
+     stand-ins only, and a press on it does nothing. */
+  const OPEN = ["Nodes", "Languages", "Learn", "Reference", "Geometry — SOP", "VEX"];
+  let open = new Set(OPEN);
+  /** The title and path mark of a stand-in: blanks nobody types. */
+  const STAND_IN = "⠀".repeat(24);
+  // A search result that is a stand-in draws as no row.
+  new MutationObserver(() => {
+    for (const row of document.querySelectorAll("button")) {
+      if (row.textContent.startsWith(STAND_IN) && row.style.display !== "none") row.style.display = "none";
+    }
+  }).observe(document, { subtree: true, childList: true });
+
+  const shut = (event) => {
+    if (event.type === "keydown" && event.key !== "Enter" && event.key !== " ") return;
+    const row = event.target.closest?.('button[aria-expanded="false"]');
+    const label = row?.querySelector("span.truncate")?.textContent?.trim();
+    if (!label || open.has(label)) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  };
+  for (const type of ["pointerdown", "mousedown", "click", "keydown"]) addEventListener(type, shut, true);
   let written = null;
-  /** The pages this site wrote: path to { title, summary, since }. */
+  /** The pages this site wrote: path to { title, summary }. */
   const writtenPages = () => (written ??= json("pages/index.json"));
+  /** A written page's Markdown, read once. The few pages are read as the app
+      starts: a page the tour opens then draws in the frame the search closes
+      in, not a round trip later. */
+  const bodies = new Map();
+  const markdownOf = (path) => {
+    if (!bodies.has(path)) bodies.set(path, fetch(`${BASE}pages/${path}.md`).then((answer) => answer.text()));
+    return bodies.get(path);
+  };
+  void writtenPages().then((mine) => Object.keys(mine).forEach(markdownOf));
 
   const INSTALL = {
     version: "21.0.829",
@@ -63,6 +120,10 @@
     help: "C:\\Program Files\\Side Effects Software\\Houdini 21.0.829\\houdini\\help",
     packages: [],
   };
+
+  /** On top of every page this site wrote, so no reader takes it for SideFX's. */
+  const SAMPLE =
+    "> [!NOTE]\n>\n> This is a sample page, written for this site. The app shows the official documentation, from your local install.\n\n";
 
   const settings = new Map([["onboarded", "done"]]);
   const recents = [];
@@ -94,14 +155,12 @@
     const root = path.slice(0, -"index".length);
     const folders = new Map();
     for (const row of all) {
-      if (!row.path.startsWith(root) || row.path.endsWith("/index")) continue;
+      if (row.standIn || !row.path.startsWith(root) || row.path.endsWith("/index")) continue;
       const folder = row.place?.join(" › ") ?? "";
       if (!folders.has(folder)) folders.set(folder, []);
       folders.get(folder).push(`- [${row.title}](/${row.path})`);
     }
-    const markdown = [...folders]
-      .map(([folder, links]) => (folder ? `## ${folder}\n\n` : "") + links.join("\n"))
-      .join("\n\n");
+    const markdown = [...folders].map(([folder, links]) => (folder ? `## ${folder}\n\n` : "") + links.join("\n")).join("\n\n");
     return {
       path,
       name: hit.title,
@@ -112,7 +171,9 @@
   }
 
   async function page({ path }) {
-    const clean = String(path).replace(/^\/+|\/+$/g, "").replace(/#.*$/, "");
+    const clean = String(path)
+      .replace(/^\/+|\/+$/g, "")
+      .replace(/#.*$/, "");
     const [all, mine] = await Promise.all([allTitles(), writtenPages()]);
     const hit = all.find((row) => row.path === clean);
     const own = mine[clean];
@@ -121,14 +182,13 @@
       if (!hit) throw new Error(`missing: ${clean}`);
       return stand(hit, clean);
     }
-    const markdown = await fetch(`${BASE}pages/${clean}.md`).then((answer) => answer.text());
+    const markdown = await markdownOf(clean);
     return {
       path: clean,
       name: own.title,
       nodeType: hit?.nodeType ?? undefined,
       summary: own.summary,
-      since: own.since,
-      markdown,
+      markdown: SAMPLE + markdown,
       version: INSTALL.version,
       nodeVersions: [],
     };
@@ -146,7 +206,7 @@
     const [all, mine] = await Promise.all([allTitles(), writtenPages()]);
     const hits = [];
     for (const [path, own] of Object.entries(mine)) {
-      const text = await fetch(`${BASE}pages/${path}.md`).then((answer) => answer.text());
+      const text = await markdownOf(path);
       const sections = text.split(/\n(?=## )/);
       const headings = [];
       let score = 0;
@@ -193,7 +253,10 @@
     current_install: () => INSTALL,
     available_installs: () => [],
     houdini_releases: () => [],
-    index_status: () => ({ build: INSTALL.version, pages: 11296, total: 11296, done: true, wrote: false }),
+    index_status: async () => {
+      const pages = (await allTitles()).length;
+      return { build: INSTALL.version, pages, total: pages, done: true, wrote: false };
+    },
     titles: () => allTitles(),
     search,
     page,

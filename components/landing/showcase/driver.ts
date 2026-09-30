@@ -17,6 +17,10 @@ export class Stopped extends Error {}
 export interface Pointer {
   /** Moves the drawn pointer to a point in the app's own pixels. */
   move(x: number, y: number, ms: number): void;
+  /** Where the pointer is drawn now: a scene starts where the last left it. */
+  where(): { x: number; y: number };
+  /** Takes the shape of the app's own cursor there: its CSS `cursor`. */
+  look(cursor: string): void;
   press(down: boolean): void;
   show(visible: boolean): void;
 }
@@ -58,12 +62,16 @@ export async function timeOpen(
   return painted && Math.max(1, Math.round(painted - (start?.() ?? begun)));
 }
 
+/** How much of a part must show, in px, for the pointer to take it where it
+    is: less, and the page scrolls it into view first. */
+const REACH = 24;
+
 /** The controls the app acts on at the press (`src/lib/ui/press.ts`): they get
     no click event of their own, or they would act twice. */
 const CONTROLS = 'a[href], button, [role="button"]';
 
 export class Driver {
-  private at = { x: 600, y: 420 };
+  private at: { x: number; y: number };
   private hovered: Element | null = null;
   private pressedAt = 0;
 
@@ -74,7 +82,11 @@ export class Driver {
     private signal: AbortSignal,
     /** Resolves while the scene may run; a new promise while it is held. */
     private gate: () => Promise<void>,
-  ) {}
+  ) {
+    // A move's time comes from its length, so it starts from where the
+    // pointer really is.
+    this.at = pointer.where();
+  }
 
   get doc() {
     return this.frame.contentDocument!;
@@ -150,29 +162,90 @@ export class Driver {
     el.dispatchEvent(new Kind(type, init));
   }
 
+  /** The part of the page a reader sees whole, top and bottom, for `el` on
+      a page: under the page's bar, which stays on top as it scrolls, and
+      above the fade that `FRAME_STYLE` puts on the last 110px. */
+  private band(el: Element) {
+    const shell = el.closest(".docs-shell");
+    if (!shell) return null;
+    const view = shell.getBoundingClientRect();
+    const bar = shell.querySelector(".page-bar-scrim")?.getBoundingClientRect().bottom ?? view.top;
+    return { shell, top: bar + 16, bottom: view.bottom - 120 };
+  }
+
+  /** Scrolls the page, as a reader would, when too little of `el` is in
+      view to point at: a short window, as on a phone, holds only the top of
+      a page, and a step below it would happen out of sight. What shows is
+      not scrolled to: the reader is reading it. */
+  private async reveal(el: Element) {
+    const band = this.band(el);
+    if (!band) return;
+    const box = el.getBoundingClientRect();
+    if (Math.min(box.bottom, band.bottom) - Math.max(box.top, band.top) >= Math.min(REACH, box.height)) return;
+    // As little as it takes: the page keeps as much of what was in view.
+    const by = box.top < band.top ? box.top - band.top : Math.min(box.bottom - band.bottom, box.top - band.top);
+    if (Math.abs(by) < 4) return;
+    let ended = false;
+    band.shell.addEventListener("scrollend", () => (ended = true), { once: true });
+    band.shell.scrollBy({ top: by, behavior: "smooth" });
+    // Until the scroll ends; an engine with no `scrollend` waits the most a
+    // smooth scroll takes.
+    for (let waited = 0; !ended && waited < 700; waited += 50) await this.sleep(50);
+  }
+
+  /** The spot the pointer takes on `el`: its middle, or near its start when
+      it is wide, as a hand goes for the start of a line. On a page, the
+      middle of what shows of it: a picture half in view is pointed at where
+      it is seen. */
+  private spot(el: Element) {
+    const box = el.getBoundingClientRect();
+    const x = box.left + Math.min(box.width / 2, 40);
+    const band = this.band(el);
+    const top = Math.max(box.top, band?.top ?? box.top);
+    const bottom = Math.min(box.bottom, band?.bottom ?? box.bottom);
+    return { x, y: bottom - top >= REACH ? (top + bottom) / 2 : box.top + box.height / 2 };
+  }
+
+  /** Whether `el` is what a hand at its spot would touch: a copy the app
+      keeps under another part (a sticky heading) is not. */
+  shows(el: Element) {
+    const { x, y } = this.spot(el);
+    const hit = this.doc.elementFromPoint(x, y);
+    return !!hit && el.contains(hit);
+  }
+
   /** Moves the pointer onto `el`, and the app sees it arrive. */
   async point(el: Element, { dwell = 0 }: { dwell?: number } = {}) {
     this.check();
-    const box = el.getBoundingClientRect();
-    const to = { x: box.left + Math.min(box.width / 2, 40), y: box.top + box.height / 2 };
+    await this.reveal(el);
+    const to = this.spot(el);
     const distance = Math.hypot(to.x - this.at.x, to.y - this.at.y);
-    const ms = Math.round(Math.min(900, 280 + distance * 0.7));
     this.pointer.show(true);
-    this.pointer.move(to.x, to.y, ms);
-    await this.sleep(ms);
+    // Already there, as for a press after a hover: no move, and no wait.
+    if (distance >= 2) {
+      const ms = Math.round(Math.min(800, 300 + distance * 0.45));
+      this.pointer.look("default");
+      this.pointer.move(to.x, to.y, ms);
+      await this.sleep(ms);
+    }
     this.at = to;
     if (this.hovered && this.hovered !== el) {
       this.fire(this.hovered, "pointerout", { relatedTarget: el });
       this.fire(this.hovered, "mouseout", { relatedTarget: el });
     }
+    // An event from script sets no :hover, so what the app shows on hover
+    // (a code block's copy button) keys on this mark in the frame's style.
+    for (let at = this.hovered; at; at = at.parentElement) at.removeAttribute("data-hover");
+    for (let at: Element | null = el; at; at = at.parentElement) at.setAttribute("data-hover", "");
     this.hovered = el;
     for (const type of ["pointerover", "mouseover", "pointermove", "mousemove"]) this.fire(el, type);
+    this.pointer.look(this.win.getComputedStyle(el).cursor);
     if (dwell) await this.sleep(dwell);
   }
 
   async press(el: Element) {
     await this.point(el);
-    await this.sleep(120);
+    await this.sleep(80);
     this.pointer.press(true);
     this.pressedAt = performance.now();
     this.fire(el, "pointerdown", { buttons: 1 });
@@ -190,7 +263,8 @@ export class Driver {
     for (const char of text) {
       this.setValue(input, input.value + char);
       input.dispatchEvent(new this.win.InputEvent("input", { bubbles: true, data: char, inputType: "insertText" }));
-      await this.sleep(45 + Math.random() * 70);
+      // A reader's pace: about eight keys a second, unevenly.
+      await this.sleep(80 + Math.random() * 70);
     }
   }
 
@@ -216,7 +290,7 @@ export class Driver {
     el.dispatchEvent(new this.win.KeyboardEvent("keydown", { key, ctrlKey, bubbles: true, cancelable: true }));
     el.dispatchEvent(new this.win.KeyboardEvent("keyup", { key, ctrlKey, bubbles: true, cancelable: true }));
     if (label) {
-      await this.sleep(900);
+      await this.sleep(650);
       this.cues.key(null);
     }
   }
@@ -246,13 +320,6 @@ export class Driver {
     );
     this.check();
     if (ms) this.cues.opened(title, ms);
-  }
-
-  /** Scrolls `shell` until `target` sits `offset` pixels below its top. */
-  async scroll(shell: Element, target: Element, offset: number) {
-    const top = target.getBoundingClientRect().top - shell.getBoundingClientRect().top + shell.scrollTop - offset;
-    shell.scrollTo({ top, behavior: "smooth" });
-    await this.sleep(750);
   }
 
   hide() {

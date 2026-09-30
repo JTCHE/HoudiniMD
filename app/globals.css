@@ -22,6 +22,12 @@ html {
   color-scheme: light;
 }
 
+/* The landing page is centred on the screen: a gutter on one side only
+   would put its middle half a scrollbar to the left. */
+html:has(main[data-landing]) {
+  scrollbar-gutter: stable both-edges;
+}
+
 @theme inline {
   /* ── Spacing ladder ────────────────────────────────────────────────────
      One ladder, consumed by name. Responsiveness lives in the media query on
@@ -116,6 +122,9 @@ html {
   --shadow-pane: var(--elevation-pane);
 
   --ease-out-quint: var(--easing-quint);
+  /* Springs, as `linear()` curves: their values come from `lib/landing/spring.ts`. */
+  --ease-spring: var(--easing-spring);
+  --ease-spring-bounce: var(--easing-spring-bounce);
   --default-transition-duration: var(--duration-base);
   --default-transition-timing-function: var(--ease-out-quint);
 
@@ -808,6 +817,87 @@ button:active kbd.kbd-button {
 
 @media (prefers-reduced-motion: reduce) {
   .toc-label {
+    animation: none;
+  }
+}
+
+/* ── Landing entrance — the parts come in one after the other, in the
+   order `--enter` gives them ── */
+/* Not `enter` or `exit`: tw-animate-css owns those names, and the later
+   rule wins. */
+@keyframes rise {
+  from {
+    translate: 0 var(--xl);
+  }
+}
+
+/* Opacity and blur come in first, on their own curve, so the rise shows: the
+   part is in full view while it glides the last of the way up. A large dark
+   part sets `--enter-blur: 0px`: blurred, it reads as a grey smudge. */
+.enter {
+  animation:
+    rise 1000ms var(--easing-spring) both,
+    rise-fade 400ms ease-out both;
+  animation-delay: calc(var(--enter, 0) * 140ms + 120ms);
+}
+
+@keyframes rise-fade {
+  from {
+    opacity: 0;
+    filter: blur(var(--enter-blur, 8px));
+  }
+}
+
+/* The app's frame comes in tilted back, as a surface that settles flat. It
+   rests flat: a transform at rest would redraw the app's 1px lines off the
+   pixel grid. */
+@keyframes enter-tilt {
+  from {
+    opacity: 0;
+    transform: perspective(1800px) translateY(var(--2xl)) rotateX(14deg) scale(0.97);
+  }
+}
+
+.enter-tilt {
+  transform-origin: 50% 100%;
+  animation: enter-tilt 1600ms var(--easing-spring) both;
+  animation-delay: calc(var(--enter, 0) * 140ms + 120ms);
+}
+
+/* Light on the frame's rim, from the top left and the bottom right: a
+   hairline inside the frame, over what it shows, that lifts it off the page. */
+.rim::after {
+  --rim: oklch(1 0 0 / 10%);
+  --rim-faded: oklch(1 0 0 / 5%);
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  padding: 1px;
+  border-radius: inherit;
+  background: linear-gradient(to bottom right, var(--rim), var(--rim-faded) 25% 75%, var(--rim));
+  mask:
+    linear-gradient(#000 0 0) content-box exclude,
+    linear-gradient(#000 0 0);
+  pointer-events: none;
+}
+
+/* The background only fades: a move or a blur on a layer the size of the
+   screen costs every frame. */
+@keyframes enter-backdrop {
+  from {
+    opacity: 0;
+  }
+}
+
+.enter-backdrop {
+  animation: enter-backdrop 1600ms ease-out 200ms both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .enter,
+  .enter-backdrop,
+  .enter-tilt {
     animation: none;
   }
 }
