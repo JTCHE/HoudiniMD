@@ -100,13 +100,13 @@ export function TitleBar({ sidebarOpen, onToggleSidebar, showTrail, bare = false
           // Only the horizontal padding differs, because a logo and a word
           // need more room than one glyph. A whole-pixel width: the text is a
           // fraction wide, and the arrows after it drew soft on half pixels.
-          "ml-sm flex h-[28px] w-[98px] shrink-0 cursor-interactive items-center gap-[6px] rounded-md px-sm",
+          "ml-sm flex h-[28px] w-[101px] shrink-0 cursor-interactive items-center gap-[6px] rounded-md px-sm",
           "transition-colors duration-(--duration-fast) motion-reduce:transition-none",
           "pointer-hover:bg-neutral-200",
           "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
         )}
       >
-        <BrandLogo className="h-[16px] w-auto" />
+        <BrandLogo className="h-[16px] w-auto shrink-0" />
         <span className="translate-y-[0.5px] text-[12.5px] font-medium tracking-[-0.01em] text-neutral-950">
           HoudiniMD
         </span>

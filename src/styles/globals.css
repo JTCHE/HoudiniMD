@@ -211,7 +211,6 @@ a {
   --color-brand-bright: var(--brand-bright);
   --color-brand-700: var(--brand-700);
   --color-brand-foreground: var(--brand-foreground);
-  --color-brand-plate: var(--brand-plate);
 
   /* Surfaces and controls, named by elevation rather than by colour. */
   --color-surface: var(--surface);
@@ -324,12 +323,12 @@ a {
   --neutral-900: oklch(0.205 0 0);
   --neutral-950: oklch(0.145 0 0);
 
-  /* Brand — #f05f04 converted to OKLCH. Identical in both themes. */
-  --brand: oklch(0.664 0.195 43.1);
-  --brand-bright: oklch(0.71 0.19 43.1);
-  /* The brand as TEXT. `--brand` is a plate colour: 3.31:1 on white, which a
-     word cannot be set in. This step is 4.79:1 and reads at label size. */
-  --brand-700: oklch(0.575 0.19 43.1);
+  /* Brand — #e97204 converted to OKLCH. Identical in both themes. */
+  --brand: oklch(0.680 0.174 52);
+  --brand-bright: oklch(0.720 0.185 52);
+  /* The brand as TEXT. `--brand` is a plate colour: 3.1:1 on white, which a
+     word cannot be set in. This step is 4.6:1 and reads at label size. */
+  --brand-700: oklch(0.575 0.147 52);
   --brand-foreground: oklch(0.985 0 0);
 
   /* Surfaces.
@@ -363,12 +362,6 @@ a {
   --control-foreground: var(--neutral-50);
 
   --control-sheen: oklch(1 0 0 / 12%);
-
-  /* The plate the app mark is drawn on. Deliberately off the ramp and unique:
-     it is one step of contrast below the page in either theme, which is the
-     only thing that keeps a rounded-square icon visible against a page of its
-     own colour. #F8F8F8 in light, its mirror at HSV value 3% in dark. */
-  --brand-plate: oklch(0.979 0 0);
 
   --elevation-field: 0 18px 50px 0 oklch(0 0 0 / 10%);
   --elevation-keycap: 0 2px 0 0 var(--elevated-edge), 0 1px 1.5px 0 oklch(0 0 0 / 10%);
@@ -481,8 +474,6 @@ a {
      dark one: a drop shadow under a near-black chip on a near-black sidebar
      shows nothing, so the same 1px reads from above instead. */
   --elevation-chip: inset 0 1px 0 0 oklch(1 0 0 / 6%);
-
-  --brand-plate: oklch(0.134 0 0);
 
   --card: var(--neutral-100);
   --popover: var(--neutral-100);
