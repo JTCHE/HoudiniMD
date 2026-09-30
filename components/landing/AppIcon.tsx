@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 export function AppIcon({ className }: { className?: string }) {
   return (
     <img
-      src="/brand/icon.svg"
+      src="/icon.svg"
       alt=""
       draggable={false}
       className={cn(

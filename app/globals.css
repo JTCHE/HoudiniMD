@@ -215,7 +215,7 @@ html:has(main[data-landing]) {
   --neutral-900: oklch(0.205 0 0);
   --neutral-950: oklch(0.145 0 0);
 
-  /* Brand — #f05f04 converted to OKLCH. Identical in both themes. */
+  /* Brand — #e97204 converted to OKLCH. Identical in both themes. */
   --brand: oklch(0.680 0.174 52);
   --brand-bright: oklch(0.720 0.185 52);
   /* Small brand text on a light surface: 4.6:1. */
