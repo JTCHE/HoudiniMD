@@ -32,17 +32,6 @@ a family of pages, not on the one page that showed the bug:
 Read the Markdown the parser returns, then look at the drawn page. They fail
 in different ways.
 
-`harness/compare.mts` does that check by machine. It samples pages from the
-index and puts three renderings of each beside one another — the SideFX page,
-the `houdinimd.com` mirror, and this app — and reports only where the two
-references agree on the shape of a region and the app does not. Both
-references come from the doc build's HTML; the app parses the wiki markup
-underneath it, so the app is the one that can be wrong on its own.
-
-```bash
-node harness/compare.mts --pages 40 --seed 3
-```
-
 It reads in two lanes. One reads what a page is made of, out of the markdown
 and the SideFX DOM: sections, tables, figures, and how much of each. The other
 draws all three pages in a browser and measures every kind of thing a doc page

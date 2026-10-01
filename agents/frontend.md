@@ -41,17 +41,6 @@ a 120 Hz display and on a high-resolution display. Obey these rules.
 Use an animation only when it tells the reader something. If it tells the
 reader nothing, draw it static.
 
-## Where the app is deliberately not the website
-
-`houdinimd.com` and the app share a design, not every decision. The two below
-are settled. Do not "fix" them back, and do not report them as defects when
-`harness/compare.mts` puts the app beside the website.
-
-- **Lists are lists.** The website draws a list of pages as a grid of cards.
-  The app draws a plain list.
-- **Links are orange.** The link colour in the app is the accent, not the
-  website's white.
-
 ## Look at the change
 
 Open the page and look at it. A build that compiles is not a page that reads.
