@@ -2,62 +2,67 @@
 
 ![The HoudiniMD home page, with the app open on a sample page](public/cover.png)
 
-## A blazing-fast, clutter free, clean Markdown mirror of the Houdini docs.<br>Built for humans to read, and agents to understand.<br><br>
+<p align="center">A free desktop app that reads the documentation of the Houdini you have installed.<br>Search it, browse it, and open it from Houdini with <kbd>F1</kbd>, in a fraction of a second.</p>
 
-<br>
 <div align="center">
-  <a target="_blank" href="https://houdinimd.com"><img src="public/badges/website.svg" height="42" alt="Open HoudiniMD"></a>
   <a target="_blank" href="https://houdinimd.com/download"><img src="public/badges/download.svg" height="42" alt="Download for Windows"></a>
+  <a target="_blank" href="https://houdinimd.com"><img src="public/badges/website.svg" height="42" alt="Open HoudiniMD"></a>
   <a target="_blank" href="https://github.com/JTCHE/houdini-mcp"><img src="public/badges/mcp.svg" height="42" alt="Houdini MCP"></a>
   <a target="_blank" href="https://github.com/sponsors/JTCHE?frequency=one-time"><img src="public/badges/sponsor.svg" height="42" alt="Sponsor on GitHub"></a>
 </div>
 <br>
 
-HoudiniMD mirrors SideFX's official Houdini documentation into clean markdown, served through a minimal, near-instant interface. Same content, displayed inside a clean and responsive interface.
+## Why
 
-<img src="public/load-time-benchmark.png" alt="A horizontal bar chart comparing full page load time between the official SideFX docs and HoudiniMD, with the latter showing a median of 10.7x faster loading times than the former">
+Houdini's help is thorough, and slow to reach. Each <kbd>F1</kbd> waits on a local help server, and a search means a trip to the browser.
 
-It follows the [llms.txt](https://llmstxt.org) standard. AI agents are automatically redirected to raw markdown instead of scraping cluttered HTML. They get accurate, low-noise context about Houdini's nodes and functions; exactly the kind of niche knowledge even frontier models still lack.
+HoudiniMD reads the same pages from your install, indexes them once, and shows them in a clean, fast window. Nothing comes from the network, so the docs always match the build you work in.
 
 ## Features
 
-- **Fast** — pages load instantly. <kbd>⌘K</kbd> to search, <kbd>⌘C</kbd> to copy as Markdown
-- **Full Mirror, Clean Markdown** — every current and future doc page under `sidefx.com/docs` mirrored to readable markdown, dark mode included.
-- **Instant search** — find any node, VEX function, or niche HOM API. You can even paste full SideFX links directly.
-- **llms.txt native** — agents get raw markdown, not scraped HTML, cutting context bloat.
-- **Houdini Integration** — After setting it as the default source, press <kbd>F1</kbd> to bring up HoudiniMD directly inside Houdini
-- **AI Native & MCP Integration** — Paired with my [Houdini MCP](https://github.com/JTCHE/houdini-mcp) fork, agents can query pure markdown directly from HoudiniMD to inform their decisions and actions inside Houdini. Accurate info, at the right time, without context bloat.
+- **Instant search.** <kbd>Ctrl</kbd> <kbd>K</kbd> finds any node, VEX function or HOM class as you type. Paste a sidefx.com link and it opens that page.
+- **<kbd>F1</kbd> inside Houdini.** Set HoudiniMD as the help server of an install. <kbd>F1</kbd> or **Get Help** on a node then opens its page in Houdini's help pane.
+- **Your build, offline.** The docs come from the Houdini on your disk. Switch between installs from the sidebar.
+- **Copy as Markdown.** <kbd>Ctrl</kbd> <kbd>C</kbd> copies the whole page as clean Markdown, ready for notes or a prompt.
+- **Bookmarks and history.** <kbd>Ctrl</kbd> <kbd>D</kbd> keeps a page. Recent pages are one click away.
+- **Built for agents.** [Houdini MCP](https://github.com/JTCHE/houdini-mcp) gives Claude, Codex, Gemini and other agents the same docs, for the exact build you use, next to the tools that drive Houdini.
+- **Light and dark.**
+
+## Speed
+
+<kbd>F1</kbd> opens a readable page 13 times faster than Houdini's own help server.
+
+<img src="public/help-server-benchmark.png" alt="A bar chart of the time from F1 to a readable page in Houdini's help pane, for Houdini's own help server and for HoudiniMD. HoudiniMD is 13.1 times faster at the median.">
 
 ## Install
 
-<img src="public/help-server-benchmark.png" alt="A horizontal bar chart comparing the time from F1 to a readable page in Houdini's help pane, between Houdini's own help server and HoudiniMD, with the latter showing a median of 13.1x faster">
-HoudiniMD is also now available as a Desktop app, living locally, directly on your computer.
+### Windows
 
-## Windows
+[**Download for Windows**](https://houdinimd.com/download), run the installer, and choose your Houdini install. The app updates itself.
 
-[Download for Windows](https://houdinimd.com/download).
+> [!NOTE]
+> The installer is not signed yet, so Windows shows "Windows protected your PC". Select **More info**, then **Run anyway**.
 
-The desktop app reads the docs from the Houdini build on your machine, so it works with no network. <kbd>F1</kbd> in Houdini opens the page in it.
+### Linux
 
-> [!WARNING]
-> Windows shows "Windows protected your PC" because the installer is not signed yet. Select **More info**, then **Run anyway**. A signature needs a legal entity, and it is on the list.
-
-## Linux
-
-Download `HoudiniMD.AppImage` from the [latest release](https://github.com/JTCHE/HoudiniMD/releases/latest), then:
+[**Download the AppImage**](https://houdinimd.com/download/linux), then:
 
 ```sh
 chmod +x HoudiniMD.AppImage
 ./HoudiniMD.AppImage
 ```
 
-The file carries its own WebKitGTK, so it needs no packages. It is built on Ubuntu 22.04 and runs on glibc 2.34 and later: RHEL 9, Rocky 9, AlmaLinux 9, Ubuntu 22.04 and 24.04.
+It carries its own WebKitGTK, so it needs no packages. It runs on glibc 2.34 and later: Ubuntu 22.04 and 24.04, RHEL 9, Rocky 9 and AlmaLinux 9.
 
 > [!WARNING]
-> On Ubuntu 26.04 the web process dies in EGL. That is WebKit 2.50 against a very new mesa. This is a known issue.
+> On Ubuntu 26.04 the app closes at start, from a WebKit fault with the newest Mesa. This is a known issue.
+
+### macOS
+
+Not yet. A macOS build is planned.
 
 <details>
-<summary><b>Compiling a Linux Build</b></summary>
+<summary><b>Build it yourself</b></summary>
 
 You need [Bun](https://bun.sh), [Rust](https://rustup.rs) and, on a Debian or Ubuntu base:
 
@@ -72,7 +77,7 @@ bun install
 bun run tauri build --bundles appimage
 ```
 
-The file lands in `src-tauri/target/release/bundle/appimage/`. That file runs on the distro that built it. To also reach RHEL 9, run the widen pass over the packed folder — it carries the fonts stack, retags `hypot`, and puts a newer `libstdc++` where only an older host uses it:
+The file lands in `src-tauri/target/release/bundle/appimage/` and runs on the distro that built it. To also reach RHEL 9, run the widen pass over the packed folder:
 
 ```sh
 cd src-tauri/target/release/bundle/appimage
@@ -85,14 +90,12 @@ The release workflow does all of this: [.github/workflows/release.yml](.github/w
 
 ## Pricing
 
-Free. No account, no subscription. A doc page is public and belongs to SideFX, so no doc page is ever going behind a payment.
+Free, with no account. The docs belong to SideFX, and reading them will never cost anything.
 
-Paid features will come in a later update to support power-users and allow them to write custom notes on a page, sync their settings and bookmarks across machines in the cloud, and much more.
+Paid features will come later, for people who want more: notes on a page, and settings and bookmarks synced across machines.
 
-## Credits & license
+## Credits and license
 
-Built by [John C](https://jchd.me). HoudiniMD is an unofficial, independent project and is not affiliated with or endorsed by SideFX.
+Built by [John C](https://jchd.me). The code is released under the [MIT License](LICENSE).
 
-**The code in this repository** is released under the [MIT License](LICENSE).
-
-HoudiniMD is an unofficial, independent project, and isn't affiliated with or endorsed by SideFX.
+HoudiniMD is an unofficial, independent project. It is not affiliated with or endorsed by SideFX. Houdini is a trademark of SideFX.
