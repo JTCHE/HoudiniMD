@@ -14,23 +14,25 @@
 
 ## Why
 
-Houdini's help is thorough, and slow to reach. Each <kbd>F1</kbd> waits on a local help server, and a search means a trip to the browser.
+Houdini's help is thorough, but not the handiest to navigate through. Each query waits on a sluggish local help server, and a search means a trip to the browser.
 
-HoudiniMD reads the same pages from your install, indexes them once, and shows them in a clean, fast window. Nothing comes from the network, so the docs always match the build you work in.
+HoudiniMD reads the same pages from your install, indexes them once, and displays them in a clean, fast interface. It's completely offline, making it faster and more secure.
+
+![The HoudiniMD sidebar, showcasing a version switcher and collapsed categories](public/HoudiniMD_Sidebar_Closeup.png)
 
 ## Features
 
-- **Instant search.** <kbd>Ctrl</kbd> <kbd>K</kbd> finds any node, VEX function or HOM class as you type. Paste a sidefx.com link and it opens that page.
-- **<kbd>F1</kbd> inside Houdini.** Set HoudiniMD as the help server of an install. <kbd>F1</kbd> or **Get Help** on a node then opens its page in Houdini's help pane.
-- **Your build, offline.** The docs come from the Houdini on your disk. Switch between installs from the sidebar.
-- **Copy as Markdown.** <kbd>Ctrl</kbd> <kbd>C</kbd> copies the whole page as clean Markdown, ready for notes or a prompt.
-- **Bookmarks and history.** <kbd>Ctrl</kbd> <kbd>D</kbd> keeps a page. Recent pages are one click away.
-- **Built for agents.** [Houdini MCP](https://github.com/JTCHE/houdini-mcp) gives Claude, Codex, Gemini and other agents the same docs, for the exact build you use, next to the tools that drive Houdini.
-- **Light and dark.**
+- **Instant search:** <kbd>Ctrl</kbd> <kbd>K</kbd> finds any node, VEX function or HOM class as you type. Paste a sidefx.com link and it opens that page.
+- **Bookmarks and history:** <kbd>Ctrl</kbd> <kbd>D</kbd> keeps a page. Recent pages are one click away.
+- **Native Houdini Integration:** Set HoudiniMD as the help server of an install. <kbd>F1</kbd> or **Get Help** on a node then opens its page in Houdini's help pane.
+- **Your build, offline:** The docs come from the Houdini on your disk. Switch between versions from the sidebar.
+- **Copy as Markdown:** <kbd>Ctrl</kbd> <kbd>C</kbd> copies the whole page as clean Markdown, ready for notes or a prompt.
+- **Built for agents:** The [Houdini MCP](https://github.com/JTCHE/houdini-mcp) gives Claude, Codex, Gemini and other agents the same docs, for the exact build you use, next to the tools that drive Houdini.
+- **Light and dark** themes, that can be flipped at any time in the sidebar
 
 ## Speed
 
-<kbd>F1</kbd> opens a readable page 13 times faster than Houdini's own help server.
+HoudiniMD opens a readable page 13 times faster than Houdini's own help server.
 
 <img src="public/help-server-benchmark.png" alt="A bar chart of the time from F1 to a readable page in Houdini's help pane, for Houdini's own help server and for HoudiniMD. HoudiniMD is 13.1 times faster at the median.">
 
@@ -61,8 +63,7 @@ It carries its own WebKitGTK, so it needs no packages. It runs on glibc 2.34 and
 
 Not yet. A macOS build is planned.
 
-<details>
-<summary><b>Build it yourself</b></summary>
+### Build Instructions
 
 You need [Bun](https://bun.sh), [Rust](https://rustup.rs) and, on a Debian or Ubuntu base:
 
@@ -85,8 +86,6 @@ OUTPUT=$PWD/HoudiniMD.AppImage bash ../../../../linux/widen.sh HoudiniMD.AppDir
 ```
 
 The release workflow does all of this: [.github/workflows/release.yml](.github/workflows/release.yml).
-
-</details>
 
 ## Pricing
 
