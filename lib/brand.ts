@@ -3,10 +3,10 @@
 
 export const SITE_NAME = "NodebookMD";
 
-export const REPO_URL = "https://github.com/JTCHE/HoudiniMD";
+export const REPO_URL = "https://github.com/JTCHE/NodebookMD";
 
 /** GitHub's API for the app's releases. */
-export const RELEASES_API = "https://api.github.com/repos/JTCHE/HoudiniMD/releases";
+export const RELEASES_API = "https://api.github.com/repos/JTCHE/NodebookMD/releases";
 
 /** The app's own link scheme: `<scheme>://docs/<slug>` opens that page in the app. */
 export const APP_SCHEME = "houdinimd";
