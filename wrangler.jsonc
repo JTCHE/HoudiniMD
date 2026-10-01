@@ -94,11 +94,12 @@
       "pattern": "nodebook.md",
       "custom_domain": true,
     },
-    // The old host. `worker.ts` answers it with a 301 to nodebook.md.
-    // telemetry.houdinimd.com is its own Worker and does not match.
+    // The old host. `worker.ts` answers it with a 301 to nodebook.md. It must
+    // stay a custom domain: a deploy removes every custom domain of this
+    // Worker that is not listed here, and with it the DNS record.
     {
-      "pattern": "houdinimd.com/*",
-      "zone_name": "houdinimd.com",
+      "pattern": "houdinimd.com",
+      "custom_domain": true,
     },
   ],
   "services": [
