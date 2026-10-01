@@ -1,12 +1,12 @@
 ---
-title: Privacy Policy - HoudiniMD
-description: What HoudiniMD collects, what it does not collect, how long data is kept, and who it is shared with.
+title: Privacy Policy - NodebookMD
+description: What NodebookMD collects, what it does not collect, how long data is kept, and who it is shared with.
 ---
 # Privacy Policy
 
 Last updated: September 2026.
 
-HoudiniMD is a free, open-source desktop app for the Houdini docs, and this site is its home page. It is independent and unofficial, and it is run by one person, John C. This page tells you what data HoudiniMD collects, why, and what it does not collect.
+NodebookMD is a free, open-source desktop app for the Houdini docs, and this site is its home page. It is independent and unofficial, and it is run by one person, John C. This page tells you what data NodebookMD collects, why, and what it does not collect.
 
 ## What we collect, and why
 
@@ -43,9 +43,9 @@ We send one email, when the app is released. We do not send anything else, we do
 
 ## What we store on your device
 
-HoudiniMD stores one small thing in your browser, on your device only, and it is not sent to us: your choice of light or dark theme, in `localStorage`.
+NodebookMD stores one small thing in your browser, on your device only, and it is not sent to us: your choice of light or dark theme, in `localStorage`.
 
-Earlier versions of the site also kept an offline copy of the doc pages you viewed, and your search history. On your next visit, the site removes the offline copy. You can clear everything at any time by clearing your browser's site data for HoudiniMD.
+Earlier versions of the site also kept an offline copy of the doc pages you viewed, and your search history. On your next visit, the site removes the offline copy. You can clear everything at any time by clearing your browser's site data for NodebookMD.
 
 ## How long we keep it
 
@@ -63,4 +63,4 @@ You can ask us what data we hold linked to you, and ask us to delete it. In prac
 
 ## Contact
 
-HoudiniMD is built by John C. [hi@jchd.me](mailto:hi@jchd.me?subject=HoudiniMD%20Privacy)
+NodebookMD is built by John C. [hi@jchd.me](mailto:hi@jchd.me?subject=NodebookMD%20Privacy)

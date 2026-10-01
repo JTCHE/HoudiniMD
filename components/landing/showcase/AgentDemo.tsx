@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { ArrowUpRight, Check, Copy } from "lucide-react";
 import { enter, usePlayed, type DemoProps } from "@/components/landing/showcase/layout";
-import { MCP_URL } from "@/lib/brand";
+import { MCP_URL, SITE_NAME } from "@/lib/brand";
 import { cn } from "@/lib/utils";
 
 /** One turn of an agent with the Houdini MCP. The tool names are the MCP's
@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 const TURN: { kind: "user" | "tool" | "result" | "agent"; text: string }[] = [
   { kind: "user", text: "Scatter points on the mesh, denser where @mask is high." },
   { kind: "tool", text: 'docs  page="nodes/sop/scatter"  section="Density"' },
-  { kind: "result", text: "12 lines of Markdown from HoudiniMD, out of your Houdini 21.0 install" },
+  { kind: "result", text: `12 lines of Markdown from ${SITE_NAME}, out of your Houdini 21.0 install` },
   { kind: "tool", text: 'node_edit  create="scatter"  parent="/obj/geo1"' },
   { kind: "tool", text: 'parm_set  node="scatter1"  densityattrib="mask"' },
   { kind: "tool", text: "capture  viewport" },

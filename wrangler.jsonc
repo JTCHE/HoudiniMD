@@ -69,7 +69,7 @@
   // keeping it here (rather than in the dashboard) means it deploys atomically
   // with the code and cannot silently drift.
   "vars": {
-    "URL": "https://houdinimd.com",
+    "URL": "https://nodebook.md",
     // A doc page renders in ~31s of wall time at P99, and the revalidation
     // queue aborts its own fetch after 10s. The render still finishes and
     // still writes the entry to R2 — only the durable object's view of it
@@ -90,6 +90,12 @@
     "NEXT_CACHE_DO_QUEUE_REVALIDATION_TIMEOUT_MS": "45000",
   },
   "routes": [
+    {
+      "pattern": "nodebook.md/*",
+      "zone_name": "nodebook.md",
+    },
+    // The old host. `worker.ts` answers it with a 301 to nodebook.md.
+    // telemetry.houdinimd.com is its own Worker and does not match.
     {
       "pattern": "houdinimd.com/*",
       "zone_name": "houdinimd.com",

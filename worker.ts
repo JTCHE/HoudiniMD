@@ -28,7 +28,12 @@ let loading: Promise<NextHandler> | undefined;
 const nextHandler = (): Promise<NextHandler> =>
   (loading ??= import("./.open-next/worker.js").then((m) => m.default as NextHandler));
 
+/** The site's old host. Each address there answers one 301 to the same
+    path and query on `URL`, the new origin. */
+const OLD_HOST = "houdinimd.com";
+
 interface Env {
+  URL: string;
   NEXT_INC_CACHE_R2_BUCKET: Bucket;
   DB?: D1Database;
   VISITOR_SALT?: string;
@@ -47,6 +52,8 @@ const STATIC_ARCHIVE_MIME: Record<string, string> = {
 const worker = {
   async fetch(request: Request, env: Env, ctx: { waitUntil(promise: Promise<unknown>): void; passThroughOnException(): void }) {
     const url = new URL(request.url);
+    if (url.hostname === OLD_HOST) return Response.redirect(`${env.URL}${url.pathname}${url.search}`, 301);
+
     const beacon = recordViewBeacon(request, url, env, ctx);
     if (beacon) return beacon;
 
