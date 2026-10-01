@@ -13,7 +13,7 @@ import { Hint } from "@/components/ui/Hint";
 import { SidebarRow } from "./SidebarRow";
 
 /* Bugs go to GitHub issues, in the reader's own browser. See spec: Bug Filing Button. */
-const ISSUES = "https://github.com/JTCHE/HoudiniMD/issues/new";
+const ISSUES = "https://github.com/JTCHE/NodebookMD/issues/new";
 
 const FOOTER_BUTTON =
   "grid size-[30px] cursor-interactive place-items-center rounded-md text-neutral-500 " +
