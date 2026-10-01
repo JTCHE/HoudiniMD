@@ -24,6 +24,7 @@ export function VirtualList<T>({
   style,
   overscan = 8,
   reveal,
+  revealBelow = 0,
   onTop,
 }: {
   items: T[];
@@ -41,6 +42,9 @@ export function VirtualList<T>({
       from somewhere else. Only moves the list when the row is off screen, so
       a row already visible is not dragged under the pointer. */
   reveal?: number;
+  /** How much of the list's top the caller draws over (pinned headers). A row
+      under it is off screen too. */
+  revealBelow?: number;
 }) {
   const node = useRef<HTMLDivElement>(null);
   const [top, setTop] = useState(0);
@@ -82,13 +86,13 @@ export function VirtualList<T>({
     if (!element || reveal === undefined || reveal < 0) return;
     const top = reveal * rowHeight;
     const box = element.clientHeight;
-    if (top >= element.scrollTop && top + rowHeight <= element.scrollTop + box) return;
+    if (top >= element.scrollTop + revealBelow && top + rowHeight <= element.scrollTop + box) return;
     // Centred, not flush against an edge: the rows around it are what say
     // where in the list the reader landed.
     element.scrollTop = Math.max(0, top - box / 2 + rowHeight / 2);
     setTop(element.scrollTop);
     onTop?.(element.scrollTop);
-  }, [reveal, rowHeight]);
+  }, [reveal, revealBelow, rowHeight]);
 
   const total = items.length * rowHeight;
   const first = Math.max(0, Math.floor(top / rowHeight) - overscan);

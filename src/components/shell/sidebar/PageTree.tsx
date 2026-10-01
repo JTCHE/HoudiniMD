@@ -318,6 +318,9 @@ export function PageTree({ groups, currentPath, bookmarked, className }: PageTre
         items={lines}
         rowHeight={ROW}
         reveal={reveal}
+        // Every open row above a page pins over the list once it scrolls by,
+        // and a page has one open row per level above it.
+        revealBelow={reveal >= 0 ? lines[reveal].depth * ROW : 0}
         onTop={setTop}
         // Slack on the left for what a row draws outside its own box — the
         // bookmark flag hangs 9px past the mark, the chip's shadow spreads past
