@@ -14,6 +14,6 @@ export const FEATURES = {
 
 /** What each switch needs from the latest GitHub release. */
 export const REQUIRES: Record<keyof typeof FEATURES, { asset?: string; minAppVersion?: string; why: string }> = {
-  openInApp: { minAppVersion: "0.1.0-beta.9", why: "the app release that registers the link scheme" },
+  openInApp: { minAppVersion: "0.2.1", why: "the app release that registers the link scheme" },
   macosDownload: { asset: ".dmg", why: "a macOS build on the release" },
 };
