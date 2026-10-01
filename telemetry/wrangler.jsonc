@@ -3,7 +3,12 @@
   "name": "houdinimd-telemetry",
   "main": "worker.ts",
   "compatibility_date": "2026-08-01",
-  "routes": [{ "pattern": "telemetry.houdinimd.com", "custom_domain": true }],
+  // Both hosts stay listed: a deploy removes any custom domain not here, and
+  // builds before 0.2.0 still post to the old one.
+  "routes": [
+    { "pattern": "telemetry.nodebook.md", "custom_domain": true },
+    { "pattern": "telemetry.houdinimd.com", "custom_domain": true },
+  ],
   // One data point per event, kept three months by Analytics Engine itself.
   "analytics_engine_datasets": [{ "binding": "EVENTS", "dataset": "houdinimd_app" }],
   // Per install id. An app sends a handful of events a session.

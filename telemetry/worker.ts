@@ -8,7 +8,7 @@
  * Anonymous Telemetry.
  *
  *   bunx wrangler dev          # local, from this folder
- *   bunx wrangler deploy       # needs telemetry.houdinimd.com on the account
+ *   bunx wrangler deploy       # needs both hosts in wrangler.jsonc on the account
  *
  * Read it with the Analytics Engine SQL API:
  *   SELECT blob1 AS kind, blob3 AS build, count() FROM houdinimd_app GROUP BY kind, build

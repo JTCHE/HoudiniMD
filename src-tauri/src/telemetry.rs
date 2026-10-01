@@ -19,7 +19,7 @@ use std::time::Duration;
 use serde_json::{Value, json};
 use tauri::{AppHandle, Manager};
 
-const ENDPOINT: &str = "https://telemetry.houdinimd.com/v1/event";
+const ENDPOINT: &str = "https://telemetry.nodebook.md/v1/event";
 /// The onboarding writes `true` or `false` here. Absent means the reader has
 /// not answered yet, and nothing is sent.
 pub const KEY: &str = "telemetry";
