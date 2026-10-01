@@ -925,6 +925,10 @@ img.markdown-media {
   border: 1px solid oklch(1 0 0 / 10%);
   border-radius: var(--radius-lg);
   overflow-x: auto;
+  /* Never a vertical bar. The last row hangs under the horizontal one (see
+     CodePanel), so its box sticks out of the panel by the bar's height; with
+     `auto` here that overflow drew a second bar down the right side. */
+  overflow-y: hidden;
   scrollbar-color: oklch(1 0 0 / 22%) transparent;
 }
 
