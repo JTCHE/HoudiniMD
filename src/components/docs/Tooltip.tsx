@@ -13,9 +13,13 @@ interface MetaEntry {
 }
 
 // Module-level caches shared across all DocTooltip instances in this session.
-// `null` marks a page the backend could not name, so a second hover does not
+// `null` marks a page that is not in the build, so a second hover does not
 // ask again.
 const metaCache = new Map<string, MetaEntry | null>();
+
+/** What a batch settles a slug to: the page, `null` for no such page, or
+    `undefined` when the call failed and nothing is known. */
+type Settled = MetaEntry | null | undefined;
 
 // Slugs waiting for the next call. The site asked per link; here one Rust call
 // answers a batch, so a viewport full of links is one round trip and not one
@@ -24,7 +28,7 @@ const metaCache = new Map<string, MetaEntry | null>();
 // hover never waits behind the viewport warming that queued before it.
 const urgent = new Set<string>();
 const pending = new Set<string>();
-const waiting = new Map<string, Set<(entry: MetaEntry | null) => void>>();
+const waiting = new Map<string, Set<(entry: Settled) => void>>();
 let scheduled: ReturnType<typeof setTimeout> | null = null;
 
 const BATCH_MS = 30;
@@ -43,10 +47,12 @@ function flush() {
   if (urgent.size + pending.size > 0) scheduled = setTimeout(flush, BATCH_MS);
   if (paths.length === 0) return;
 
+  let answered = false;
   invoke<{ path: string; title: string; summary?: string | null; icon?: string | null }[]>("meta", {
     paths,
   })
     .then((rows) => {
+      answered = true;
       for (const row of rows) {
         metaCache.set(row.path, {
           title: row.title,
@@ -57,12 +63,13 @@ function flush() {
     })
     .catch(() => {})
     .finally(() => {
-      // Anything the answer did not name has no meta in this build. It must
-      // still be resolved: the skeleton has no terminal state, so a silent
-      // return leaves it loading forever.
+      // Anything an answer did not name has no page in this build. A failed
+      // call proves nothing, so it is not cached. Both must still be
+      // resolved: the skeleton has no terminal state, so a silent return
+      // leaves it loading forever.
       for (const path of paths) {
-        if (!metaCache.has(path)) metaCache.set(path, null);
-        const entry = metaCache.get(path) ?? null;
+        if (answered && !metaCache.has(path)) metaCache.set(path, null);
+        const entry = metaCache.get(path);
         for (const resolve of waiting.get(path) ?? []) resolve(entry);
         waiting.delete(path);
       }
@@ -75,7 +82,7 @@ function flush() {
     hover that matters. */
 function request(
   slug: string,
-  onSettled?: (entry: MetaEntry | null) => void,
+  onSettled?: (entry: Settled) => void,
   eager = true,
 ) {
   // The title list already holds what a call would answer for almost every
@@ -120,7 +127,7 @@ export function usePageMark(slug: string | null): MetaEntry | null {
     request(
       slug,
       (entry) => {
-        if (live) setMark(entry);
+        if (live) setMark(entry ?? null);
       },
       false,
     );
@@ -215,8 +222,10 @@ export function TooltipBox({ anchorRef, hoverPosRef, className, children }: Anch
 
 /** What a page in the help is called and what it is about. */
 export function DocTooltip({ slug, ...anchored }: Anchored & { slug: string }) {
-  const [meta, setMeta] = useState<MetaEntry | null>(() => metaCache.get(slug) ?? null);
-  const [error, setError] = useState(metaCache.get(slug) === null);
+  // undefined while the answer is on its way; null for a page the build does
+  // not have.
+  const [meta, setMeta] = useState<MetaEntry | null | undefined>(() => metaCache.get(slug));
+  const [failed, setFailed] = useState(false);
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -227,8 +236,8 @@ export function DocTooltip({ slug, ...anchored }: Anchored & { slug: string }) {
     const debounce = setTimeout(() => {
       request(slug, (entry) => {
         if (!mountedRef.current) return;
-        if (entry) setMeta(entry);
-        else setError(true);
+        if (entry === undefined) setFailed(true);
+        else setMeta(entry);
       });
     }, 75);
 
@@ -238,7 +247,7 @@ export function DocTooltip({ slug, ...anchored }: Anchored & { slug: string }) {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (error) return null;
+  if (failed) return null;
 
   const summary = meta?.summary;
 
@@ -248,6 +257,15 @@ export function DocTooltip({ slug, ...anchored }: Anchored & { slug: string }) {
         <>
           <span className="block font-semibold text-foreground">{meta.title}</span>
           {summary && <span className="text-muted-foreground mt-0.5 line-clamp-2">{summary}</span>}
+        </>
+      ) : meta === null ? (
+        // The help itself links to pages that do not exist. Say so, so the
+        // reader does not blame the app for the empty page behind the link.
+        <>
+          <span className="block font-semibold text-foreground">Broken link</span>
+          <span className="text-muted-foreground mt-0.5">
+            The SideFX docs link to a page that is not in this Houdini build.
+          </span>
         </>
       ) : (
         <Skeleton />
