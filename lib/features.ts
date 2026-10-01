@@ -7,7 +7,7 @@
 
 export const FEATURES = {
   /** "Open in app" beside the download key. Needs an app release that registers the link scheme. */
-  openInApp: false,
+  openInApp: true,
   /** The macOS download. Needs a `.dmg` on the latest release. */
   macosDownload: false,
 } as const;

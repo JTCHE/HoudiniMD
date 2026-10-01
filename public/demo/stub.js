@@ -285,7 +285,7 @@
     report_use: () => {},
     report_search: () => {},
     report_error: () => {},
-    "plugin:app|version": () => "0.2.0",
+    "plugin:app|version": () => "0.2.1",
     "plugin:app|name": () => "HoudiniMD",
     "plugin:event|listen": () => 0,
     "plugin:event|unlisten": () => {},
