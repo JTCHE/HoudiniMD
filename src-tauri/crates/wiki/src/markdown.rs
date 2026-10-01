@@ -329,6 +329,25 @@ fn item(name: &str, label: &str, props: &Props, children: &[Block], depth: u8) -
             ),
             None => String::new(),
         },
+        // `:load_example:` names an example asset, by `#path` or by
+        // `#examplefile`. The front-end draws its Launch button in place.
+        "load_example" => {
+            let file = prop(props, "path").or_else(|| prop(props, "examplefile")).unwrap_or_default();
+            let file = file.trim().trim_start_matches('/');
+            let path = file.strip_suffix(".otl").or_else(|| file.strip_suffix(".hda")).unwrap_or(file);
+            let head = match label.trim_end_matches(':').trim() {
+                "" => String::new(),
+                label => format!("**{label}**
+
+"),
+            };
+            format!(
+                "{head}<div class=\"not-prose load-example\" data-path=\"{}\"></div>
+
+{body}",
+                attribute(path)
+            )
+        }
         name if admonition(name).is_some() => {
             let (kind, head) = admonition(name).expect("the name is an admonition");
             // A blockquote that opens with `[!KIND]` is a callout to the

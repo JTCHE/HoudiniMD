@@ -9,15 +9,19 @@ import { Video } from "./MarkdownVideo";
 import { Card } from "./Card";
 import { ImageGroup } from "./ImageGroup";
 import { Vimeo } from "./MarkdownVimeo";
+import { LaunchExample } from "@/components/docs/LaunchExample";
 import { H2, H3, H4 } from "./MarkdownHeading";
 
 /** The parser writes a `.code-panel` that carries the copy button and the
     highlighting, an `.image-group` row of pictures, `.columns` of `:col:`
-    blocks, and a `.vimeo` clip. */
+    blocks, and a `.vimeo` clip, and a `.load-example` Launch button. */
 const Div: Components["div"] = function MarkdownDiv({ className, children, ...props }) {
   const kinds = className?.split(" ") ?? [];
   if (kinds.includes("image-group")) {
     return <ImageGroup className={className!}>{children}</ImageGroup>;
+  }
+  if (kinds.includes("load-example")) {
+    return <LaunchExample path={String((props as Record<string, unknown>)["data-path"] ?? "")} />;
   }
   if (kinds.includes("vimeo")) {
     return <Vimeo id={String((props as Record<string, unknown>)["data-id"] ?? "")} title={props.title} />;
