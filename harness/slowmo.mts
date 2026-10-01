@@ -314,7 +314,7 @@ async function main() {
   } else if (!real && !given && !args.includes("--no-build")) {
     for (const [cmd, cmdArgs, cwd] of [
       ["npx", ["vite", "build"], "."],
-      ["cargo", ["build", "--bin", "probe"], "src-tauri"],
+      ["cargo", ["build", "--example", "probe"], "src-tauri"],
     ] as const) {
       const run = spawnSync(cmd, [...cmdArgs], { cwd, stdio: "inherit", shell: true });
       if (run.status !== 0) process.exit(run.status ?? 1);
@@ -327,7 +327,7 @@ async function main() {
     app = await launch();
     origin = new URL(app.page.url()).origin + "/";
   } else if (!given) {
-    server = spawn("src-tauri/target/debug/probe.exe", ["--serve", String(port), "--dist", "dist"], { stdio: "ignore" });
+    server = spawn("src-tauri/target/debug/examples/probe.exe", ["--serve", String(port), "--dist", "dist"], { stdio: "ignore" });
   }
 
   // CHROME names a browser other than the one this Playwright pins.

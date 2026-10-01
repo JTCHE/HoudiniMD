@@ -8,9 +8,6 @@ description = "Version-exact Houdini documentation, offline and local."
 authors = ["JTCHE"]
 edition = "2024"
 rust-version = "1.85"
-# `src/bin/probe.rs` is a second binary, so `cargo run` needs to be told which
-# one the app is.
-default-run = "houdinimd"
 
 [lib]
 # The desktop binary and any future test harness both link this.

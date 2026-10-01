@@ -1,8 +1,8 @@
 //! WHAT THE BACK END COSTS, MEASURED, WITH A BUDGET THAT CAN FAIL.
 //!
-//!   cargo run --release --bin probe
-//!   cargo run --release --bin probe -- --runs 5
-//!   cargo run --release --bin probe -- --out ../harness/out/probe.json
+//!   cargo run --release --example probe
+//!   cargo run --release --example probe -- --runs 5
+//!   cargo run --release --example probe -- --out ../harness/out/probe.json
 //!
 //! Every number here is a real call into `houdinimd_lib`, on the Houdini
 //! install this machine has, with no app and no window around it. That is the

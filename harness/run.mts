@@ -11,7 +11,7 @@
  *
  * Four measuring parts, each in its own file and each able to run alone:
  *
- *   src-tauri/src/bin/probe   the back end: indexing, search, pages, images
+ *   src-tauri/examples/probe   the back end: indexing, search, pages, images
  *   harness/ui.mts            the front end, in a real browser
  *   harness/load.mts          a Houdini cook, so none of it is measured quiet
  *   harness/app.mts           the shipped binary, driven and watched
@@ -88,7 +88,7 @@ function run(command: string, args: string[], cwd?: string): void {
 
 /** The back-end probe, as parsed metrics. */
 function backend(runs: number): UiMetric[] {
-  const res = spawnSync("src-tauri/target/release/probe.exe", ["--runs", String(runs)], {
+  const res = spawnSync("src-tauri/target/release/examples/probe.exe", ["--runs", String(runs)], {
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
   });
@@ -98,7 +98,7 @@ function backend(runs: number): UiMetric[] {
 
 async function serve(port: number) {
   const child = spawn(
-    "src-tauri/target/release/probe.exe",
+    "src-tauri/target/release/examples/probe.exe",
     ["--serve", String(port), "--dist", "dist"],
     { stdio: ["ignore", "pipe", "inherit"] },
   );
@@ -271,7 +271,7 @@ async function main() {
 
   if (!has("--no-build")) {
     run("bun", ["run", "build"]);
-    run("cargo", ["build", "--release", "--bin", "probe"], "src-tauri");
+    run("cargo", ["build", "--release", "--example", "probe"], "src-tauri");
   }
 
   const file = readBudgets();

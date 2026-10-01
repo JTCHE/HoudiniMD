@@ -128,13 +128,12 @@ breaks every installed copy.
 
     bun run tauri build
 
-Two traps, both cost a build here:
+Run it from **Bash**, not PowerShell. `$env:NAME = ""` deletes the variable
+rather than setting it empty, so the signer stops and asks for a password that
+does not exist, and the build hangs after writing the bundle.
 
-- Run it from **Bash**, not PowerShell. `$env:NAME = ""` deletes the variable
-  rather than setting it empty, so the signer stops and asks for a password
-  that does not exist, and the build hangs after writing the bundle.
-- Stop `probe.exe` first. It holds `target/release/probe.exe` open and cargo
-  cannot replace it.
+The bundler packs every `[[bin]]` of the crate into the installer. A tool that
+users must not get, such as `probe`, is a cargo example.
 
 ## The installer
 

@@ -4,7 +4,7 @@
  *   node harness/ui.mts --port 8801            # against a running --serve
  *   node harness/ui.mts --port 8801 --label "under load"
  *
- * The back-end numbers are `src-tauri/src/bin/probe/main.rs`. This file
+ * The back-end numbers are `src-tauri/examples/probe/main.rs`. This file
  * answers the ones that only exist once a person is typing at the app: the
  * delay between a key press and the row that answers it, the time a page takes
  * to open and draw, and what happens when navigation is hammered.

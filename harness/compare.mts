@@ -1187,7 +1187,7 @@ async function main() {
   fresh = args.includes("--fresh");
 
   if (!args.includes("--no-build") && !given) {
-    const built = spawnSync("cargo", ["build", "--bin", "probe"], { cwd: "src-tauri", stdio: "inherit", shell: true });
+    const built = spawnSync("cargo", ["build", "--example", "probe"], { cwd: "src-tauri", stdio: "inherit", shell: true });
     if (built.status !== 0) process.exit(built.status ?? 1);
   }
 
@@ -1199,7 +1199,7 @@ async function main() {
   const port = given ? Number(given) : await freePort();
   let server: ChildProcess | null = null;
   if (!given) {
-    server = spawn("src-tauri/target/debug/probe.exe", ["--serve", String(port), "--dist", "dist"], { stdio: "ignore" });
+    server = spawn("src-tauri/target/debug/examples/probe.exe", ["--serve", String(port), "--dist", "dist"], { stdio: "ignore" });
   }
   const base = `http://localhost:${port}/`;
 
