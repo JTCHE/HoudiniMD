@@ -91,8 +91,8 @@
   },
   "routes": [
     {
-      "pattern": "nodebook.md/*",
-      "zone_name": "nodebook.md",
+      "pattern": "nodebook.md",
+      "custom_domain": true,
     },
     // The old host. `worker.ts` answers it with a 301 to nodebook.md.
     // telemetry.houdinimd.com is its own Worker and does not match.
