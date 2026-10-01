@@ -1,6 +1,6 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { ControlButton } from "@/components/ui/control-button";
 import { cn } from "@/lib/utils";
 import { FALLBACK, PLATFORMS, type Platform } from "@/lib/download";
@@ -113,13 +113,31 @@ export function DownloadKey({ className, ...rest }: { className?: string } & Rec
   );
 }
 
-/** Opens the page in the installed app. A desktop only: there is no app on a phone. */
+/** Set by the first click on "Open in app": that reader has the app. */
+const OPENS_IN_APP = "opens-in-app";
+
+/**
+ * Opens the page in the installed app. A desktop only: there is no app on a
+ * phone. After one click, later visits open the app by themselves. A reader
+ * who never clicked never gets a browser prompt for an app they may not have.
+ */
 export function OpenInApp({ href }: { href: string }) {
   const platform = usePlatform();
-  if (!FEATURES.openInApp || !platform) return null;
+  const on = FEATURES.openInApp && !!platform;
+  useEffect(() => {
+    try {
+      if (on && localStorage.getItem(OPENS_IN_APP)) window.location.href = href;
+    } catch {}
+  }, [on, href]);
+  if (!on) return null;
   return (
     <a
       href={href}
+      onClick={() => {
+        try {
+          localStorage.setItem(OPENS_IN_APP, "1");
+        } catch {}
+      }}
       className="text-label font-medium text-muted-foreground hover:text-foreground transition-colors"
     >
       Open in app

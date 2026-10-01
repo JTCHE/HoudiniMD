@@ -9,7 +9,7 @@ export const REPO_URL = "https://github.com/JTCHE/NodebookMD";
 export const RELEASES_API = "https://api.github.com/repos/JTCHE/NodebookMD/releases";
 
 /** The app's own link scheme: `<scheme>://docs/<slug>` opens that page in the app. */
-export const APP_SCHEME = "houdinimd";
+export const APP_SCHEME = "nodebookmd";
 
 /** The Houdini MCP: the agent side of the app. */
 export const MCP_URL = "https://github.com/JTCHE/houdini-mcp";
