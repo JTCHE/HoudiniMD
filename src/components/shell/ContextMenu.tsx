@@ -15,17 +15,17 @@ import { revealInSidebar } from "@/components/shell/sidebar/PageTree";
 import { MenuList, type MenuEntry, type MenuGroups } from "@/components/ui/MenuList";
 import { useTrail } from "@/lib/nav";
 import { pageActions } from "@/lib/page-actions";
-import { HOUDINIMD_DOCS_ROOT } from "@/lib/houdini";
+import { sideFxUrl } from "@/lib/sidefx";
 import { COMMAND_KEY } from "@/lib/hotkeys";
 import { invoke, inTauri } from "@/lib/backend";
 import { openLightbox, PAGE_PICTURES } from "@/lib/lightbox";
 import { showToast } from "@/components/ui/toast-notification";
 import { used } from "@/lib/telemetry";
 
-/** The web address of a link the app draws: the site's copy of the page. */
+/** The web address of a link the app draws: the same page on sidefx.com. */
 function shareable(href: string): string {
   const url = new URL(href, location.href);
-  return url.origin === location.origin ? `${HOUDINIMD_DOCS_ROOT}${url.pathname}${url.hash}` : url.href;
+  return url.origin === location.origin ? `${sideFxUrl(url.pathname.slice(1))}${url.hash}` : url.href;
 }
 
 async function copyText(text: string, said: string) {

@@ -6,7 +6,6 @@ import { ACTION, QUIET } from "@/lib/ui/button";
 import { MenuList, type MenuEntry } from "@/components/ui/MenuList";
 import { sideFxUrl } from "@/lib/sidefx";
 import { invoke, inTauri } from "@/lib/backend";
-import { HOUDINIMD_DOCS_ROOT } from "@/lib/houdini";
 import { pageHtml } from "@/lib/markdown/html";
 import { showToast } from "@/components/ui/toast-notification";
 import { COMMAND_KEY, isCommand, isTyping, useHotkey } from "@/lib/hotkeys";
@@ -97,7 +96,7 @@ export function MarkdownActions({ markdown, path, title }: { markdown: string; p
   // name picks the form, so both shapes are made before the dialog opens.
   const save = useCallback(async () => {
     const name = path.split("/").pop() || "page";
-    const html = await pageHtml({ title, source: `${HOUDINIMD_DOCS_ROOT}/${path}` });
+    const html = await pageHtml({ title, source: sideFxUrl(path) });
     if (await invoke<boolean>("save_page", { name, markdown, html })) showToast("Page saved");
   }, [markdown, path, title]);
 
@@ -126,7 +125,7 @@ export function MarkdownActions({ markdown, path, title }: { markdown: string; p
 
   // Ctrl/Cmd+L copies the page's web address, as the menus say.
   const copyLink = useCallback(async () => {
-    await navigator.clipboard.writeText(`${HOUDINIMD_DOCS_ROOT}/${path}`);
+    await navigator.clipboard.writeText(sideFxUrl(path));
     showToast("Link copied");
   }, [path]);
   useHotkey((event) => {
@@ -148,7 +147,7 @@ export function MarkdownActions({ markdown, path, title }: { markdown: string; p
     });
     // The same short request both assistants get: read this page, then answer.
     const prompt =
-      `Please read the Houdini docs page for "${title}" at ${HOUDINIMD_DOCS_ROOT}/${path}.md.
+      `Please read the Houdini docs page for "${title}" at ${sideFxUrl(path)}.
 
 ` +
       "Concisely tell me about it using Simplified Technical English (ASD-STE100).";

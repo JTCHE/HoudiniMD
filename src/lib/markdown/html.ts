@@ -4,7 +4,7 @@
 // and the fonts inside the file. Nothing in it reaches the network, and
 // nothing in it needs the app.
 
-import { HOUDINIMD_DOCS_ROOT } from "@/lib/houdini";
+import { sideFxUrl } from "@/lib/sidefx";
 
 /** The window around the article, which the app draws with its shell. */
 const SHELL = `
@@ -98,9 +98,10 @@ export async function pageHtml({ title, source }: { title: string; source: strin
   window.dispatchEvent(new Event("afterprint"));
 
   // A link inside the app is a path. Outside it that path means nothing, so it
-  // points at the same page on the site.
+  // points at the same page on sidefx.com.
   for (const link of Array.from(page.querySelectorAll<HTMLAnchorElement>("a[href^='/']"))) {
-    link.setAttribute("href", `${HOUDINIMD_DOCS_ROOT}${link.getAttribute("href")}`);
+    const [path, hash] = link.getAttribute("href")!.slice(1).split("#");
+    link.setAttribute("href", hash === undefined ? sideFxUrl(path) : `${sideFxUrl(path)}#${hash}`);
   }
 
   const [, css] = await Promise.all([
