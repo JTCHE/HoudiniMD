@@ -177,7 +177,9 @@ export default function Page() {
   // until the reader takes over.
   useEffect(() => {
     const id = decodeURIComponent(location.hash.slice(1));
-    if (!id || !page) return;
+    // Only on the page the address names: the old page stays on screen while
+    // the next one is read, and it does not have the next page's sections.
+    if (!id || page?.path !== path) return;
     const box = scroller.current;
     if (!box) return;
     const aimAtIt = () => {
@@ -216,7 +218,7 @@ export default function Page() {
       cancelAnimationFrame(frame);
       stop();
     };
-  }, [location.hash, page]);
+  }, [location.hash, page, path]);
 
   // A search excerpt the reader picked: the page opens at those words and
   // marks them. Once per navigation, so the same excerpt picked twice marks
