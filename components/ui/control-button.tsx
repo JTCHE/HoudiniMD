@@ -41,7 +41,9 @@ export function ControlButton({
     // The press drops it and sinks the key by the same 1px, so the two
     // states differ the way a real key does.
     "shadow-control inset-shadow-[0_1px_0_0_var(--control-sheen)]",
-    "transition duration-(--duration-fast) active:translate-y-px active:inset-shadow-none",
+    // Only what the press changes. A plain `transition` also animates the
+    // gradient variables, and Safari can leave them at their transparent start.
+    "transition-[translate,box-shadow] duration-(--duration-fast) active:translate-y-px active:inset-shadow-none",
     "disabled:cursor-wait motion-reduce:transition-none",
     className,
   );

@@ -17,14 +17,15 @@ layout.
 For iOS, confirm the change through the WebKit pipeline:
 
 ```bash
-node scripts/webkit-shot.ts houdini/nodes/dop/pyrosolver
+MSYS_NO_PATHCONV=1 node scripts/webkit-shot.ts /docs/houdini/nodes/chop
 ```
 
 - **`node`, never `bun`.** Bun on Windows cannot hold Playwright's stdio pipe,
   so the launch times out.
-- The dev server must run (`bun run dev`).
-- The script writes `shots/{top,scrolled,open,jumped}.png` at iPhone 14 Pro
-  size. Read the PNGs. That is the feedback loop.
+- The dev server must run on port 3112, or set `SHOT_BASE`.
+- `MSYS_NO_PATHCONV=1` stops Git Bash from turning the path into a file path.
+- The script writes `shots/{first,settled}.png` at iPhone 14 Pro size: before
+  and after hydration. Read the PNGs.
 
 For a one-off check, copy the script, edit it, run it, delete it. Assert with
 `page.evaluate` — counts, rects, `aria-current` — instead of your eyes.
