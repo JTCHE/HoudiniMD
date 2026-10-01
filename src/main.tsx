@@ -6,6 +6,7 @@ import Home from "./routes/Home";
 import Page from "./routes/Page";
 import { AppShell } from "./components/shell/AppShell";
 import { ToastListener } from "./components/ui/toast-notification";
+import { DeepLinks } from "./components/shell/DeepLinks";
 import { startTheme } from "./lib/ui/theme";
 import { startPress } from "./lib/ui/press";
 import { startBlurCheck } from "./lib/ui/blur";
@@ -118,6 +119,7 @@ createRoot(document.getElementById("root")!).render(
         </Routes>
       </AppShell>
       <ToastListener />
+      <DeepLinks />
     </BrowserRouter>
   </StrictMode>,
 );

@@ -1076,6 +1076,21 @@ fn hook_from_the_command_line(data: &std::path::Path, port: u16, cache: &install
     }
 }
 
+/// The installer registers the link scheme on Windows, but an AppImage has
+/// no installer, and a moved AppImage leaves a registration that names the old
+/// path. So every launch points the scheme at this executable. Not in a debug
+/// build: `bun run app` would take the scheme from the installed app.
+fn register_link_scheme(app: &tauri::App) {
+    #[cfg(all(not(debug_assertions), any(windows, target_os = "linux")))]
+    {
+        use tauri_plugin_deep_link::DeepLinkExt;
+        if let Err(reason) = app.deep_link().register_all() {
+            crate::say!(Warn, "link", "the link scheme did not register: {reason}");
+        }
+    }
+    let _ = app;
+}
+
 /// The port the localhost server took, so the front-end can show it and the
 /// hook commands can write it. Zero where the server did not start.
 struct Port(u16);
@@ -1099,6 +1114,10 @@ pub fn run() {
     #[cfg(not(debug_assertions))]
     let builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, _| tray::second_launch(app, argv)));
     builder
+        // `nodebookmd://docs/<slug>`, the link on the site's notice. The page
+        // routes it (`DeepLinks` in `main.tsx`); a second launch that carries
+        // one shows the window through `tray::second_launch`.
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(update::plugin())
@@ -1156,6 +1175,7 @@ pub fn run() {
                 Err(reason) => crate::say!(Warn, "install", "no build to read: {reason}"),
             }
             tray::build(app)?;
+            register_link_scheme(app);
             telemetry::start(app.handle());
             // The window is hidden in `tauri.conf.json`. This shows it, after
             // the update check has had its say.
