@@ -38,6 +38,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { resolve } from "node:path";
 import sharp from "sharp";
+import { buildAsciiField } from "../src/lib/landing/asciiField.ts";
 import tauri from "../src-tauri/tauri.conf.json" with { type: "json" };
 const { productName } = tauri;
 import { launch } from "./app.mts";
@@ -231,7 +232,6 @@ function speedup(results: Results, press: Press, key: keyof Sample): number {
 
 export interface Chart {
   title: string;
-  lede: string;
   stat: string;
   statNote: string;
   /** The reference first, this app second. */
@@ -241,11 +241,12 @@ export interface Chart {
 }
 
 const GEIST = "node_modules/@fontsource-variable/geist/files/geist-latin-wght-normal.woff2";
+const GEIST_MONO = "node_modules/@fontsource-variable/geist-mono/files/geist-mono-latin-wght-normal.woff2";
+const ICON = "src-tauri/icons/128x128@2x.png";
 
 /**
- * Draws a chart in the site's own language: Geist, the neutral ramp, one
- * brand colour for the product, hairlines. Values from `app/globals.css` in
- * the website repository, written out as the plain colours they resolve to.
+ * Draws a chart in the landing page's language: Geist, the neutral ramp, the
+ * ASCII wave behind, and the brand orange for this app. Values from `src/styles/globals.css`.
  */
 export async function drawChart(chart: Chart, file: string) {
   const browser = await chromium.launch();
@@ -258,9 +259,8 @@ export async function drawChart(chart: Chart, file: string) {
 
 /** The chart as a page, 1600 × 900. */
 export function chartHtml(chart: Chart): string {
-  const font = readFileSync(GEIST).toString("base64");
-  const c = { bg: "#ffffff", ink: "#0a0a0a", muted: "#737373", faint: "#a3a3a3", rule: "rgba(0,0,0,.09)", ref: "#d4d4d4" };
-  const brand = "#e8622c";
+  const b64 = (f: string) => readFileSync(f).toString("base64");
+  const c = { ink: "oklch(0.145 0 0)", muted: "oklch(0.556 0 0)", faint: "oklch(0.708 0 0)", rule: "oklch(0 0 0 / 9%)" };
   const top = Math.max(...chart.rows.flatMap((r) => [r.a, r.b]));
   const step = [0.25, 0.5, 1, 2, 5, 10].find((s) => top / s <= 6)!;
   const max = Math.ceil(top / step) * step;
@@ -272,40 +272,48 @@ export function chartHtml(chart: Chart): string {
     .map(
       (r) => `<div class="row"><div class="label">${r.label}</div><div class="bars">
         <div class="bar ref" style="width:${pct(r.a)}"><span>${secs(r.a)}</span></div>
-        <div class="bar hmd" style="width:${pct(r.b)}"><span>${secs(r.b)}</span></div></div></div>`,
+        <div class="bar key" style="width:${pct(r.b)}"><span>${secs(r.b)}</span></div></div></div>`,
     )
     .join("");
   return `<!doctype html><meta charset="utf-8"><style>
-@font-face{font-family:Geist;src:url(data:font/woff2;base64,${font}) format("woff2");font-weight:100 900}
+@font-face{font-family:Geist;src:url(data:font/woff2;base64,${b64(GEIST)}) format("woff2");font-weight:100 900}
+@font-face{font-family:"Geist Mono";src:url(data:font/woff2;base64,${b64(GEIST_MONO)}) format("woff2");font-weight:100 900}
+:root{--brand:oklch(0.680 0.174 52)}
 *{box-sizing:border-box;margin:0}
-body{width:1600px;height:900px;background:${c.bg};color:${c.ink};font:400 19px/1.45 Geist,system-ui,sans-serif;font-feature-settings:"tnum";padding:80px 96px 64px;display:flex;flex-direction:column;-webkit-font-smoothing:antialiased}
-header{display:flex;justify-content:space-between;align-items:flex-end;gap:64px}
-h1{font-size:66px;font-weight:600;line-height:.92;letter-spacing:-.045em}
-.lede{color:${c.muted};margin-top:20px;font-size:23px;letter-spacing:-.011em;max-width:700px}
-.stat{text-align:right}
-.stat b{display:block;font-size:66px;font-weight:600;line-height:.92;letter-spacing:-.045em;color:${brand}}
-.stat small{display:block;color:${c.muted};font-size:18px;margin-top:20px}
-.legend{display:flex;gap:32px;margin-top:40px;font-size:19px;font-weight:500}
-.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:9px;vertical-align:-1px}
-.chart{flex:1;display:flex;flex-direction:column;margin-top:28px;position:relative}
-.grid{position:absolute;left:280px;right:80px;top:0;bottom:36px}
-.grid div{position:absolute;top:0;bottom:0;border-left:1px solid ${c.rule}}
-.grid span{position:absolute;bottom:-34px;transform:translateX(-50%);font-size:17px;color:${c.faint}}
+body{width:1600px;height:900px;background:#fff;color:${c.ink};font:400 19px/1.45 Geist,system-ui,sans-serif;font-feature-settings:"tnum";padding:76px 96px 60px;display:flex;flex-direction:column;-webkit-font-smoothing:antialiased;position:relative;overflow:hidden}
+.field{position:absolute;inset:-8px 0 auto;font:400 13px/1.625 "Geist Mono",ui-monospace,monospace;white-space:pre;color:${c.ink};opacity:.09;pointer-events:none;
+  -webkit-mask-image:radial-gradient(ellipse 45% 90% at 100% 0%,#000 0%,rgba(0,0,0,.5) 45%,transparent 80%)}
+header,.legend,.chart,footer{position:relative}
+h1{font-size:64px;font-weight:600;line-height:1.05;letter-spacing:-.04em}
+h1 em{font-style:normal;color:var(--brand)}
+header p{color:${c.muted};font-size:22px;margin-top:16px;letter-spacing:-.01em}
+.legend{display:flex;gap:32px;align-items:center;margin-top:44px;font-size:19px;font-weight:500}
+.legend span{display:flex;align-items:center;gap:10px}
+.legend i{display:inline-block;width:28px;height:14px;border-radius:4px}
+.chart{flex:1;display:flex;flex-direction:column;margin-top:24px}
+.grid{position:absolute;left:280px;right:88px;top:0;bottom:36px}
+.grid div{position:absolute;top:0;bottom:0;border-left:1px dashed ${c.rule}}
+.grid span{position:absolute;bottom:-34px;transform:translateX(-50%);font:400 15px "Geist Mono",monospace;color:${c.faint}}
 .rows{flex:1;display:flex;flex-direction:column;justify-content:space-around;padding-bottom:36px}
 .row{display:flex;align-items:center}
-.label{width:280px;font-size:25px;font-weight:500;letter-spacing:-.01em}
-.bars{flex:1;margin-right:80px;display:flex;flex-direction:column;gap:6px}
-.bar{height:34px;border-radius:0 8px 8px 0;position:relative;min-width:6px}
-.bar span{position:absolute;left:100%;top:50%;transform:translateY(-50%);padding-left:12px;font-size:20px;white-space:nowrap}
-.ref{background:${c.ref}}.ref span{color:${c.muted}}
-.hmd{background:${brand}}.hmd span{font-weight:600}
-footer{margin-top:32px;padding-top:22px;border-top:1px solid ${c.rule};font-size:17px;color:${c.muted};display:flex;gap:10px;flex-wrap:wrap}
+.label{width:280px;font-size:25px;font-weight:500;letter-spacing:-.015em}
+.bars{flex:1;margin-right:88px;display:flex;flex-direction:column;gap:6px}
+.bar{height:26px;border-radius:6px;position:relative;min-width:10px}
+.bar span{position:absolute;left:100%;top:50%;transform:translateY(-50%);padding-left:14px;font:500 19px "Geist Mono",monospace;white-space:nowrap;letter-spacing:-.02em}
+.ref{background:oklch(0.922 0 0)}
+.ref span{color:${c.muted}}
+.key{background:var(--brand)}
+.key span{color:${c.ink};font-weight:600}
+footer{margin-top:30px;padding-top:22px;border-top:1px solid ${c.rule};font-size:16px;white-space:nowrap;color:${c.muted};display:flex;align-items:center;gap:10px}
 footer span+span:before{content:"·";margin-right:10px;color:${c.faint}}
-</style><header><div><h1>${chart.title}</h1><p class="lede">${chart.lede}</p></div>
-<div class="stat"><b>${chart.stat}</b><small>${chart.statNote}</small></div></header>
-<div class="legend"><span><i style="background:${c.ref}"></i>${chart.series[0]}</span><span><i style="background:${brand}"></i>${chart.series[1]}</span></div>
+footer .brand{margin-left:auto;display:flex;align-items:center;gap:10px;font-weight:600;color:${c.ink};letter-spacing:-.01em}
+footer .brand:before{content:none}
+footer img{width:28px;height:28px}
+</style><pre class="field">${buildAsciiField(0.6, 190, 32)}</pre>
+<header><h1><em>${chart.stat}</em> ${chart.title}</h1><p>${chart.statNote}</p></header>
+<div class="legend"><span><i class="ref"></i>${chart.series[0]}</span><span><i class="key"></i>${chart.series[1]}</span></div>
 <div class="chart"><div class="grid">${ticks.map((t) => `<div style="left:${pct(t)}"><span>${tick(t)}</span></div>`).join("")}</div><div class="rows">${rows}</div></div>
-<footer>${chart.footer.map((f) => `<span>${f}</span>`).join("")}</footer>`;
+<footer>${chart.footer.map((f) => `<span>${f}</span>`).join("")}<span class="brand"><img src="data:image/png;base64,${b64(ICON)}">${chart.series[1]}</span></footer>`;
 }
 
 /* ─────────────────────────────── main ─────────────────────────────── */
@@ -363,18 +371,12 @@ async function main() {
   if (args.includes("--chart")) {
     const med = (s: string, label: string, p: Press) => median(results[s][label][p].map((x) => x.ready)) / 1000;
     const chart: Chart = {
-      title: "F1 in Houdini",
-      lede: `The same Houdini doc pages, pressed in the help pane. Houdini's own help server vs. ${productName}.`,
+      title: "than Houdini's help server",
       stat: `${speedup(results, "cold", "ready").toFixed(1)}× faster`,
-      statNote: "to a readable page, median across all pages",
+      statNote: "Median time to a readable page",
       series: ["Houdini help server", productName],
       rows: PAGES.map((p) => ({ label: p.label, a: med("SideFX", p.label, "cold"), b: med(productName, p.label, "cold") })),
-      footer: [
-        "Lower is better",
-        `Houdini ${install?.version ?? ""}, same machine, pane engine Chromium ${chromiumVersion.split(".")[0]}`,
-        `median of ${runs} presses per page, fresh pane`,
-        `${speedup(results, "first", "ready").toFixed(1)}× faster on the first press after launch`,
-      ],
+      footer: [`Houdini ${install?.version ?? ""}`, `${runs} runs per page`],
     };
     await drawChart(chart, "public/help-server-benchmark.png");
     console.log("Chart: public/help-server-benchmark.png");

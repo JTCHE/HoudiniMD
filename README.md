@@ -32,9 +32,9 @@ NodebookMD reads the same pages from your install, indexes them once, and displa
 
 ## Speed
 
-NodebookMD opens a readable page 13 times faster than Houdini's own help server.
+NodebookMD opens a readable page 19 times faster than Houdini's own help server.
 
-<img src="public/help-server-benchmark.png" alt="A bar chart of the time from F1 to a readable page in Houdini's help pane, for Houdini's own help server and for NodebookMD. NodebookMD is 13.1 times faster at the median.">
+<img src="public/help-server-benchmark.png" alt="A bar chart of the time from F1 to a readable page in Houdini's help pane, for Houdini's own help server and for NodebookMD. NodebookMD is 19.3 times faster at the median.">
 
 ## Install
 
