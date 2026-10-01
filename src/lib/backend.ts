@@ -38,7 +38,16 @@ async function http<T>(command: string, args?: Args): Promise<T> {
   const search = query.toString();
   const url = `/api/${command}${search ? `?${search}` : ""}`;
   const answer = await fetch(url);
-  if (!answer.ok) throw new Error(await answer.text());
+  if (!answer.ok) {
+    // A missing page comes back as its `PageError`, the same value `invoke`
+    // rejects with; anything else is a plain message.
+    const text = await answer.text();
+    let reason: unknown = null;
+    try {
+      reason = JSON.parse(text);
+    } catch {}
+    throw typeof reason === "object" && reason ? reason : new Error(text);
+  }
   return (await answer.json()) as T;
 }
 

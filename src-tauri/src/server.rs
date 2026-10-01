@@ -210,7 +210,12 @@ fn api(
         "report_use" | "report_search" => serde_json::to_vec(&true),
         "clean_start" => serde_json::to_vec(&false),
         "page" => match current(db, chosen, cache).and_then(|i| {
-            let mut page = crate::read_page(&i, &call.path).map_err(|e| e.message)?;
+            // A missing page goes back whole, as `invoke` gives it: the
+            // `missing` flag is what draws the not-found page in the pane.
+            let mut page = crate::read_page(&i, &call.path).map_err(|e| match e.missing {
+                true => serde_json::to_string(&e).unwrap_or(e.message),
+                false => e.message,
+            })?;
             page.node_versions = db
                 .ok()
                 .and_then(|db| db.lock().ok())
