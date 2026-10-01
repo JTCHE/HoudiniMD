@@ -5,7 +5,7 @@
  * It is pinned to the bottom rather than following the tree, so settings and
  * the theme switch are in the same place whether the tree is open or shut.
  */
-import { openSettings } from "@/components/settings/SettingsDialog";
+import { SETTINGS_KEYS, openSettings } from "@/components/settings/SettingsDialog";
 import { cn } from "@/lib/utils";
 import { Icons } from "@/lib/ui/icons";
 import { toggleTheme, useTheme } from "@/lib/ui/theme";
@@ -51,7 +51,7 @@ export function SidebarFooter({ recentCount, recentsOpen, onToggleRecents, class
       {/* The two that change the app side by side; the bug report, which
           leaves it, apart in the far corner. */}
       <div className="flex items-center gap-2xs px-ms pt-ms">
-        <Hint label="Settings">
+        <Hint label="Settings" keys={SETTINGS_KEYS}>
           <button type="button" aria-label="Settings" className={FOOTER_BUTTON} onClick={openSettings}>
             <Icons.settings className="size-[18px]" />
           </button>

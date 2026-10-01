@@ -10,9 +10,8 @@
 import { useEffect, useRef } from "react";
 import { DatabaseZap, FileText, Settings, Trash2 } from "lucide-react";
 import { invoke } from "@/lib/backend";
-import { COMMAND_KEY } from "@/lib/hotkeys";
 import { showToast } from "@/components/ui/toast-notification";
-import { openSettings } from "@/components/settings/SettingsDialog";
+import { SETTINGS_KEYS, openSettings } from "@/components/settings/SettingsDialog";
 import { MenuList } from "@/components/ui/MenuList";
 import { APP_NAME } from "@/lib/brand";
 
@@ -59,7 +58,7 @@ export function TitleBarMenu({ at, onClose }: { at: { x: number; y: number }; on
       style={{ top: at.y, left: at.x }}
       className="fixed z-50 min-w-52"
       groups={[
-        [{ label: "Settings", icon: Settings, keys: `${COMMAND_KEY}+,`, run: openSettings }],
+        [{ label: "Settings", icon: Settings, keys: SETTINGS_KEYS, run: openSettings }],
         [{ label: "Open logs", icon: FileText, run: () => invoke("show_logs") }],
         [
           { label: "Reset index", icon: DatabaseZap, run: resetIndex },

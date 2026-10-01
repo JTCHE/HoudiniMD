@@ -9,7 +9,7 @@
  */
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { invoke, inTauri } from "@/lib/backend";
-import { isCommand, useHotkey } from "@/lib/hotkeys";
+import { COMMAND_KEY, isCommand, useHotkey } from "@/lib/hotkeys";
 import { cn } from "@/lib/utils";
 import { Icons } from "@/lib/ui/icons";
 import { Modal, MODAL_LINE, MODAL_TOP } from "@/components/ui/Modal";
@@ -23,6 +23,9 @@ import { APP_NAME } from "@/lib/brand";
 import { OBSIDIAN_PICTURES, OBSIDIAN_VAULT, picturesChoice, rememberedVault, type PicturesChoice } from "@/lib/obsidian";
 
 const OPEN = "houdinimd:settings";
+
+/** The keys that open Settings, as the menu and the tooltip show them. */
+export const SETTINGS_KEYS = `${COMMAND_KEY}+,`;
 
 export function openSettings() {
   window.dispatchEvent(new Event(OPEN));
