@@ -298,7 +298,9 @@ export function PageTree({ groups, currentPath, bookmarked, className }: PageTre
   };
 
   return (
-    <nav ref={nav} aria-label="Documentation" className={cn("relative flex min-h-0 flex-col", className)}>
+    // `isolate` keeps the pinned headers' z-index inside the tree, so a panel
+    // that opens over the tree (the version switcher) stays on top of them.
+    <nav ref={nav} aria-label="Documentation" className={cn("relative isolate flex min-h-0 flex-col", className)}>
       {/* Drawn over the list, not inside it — see the note at the top of the
           file. `pointer-events-none` on the box and back on the rows, so the
           gap beside a pinned header still scrolls the list under it. */}
