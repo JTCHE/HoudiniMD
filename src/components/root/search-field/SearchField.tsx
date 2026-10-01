@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { useNavigate } from "react-router";
 import { cn } from "@/lib/utils";
-import { pastedPath, resolve, titles } from "@/lib/search";
+import { pastedPath, rememberSearch, resolve, titles } from "@/lib/search";
 import { useSearch } from "@/lib/use-search";
 import { scopedInput } from "@/lib/scope";
 import { ScopeChip } from "@/components/search/ScopeChip";
@@ -106,6 +106,7 @@ export function SearchField({ className, autoFocus = true }: { className?: strin
     tell(rows.findIndex((row) => row.hit.path === hit.path));
     // A row of the list may name a heading of the page, not only the page.
     const row = open && rows[selected]?.hit === hit ? rows[selected] : null;
+    rememberSearch(hit);
     go(row ? rowPath(row) : hit.path, row?.section?.excerpt);
   }
 
@@ -249,6 +250,7 @@ export function SearchField({ className, autoFocus = true }: { className?: strin
           onSelect={setSelected}
           onActivate={(row, rank) => {
             tell(rank);
+            rememberSearch(row.hit);
             go(rowPath(row), row.section?.excerpt);
           }}
           className={cn("absolute top-full right-0 left-0 z-10", SEARCH_DROPDOWN_CLASS)}

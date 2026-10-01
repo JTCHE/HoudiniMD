@@ -66,6 +66,26 @@ export interface Hit {
   place?: string[];
 }
 
+const RECENT_SEARCHES_KEY = "houdinimd:recent-searches";
+const MAX_RECENT = 5;
+
+/** The pages the reader last opened from a search, newest first. Both search
+    boxes write it, and the overlay lists it before anything is typed. */
+export function recentSearches(): Hit[] {
+  try {
+    return JSON.parse(sessionStorage.getItem(RECENT_SEARCHES_KEY) ?? "[]");
+  } catch {
+    return [];
+  }
+}
+
+/** The page, never the section the reader entered it by. */
+export function rememberSearch(hit: Hit) {
+  const page = { ...hit, headings: undefined };
+  const updated = [page, ...recentSearches().filter((r) => r.path !== hit.path)].slice(0, MAX_RECENT);
+  sessionStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(updated));
+}
+
 /** Every title in the build, fetched once and kept for the session.
  *
  *  10,450 titles are small, and holding them here is what makes the pick

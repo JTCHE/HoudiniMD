@@ -19,7 +19,7 @@ import { invoke, inTauri } from "@/lib/backend";
 import { COMMAND_KEY, isCommand, isTyping, useHotkey } from "@/lib/hotkeys";
 import { Icons } from "@/lib/ui/icons";
 import { toggleTheme, useTheme } from "@/lib/ui/theme";
-import { pastedAnchor, pastedPath, resolve, titles, type Hit } from "@/lib/search";
+import { pastedAnchor, pastedPath, recentSearches, rememberSearch, resolve, titles, type Hit } from "@/lib/search";
 import { useSearch } from "@/lib/use-search";
 import { scopedInput } from "@/lib/scope";
 import { ScopeChip } from "@/components/search/ScopeChip";
@@ -40,23 +40,6 @@ const FOOTER_HINTS: Array<{ keys: string[]; label: string }> = [
 
 export interface SearchOverlayRef {
   openSearch: () => void;
-}
-
-const RECENT_SEARCHES_KEY = "houdinimd:recent-searches";
-const MAX_RECENT = 5;
-
-function getRecentSearches(): Hit[] {
-  try {
-    return JSON.parse(sessionStorage.getItem(RECENT_SEARCHES_KEY) ?? "[]");
-  } catch {
-    return [];
-  }
-}
-
-function saveRecentSearch(hit: Hit) {
-  const existing = getRecentSearches().filter((r) => r.path !== hit.path);
-  const updated = [hit, ...existing].slice(0, MAX_RECENT);
-  sessionStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(updated));
 }
 
 /** An action the overlay offers beside the pages. */
@@ -142,7 +125,7 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
       setQuery(seed.current);
       seed.current = "";
       const here = location.pathname.replace(/^\/+/, "");
-      setRecent(getRecentSearches().filter((hit) => hit.path !== here));
+      setRecent(recentSearches().filter((hit) => hit.path !== here));
     }
   }
 
@@ -264,11 +247,7 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
   const openRow = useCallback(
     (row: Row, rank: number) => {
       tell(rank);
-      // Recents store the page, never the section the reader happened to
-      // enter it by.
-      if (location.pathname !== `/${row.hit.path}`) {
-        saveRecentSearch({ ...row.hit, headings: undefined });
-      }
+      if (location.pathname !== `/${row.hit.path}`) rememberSearch(row.hit);
       // A pasted link keeps the section it names: `…/cacheif#how-to` opens
       // the page at How to.
       go(paste && !row.section ? `${row.hit.path}${pastedAnchor(trimmed)}` : rowPath(row), row.section?.excerpt);
@@ -292,7 +271,7 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
       return;
     }
     tell(rows.findIndex((row) => row.hit.path === hit.path));
-    if (location.pathname !== `/${hit.path}`) saveRecentSearch({ ...hit, headings: undefined });
+    if (location.pathname !== `/${hit.path}`) rememberSearch(hit);
     go(`${hit.path}${pastedAnchor(trimmed)}`);
   }, [trimmed, words, hits, go, location.pathname, tell, rows]);
 
