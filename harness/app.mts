@@ -219,7 +219,7 @@ export interface Running {
 
 /**
  * Starts the app from a staged folder and attaches to its window. Waits for
- * an already-running release HoudiniMD to close first: it holds the
+ * an already-running release NodebookMD to close first: it holds the
  * single-instance lock, and a second launch would only hand over to it. It is
  * not stopped: it is the reader's own app, or another session's. A debug
  * build takes no lock (`run` in `lib.rs`), so it is left alone.
@@ -229,9 +229,9 @@ export async function launch(options: { clean?: boolean; telemetry?: string; env
     spawnSync("powershell", ["-NoProfile", "-Command", "(Get-CimInstance Win32_Process -Filter \"Name='houdinimd.exe'\").ExecutablePath"], { encoding: "utf8" })
       .stdout.split(/\r?\n/)
       .some((exe) => exe.trim() && !/\\target\\debug\\/i.test(exe));
-  if (running()) console.error("# waiting for the HoudiniMD that is already running to close");
+  if (running()) console.error("# waiting for the NodebookMD that is already running to close");
   for (const give = Date.now() + 30 * 60_000; running(); await sleep(5000)) {
-    if (Date.now() > give) throw new Error("another HoudiniMD is still running; close it and run again");
+    if (Date.now() > give) throw new Error("another NodebookMD is still running; close it and run again");
   }
   const dir = stage(!!options.clean);
   // A panic prints here before the app aborts; the error below quotes it.
@@ -284,7 +284,7 @@ export async function launch(options: { clean?: boolean; telemetry?: string; env
     }
     await page.waitForLoadState("load");
     // Asked of this process, not found by a scan of 48800 and up: another
-    // HoudiniMD (a debug build, the reader's own) can hold the first port.
+    // NodebookMD (a debug build, the reader's own) can hold the first port.
     const port = (await page.evaluate(() => window.__TAURI_INTERNALS__.invoke("server_port"))) as number;
     if (!port) throw new Error("the app's help server did not start");
     return { pid, port, page, dir, stop };

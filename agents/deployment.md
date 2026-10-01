@@ -43,8 +43,8 @@ The draft step stays, because it is where the notes are written.
 
 ## Release notes
 
-Write them in the vault, under `side projects/Houdini/HoudiniMD/releases/`, one
-file per version: `releases/Open/` while the version is not out, `releases/Closed/`
+Write them in the vault, under `side projects/Houdini/HoudiniMD/specs/Release/`, one
+file per version: `Open/` while the version is not out, `Closed/`
 once it is published. CI cannot read the vault — it is in iCloud — so the file is
 the source and the GitHub release body is a copy. Paste it into the draft
 before publishing.

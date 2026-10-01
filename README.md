@@ -18,7 +18,7 @@ Houdini's help is thorough, but not the handiest to navigate through. Each query
 
 NodebookMD reads the same pages from your install, indexes them once, and displays them in a clean, fast interface. It's completely offline, making it faster and more secure.
 
-![The NodebookMD sidebar, showcasing a version switcher and collapsed categories](public/HoudiniMD_Sidebar_Closeup.png)
+![The NodebookMD sidebar, showcasing a version switcher and collapsed categories](public/NodebookMD_Sidebar_Closeup.png)
 
 ## Features
 
