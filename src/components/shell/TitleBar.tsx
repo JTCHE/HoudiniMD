@@ -16,7 +16,7 @@ import { useTrail } from "@/lib/nav";
 import { WindowControls } from "./WindowControls";
 import { TitleBarMenu } from "./TitleBarMenu";
 import { appWindow } from "@/lib/backend";
-import { COMMAND_KEY } from "@/lib/hotkeys";
+import { COMMAND_KEY, useHotkey } from "@/lib/hotkeys";
 import { Hint } from "@/components/ui/Hint";
 import { APP_NAME } from "@/lib/brand";
 import { version } from "../../../src-tauri/tauri.conf.json";
@@ -171,25 +171,33 @@ export function TitleBar({ sidebarOpen, onToggleSidebar, showTrail, bare = false
 
 /** Keeps the window over every other one, Houdini's included, so the page
     stays in sight while the reader works. Only in the app's own window: the
-    help pane is a panel inside Houdini. It lasts until the window closes. */
+    help pane is a panel inside Houdini. It lasts until the window closes.
+    Ctrl+Alt+T does the same from the keyboard. */
 function PinButton() {
   const [pinned, setPinned] = useState(false);
+  const toggle = () => {
+    const next = !pinned;
+    void appWindow()
+      ?.setAlwaysOnTop(next)
+      .then(() => setPinned(next))
+      .catch(() => {});
+  };
+  // `code`, not `key`: Alt changes the character the key types on macOS.
+  useHotkey((event) => {
+    if (event.code !== "KeyT" || !(event.ctrlKey || event.metaKey) || !event.altKey || event.shiftKey) return;
+    event.preventDefault();
+    toggle();
+  });
   if (!appWindow()) return null;
   return (
-    <Hint label={pinned ? "Stop keeping on top" : "Keep on top"}>
+    <Hint label={pinned ? "Stop keeping on top" : "Keep on top"} keys={`${COMMAND_KEY}+Alt+T`}>
     <button
       type="button"
       tabIndex={-1}
       aria-label={pinned ? "Stop keeping on top" : "Keep on top"}
       aria-pressed={pinned}
       className={cn(BAR_BUTTON, pinned && "text-brand")}
-      onClick={() => {
-        const next = !pinned;
-        void appWindow()
-          ?.setAlwaysOnTop(next)
-          .then(() => setPinned(next))
-          .catch(() => {});
-      }}
+      onClick={toggle}
     >
       <Icons.pin className={cn("size-[13px]", pinned && "fill-current")} />
     </button>
