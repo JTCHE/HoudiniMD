@@ -3,7 +3,7 @@
 //! The localhost server is what answers F1 inside Houdini, so the window is a
 //! view onto a process that must outlive it. Closing the window hides it; the
 //! tray icon brings it back, and its menu is the one way to quit.
-//! See spec: Closing HoudiniMD Should send to Notification Tray.
+//! See spec: Closing the app sends it to the notification tray.
 
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -34,10 +34,10 @@ pub fn second_launch(app: &AppHandle, argv: Vec<String>) {
 }
 
 pub fn build(app: &tauri::App) -> tauri::Result<()> {
-    let open = MenuItem::with_id(app, "open", "Open HoudiniMD", true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, "quit", "Quit HoudiniMD", true, None::<&str>)?;
+    let open = MenuItem::with_id(app, "open", &format!("Open {}", crate::APP_NAME), true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", &format!("Quit {}", crate::APP_NAME), true, None::<&str>)?;
     let mut tray = TrayIconBuilder::with_id("main")
-        .tooltip("HoudiniMD")
+        .tooltip(crate::APP_NAME)
         .menu(&Menu::with_items(app, &[&open, &quit])?)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {

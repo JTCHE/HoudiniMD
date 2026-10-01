@@ -10,6 +10,7 @@
  */
 import { invoke } from "@/lib/backend";
 import { openWeb } from "@/lib/web";
+import { APP_NAME } from "@/lib/brand";
 
 /** The vault the pictures were last written into. */
 export const OBSIDIAN_VAULT = "obsidian-vault";
@@ -49,7 +50,7 @@ export async function pickFolder(): Promise<string | null> {
 }
 
 function fileName(title: string): string {
-  return `HoudiniMD/${title.replace(/[\\/:*?"<>|]/g, " ").trim() || "page"}`;
+  return `${APP_NAME}/${title.replace(/[\\/:*?"<>|]/g, " ").trim() || "page"}`;
 }
 
 /** The text alone, into the vault Obsidian last had open. */

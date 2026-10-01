@@ -38,6 +38,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { resolve } from "node:path";
 import sharp from "sharp";
+import tauri from "../src-tauri/tauri.conf.json" with { type: "json" };
+const { productName } = tauri;
 import { launch } from "./app.mts";
 import { CONFIRMED_CHROMIUM, detectInstalls, gapsFor, qtWebEngineVersion, shimPane } from "./pane.mts";
 
@@ -109,7 +111,7 @@ async function sidefxServer(): Promise<{ base: string; what: string; stop: () =>
 /** This app's server, off a staged copy of the shipped binary. */
 async function houdinimdServer(): Promise<{ base: string; what: string; stop: () => Promise<void> }> {
   const running = await launch();
-  return { base: `http://127.0.0.1:${running.port}/`, what: "HoudiniMD's server, the one F1 opens", stop: running.stop };
+  return { base: `http://127.0.0.1:${running.port}/`, what: `${productName}'s server, the one F1 opens`, stop: running.stop };
 }
 
 /* ─────────────────────────────── one press ─────────────────────────────── */
@@ -232,7 +234,7 @@ export interface Chart {
   lede: string;
   stat: string;
   statNote: string;
-  /** The reference first, HoudiniMD second. */
+  /** The reference first, this app second. */
   series: [string, string];
   rows: { label: string; a: number; b: number }[];
   footer: string[];
@@ -336,8 +338,8 @@ async function main() {
     }
     const hmd = await houdinimdServer();
     try {
-      notes.push(`HoudiniMD: ${hmd.what}.`);
-      results["HoudiniMD"] = await measure(browser, hmd.base, runs, gaps);
+      notes.push(`${productName}: ${hmd.what}.`);
+      results[productName] = await measure(browser, hmd.base, runs, gaps);
     } finally {
       await hmd.stop();
     }
@@ -345,7 +347,7 @@ async function main() {
     await browser.close();
   }
 
-  let md = `# Help server: SideFX against HoudiniMD\n\n${new Date().toISOString()}\n\n${notes.join("\n")}\n`;
+  let md = `# Help server: SideFX against ${productName}\n\n${new Date().toISOString()}\n\n${notes.join("\n")}\n`;
   md += `Pane recreated as Chromium ${chromiumVersion}. Median of ${runs} runs; \`first\` is one sample. Milliseconds.\n\n`;
   for (const pressKind of ["first", "cold", "repeat"] as Press[]) {
     for (const key of ["ttfb", "ready", "complete"] as (keyof Sample)[]) {
@@ -362,11 +364,11 @@ async function main() {
     const med = (s: string, label: string, p: Press) => median(results[s][label][p].map((x) => x.ready)) / 1000;
     const chart: Chart = {
       title: "F1 in Houdini",
-      lede: "The same Houdini doc pages, pressed in the help pane. Houdini's own help server vs. HoudiniMD.",
+      lede: `The same Houdini doc pages, pressed in the help pane. Houdini's own help server vs. ${productName}.`,
       stat: `${speedup(results, "cold", "ready").toFixed(1)}× faster`,
       statNote: "to a readable page, median across all pages",
-      series: ["Houdini help server", "HoudiniMD"],
-      rows: PAGES.map((p) => ({ label: p.label, a: med("SideFX", p.label, "cold"), b: med("HoudiniMD", p.label, "cold") })),
+      series: ["Houdini help server", productName],
+      rows: PAGES.map((p) => ({ label: p.label, a: med("SideFX", p.label, "cold"), b: med(productName, p.label, "cold") })),
       footer: [
         "Lower is better",
         `Houdini ${install?.version ?? ""}, same machine, pane engine Chromium ${chromiumVersion.split(".")[0]}`,

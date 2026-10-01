@@ -5,7 +5,7 @@
  * install, or throw away the reader's own data — which includes the fact that
  * they have run the setup, so the window comes back on the first launch.
  * In every build, not only in a development one. See spec: Right click on
- * HoudiniMD in title bar.
+ * the app name in the title bar.
  */
 import { useEffect, useRef } from "react";
 import { DatabaseZap, FileText, Settings, Trash2 } from "lucide-react";
@@ -14,6 +14,7 @@ import { COMMAND_KEY } from "@/lib/hotkeys";
 import { showToast } from "@/components/ui/toast-notification";
 import { openSettings } from "@/components/settings/SettingsDialog";
 import { MenuList } from "@/components/ui/MenuList";
+import { APP_NAME } from "@/lib/brand";
 
 export function TitleBarMenu({ at, onClose }: { at: { x: number; y: number }; onClose: () => void }) {
   const panel = useRef<HTMLDivElement>(null);
@@ -53,7 +54,7 @@ export function TitleBarMenu({ at, onClose }: { at: { x: number; y: number }; on
   return (
     <MenuList
       ref={panel}
-      label="HoudiniMD"
+      label={APP_NAME}
       onClose={onClose}
       style={{ top: at.y, left: at.x }}
       className="fixed z-50 min-w-52"

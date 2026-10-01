@@ -28,6 +28,12 @@ jobs:
       - name: install front-end dependencies
         run: bun install
 
+      # The release takes the app's name from the one place that holds it.
+      - name: read the app name
+        id: app
+        shell: bash
+        run: echo "name=$(jq -r .productName src-tauri/tauri.conf.json)" >> "$GITHUB_OUTPUT"
+
       - name: build and sign
         uses: tauri-apps/tauri-action@v0
         env:
@@ -39,7 +45,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: "HoudiniMD ${{ github.ref_name }}"
+          releaseName: "${{ steps.app.outputs.name }} ${{ github.ref_name }}"
           # A draft, so the release notes can be pasted in before anyone sees
           # it. Publishing the draft is what starts the update: a draft is
           # invisible to `releases/latest`, and so is a prerelease. That is why
@@ -110,7 +116,7 @@ jobs:
           file=$(ls "$bundle"/*.AppImage)
           # Pack over the file tauri just made: the name is what the release
           # page and `latest.json` already carry.
-          OUTPUT="$PWD/$file" bash src-tauri/linux/widen.sh "$bundle/HoudiniMD.AppDir"
+          OUTPUT="$PWD/$file" bash src-tauri/linux/widen.sh "$bundle"/*.AppDir
           # The signature tauri wrote covers the file before the widen pass, so
           # it is replaced here.
           bun run tauri signer sign "$file"

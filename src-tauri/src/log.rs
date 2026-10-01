@@ -48,7 +48,7 @@ pub fn start(data: &Path, version: &str) {
     if let Ok(mut sink) = SINK.lock() {
         *sink = Some(Sink { file, dir, written });
     }
-    line(Level::Info, "app", format_args!("HoudiniMD {version} starting, data {}", data.display()));
+    line(Level::Info, "app", format_args!("{} {version} starting, data {}", crate::APP_NAME, data.display()));
     line(Level::Info, "app", format_args!("times are UTC"));
 }
 

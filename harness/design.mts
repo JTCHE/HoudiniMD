@@ -25,6 +25,8 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { resolve } from "node:path";
 import { recycle } from "./app.mts";
+import tauri from "../src-tauri/tauri.conf.json" with { type: "json" };
+const { productName } = tauri;
 
 const OUT = "harness/out/design";
 const WIDE = { width: 1280, height: 820 };
@@ -510,8 +512,8 @@ const AREAS: Area[] = [
     scenes: ["docs-node"],
     check: async (page) => {
       const before = await page.evaluate(() => location.hash);
-      const name = page.locator("header a, header button").filter({ hasText: "HoudiniMD" }).first();
-      if ((await name.count()) === 0) return one("", "titlebar.brand_home", "a HoudiniMD control", "none");
+      const name = page.locator("header a, header button").filter({ hasText: productName }).first();
+      if ((await name.count()) === 0) return one("", "titlebar.brand_home", `a ${productName} control`, "none");
       await name.click();
       await page.waitForTimeout(400);
       const after = await page.evaluate(() => location.hash);

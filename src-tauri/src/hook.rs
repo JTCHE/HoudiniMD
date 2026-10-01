@@ -192,19 +192,43 @@ const PYTHONS: [&str; 5] = ["3.10", "3.11", "3.12", "3.13", "3.14"];
 /// reader's files, and removing the one package file undoes it all.
 fn start_with_houdini(data: &Path, prefs: &Path) -> Result<(), String> {
     let root = data.join("houdini");
-    // A debug build draws its window from the Vite dev server. Named here, it
-    // would start with Houdini after the dev server is gone and show
-    // "localhost refused to connect", so it leaves the script to the installed app.
-    if !cfg!(debug_assertions) {
-        let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-        let script = startup_script(&exe);
-        for python in PYTHONS {
-            write(&root.join(format!("python{python}libs")).join("uiready.py"), &script)?;
-        }
-    }
+    write_startup_script(&root)?;
     let package = serde_json::json!({ "hpath": root.to_string_lossy().replace('\\', "/") });
     let text = serde_json::to_string_pretty(&package).map_err(|e| e.to_string())?;
     write(&prefs.join("packages").join(PACKAGE), &text)
+}
+
+/// The script names this exe. A debug build draws its window from the Vite
+/// dev server. Named here, it would start with Houdini after the dev server is
+/// gone and show "localhost refused to connect", so it leaves the script to
+/// the installed app.
+fn write_startup_script(root: &Path) -> Result<(), String> {
+    if cfg!(debug_assertions) {
+        return Ok(());
+    }
+    // An AppImage runs from a mount that goes when it exits; `APPIMAGE` names
+    // the file itself.
+    let exe = match std::env::var_os("APPIMAGE") {
+        Some(file) => std::path::PathBuf::from(file),
+        None => std::env::current_exe().map_err(|e| e.to_string())?,
+    };
+    let script = startup_script(&exe);
+    for python in PYTHONS {
+        write(&root.join(format!("python{python}libs")).join("uiready.py"), &script)?;
+    }
+    Ok(())
+}
+
+/// Names this exe in the startup script again, on each launch. The install
+/// folder follows the app's name, so a rename moves the exe, and a script that
+/// names the old one starts nothing when Houdini starts.
+pub fn refresh(data: &Path) {
+    if load(data).releases.is_empty() {
+        return;
+    }
+    if let Err(reason) = write_startup_script(&data.join("houdini")) {
+        crate::say!(Warn, "hook", "startup script not written: {reason}");
+    }
 }
 
 /// A second launch hands over to the running app and exits, so this script
@@ -213,8 +237,8 @@ fn startup_script(exe: &Path) -> String {
     // Rust's debug form of a string is a valid Python string literal.
     let exe = format!("{:?}", exe.to_string_lossy());
     format!(
-        "# Written by HoudiniMD. Starts its help server with Houdini, so F1 has an
-# answer. HoudiniMD removes the package that loads this when F1 is given back.
+        "# Written by {name}. Starts its help server with Houdini, so F1 has an
+# answer. {name} removes the package that loads this when F1 is given back.
 import subprocess, sys
 # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP: the app outlives this session.
 flags = 0x00000008 | 0x00000200 if sys.platform == \"win32\" else 0
@@ -222,7 +246,8 @@ try:
     subprocess.Popen([{exe}, \"--background\"], creationflags=flags, close_fds=True)
 except OSError:
     pass
-"
+",
+        name = crate::APP_NAME,
     )
 }
 

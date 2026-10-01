@@ -3,6 +3,7 @@ import { SearchField } from "@/components/root/search-field/SearchField";
 import { LibraryPanel } from "@/components/root/LibraryPanel";
 import { pagesLabel, useBuild, useIndex } from "@/lib/install";
 import { DISPLAY_TITLE } from "@/lib/ui/type";
+import { APP_NAME } from "@/lib/brand";
 
 /**
  * What the window opens on.
@@ -33,7 +34,7 @@ export default function Home() {
           <div className="flex shrink-0 flex-col gap-lg">
             <header className="flex flex-col gap-xs">
               <h1 className={DISPLAY_TITLE}>
-                Welcome to HoudiniMD.
+                Welcome to {APP_NAME}.
               </h1>
               <p className="flex items-center flex-wrap gap-x-sm text-[16px] leading-6 tracking-[-0.012em] text-neutral-500">
                 {version === null ? (

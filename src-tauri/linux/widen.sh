@@ -77,6 +77,6 @@ while IFS= read -r -d '' f; do
 done < <(find "$APPDIR" -type f -print0)
 
 export APPIMAGE_EXTRACT_AND_RUN=1
-export OUTPUT=${OUTPUT:-HoudiniMD.AppImage}
+export OUTPUT=${OUTPUT:-$(basename "$APPDIR" .AppDir).AppImage}
 "$TOOLS/linuxdeploy-plugin-appimage.AppImage" --appdir "$APPDIR"
 ls -la "$OUTPUT"

@@ -22,13 +22,14 @@ import { InstallStep } from "./InstallStep";
 import { McpStep } from "./McpStep";
 import { showToast } from "@/components/ui/toast-notification";
 import { setupDone } from "@/lib/telemetry";
+import { APP_NAME } from "@/lib/brand";
 
 /** The `user.settings` key that says the first launch is over. */
 export const ONBOARDED = "onboarded";
 /** The `user.settings` key that holds the reader's telemetry answer. */
 export const TELEMETRY = "telemetry";
 
-/** Where the step-2 picture lives: HoudiniMD open in Houdini's help pane. It
+/** Where the step-2 picture lives: the app open in Houdini's help pane. It
     ships with the app, the way the cover picture in the README does. */
 const HELP_PANE_PICTURE = "/onboarding/help-pane.webp";
 /** The step-3 picture: the cover of the Houdini MCP repository. */
@@ -125,7 +126,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
           <span className="flex flex-wrap items-center gap-sm">
             Welcome to
             <BrandLogo className="h-[1.1em] w-auto" />
-            HoudiniMD
+            {APP_NAME}
           </span>
         }
         body={
@@ -147,7 +148,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
         step={1}
         action="Continue"
         title="Choose your Houdini install"
-        body="HoudiniMD reads the documentation from the build you select. You can switch between them at any time from the sidebar."
+        body={`${APP_NAME} reads the documentation from the build you select. You can switch between them at any time from the sidebar.`}
       >
         <InstallStep
           value={version}
@@ -165,17 +166,17 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
         step={2}
         action="Continue"
         title="Integrate inside Houdini"
-        body="Set HoudiniMD as the default help server for this install. Press F1 or the “Get Help” button on any node, and HoudiniMD appears directly inside Houdini, on that page."
+        body={`Set ${APP_NAME} as the default help server for this install. Press F1 or the “Get Help” button on any node, and ${APP_NAME} appears directly inside Houdini, on that page.`}
         media={
           <img
             src={HELP_PANE_PICTURE}
-            alt="HoudiniMD open in Houdini's help pane, on the Box node's page"
+            alt={`${APP_NAME} open in Houdini's help pane, on the Box node's page`}
             className="-mx-ms w-auto scale-150 origin-top-left"
           />
         }
       >
         <SettingRow
-          label="Set HoudiniMD as the default help server"
+          label={`Set ${APP_NAME} as the default help server`}
           detail={version ? `Houdini ${version}` : undefined}
           checked={hookOn}
           onChange={setHookOn}
@@ -214,7 +215,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
         title="Help fix what breaks"
         body={
           <>
-            HoudiniMD sends this, and nothing else, under a random number made on this machine: your Houdini build, your
+            {APP_NAME} sends this, and nothing else, under a random number made on this machine: your Houdini build, your
             Windows version, how long the index takes, how long a page takes to open, crash and error messages, the answers
             you give on this setup, the names of the parts of the app you use, and for a search, how many results came back
             and which one you opened.
@@ -243,7 +244,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
       body="Expect bugs. Bookmarks, recent pages and the index can be lost between builds. Some pages can miss content, or render incorrectly. File an issue using the button in the sidebar or directly on GitHub."
     >
       <p className="text-caption text-neutral-400">
-        The documentation is © SideFX. HoudiniMD only presents it. This is an unofficial project, not affiliated with or endorsed
+        The documentation is © SideFX. {APP_NAME} only presents it. This is an unofficial project, not affiliated with or endorsed
         by SideFX.
       </p>
     </StepFrame>

@@ -10,9 +10,45 @@
       ${OrIf} $PassiveMode = 1
         ${Break}
       ${EndIf}
-      ${IfNot} ${Cmd} `MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "Houdini is open. Close Houdini, then click Retry.$\n$\nIf you click Cancel, F1 in Houdini continues to open HoudiniMD, which will not be on this computer." IDRETRY`
+      ${IfNot} ${Cmd} `MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "Houdini is open. Close Houdini, then click Retry.$\n$\nIf you click Cancel, F1 in Houdini continues to open ${PRODUCTNAME}, which will not be on this computer." IDRETRY`
         ${Break}
       ${EndIf}
     ${Loop}
+  ${EndIf}
+!macroend
+
+; The app was called HoudiniMD. The installer names the install folder, the
+; uninstall entry and the shortcuts after the product, so the new name would
+; install beside the old one. This removes the old one. Its uninstaller runs in
+; update mode: the app data (one identifier for both names) and the F1 hook
+; stay, and the app names its new exe in F1's startup script at launch
+; (`hook::refresh`).
+;
+; An update (the updater runs this with /UPDATE) makes no shortcuts, and the
+; old uninstaller in update mode keeps its own. So each old shortcut is
+; replaced here by one with the new name.
+!define OLD_PRODUCTNAME "HoudiniMD"
+!macro NSIS_HOOK_POSTINSTALL
+  ReadRegStr $R0 HKCU "Software\houdinimd\${OLD_PRODUCTNAME}" ""
+  ${If} $R0 != ""
+  ${AndIf} ${FileExists} "$R0\uninstall.exe"
+    ; `_?=` runs it in place and makes ExecWait wait for it, so it cannot
+    ; remove itself or its folder; both go after.
+    ExecWait '"$R0\uninstall.exe" /S /UPDATE _?=$R0'
+    Delete "$R0\uninstall.exe"
+    RMDir "$R0"
+    !insertmacro REPLACE_OLD_SHORTCUT "$SMPROGRAMS"
+    !insertmacro REPLACE_OLD_SHORTCUT "$DESKTOP"
+    DeleteRegKey HKCU "Software\houdinimd\${OLD_PRODUCTNAME}"
+    DeleteRegKey /ifempty HKCU "Software\houdinimd"
+  ${EndIf}
+!macroend
+
+!macro REPLACE_OLD_SHORTCUT folder
+  ${If} ${FileExists} "${folder}\${OLD_PRODUCTNAME}.lnk"
+    !insertmacro UnpinShortcut "${folder}\${OLD_PRODUCTNAME}.lnk"
+    Delete "${folder}\${OLD_PRODUCTNAME}.lnk"
+    CreateShortcut "${folder}\${PRODUCTNAME}.lnk" "$INSTDIR\${MAINBINARYNAME}.exe"
+    !insertmacro SetLnkAppUserModelId "${folder}\${PRODUCTNAME}.lnk"
   ${EndIf}
 !macroend

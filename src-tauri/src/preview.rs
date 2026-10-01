@@ -30,7 +30,7 @@ pub async fn fetch(url: &str) -> Result<Preview, String> {
     let _ = rustls::crypto::ring::default_provider().install_default();
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(5))
-        .user_agent(concat!("HoudiniMD/", env!("CARGO_PKG_VERSION"), " (link preview)"))
+        .user_agent(concat!(env!("APP_NAME"), "/", env!("CARGO_PKG_VERSION"), " (link preview)"))
         // A redirect is checked the same as the link, or a public address
         // could send the request on to one on this network.
         .redirect(reqwest::redirect::Policy::custom(|attempt| {

@@ -1,12 +1,12 @@
-# HoudiniMD
+# NodebookMD
 
-![The HoudiniMD home page, with the app open on a sample page](public/cover.png)
+![The NodebookMD home page, with the app open on a sample page](public/cover.png)
 
-<p align="center">A free desktop app that reads the documentation of the Houdini you have installed.<br>Search it, browse it, and open it from Houdini with <kbd>F1</kbd>, in a fraction of a second.</p>
+<p align="center"><b>Fast docs for SideFX Houdini.</b> Formerly HoudiniMD.<br><br>A free desktop app that reads the documentation of the Houdini you have installed.<br>Search it, browse it, and open it from Houdini with <kbd>F1</kbd>, in a fraction of a second.</p>
 
 <div align="center">
-  <a target="_blank" href="https://houdinimd.com/download"><img src="public/badges/download.svg" height="42" alt="Download for Windows"></a>
-  <a target="_blank" href="https://houdinimd.com"><img src="public/badges/website.svg" height="42" alt="Open HoudiniMD"></a>
+  <a target="_blank" href="https://nodebook.md/download"><img src="public/badges/download.svg" height="42" alt="Download for Windows"></a>
+  <a target="_blank" href="https://nodebook.md"><img src="public/badges/website.svg" height="42" alt="Open NodebookMD"></a>
   <a target="_blank" href="https://github.com/JTCHE/houdini-mcp"><img src="public/badges/mcp.svg" height="42" alt="Houdini MCP"></a>
   <a target="_blank" href="https://github.com/sponsors/JTCHE?frequency=one-time"><img src="public/badges/sponsor.svg" height="42" alt="Sponsor on GitHub"></a>
 </div>
@@ -16,12 +16,12 @@
 
 Houdini's help is thorough, and slow to reach. Each <kbd>F1</kbd> waits on a local help server, and a search means a trip to the browser.
 
-HoudiniMD reads the same pages from your install, indexes them once, and shows them in a clean, fast window. Nothing comes from the network, so the docs always match the build you work in.
+NodebookMD reads the same pages from your install, indexes them once, and shows them in a clean, fast window. Nothing comes from the network, so the docs always match the build you work in.
 
 ## Features
 
 - **Instant search.** <kbd>Ctrl</kbd> <kbd>K</kbd> finds any node, VEX function or HOM class as you type. Paste a sidefx.com link and it opens that page.
-- **<kbd>F1</kbd> inside Houdini.** Set HoudiniMD as the help server of an install. <kbd>F1</kbd> or **Get Help** on a node then opens its page in Houdini's help pane.
+- **<kbd>F1</kbd> inside Houdini.** Set NodebookMD as the help server of an install. <kbd>F1</kbd> or **Get Help** on a node then opens its page in Houdini's help pane.
 - **Your build, offline.** The docs come from the Houdini on your disk. Switch between installs from the sidebar.
 - **Copy as Markdown.** <kbd>Ctrl</kbd> <kbd>C</kbd> copies the whole page as clean Markdown, ready for notes or a prompt.
 - **Bookmarks and history.** <kbd>Ctrl</kbd> <kbd>D</kbd> keeps a page. Recent pages are one click away.
@@ -32,24 +32,24 @@ HoudiniMD reads the same pages from your install, indexes them once, and shows t
 
 <kbd>F1</kbd> opens a readable page 13 times faster than Houdini's own help server.
 
-<img src="public/help-server-benchmark.png" alt="A bar chart of the time from F1 to a readable page in Houdini's help pane, for Houdini's own help server and for HoudiniMD. HoudiniMD is 13.1 times faster at the median.">
+<img src="public/help-server-benchmark.png" alt="A bar chart of the time from F1 to a readable page in Houdini's help pane, for Houdini's own help server and for NodebookMD. NodebookMD is 13.1 times faster at the median.">
 
 ## Install
 
 ### Windows
 
-[**Download for Windows**](https://houdinimd.com/download), run the installer, and choose your Houdini install. The app updates itself.
+[**Download for Windows**](https://nodebook.md/download), run the installer, and choose your Houdini install. The app updates itself.
 
 > [!NOTE]
 > The installer is not signed yet, so Windows shows "Windows protected your PC". Select **More info**, then **Run anyway**.
 
 ### Linux
 
-[**Download the AppImage**](https://houdinimd.com/download/linux), then:
+[**Download the AppImage**](https://nodebook.md/download/linux), then:
 
 ```sh
-chmod +x HoudiniMD.AppImage
-./HoudiniMD.AppImage
+chmod +x NodebookMD.AppImage
+./NodebookMD.AppImage
 ```
 
 It carries its own WebKitGTK, so it needs no packages. It runs on glibc 2.34 and later: Ubuntu 22.04 and 24.04, RHEL 9, Rocky 9 and AlmaLinux 9.
@@ -81,7 +81,7 @@ The file lands in `src-tauri/target/release/bundle/appimage/` and runs on the di
 
 ```sh
 cd src-tauri/target/release/bundle/appimage
-OUTPUT=$PWD/HoudiniMD.AppImage bash ../../../../linux/widen.sh HoudiniMD.AppDir
+OUTPUT=$PWD/NodebookMD.AppImage bash ../../../../linux/widen.sh NodebookMD.AppDir
 ```
 
 The release workflow does all of this: [.github/workflows/release.yml](.github/workflows/release.yml).
@@ -98,4 +98,4 @@ Paid features will come later, for people who want more: notes on a page, and se
 
 Built by [John C](https://jchd.me). The code is released under the [MIT License](LICENSE).
 
-HoudiniMD is an unofficial, independent project. It is not affiliated with or endorsed by SideFX. Houdini is a trademark of SideFX.
+NodebookMD is an unofficial, independent project. It is not affiliated with or endorsed by SideFX. Houdini is a trademark of SideFX.

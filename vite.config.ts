@@ -2,6 +2,11 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "node:path";
+import tauri from "./src-tauri/tauri.conf.json" with { type: "json" };
+
+// The app's name lives once, as `productName`. Vite hands a `VITE_` variable
+// to `%VITE_APP_NAME%` in index.html and to `src/lib/brand.ts`.
+process.env.VITE_APP_NAME = tauri.productName;
 
 // Tauri drives this dev server, so the port is fixed and failures are loud
 // rather than silently moving to another port the Rust side does not know.

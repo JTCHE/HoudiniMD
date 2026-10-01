@@ -18,7 +18,7 @@
  *     reader's browser.
  * The other three have no honest destination and are left out rather than
  * wired to nothing:
- *   - "Set HoudiniMD as F1 help" — the app has no command or settings screen
+ *   - "Set the app as F1 help" — the app has no command or settings screen
  *     that sets itself as Houdini's help target; `help.rs` only reads help
  *     pages out of an install, it does not register one.
  *   - "Keyboard shortcuts" — the mirrored docs page with this title

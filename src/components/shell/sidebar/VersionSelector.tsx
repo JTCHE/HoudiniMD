@@ -17,6 +17,7 @@ import { invoke, inTauri } from "@/lib/backend";
 import { announceBuildChanged, indexedShare, pagesLabel, pickInstall, useIndex, type IndexStatus } from "@/lib/install";
 import { showToast } from "@/components/ui/toast-notification";
 import { TooltipBox } from "@/components/docs/Tooltip";
+import { APP_NAME } from "@/lib/brand";
 
 interface VersionSelectorProps {
   /** `null` while the install is still being read. */
@@ -158,10 +159,10 @@ function F1Chip({
 
   const title = `Houdini ${release} integration`;
   const text = !known
-    ? `Start Houdini ${release} one time. Then HoudiniMD can open from its F1.`
+    ? `Start Houdini ${release} one time. Then ${APP_NAME} can open from its F1.`
     : hooked
-      ? "HoudiniMD is set as the default help server for this version. Click to remove."
-      : "Click to set HoudiniMD as the default help server for this version.";
+      ? `${APP_NAME} is set as the default help server for this version. Click to remove.`
+      : `Click to set ${APP_NAME} as the default help server for this version.`;
 
   return (
     <>

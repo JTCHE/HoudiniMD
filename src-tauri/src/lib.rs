@@ -1,3 +1,6 @@
+/// The app's name, from `productName` in `tauri.conf.json` (see `build.rs`).
+pub const APP_NAME: &str = env!("APP_NAME");
+
 pub mod db;
 pub mod hook;
 pub mod log;
@@ -330,7 +333,7 @@ fn open_page(
     // The page's own path under the temp folder, so two pages with the same
     // last name do not write over each other.
     let (folders, name) = path.rsplit_once('/').unwrap_or(("", &path));
-    let mut file = std::env::temp_dir().join("HoudiniMD");
+    let mut file = std::env::temp_dir().join(APP_NAME);
     file.extend(folders.split('/').filter(|part| !part.is_empty()));
     std::fs::create_dir_all(&file).map_err(|e| e.to_string())?;
     file.push(format!("{name}.{extension}"));
@@ -418,8 +421,8 @@ fn obsidian_vaults() -> Vec<Vault> {
     vaults.into_iter().map(|(_, vault)| vault).collect()
 }
 
-/// Writes the page into the vault at `vault`, under `HoudiniMD/`, its
-/// pictures beside it under `HoudiniMD/attachments/`. The reader picks the
+/// Writes the page into the vault at `vault`, in a folder named for the
+/// app, its pictures beside it in `attachments/`. The reader picks the
 /// vault in the app (see `ObsidianDialog`); this only writes, and returns the
 /// note's path for the app to open it.
 ///
@@ -431,7 +434,7 @@ async fn send_to_obsidian(app: tauri::AppHandle, vault: String, title: String, m
     if !vault.is_dir() {
         return Err(format!("{} is not a folder", vault.display()));
     }
-    let folder = vault.join("HoudiniMD");
+    let folder = vault.join(APP_NAME);
     let attachments = folder.join("attachments");
     std::fs::create_dir_all(&attachments).map_err(|e| e.to_string())?;
 
@@ -1144,6 +1147,7 @@ pub fn run() {
             };
             app.manage(Port(port));
             hook_from_the_command_line(&data, port, &cache);
+            hook::refresh(&data);
             match current_for(&app.handle().clone()) {
                 Ok(install) => {
                     crate::say!(Info, "install", "reading Houdini {} at {}", install.version, install.root.display());

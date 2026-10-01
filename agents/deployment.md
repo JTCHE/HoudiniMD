@@ -21,7 +21,7 @@ Two files, and nothing else:
 
 | file | what it is |
 | --- | --- |
-| `HoudiniMD_<version>_x64-setup.exe` | the installer, about 7 MB |
+| `<productName>_<version>_x64-setup.exe` | the installer, about 7 MB |
 | `latest.json` | the newest version, where to get it, and its signature |
 
 The `.sig` file Tauri writes is **not** uploaded (`uploadUpdaterSignatures:
@@ -139,7 +139,11 @@ Two traps, both cost a build here:
 ## The installer
 
 Per-user, `installMode: "currentUser"`. It installs to
-`%LOCALAPPDATA%\Programs\HoudiniMD` and asks for no administrator rights.
+`%LOCALAPPDATA%\<productName>` and asks for no administrator rights.
+
+The folder, the uninstall entry and the shortcuts follow `productName`. A
+build with a new name installs beside the old one, so `windows/hooks.nsh`
+removes the install of the old name.
 
 **Do not set `installMode` to `both` or `perMachine`.** Both make NSIS ask for
 administrator rights, which means a UAC prompt on every install AND on every

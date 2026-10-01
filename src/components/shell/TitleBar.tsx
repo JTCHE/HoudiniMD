@@ -18,6 +18,7 @@ import { TitleBarMenu } from "./TitleBarMenu";
 import { appWindow } from "@/lib/backend";
 import { COMMAND_KEY } from "@/lib/hotkeys";
 import { Hint } from "@/components/ui/Hint";
+import { APP_NAME } from "@/lib/brand";
 import { version } from "../../../src-tauri/tauri.conf.json";
 
 /* A square icon button on the bar. Smaller than a caption button and rounded,
@@ -108,7 +109,7 @@ export function TitleBar({ sidebarOpen, onToggleSidebar, showTrail, bare = false
       >
         <BrandLogo className="h-[16px] w-auto shrink-0" />
         <span className="translate-y-[0.5px] text-[12.5px] font-medium tracking-[-0.01em] text-neutral-950">
-          HoudiniMD
+          {APP_NAME}
         </span>
       </Link>
       </Hint>

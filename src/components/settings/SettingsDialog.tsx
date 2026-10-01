@@ -19,6 +19,7 @@ import { CHOICE_HANG, ChoiceRow } from "@/components/onboarding/ChoiceRow";
 import { showToast } from "@/components/ui/toast-notification";
 import { TELEMETRY } from "@/components/onboarding/Onboarding";
 import { VaultPicker } from "@/components/obsidian/ObsidianDialog";
+import { APP_NAME } from "@/lib/brand";
 import { OBSIDIAN_PICTURES, OBSIDIAN_VAULT, picturesChoice, rememberedVault, type PicturesChoice } from "@/lib/obsidian";
 
 const OPEN = "houdinimd:settings";
@@ -70,7 +71,7 @@ export function SettingsDialog() {
       </nav>
       <div className={cn("min-w-0 flex-1 overflow-y-auto px-xl pb-lg", MODAL_TOP)}>
         {!inTauri ? (
-          <p className="text-meta text-neutral-500">Settings live in the HoudiniMD app, not in Houdini's help pane.</p>
+          <p className="text-meta text-neutral-500">Settings live in the {APP_NAME} app, not in Houdini's help pane.</p>
         ) : shown === "houdini" ? (
           <HelpSection />
         ) : shown === "mcp" ? (
@@ -153,7 +154,7 @@ function HelpSection() {
   async function flip(release: string, on: boolean) {
     try {
       await invoke(on ? "hook_houdini" : "unhook_houdini", { releases: [release] });
-      showToast(on ? `F1 in Houdini ${release} now opens HoudiniMD. Restart Houdini.` : `F1 in Houdini ${release} opens its own help again.`);
+      showToast(on ? `F1 in Houdini ${release} now opens ${APP_NAME}. Restart Houdini.` : `F1 in Houdini ${release} opens its own help again.`);
     } catch (reason) {
       showToast(String(reason), "error");
     }
@@ -167,7 +168,7 @@ function HelpSection() {
         <Row
           key={one.release}
           label={`Houdini ${one.release}`}
-          detail={!one.external || !one.url ? "Opens Houdini's own help" : one.ours ? "Opens HoudiniMD" : `Opens ${one.url}`}
+          detail={!one.external || !one.url ? "Opens Houdini's own help" : one.ours ? `Opens ${APP_NAME}` : `Opens ${one.url}`}
         >
           <Toggle checked={one.external && one.ours} onChange={(next) => void flip(one.release, next)} label={`Houdini ${one.release}`} />
         </Row>

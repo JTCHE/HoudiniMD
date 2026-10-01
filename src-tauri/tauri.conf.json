@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "HoudiniMD",
+  "productName": "NodebookMD",
   "version": "0.1.0-beta.7",
   "identifier": "com.houdinimd.app",
   "build": {
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "HoudiniMD",
+        "title": "NodebookMD",
         "width": 1100,
         "height": 760,
         "minWidth": 480,
@@ -31,6 +31,7 @@
   "bundle": {
     "active": true,
     "createUpdaterArtifacts": true,
+    "publisher": "NodebookMD",
     "targets": [
       "nsis"
     ],
