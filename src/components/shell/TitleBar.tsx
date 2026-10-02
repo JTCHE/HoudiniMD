@@ -16,7 +16,7 @@ import { useTrail } from "@/lib/nav";
 import { WindowControls } from "./WindowControls";
 import { TitleBarMenu } from "./TitleBarMenu";
 import { appWindow } from "@/lib/backend";
-import { COMMAND_KEY, useHotkey } from "@/lib/hotkeys";
+import { COMMAND_KEY, IS_MAC, useHotkey } from "@/lib/hotkeys";
 import { Hint } from "@/components/ui/Hint";
 import { APP_NAME } from "@/lib/brand";
 import { version } from "../../../src-tauri/tauri.conf.json";
@@ -49,6 +49,7 @@ export function TitleBar({ sidebarOpen, onToggleSidebar, showTrail, bare = false
   const { canGoBack, canGoForward } = useTrail();
   const showArrows = !bare && (showTrail || canGoBack || canGoForward);
   const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null);
+  const nativeFrame = IS_MAC && appWindow() !== null;
 
   return (
     <header
@@ -62,6 +63,9 @@ export function TitleBar({ sidebarOpen, onToggleSidebar, showTrail, bare = false
         // the top of the 32px bar, so 2px from the left too, and its 6px
         // radius is the window's 8px less that inset.
         bare ? "pl-sm" : "pl-[2px]",
+        // macOS draws its traffic lights over the left of the bar, and no
+        // caption buttons sit at the right edge.
+        nativeFrame && "pl-[80px] pr-xs",
         // The hairline is drawn INSIDE the bar. A border would take a pixel
         // off the row, and the caption buttons would stop a pixel short of
         // the bottom of the window's own bar.
