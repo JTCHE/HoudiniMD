@@ -32,7 +32,7 @@ export function openSettings() {
 }
 
 const SECTIONS = [
-  { key: "houdini", label: "Houdini", icon: Icons.groupNodes },
+  { key: "houdini", label: "Houdini Integration", icon: Icons.groupNodes },
   { key: "mcp", label: "Houdini MCP", icon: Icons.newWindow },
   { key: "obsidian", label: "Obsidian", icon: Icons.bookmark },
   { key: "usage", label: "Usage data", icon: Icons.recent },
@@ -165,7 +165,7 @@ function HelpSection() {
   }
 
   return (
-    <Section title="F1 in Houdini" detail="Which installed Houdini releases open their help here when you press F1.">
+    <Section title={`Set ${APP_NAME} as the default help server`} detail="Which installed Houdini releases open their help here when you press F1.">
       {releases?.length === 0 && <Empty>No installed Houdini found on this machine.</Empty>}
       {releases?.map((one) => (
         <Row
