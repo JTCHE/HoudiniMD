@@ -1,6 +1,5 @@
 import { recordPageView, recordViewBeacon } from "./telemetry";
-import { pruneAnalytics } from "./telemetry/prune";
-import type { D1Database } from "./telemetry/types";
+import type { TelemetryEnv } from "./telemetry/types";
 import { cacheKey, fromCache, keep } from "./lib/edge-cache";
 import { storedAnswer, type Bucket } from "./lib/stored-answer";
 import { isProbe } from "./lib/is-probe";
@@ -32,11 +31,9 @@ const nextHandler = (): Promise<NextHandler> =>
     path and query on `URL`, the new origin. */
 const OLD_HOST = "houdinimd.com";
 
-interface Env {
+interface Env extends TelemetryEnv {
   URL: string;
   NEXT_INC_CACHE_R2_BUCKET: Bucket;
-  DB?: D1Database;
-  VISITOR_SALT?: string;
   [key: string]: unknown;
 }
 
@@ -117,10 +114,6 @@ const worker = {
     const answer = goneStatus(url, response);
     recordPageView(request, url, answer, env, ctx);
     return answer;
-  },
-
-  async scheduled(_controller: unknown, env: Env, ctx: { waitUntil(promise: Promise<unknown>): void }) {
-    if (env.DB) ctx.waitUntil(pruneAnalytics(env.DB));
   },
 };
 

@@ -1,7 +1,7 @@
 import { botFamily, browserEvidence, browserKind, deviceKind, fetchSite, primaryLanguage, visitorKind } from "../lib/wants-markdown";
 import { visitorHash } from "../lib/visitor-hash";
 import { visitorLabel } from "../lib/visitor-label";
-import { canRecord, nowStamp, type TelemetryEnv, type WaitUntil } from "./types";
+import { canRecord, type TelemetryEnv, type WaitUntil } from "./types";
 
 /** Where `lib/view-log.ts` reports a client-side navigation. */
 export const VIEW_BEACON_PATH = "/api/view-log";
@@ -63,43 +63,36 @@ async function writeView(
   // The finer identity: address + browser + device, not address alone. Built
   // from browserKind()/deviceKind(), not the raw UA — the raw string changes
   // on every Chrome minor version, which would split a returning reader every
-  // few weeks. `visitor` (hash(IP) alone, below) keeps its meaning so
-  // ownIpHashes() and the hide list keep working on every row, old and new.
+  // few weeks. `visitor` (hash(IP) alone, below) is kept beside it.
   const client = visitorHash(`${ip}|${browserKind(ua, request.headers)}|${deviceKind(ua, request.headers)}`, salt);
   const cf = (request as Request & { cf?: { city?: string; asn?: number; asOrganization?: string } }).cf;
-  await env.DB!.prepare(
-    `INSERT OR IGNORE INTO views (ts, visitor, path, kind, country, city, bot, evidence, status, referrer, markdown, alias, device, browser, fetch_site, lang, asn, as_org, client)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-  )
-    .bind(
-      nowStamp(),
-      visitorHash(ip, salt),
+  // One Analytics Engine data point per read, read by ../nodebookmd-analytics.
+  // Blob and double order is the schema; append, never reorder.
+  env.SITE_EVENTS!.writeDataPoint({
+    indexes: [client],
+    blobs: [
       ev.path,
       kind,
       country,
       cf?.city ?? "",
       botFamily(ua) ?? "",
       browserEvidence(request.headers),
-      String(ev.status),
       ev.referrer,
-      ev.markdown ? "1" : "",
-      // Named from `client`, not `visitor`: a reader's name must not change
-      // when their browser updates, and their editor's header-less `.md`
-      // fetches on the same address earn their own, separate name.
-      visitorLabel(client),
       deviceKind(ua, request.headers),
       browserKind(ua, request.headers),
       // On a beacon these describe the beacon's own fetch, not the navigation
       // it reports — that request really is same-origin — so a beacon row can
-      // never contradict its `from`. Only a document load can, which is the
-      // only place the dashboard reads the pair. See fetchSite().
+      // never contradict its `from`. Only a document load can. See fetchSite().
       fetchSite(request.headers),
       primaryLanguage(request.headers),
-      cf?.asn ?? null,
       cf?.asOrganization ?? "",
-      client,
-    )
-    .run();
+      // Named from `client`, not `visitor`: a reader's name must not change
+      // when their browser updates.
+      visitorLabel(client),
+      visitorHash(ip, salt),
+    ],
+    doubles: [ev.status, cf?.asn ?? 0, ev.markdown ? 1 : 0],
+  });
 }
 
 /**

@@ -29,19 +29,9 @@
       "bucket_name": "houdinimd-cache",
     },
   ],
-  // Page views + searches written by telemetry/*.ts, read by the
-  // houdinimd-analytics TUI (D1 HTTP API, Read-scoped token). 90-day
-  // retention enforced by the scheduled() cron below, not by D1 itself.
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "houdinimd-analytics",
-      "database_id": "6d9faa87-89b6-41fd-93b5-5031d1c5f892",
-    },
-  ],
-  "triggers": {
-    "crons": ["0 4 * * *"],
-  },
+  // One data point per page read, written by telemetry/page-view.ts and read
+  // by ../nodebookmd-analytics. Kept three months by Analytics Engine itself.
+  "analytics_engine_datasets": [{ "binding": "SITE_EVENTS", "dataset": "nodebookmd_site" }],
   // The ISR revalidation Durable Object is deleted while the routes are frozen.
   //
   // Its SQLite held a backlog of failed revalidations. The queue records a
