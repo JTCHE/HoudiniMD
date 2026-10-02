@@ -8,16 +8,12 @@ import { cn } from "@/lib/utils";
 export function Controls({
   active,
   paused,
-  waiting,
   progress,
   onPick,
   onToggle,
 }: {
   active: number;
   paused: boolean;
-  /** The tour waits, paused or held by a hover: its gauge dims, and the
-      button shows play, the way it would go on. */
-  waiting: boolean;
   progress: React.RefObject<HTMLSpanElement | null>;
   onPick: (index: number) => void;
   onToggle: () => void;
@@ -41,7 +37,7 @@ export function Controls({
         className="grid size-lg shrink-0 cursor-pointer place-items-center rounded-full max-sm:size-2xl text-muted-foreground transition-colors pointer-hover:text-foreground"
       >
         <PlayPause
-          playing={!waiting}
+          playing={!paused}
           className={cn(
             move,
             later && "translate-x-[calc(var(--spacing-ms)/4)] max-sm:translate-x-[calc(var(--spacing-md)/4)]",
@@ -60,7 +56,7 @@ export function Controls({
       />
       <Tabs
         active={active}
-        dim={waiting}
+        dim={paused}
         progress={progress}
         onPick={onPick}
       />

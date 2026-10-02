@@ -7,8 +7,7 @@
  * events a hand would send. Nothing in the app knows it is a demo.
  *
  * Every wait takes the scene's signal, so a reader who takes over stops the
- * scene at once, and the gate, so a reader who only points at the frame holds
- * it where it is.
+ * scene at once, and the gate, so a pause holds it where it is.
  */
 
 /** A scene stopped because the reader took over or left the tab. */

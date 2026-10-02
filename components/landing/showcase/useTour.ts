@@ -18,9 +18,9 @@ const quiet = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
  * The tour through the tabs: which tab shows, its scene in the app, its
  * clock, and the reader's hand on all of it.
  *
- * - Hover holds the tour; the play button pauses it. Either stops the tab's
- *   clock, the scene and the cursor, and hides the cursor: the reader's own
- *   pointer is the one on the app.
+ * - A pointer over the frame changes nothing: the tour plays on. The play
+ *   button pauses it: that stops the tab's clock, the scene and the cursor,
+ *   and hides the cursor.
  * - The reader's own input in the app stops the scene: from then on the app
  *   is theirs, and play starts the scene again from its start.
  * - A tab the reader picks plays from its start.
@@ -42,10 +42,8 @@ export function useTour({
   pausedRef.current = paused;
   /** Bumped to run the tab's scene again from its start. */
   const [run, setRun] = useState(0);
-  /** The scene was stopped, not held: play starts it again. */
+  /** The reader took the scene over, not only paused it: play starts it again. */
   const stopped = useRef(false);
-  const [held, setHeld] = useState(false);
-  const heldRef = useRef(false);
   const release = useRef<(() => void) | null>(null);
   const scene = useRef<AbortController | null>(null);
   const [key, setKey] = useState<string | null>(null);
@@ -85,20 +83,11 @@ export function useTour({
     release.current = null;
   }, []);
 
-  const hold = useCallback(
-    (on: boolean) => {
-      heldRef.current = on;
-      setHeld(on);
-      if (!on) free();
-    },
-    [free],
-  );
-
   /** What a scene waits on between two steps. */
   const gate = useCallback(async () => {
     // Looks again after every wake: a wake is a hint, not a release. A hidden
     // page has no event to wake it, so the timer wakes it.
-    while (heldRef.current || pausedRef.current || document.hidden) {
+    while (pausedRef.current || document.hidden) {
       await new Promise<void>((done) => {
         release.current = done;
         setTimeout(done, 250);
@@ -128,7 +117,7 @@ export function useTour({
     setPaused(true);
   }, []);
 
-  useEffect(() => hand.hold(paused || held), [paused, held, hand]);
+  useEffect(() => hand.hold(paused), [paused, hand]);
 
   // "Connect your agent" and friends open a tab from outside.
   useEffect(() => {
@@ -175,13 +164,13 @@ export function useTour({
       opened: (title, ms) => setOpened({ title, ms, at: Date.now() }),
     };
 
-    // The clock runs while nothing holds the tab. A scene ends its tab
+    // The clock runs while the tour is not paused. A scene ends its tab
     // itself; the clock is then only its gauge.
     played.current = { turn, ms: 0 };
     let last = performance.now();
     let frameId = 0;
     const tick = (now: number) => {
-      if (!heldRef.current && !pausedRef.current && !document.hidden) played.current.ms += now - last;
+      if (!pausedRef.current && !document.hidden) played.current.ms += now - last;
       last = now;
       progress.current?.style.setProperty("--progress", String(Math.min(1, played.current.ms / tab.ms)));
       frameId = requestAnimationFrame(tick);
@@ -228,5 +217,5 @@ export function useTour({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, ready, run]);
 
-  return { active, tab, paused, held, run, key, opened, progress, clock, go, hold, pick, toggle, stop };
+  return { active, tab, paused, run, key, opened, progress, clock, go, pick, toggle, stop };
 }

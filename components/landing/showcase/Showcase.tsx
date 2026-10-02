@@ -83,8 +83,6 @@ export function Showcase() {
             <div
               className="rim absolute inset-0 overflow-hidden bg-background"
               style={{ borderRadius: RADIUS, boxShadow: shadow(base.w * scale) }}
-              onPointerEnter={() => tour.hold(true)}
-              onPointerLeave={() => tour.hold(false)}
               onPointerDown={() => !tab.scene && tour.stop()}
             >
               <div
@@ -188,7 +186,6 @@ export function Showcase() {
       <Controls
         active={tour.active}
         paused={tour.paused}
-        waiting={tour.paused || tour.held}
         progress={tour.progress}
         onPick={tour.pick}
         onToggle={tour.toggle}
