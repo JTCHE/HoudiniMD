@@ -85,6 +85,12 @@ function usePlatform() {
   return useSyncExternalStore(subscribeNothing, readPlatform, () => "windows" as const);
 }
 
+/** This desktop's build, or null on a phone and on a desktop with no build yet. */
+function useBuild() {
+  const platform = usePlatform();
+  return platform && PLATFORMS[platform].ready ? { platform, ...PLATFORMS[platform] } : null;
+}
+
 /**
  * The download key: the build for this desktop, or the GitHub page on a phone
  * and on a desktop with no build yet.
@@ -95,10 +101,9 @@ function usePlatform() {
  * allows the two to differ.
  */
 export function DownloadKey({ className, ...rest }: { className?: string } & Record<`data-${string}`, string | undefined>) {
-  const platform = usePlatform();
-  const build = platform && PLATFORMS[platform].ready ? PLATFORMS[platform] : null;
+  const build = useBuild();
   const { label, href } = build ?? FALLBACK;
-  const icon = !build ? GitHubMark : platform === "windows" ? WindowsMark : platform === "macos" ? AppleMark : LinuxMark;
+  const icon = !build ? GitHubMark : build.platform === "windows" ? WindowsMark : build.platform === "macos" ? AppleMark : LinuxMark;
   return (
     <ControlButton
       href={href}
@@ -117,13 +122,14 @@ export function DownloadKey({ className, ...rest }: { className?: string } & Rec
 const OPENS_IN_APP = "opens-in-app";
 
 /**
- * Opens the page in the installed app. A desktop only: there is no app on a
- * phone. After one click, later visits open the app by themselves. A reader
- * who never clicked never gets a browser prompt for an app they may not have.
+ * Opens the page in the installed app. Only where the download key offers a
+ * build: elsewhere there is no app to open. After one click, later visits open
+ * the app by themselves. A reader who never clicked never gets a browser
+ * prompt for an app they may not have.
  */
 export function OpenInApp({ href }: { href: string }) {
-  const platform = usePlatform();
-  const on = FEATURES.openInApp && !!platform;
+  const build = useBuild();
+  const on = FEATURES.openInApp && !!build;
   useEffect(() => {
     try {
       if (on && localStorage.getItem(OPENS_IN_APP)) window.location.href = href;
