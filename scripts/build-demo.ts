@@ -20,7 +20,7 @@ import { cpSync, existsSync, readFileSync, renameSync, writeFileSync } from "nod
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 
-const APP_DIR = resolve(process.env.APP_DIR ?? "../HoudiniMD");
+const APP_DIR = resolve(process.env.APP_DIR ?? "../NodebookMD");
 const APP_PORT = process.env.APP_PORT ?? "48800";
 const OUT = resolve("public/demo");
 const BASE = "/demo/app/";
