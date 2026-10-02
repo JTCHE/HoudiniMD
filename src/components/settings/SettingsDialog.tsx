@@ -60,7 +60,7 @@ export function SettingsDialog() {
     <Modal label="Settings" onClose={() => setOpen(false)} className="h-[min(560px,100%)] w-full max-w-[760px] flex-row">
       {/* The panel's own rows, on the panel's own ground: the sections are
           places, as the sidebar's rows are. */}
-      <nav className={cn("flex w-[190px] shrink-0 flex-col gap-2xs border-r border-hairline bg-neutral-100 px-ms pb-ms", MODAL_TOP)}>
+      <nav className={cn("flex w-[200px] shrink-0 flex-col gap-2xs border-r border-hairline bg-neutral-100 px-ms pb-ms", MODAL_TOP)}>
         <span className={cn(MODAL_LINE, "px-sm text-caption text-neutral-500")}>Settings</span>
         {SECTIONS.map((section) => (
           <SidebarRow
