@@ -357,10 +357,10 @@ fn save(data: &Path, record: &Record) -> Result<(), String> {
     write(&data.join(RECORD), &text)
 }
 
-/// `houdini22.0` names release `22.0`.
+/// `houdini22.0` names release `22.0`. On macOS the folder is `22.0` itself.
 fn series(path: &Path) -> Option<String> {
     let name = path.file_name()?.to_str()?;
-    let rest = name.strip_prefix("houdini")?;
+    let rest = if cfg!(target_os = "macos") { name } else { name.strip_prefix("houdini")? };
     rest.starts_with(|c: char| c.is_ascii_digit()).then(|| rest.to_string())
 }
 
@@ -402,7 +402,21 @@ fn running(_release: &str) -> bool {
     process_named("houdini.exe")
 }
 
-#[cfg(not(windows))]
+/// Each edition has its own executable inside its `.app`. The match is on the
+/// whole name, so this app's own `houdinimd` does not count.
+#[cfg(target_os = "macos")]
+fn running(_release: &str) -> bool {
+    const NAMES: [&str; 6] = ["houdini", "houdinifx", "houdinicore", "hindie", "happrentice", "hescape"];
+    let Ok(out) = std::process::Command::new("ps").args(["-axo", "comm="]).output() else {
+        return false;
+    };
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .filter_map(|path| path.trim().rsplit('/').next())
+        .any(|name| NAMES.contains(&name))
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
 fn running(_release: &str) -> bool {
     false
 }
