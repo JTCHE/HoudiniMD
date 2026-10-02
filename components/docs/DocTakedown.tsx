@@ -47,7 +47,9 @@ export function TakedownNotice({ slug, sourceUrl }: { slug: string; sourceUrl: s
           Read this page in {SITE_NAME}, the free desktop app.
         </h2>
         <p className="text-lede text-muted-foreground">
-          It reads the docs that come with your own Houdini install. Instant, and offline.
+          {SITE_NAME} displays the docs that come alongside your Houdini install inside a stunning interface.{" "}
+          <br className="max-sm:hidden" />
+          It&apos;s faster, more reliable, and works offline.
         </p>
       </div>
       <div className="flex flex-wrap items-center gap-x-md gap-y-sm">
