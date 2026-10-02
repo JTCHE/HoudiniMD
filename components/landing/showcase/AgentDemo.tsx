@@ -18,12 +18,39 @@ const TURN: { kind: "user" | "tool" | "result" | "agent"; text: string }[] = [
   { kind: "agent", text: "Done. scatter1 reads @mask as its density: the points gather where the mask is high." },
 ];
 
-/** When the agent's first line comes, in ms: as the slide's parts settle.
-    The rest come at a reading pace. */
-const FIRST = 450;
+/** The prompt is typed word by word, from when the slide's parts settle,
+    then sent. The agent's lines then come at a reading pace. All in ms. */
+const WORDS = TURN[0].text.split(" ");
+const FIRST = 500;
+const WORD = 75;
+const SUBMIT = FIRST + WORDS.length * WORD + 350;
 const PACE = 1100;
-/** How many lines of the turn show, from the tab's clock. */
-const lines = (ms: number) => (ms < FIRST ? 0 : Math.min(TURN.length, 1 + Math.floor((ms - FIRST) / PACE)));
+/** One step per word typed, then one per line of the turn, from the tab's
+    clock. */
+const steps = (ms: number) =>
+  ms < FIRST
+    ? 0
+    : ms < SUBMIT
+      ? Math.min(WORDS.length, 1 + Math.floor((ms - FIRST) / WORD))
+      : WORDS.length + Math.min(TURN.length, 1 + Math.floor((ms - SUBMIT) / PACE));
+
+/** The agent's spinner, as Claude Code draws it: a glyph that grows and
+    shrinks, and a verb per step of the work. */
+const SPIN = ["·", "✢", "✳", "✶", "✻", "✽", "✻", "✶", "✳", "✢"];
+const SPIN_MS = 110;
+const VERBS = ["Cooking", "Reading", "Scattering", "Wiring", "Capturing"];
+const spinTick = (ms: number) => Math.floor(ms / SPIN_MS);
+
+function Spinner({ clock, verb }: { clock: () => number; verb: string }) {
+  const tick = usePlayed(clock, spinTick);
+  const seconds = Math.max(0, Math.floor((tick * SPIN_MS - SUBMIT) / 1000));
+  return (
+    <p className="animate-in text-brand-bright fade-in duration-300">
+      <span className="mr-2 inline-block w-[1ch]">{SPIN[tick % SPIN.length]}</span>
+      {verb}…<span className="ml-2 text-white/35">({seconds}s · esc to interrupt)</span>
+    </p>
+  );
+}
 
 const CLIENTS = ["Claude Code", "Codex", "Gemini", "Cursor", "opencode", "pi"];
 
@@ -80,9 +107,11 @@ function Capture() {
 
 export function AgentDemo({ base, clock }: DemoProps) {
   const { phone } = base;
-  const played = usePlayed(clock, lines);
-  // Less motion: the whole turn at once.
-  const shown = matchMedia("(prefers-reduced-motion: reduce)").matches ? TURN.length : played;
+  const step = usePlayed(clock, steps);
+  // Less motion: the whole turn at once, sent.
+  const shown = matchMedia("(prefers-reduced-motion: reduce)").matches ? TURN.length : Math.max(0, step - WORDS.length);
+  // The words in the prompt box, until it is sent.
+  const typed = shown ? 0 : step;
   const [system, setSystem] = useState(0);
   const [copied, setCopied] = useState(false);
 
@@ -148,8 +177,28 @@ export function AgentDemo({ base, clock }: DemoProps) {
               )}
             </div>
           ))}
-          {shown < TURN.length && <span className="h-4 w-2 bg-white/60" />}
+          {shown > 0 && shown < TURN.length && <Spinner clock={clock} verb={VERBS[Math.min(shown, VERBS.length) - 1]} />}
         </div>
+        {/* The prompt box: the caret holds still while it types, and blinks
+            while it waits. */}
+        <p className={cn("animate-in border-t border-white/10 text-white fade-in duration-500", phone ? "px-4 py-3" : "px-6 py-4")}>
+          <span className="mr-2 text-white/40">&gt;</span>
+          {WORDS.slice(0, typed).map((word, i) => (
+            <span
+              key={i}
+              className="animate-in fade-in duration-200"
+            >
+              {i ? " " : ""}
+              {word}
+            </span>
+          ))}
+          <span
+            className={cn(
+              "inline-block h-[1.1em] w-[0.6em] translate-y-[0.2em] bg-white/60",
+              typed === 0 && "motion-safe:animate-caret-blink",
+            )}
+          />
+        </p>
       </div>
 
       {phone ? (
