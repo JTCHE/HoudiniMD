@@ -94,7 +94,8 @@
 
   const shut = (event) => {
     if (event.type === "keydown" && event.key !== "Enter" && event.key !== " ") return;
-    const row = event.target.closest?.('button[aria-expanded="false"]');
+    // A folder row, not a menu button such as the version picker.
+    const row = event.target.closest?.('button[aria-expanded="false"]:not([aria-haspopup])');
     const label = row?.querySelector("span.truncate")?.textContent?.trim();
     if (!label || open.has(label)) return;
     event.preventDefault();
@@ -120,12 +121,40 @@
     help: "C:\\Program Files\\Side Effects Software\\Houdini 21.0.829\\houdini\\help",
     packages: [],
   };
+  const PORT = 48800;
+
+  /* Settings, made from `INSTALL` so the version picker and the settings say
+     the same build. F1 already opens the app, and two agents run Houdini MCP:
+     the state of a machine after the setup. */
+  const series = INSTALL.version.split(".").slice(0, 2).join(".");
+  const hooked = new Set([series]);
+  const releases = () =>
+    [series].map((release) => ({
+      release,
+      url: hooked.has(release) ? `http://127.0.0.1:${PORT}` : null,
+      external: hooked.has(release),
+      ours: hooked.has(release),
+    }));
+  const hook = (on) => ({ releases: list }) => {
+    for (const release of list) on ? hooked.add(release) : hooked.delete(release);
+    return list;
+  };
+  /** As the app's `mcp::agents` names them. */
+  const AGENTS = [
+    { key: "claude", label: "Claude", link: "ours" },
+    { key: "codex", label: "OpenAI Codex", link: "none" },
+    { key: "opencode", label: "opencode", link: "ours" },
+  ];
+  const VAULTS = [{ path: "C:\\Users\\you\\Documents\\Houdini notes", name: "Houdini notes" }];
 
   /** On top of every page this site wrote, so no reader takes it for SideFX's. */
   const SAMPLE =
     "> [!NOTE]\n>\n> This is a sample page, written for this site. The app shows the official documentation, from your local install.\n\n";
 
-  const settings = new Map([["onboarded", "done"]]);
+  const settings = new Map([
+    ["onboarded", "done"],
+    ["obsidian-vault", VAULTS[0].path],
+  ]);
   const recents = [];
   const bookmarks = [];
   const now = Date.now();
@@ -251,8 +280,10 @@
     clean_start: () => false,
     installs: () => [INSTALL],
     current_install: () => INSTALL,
-    available_installs: () => [],
-    houdini_releases: () => [],
+    available_installs: async () => [{ version: INSTALL.version, pages: (await allTitles()).length, done: true, current: true }],
+    houdini_releases: releases,
+    hook_houdini: hook(true),
+    unhook_houdini: hook(false),
     index_status: async () => {
       const pages = (await allTitles()).length;
       return { build: INSTALL.version, pages, total: pages, done: true, wrote: false };
@@ -279,14 +310,19 @@
     get_setting: ({ key }) => settings.get(key) ?? null,
     set_setting: ({ key, value }) => void settings.set(key, value),
     user_name: () => null,
-    server_port: () => 48800,
-    mcp_agents: () => [],
-    obsidian_vaults: () => [],
+    server_port: () => PORT,
+    mcp_agents: () => AGENTS.map((agent) => ({ ...agent })),
+    // The real install downloads; a second is enough to show the button work.
+    install_houdini_mcp: async ({ agent }) => {
+      await new Promise((done) => setTimeout(done, 1200));
+      AGENTS.find((one) => one.key === agent).link = "ours";
+    },
+    obsidian_vaults: () => VAULTS,
     report_use: () => {},
     report_search: () => {},
     report_error: () => {},
     "plugin:app|version": () => "0.2.1",
-    "plugin:app|name": () => "HoudiniMD",
+    "plugin:app|name": () => "NodebookMD",
     "plugin:event|listen": () => 0,
     "plugin:event|unlisten": () => {},
     "plugin:event|emit": () => {},
