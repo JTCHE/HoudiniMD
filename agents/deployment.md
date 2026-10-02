@@ -11,7 +11,8 @@ One workflow, `.github/workflows/release.yml`, on a `v*` tag.
 2. `tauri-action` runs `bun run tauri build` on `windows-latest`.
 3. It signs the installer with the updater key and writes `latest.json`.
 4. It opens a **draft** release holding three files.
-5. You paste the release notes into the draft and publish it.
+5. You paste the release notes into the draft and publish it. Then set the
+   note's `Status` to `Closed` and fill its `Date`.
 6. Publishing is what starts the update. Installed copies read
    `releases/latest/download/latest.json` on their next launch.
 
@@ -50,6 +51,25 @@ the source and the GitHub release body is a copy. Paste it into the draft
 before publishing.
 
 The note must include `Type: Release`, `Version`, `Date`, and `Status` in its frontmatter.
+
+### Which note to write to
+
+The notes are the changelog. Every commit that changes the shipped app adds
+its line in the same turn. A change that does not ship (harness, CI, agent
+guides) gets no line. `Open/` holds one note at most, and that note is the one
+to write to. Follow these steps in order:
+
+1. One note in `Open/`: run `gh release view v<its Version> --json isDraft`.
+   No release, or `isDraft: true`: add the line to that note. Stop.
+   A published release: the note is stale. Set `Status: Closed` and its
+   `Date`, then go to step 2.
+2. No note in `Open/`: take the highest `Version` in `Closed/`, add one to
+   its patch number, and create `Open/v<that version>.md` with `Status: Open`
+   and an empty `Date`. Add the line there.
+
+Never write to a `Closed` note, and never open a second note. A larger version
+jump (minor or major) is the user's decision: rename the open note's file and
+`Version` when they make it.
 
 The note mover plugin reads `Status` and files the note under `releases/<Status>`. 
 Changing `Status` to `Closed` therefore moves the note. 

@@ -41,6 +41,9 @@ Project information: @README.md
 - A release page holds the installer and `latest.json`, and nothing else. Never
   put a `.sig` file on it: the signature the app checks is inside `latest.json`,
   so the file is a second copy that nothing reads.
+- Every commit that changes the shipped app adds its line to the open release
+  note in the vault, in the same turn. The release note is the changelog. To
+  find the right note, see [Deployment](agents/deployment.md#release-notes).
 - Look at a UI change before you report it done. A build that compiles is not a
   page that reads.
 - This machine has an interactive desktop. To look at the app, serve the built `dist` with a
