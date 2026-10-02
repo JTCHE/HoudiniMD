@@ -5,7 +5,7 @@
 //! pass took, how long pages take to open, how many rows a search returned
 //! and which row was opened, which answers the first launch got,
 //! the names of the parts of the app a session used, crash messages, and a
-//! bare "alive" every 15 minutes while the app runs. Each
+//! bare "alive" once an hour while the app runs. Each
 //! name is a fixed word this code writes. No page path,
 //! no title, no search, no user name, no file path. Every payload is also
 //! written to `telemetry.log` in the data folder before it is sent, so the
@@ -33,7 +33,7 @@ const CRASH: &str = "crash.txt";
 /// How often a running app says it is still running. It carries the same
 /// fields as `launch` and nothing more; it is what lets the dashboard count
 /// installs open now, not only installs that launched lately.
-const HEARTBEAT: Duration = Duration::from_secs(15 * 60);
+const HEARTBEAT: Duration = Duration::from_secs(60 * 60);
 /// Page opens are sent as one summary per this many, not one event each.
 const BATCH: usize = 25;
 

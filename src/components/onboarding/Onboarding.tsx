@@ -218,7 +218,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
             {APP_NAME} sends this, and nothing else, under a random number made on this machine: your Houdini build, your
             Windows version, how long the index takes, how long a page takes to open, crash and error messages, the answers
             you give on this setup, the names of the parts of the app you use, for a search, how many results came back
-            and which one you opened, and a signal every 15 minutes that the app is still running.
+            and which one you opened, and a signal once an hour that the app is running.
             <br />
             <br />
             <strong>Never your search words, page titles, file paths or user name.</strong> You can read every line that
