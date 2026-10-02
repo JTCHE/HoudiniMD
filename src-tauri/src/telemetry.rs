@@ -4,7 +4,8 @@
 //! version, the Houdini build, the operating system version, how long an index
 //! pass took, how long pages take to open, how many rows a search returned
 //! and which row was opened, which answers the first launch got,
-//! the names of the parts of the app a session used, and crash messages. Each
+//! the names of the parts of the app a session used, crash messages, and a
+//! bare "alive" every 15 minutes while the app runs. Each
 //! name is a fixed word this code writes. No page path,
 //! no title, no search, no user name, no file path. Every payload is also
 //! written to `telemetry.log` in the data folder before it is sent, so the
@@ -29,6 +30,10 @@ const LOG: &str = "telemetry.log";
 /// aborts the process (`panic = "abort"`), so there is no later moment to
 /// send it in.
 const CRASH: &str = "crash.txt";
+/// How often a running app says it is still running. It carries the same
+/// fields as `launch` and nothing more; it is what lets the dashboard count
+/// installs open now, not only installs that launched lately.
+const HEARTBEAT: Duration = Duration::from_secs(15 * 60);
 /// Page opens are sent as one summary per this many, not one event each.
 const BATCH: usize = 25;
 
@@ -82,6 +87,13 @@ pub fn start(app: &AppHandle) {
         let _ = std::fs::remove_file(data.join(CRASH));
     }
     send(app, "launch", json!({}));
+    // `send` reads the consent on every beat, so turning usage data off stops
+    // the beats at once.
+    let app = app.clone();
+    std::thread::spawn(move || loop {
+        std::thread::sleep(HEARTBEAT);
+        send(&app, "alive", json!({}));
+    });
 }
 
 /// One index pass that did work, and how long it took.

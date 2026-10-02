@@ -316,7 +316,7 @@ function UsageSection() {
   }
 
   return (
-    <Section title="Usage data" detail="Anonymous timings and counts of how the app is used. No page, no search and no file path leaves the machine.">
+    <Section title="Usage data" detail="Anonymous timings and counts of how the app is used, and a signal every 15 minutes while it runs. No page, no search and no file path leaves the machine.">
       <Row
         label="Send anonymous usage data"
         detail={
