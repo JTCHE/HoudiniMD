@@ -315,34 +315,20 @@ export function DocTooltip({ slug, ...anchored }: Anchored & { slug: string }) {
   );
 }
 
-/** How long the pointer rests on a row before its tooltip opens. A list is
-    crossed on the way to somewhere else, and a box at every row on the way
-    reads as flicker, not as help. */
-const REST_MS = 100;
-
-/** The page tooltip of a row in a list: it opens once the pointer rests, sits
-    beside the row, and goes on a press. Spread `pointer` on the link and render `tip` beside it —
-    not in it: a link sets its ref after the layout effects of its children, so
-    a box inside it measures nothing. */
+/** The page tooltip of a row in a list: it opens when the pointer arrives, sits
+    beside the row, and goes on a press. Spread `pointer` on the link and render
+    `tip` beside it — not in it: a link sets its ref after the layout effects of
+    its children, so a box inside it measures nothing. */
 export function useRowTip<T extends HTMLElement>(slug: string) {
   const anchorRef = useRef<T>(null);
   const [shown, setShown] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  useEffect(() => () => clearTimeout(timer.current), []);
-  const hide = () => {
-    clearTimeout(timer.current);
-    setShown(false);
-  };
   return {
     anchorRef,
     pointer: {
-      onPointerEnter: () => {
-        clearTimeout(timer.current);
-        timer.current = setTimeout(() => setShown(true), REST_MS);
-      },
-      onPointerLeave: hide,
+      onPointerEnter: () => setShown(true),
+      onPointerLeave: () => setShown(false),
       // A press is the answer to the question the tooltip was for.
-      onPointerDown: hide,
+      onPointerDown: () => setShown(false),
     },
     tip: shown ? <DocTooltip slug={slug} anchorRef={anchorRef} side="right" /> : null,
   };
