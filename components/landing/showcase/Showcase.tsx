@@ -33,7 +33,9 @@ export function Showcase() {
   // a phone gives no size that shows it, so it is known by its gesture
   // events, which only WebKit has; any other WebKit, by the sizes, below.
   const [twice, setTwice] = useState(() => typeof window !== "undefined" && "GestureEvent" in window);
-  // The tour starts once the frame has come in and lies flat. With less
+  // The tour starts once the frame has come in and looks flat: at 60% of its
+  // spring it is within half a degree of flat. The spring's tail is too
+  // small to see, and waiting for it delays the start by 0.6 s. With less
   // motion it does not come in: it is there.
   const [settled, setSettled] = useState(
     () => typeof window !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches,
@@ -77,7 +79,11 @@ export function Showcase() {
             // Out of the flow and centred by its margins, not a transform: the
             // area then sizes by the page alone, never by the frame in it.
             className="enter-tilt absolute inset-0 m-auto"
-            onAnimationEnd={(event) => event.target === event.currentTarget && setSettled(true)}
+            onAnimationStart={(event) => {
+              if (event.target !== event.currentTarget) return;
+              const ms = Number(event.currentTarget.getAnimations()[0]?.effect?.getComputedTiming().duration ?? 0);
+              setTimeout(() => setSettled(true), ms * 0.6);
+            }}
             style={{ width: base.w * scale, height: base.h * scale, "--enter": 5 } as React.CSSProperties}
           >
             <div

@@ -164,13 +164,18 @@ export function useTour({
       opened: (title, ms) => setOpened({ title, ms, at: Date.now() }),
     };
 
+    // No clock before the tour starts: a gauge that fills while the frame
+    // comes in would drop back to empty when it does.
+    progress.current?.style.setProperty("--progress", "0");
+    if (!ready) return () => controller.abort();
+
     // The clock runs while the tour is not paused. A scene ends its tab
     // itself; the clock is then only its gauge.
     played.current = { turn, ms: 0 };
     let last = performance.now();
     let frameId = 0;
     const tick = (now: number) => {
-      if (!pausedRef.current && !document.hidden) played.current.ms += now - last;
+      if (!pausedRef.current && !document.hidden) played.current.ms += Math.max(0, now - last);
       last = now;
       progress.current?.style.setProperty("--progress", String(Math.min(1, played.current.ms / tab.ms)));
       frameId = requestAnimationFrame(tick);
