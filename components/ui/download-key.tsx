@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
+import { Check, Copy } from "lucide-react";
 import { ControlButton } from "@/components/ui/control-button";
 import { cn } from "@/lib/utils";
 import { FALLBACK, PLATFORMS, type Platform } from "@/lib/download";
@@ -124,7 +125,7 @@ const MAC_INSTALL = "curl -fsSL https://nodebook.md/install.sh | sh";
 /**
  * Under the key on a Mac. The disk image is not notarized, so macOS asks for
  * "Open Anyway" once; a file from curl carries no download mark and opens at
- * once. A press copies the line.
+ * once. The line speaks for itself, so it has no words around it.
  */
 export function MacInstall({ className, style }: { className?: string; style?: React.CSSProperties }) {
   const build = useBuild();
@@ -136,21 +137,26 @@ export function MacInstall({ className, style }: { className?: string; style?: R
       setTimeout(() => setCopied(false), 1600);
     });
   };
+  const Mark = copied ? Check : Copy;
   return (
-    // A subtitle, not a second button: the line is for the reader who wants
-    // it, so it reads at the size and the shade of a caption.
-    <p style={style} className={cn("text-caption text-muted-foreground/80", className)}>
-      Or in Terminal, with no &ldquo;Open Anyway&rdquo; step:{" "}
+    <div
+      style={style}
+      className={cn(
+        "inline-flex items-center gap-xs rounded-md border border-hairline bg-foreground/[0.03] py-[3px] pr-[3px] pl-sm",
+        className,
+      )}
+    >
+      <code className="font-mono text-[11.5px] text-muted-foreground select-all">{MAC_INSTALL}</code>
       <button
         type="button"
         onClick={copy}
-        title="Copy"
-        aria-label="Copy the install command"
-        className="cursor-pointer font-mono text-[0.92em] text-muted-foreground underline decoration-transparent decoration-dotted underline-offset-4 transition-colors hover:text-foreground hover:decoration-current"
+        aria-label={copied ? "Copied" : "Copy the install command"}
+        title={copied ? "Copied" : "Copy"}
+        className="grid size-[22px] cursor-pointer place-items-center rounded-[5px] text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground"
       >
-        {copied ? "Copied" : MAC_INSTALL}
+        <Mark className="size-3" />
       </button>
-    </p>
+    </div>
   );
 }
 
