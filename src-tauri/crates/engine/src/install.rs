@@ -134,9 +134,9 @@ pub fn find(picked: &[PathBuf]) -> Vec<Install> {
             continue;
         };
         for entry in entries.flatten() {
-            // The macOS installer links `Current` to the newest build, which
-            // the scan also finds by its own name.
-            if cfg!(target_os = "macos") && entry.file_type().is_ok_and(|t| t.is_symlink()) {
+            // The installers link a short name to a build the scan also finds
+            // by its own name: `Current` on macOS, `hfs22.0` on Linux.
+            if entry.file_type().is_ok_and(|t| t.is_symlink()) {
                 continue;
             }
             if let Some(install) = read(hfs(entry.path())) {
@@ -290,11 +290,12 @@ pub fn load_picked(cache: &Cache, stored: &str) {
 /// in it, with the new `PICKED_KEY` value for the caller to persist. The
 /// picker gives back whatever folder was open, so this also accepts a folder
 /// inside the install: `.../Houdini 21.0.829/houdini/help` names the same
-/// build as its root does.
+/// build as its root does. On macOS the folder a reader sees is
+/// `Houdini22.0.461`, and the install is deep inside it.
 pub fn add_picked(cache: &Cache, chosen: PathBuf) -> Result<(Install, String), String> {
     let install = std::iter::successors(Some(chosen.as_path()), |dir| dir.parent())
         .take(3)
-        .find_map(|dir| read(dir.to_path_buf()))
+        .find_map(|dir| read(dir.to_path_buf()).or_else(|| read(hfs(dir.to_path_buf()))))
         .ok_or_else(|| format!("{} holds no Houdini help", chosen.display()))?;
 
     let mut roots = cache.picked();
