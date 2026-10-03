@@ -137,13 +137,16 @@ export function MacInstall({ className, style }: { className?: string; style?: R
     });
   };
   return (
-    <p style={style} className={cn("flex flex-wrap items-center justify-center gap-x-sm gap-y-2xs text-caption text-muted-foreground", className)}>
-      Or in Terminal, with no &ldquo;Open Anyway&rdquo; step:
+    // A subtitle, not a second button: the line is for the reader who wants
+    // it, so it reads at the size and the shade of a caption.
+    <p style={style} className={cn("text-caption text-muted-foreground/80", className)}>
+      Or in Terminal, with no &ldquo;Open Anyway&rdquo; step:{" "}
       <button
         type="button"
         onClick={copy}
+        title="Copy"
         aria-label="Copy the install command"
-        className="cursor-pointer rounded-md border border-hairline px-sm py-[2px] font-mono text-[12px] text-foreground/80 transition-colors hover:bg-foreground/5 hover:text-foreground"
+        className="cursor-pointer font-mono text-[0.92em] text-muted-foreground underline decoration-transparent decoration-dotted underline-offset-4 transition-colors hover:text-foreground hover:decoration-current"
       >
         {copied ? "Copied" : MAC_INSTALL}
       </button>
