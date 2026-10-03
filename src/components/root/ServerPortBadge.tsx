@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { inTauri, invoke } from "@/lib/backend";
 import { showToast } from "@/components/ui/toast-notification";
+import { COMMAND_KEY } from "@/lib/hotkeys";
 
 /**
  * The local server the Houdini help pane talks to, named the way a developer
@@ -57,7 +58,7 @@ export function ServerPortBadge() {
       target="_blank"
       rel="noopener noreferrer"
       onClick={open}
-      title="Press to copy. Ctrl-press to open it in the browser."
+      title={`Press to copy. ${COMMAND_KEY}-press to open it in the browser.`}
       className="flex shrink-0 cursor-interactive items-center gap-sm text-meta text-neutral-500 transition-colors duration-(--duration-fast) motion-reduce:transition-none pointer-hover:text-neutral-800 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
     >
       {address.slice("http://".length)}

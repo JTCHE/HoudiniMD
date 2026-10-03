@@ -25,6 +25,23 @@ pub fn show(app: &AppHandle) {
     }
 }
 
+/// Set once the launch check has shown the window or left it in the tray.
+static SETTLED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub fn settle() {
+    SETTLED.store(true, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// A link opened while the app runs (macOS sends it to the running process).
+/// A link that comes before the launch check is done is the one that started
+/// the app, and the check shows the window when it ends.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub fn link_opened(app: &AppHandle) {
+    if SETTLED.load(std::sync::atomic::Ordering::Relaxed) {
+        show(app);
+    }
+}
+
 /// A second launch lands here instead of starting a second process. A launch
 /// from Houdini only wants the server, which is already up.
 pub fn second_launch(app: &AppHandle, argv: Vec<String>) {
@@ -39,17 +56,29 @@ pub fn build(app: &tauri::App) -> tauri::Result<()> {
     let mut tray = TrayIconBuilder::with_id("main")
         .tooltip(crate::APP_NAME)
         .menu(&Menu::with_items(app, &[&open, &quit])?)
-        .show_menu_on_left_click(false)
+        // A menu bar item opens its menu on a click; a tray icon opens the
+        // window, and keeps its menu for the right button.
+        .show_menu_on_left_click(cfg!(target_os = "macos"))
         .on_menu_event(|app, event| match event.id.as_ref() {
             "open" => show(app),
             "quit" => app.exit(0),
             _ => {}
         })
         .on_tray_icon_event(|tray, event| {
-            if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
+            if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event
+                && !cfg!(target_os = "macos")
+            {
                 show(tray.app_handle());
             }
         });
+    // The menu bar draws a template from its alpha, in the bar's own colour.
+    #[cfg(target_os = "macos")]
+    {
+        tray = tray
+            .icon(tauri::image::Image::from_bytes(include_bytes!("../icons/tray.png"))?)
+            .icon_as_template(true);
+    }
+    #[cfg(not(target_os = "macos"))]
     if let Some(icon) = app.default_window_icon() {
         tray = tray.icon(icon.clone());
     }

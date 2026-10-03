@@ -12,6 +12,23 @@ export const IS_MAC = navigator.platform.toLowerCase().includes("mac");
 /** How to write that key: `Ctrl` on Windows and Linux, `⌘` on macOS. */
 export const COMMAND_KEY = IS_MAC ? "⌘" : "Ctrl";
 
+/** How to write Alt: `⌥` on macOS. */
+export const ALT_KEY = IS_MAC ? "⌥" : "Alt";
+
+/** Back and forward. Windows' webview goes back on Alt+← by itself; macOS's
+    has no key for it, so the app takes Safari's. */
+export const BACK_KEYS = IS_MAC ? "⌘+[" : "Alt+←";
+export const FORWARD_KEYS = IS_MAC ? "⌘+]" : "Alt+→";
+
+/** -1 for back, 1 for forward, 0 for any other key. macOS only: elsewhere the
+    webview does it. `code`, so a keyboard that types `[` with Alt still works. */
+export function historyStep(event: KeyboardEvent): number {
+  if (!IS_MAC || !event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return 0;
+  if (event.code === "BracketLeft") return -1;
+  if (event.code === "BracketRight") return 1;
+  return 0;
+}
+
 /** Ctrl on Windows and Linux, Command on macOS. One of the two, never both. */
 export function isCommand(event: KeyboardEvent): boolean {
   return (event.ctrlKey || event.metaKey) && !event.altKey;

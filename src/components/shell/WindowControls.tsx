@@ -3,12 +3,15 @@
  *
  * The window has no system frame (`decorations: false` in `tauri.conf.json`),
  * which is what puts the title bar and these buttons on one row instead of two.
+ * macOS keeps its frame, and its traffic lights take the place of these
+ * (`window` in `lib.rs`).
  * The price is that the OS no longer draws them, so the shapes, the hit
  * targets and the close button's red hover are stated here — at the sizes
  * Windows uses, so they read as the window's own buttons and not as three more
  * controls inside the page.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { Window } from "@tauri-apps/api/window";
 import { appWindow } from "@/lib/backend";
 import { cn } from "@/lib/utils";
 import { Icons } from "@/lib/ui/icons";
@@ -22,30 +25,21 @@ const CAPTION_BUTTON =
   "pointer-hover:bg-neutral-200 active:bg-neutral-300 " +
   "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:-ring-offset-2";
 
-export function WindowControls({ className }: { className?: string }) {
-  const [maximized, setMaximized] = useState(false);
-
-  // Houdini's help pane owns its own frame. Drawing these there gives the
-  // reader three buttons that do nothing. On macOS the system draws its own
-  // traffic lights over the bar (`tauri.macos.conf.json`).
-  const shown = appWindow() !== null && !IS_MAC;
-
-  // The window can be maximized without these buttons — a double-click on the
-  // bar, the Win+Up shortcut, a snap gesture — so the glyph follows the
-  // window's own state rather than what was last clicked here.
+/** A yes-or-no state of the window that the system can change without the
+    app: maximized, full screen. Read again on every resize. `false` outside a
+    Tauri window, where there is no window to ask. */
+export function useWindowFlag(ask: (shell: Window) => Promise<boolean>): boolean {
+  const [flag, setFlag] = useState(false);
+  const latest = useRef(ask);
+  latest.current = ask;
   useEffect(() => {
     const shell = appWindow();
     if (!shell) return;
     let live = true;
     const sync = () => {
-      void shell
-        .isMaximized()
-        .then((is) => {
-          if (live) setMaximized(is);
-        })
-        // Outside a Tauri window — the browser harness — there is no window to
-        // ask. The buttons still draw, and the glyph stays on "maximize".
-        .catch(() => {});
+      void latest.current(shell).then((is) => {
+        if (live) setFlag(is);
+      }, () => {});
     };
     sync();
     const stop = shell.onResized(sync).catch(() => () => {});
@@ -54,6 +48,18 @@ export function WindowControls({ className }: { className?: string }) {
       void stop.then((unlisten) => unlisten());
     };
   }, []);
+  return flag;
+}
+
+export function WindowControls({ className }: { className?: string }) {
+  // The window can be maximized without these buttons — a double-click on the
+  // bar, the Win+Up shortcut, a snap gesture — so the glyph follows the
+  // window's own state rather than what was last clicked here.
+  const maximized = useWindowFlag((shell) => shell.isMaximized());
+
+  // Houdini's help pane owns its own frame. Drawing these there gives the
+  // reader three buttons that do nothing. macOS draws its traffic lights.
+  const shown = appWindow() !== null && !IS_MAC;
 
   const MaximizeGlyph = maximized ? Icons.captionRestore : Icons.captionMaximize;
 

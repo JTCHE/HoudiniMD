@@ -16,7 +16,7 @@ import { MenuList, type MenuEntry, type MenuGroups } from "@/components/ui/MenuL
 import { useTrail } from "@/lib/nav";
 import { pageActions } from "@/lib/page-actions";
 import { sideFxUrl } from "@/lib/sidefx";
-import { COMMAND_KEY } from "@/lib/hotkeys";
+import { BACK_KEYS, COMMAND_KEY, FORWARD_KEYS } from "@/lib/hotkeys";
 import { invoke, inTauri } from "@/lib/backend";
 import { openLightbox, PAGE_PICTURES } from "@/lib/lightbox";
 import { showToast } from "@/components/ui/toast-notification";
@@ -102,8 +102,8 @@ export function ContextMenu() {
       }
 
       menu.push([
-        { label: "Back", icon: ArrowLeft, keys: "Alt+←", disabled: !trail.current.canGoBack, run: () => navigate(-1) },
-        { label: "Forward", icon: ArrowRight, keys: "Alt+→", disabled: !trail.current.canGoForward, run: () => navigate(1) },
+        { label: "Back", icon: ArrowLeft, keys: BACK_KEYS, disabled: !trail.current.canGoBack, run: () => navigate(-1) },
+        { label: "Forward", icon: ArrowRight, keys: FORWARD_KEYS, disabled: !trail.current.canGoForward, run: () => navigate(1) },
       ]);
       setAt({ x: event.clientX, y: event.clientY, menu });
     };

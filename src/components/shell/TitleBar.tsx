@@ -13,10 +13,10 @@ import { cn } from "@/lib/utils";
 import { Icons } from "@/lib/ui/icons";
 import { BrandLogo } from "@/components/brand/BrandLogo";
 import { useTrail } from "@/lib/nav";
-import { WindowControls } from "./WindowControls";
+import { WindowControls, useWindowFlag } from "./WindowControls";
 import { TitleBarMenu } from "./TitleBarMenu";
 import { appWindow } from "@/lib/backend";
-import { COMMAND_KEY, IS_MAC, useHotkey } from "@/lib/hotkeys";
+import { ALT_KEY, BACK_KEYS, COMMAND_KEY, FORWARD_KEYS, IS_MAC, historyStep, isTyping, useHotkey } from "@/lib/hotkeys";
 import { Hint } from "@/components/ui/Hint";
 import { APP_NAME } from "@/lib/brand";
 import { version } from "../../../src-tauri/tauri.conf.json";
@@ -49,7 +49,16 @@ export function TitleBar({ sidebarOpen, onToggleSidebar, showTrail, bare = false
   const { canGoBack, canGoForward } = useTrail();
   const showArrows = !bare && (showTrail || canGoBack || canGoForward);
   const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null);
+  // macOS hides the traffic lights in full screen, and the room kept for
+  // them goes with them.
+  const fullscreen = useWindowFlag((shell) => shell.isFullscreen());
   const nativeFrame = IS_MAC && appWindow() !== null;
+  useHotkey((event) => {
+    const step = historyStep(event);
+    if (!step || isTyping(event.target)) return;
+    event.preventDefault();
+    if (step < 0 ? canGoBack : canGoForward) void navigate(step);
+  });
 
   return (
     <header
@@ -65,7 +74,8 @@ export function TitleBar({ sidebarOpen, onToggleSidebar, showTrail, bare = false
         bare ? "pl-sm" : "pl-[2px]",
         // macOS draws its traffic lights over the left of the bar, and no
         // caption buttons sit at the right edge.
-        nativeFrame && "pl-[80px] pr-xs",
+        nativeFrame && !fullscreen && "pl-[80px]",
+        nativeFrame && "pr-xs",
         // The hairline is drawn INSIDE the bar. A border would take a pixel
         // off the row, and the caption buttons would stop a pixel short of
         // the bottom of the window's own bar.
@@ -125,7 +135,7 @@ export function TitleBar({ sidebarOpen, onToggleSidebar, showTrail, bare = false
       {showArrows && (
         // 16px, not 15: an odd size in the 28px plate sat on a half pixel.
         <span className="ml-xs flex shrink-0 items-center gap-2xs">
-          <Hint label="Back" keys="Alt+←">
+          <Hint label="Back" keys={BACK_KEYS}>
             <button
               type="button"
               tabIndex={-1}
@@ -137,7 +147,7 @@ export function TitleBar({ sidebarOpen, onToggleSidebar, showTrail, bare = false
               <Icons.back className="size-4 -translate-y-px" />
             </button>
           </Hint>
-          <Hint label="Forward" keys="Alt+→">
+          <Hint label="Forward" keys={FORWARD_KEYS}>
             <button
               type="button"
               tabIndex={-1}
@@ -194,7 +204,7 @@ function PinButton() {
   });
   if (!appWindow()) return null;
   return (
-    <Hint label={pinned ? "Stop keeping on top" : "Keep on top"} keys={`${COMMAND_KEY}+Alt+T`}>
+    <Hint label={pinned ? "Stop keeping on top" : "Keep on top"} keys={`${COMMAND_KEY}+${ALT_KEY}+T`}>
     <button
       type="button"
       tabIndex={-1}
