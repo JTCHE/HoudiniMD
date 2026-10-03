@@ -1,12 +1,17 @@
 import { clsx, type ClassValue } from "clsx"
 import { extendTailwindMerge } from "tailwind-merge"
 
-// The type scale in globals.css (`--text-*`) names sizes the merge does not
-// know. Unknown, `text-caption` reads as a colour, and a `text-neutral-500`
-// after it removed the size.
+// The type scale and the spacing scale in globals.css (`--text-*`,
+// `--spacing-*`) name values the merge does not know. Unknown, `text-caption`
+// reads as a colour, and a `text-neutral-500` after it removed the size; and
+// `pl-sm` does not conflict with `pl-[80px]`, so both stay and the CSS order
+// picks one.
 const twMerge = extendTailwindMerge({
   extend: {
-    theme: { text: ["display", "lede", "title", "label", "meta", "caption"] },
+    theme: {
+      text: ["display", "lede", "title", "label", "meta", "caption"],
+      spacing: ["thin", "light", "2xs", "xs", "sm", "ms", "md", "lg", "xl", "2xl", "3xl", "4xl"],
+    },
   },
 })
 

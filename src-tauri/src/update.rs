@@ -49,9 +49,14 @@ pub fn data_dir_before_launch(identifier: &str) -> io::Result<PathBuf> {
         let roaming = std::env::var_os("APPDATA").ok_or_else(|| io::Error::other("APPDATA is not set"))?;
         Ok(PathBuf::from(roaming).join(identifier))
     }
+    #[cfg(target_os = "macos")]
+    {
+        let home = std::env::var_os("HOME").ok_or_else(|| io::Error::other("HOME is not set"))?;
+        Ok(PathBuf::from(home).join("Library/Application Support").join(identifier))
+    }
     // What Tauri resolves `app_data_dir()` to here: `$XDG_DATA_HOME`, or the
     // documented default when the variable is not set.
-    #[cfg(not(windows))]
+    #[cfg(all(unix, not(target_os = "macos")))]
     {
         let data = std::env::var_os("XDG_DATA_HOME")
             .map(PathBuf::from)
@@ -106,6 +111,7 @@ pub fn start(app: &tauri::AppHandle) {
         } else {
             crate::tray::show(&app);
         }
+        crate::tray::settle();
     });
 }
 

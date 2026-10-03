@@ -38,9 +38,11 @@ Project information: @README.md
   in a temporary directory.
 - Do not commit SQL migration files. Write them in `migrations/`, apply, then delete
   the file.
-- A release page holds the installer and `latest.json`, and nothing else. Never
-  put a `.sig` file on it: the signature the app checks is inside `latest.json`,
-  so the file is a second copy that nothing reads.
+- A release page holds the installers, the macOS updater bundle and
+  `latest.json`, and nothing else. The macOS updater reads the app as a
+  `.app.tar.gz`, not the disk image, so that file must be there. Never put a
+  `.sig` file on it: the signature the app checks is inside `latest.json`, so
+  the file is a second copy that nothing reads.
 - Every commit that changes the shipped app adds its line to the open release
   note in the vault, in the same turn. The release note is the changelog. To
   find the right note, see [Deployment](agents/deployment.md#release-notes).

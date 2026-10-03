@@ -273,12 +273,12 @@ export default function Page() {
   });
   const aim = useRef<number | null>(null);
 
-  // Ctrl Alt C copies where an agent can read this page as a file:
+  // Ctrl Alt C (⌘ ⌥ C) copies where an agent can read this page as a file:
   // the Markdown the local server answers at `<page>.md`. Houdini's help pane
   // is already on that server; the desktop window asks for its port.
   useHotkey((event) => {
-    const key = event.key.toLowerCase();
-    const wanted = event.ctrlKey && event.altKey && key === "c";
+    // `code`: on macOS, Alt makes the C key type "ç".
+    const wanted = (event.ctrlKey || event.metaKey) && event.altKey && event.code === "KeyC";
     if (!wanted || isTyping(event.target)) return;
     event.preventDefault();
     void (inTauri ? invoke<number>("server_port").catch(() => 0) : Promise.resolve(Number(window.location.port)))

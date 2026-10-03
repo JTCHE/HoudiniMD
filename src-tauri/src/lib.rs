@@ -553,6 +553,23 @@ fn asset_paths(text: &str, kind: &str) -> Vec<String> {
     found
 }
 
+/// Every window comes from the one entry in `tauri.conf.json`, which has no
+/// system frame: the bar draws its own buttons. On macOS the system frame
+/// stays, with the traffic lights drawn over the left of that bar.
+fn window<'a, R: tauri::Runtime, M: Manager<R>>(
+    manager: &'a M,
+    config: &tauri::utils::config::WindowConfig,
+) -> tauri::Result<tauri::WebviewWindowBuilder<'a, R, M>> {
+    let builder = tauri::WebviewWindowBuilder::from_config(manager, config)?;
+    #[cfg(target_os = "macos")]
+    let builder = builder
+        .decorations(true)
+        .title_bar_style(tauri::TitleBarStyle::Overlay)
+        .hidden_title(true)
+        .traffic_light_position(tauri::LogicalPosition::new(14.0, 18.0));
+    Ok(builder)
+}
+
 /// Opens one more window, made from the same entry in `tauri.conf.json` as the
 /// first, on the home page or on `path` (`/nodes/sop/box#inputs`). It stays
 /// hidden until its page has loaded, so it never shows an empty frame. Async,
@@ -573,7 +590,7 @@ async fn new_window(app: tauri::AppHandle, path: Option<String>) -> Result<(), S
         }
         config.url = tauri::WebviewUrl::App(path.trim_start_matches('/').into());
     }
-    tauri::WebviewWindowBuilder::from_config(&app, &config)
+    window(&app, &config)
         .map_err(|e| e.to_string())?
         .on_page_load(|window, load| {
             if load.event() == PageLoadEvent::Finished {
@@ -1174,6 +1191,8 @@ pub fn run() {
                 }
                 Err(reason) => crate::say!(Warn, "install", "no build to read: {reason}"),
             }
+            // After the state above: the page asks for it as soon as it loads.
+            window(app, &app.config().app.windows[0])?.build()?;
             tray::build(app)?;
             register_link_scheme(app);
             telemetry::start(app.handle());
@@ -1228,8 +1247,20 @@ pub fn run() {
             close_window,
             open_devtools
         ])
-        .run(context)
-        .expect("error while running the application");
+        .build(context)
+        .expect("error while running the application")
+        .run(|app, event| {
+            // macOS keeps the process when the window hides, and the Dock icon
+            // is the reader's way back to it. A link reaches the running app
+            // here, not as a second launch.
+            #[cfg(target_os = "macos")]
+            match &event {
+                tauri::RunEvent::Reopen { .. } => tray::show(app),
+                tauri::RunEvent::Opened { .. } => tray::link_opened(app),
+                _ => {}
+            }
+            let _ = (app, event);
+        });
 }
 
 #[cfg(test)]

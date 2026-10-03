@@ -1,16 +1,18 @@
 # Deployment
 
-`main` is the desktop app. It ships as a signed installer through GitHub
-Releases, and GitHub Releases is also the update channel.
+`main` is the desktop app. It ships through GitHub Releases, for Windows,
+Linux and macOS, and GitHub Releases is also the update channel.
 
 ## The pipeline
 
 One workflow, `.github/workflows/release.yml`, on a `v*` tag.
 
 1. Push a tag. Nothing else starts a release.
-2. `tauri-action` runs `bun run tauri build` on `windows-latest`.
-3. It signs the installer with the updater key and writes `latest.json`.
-4. It opens a **draft** release holding three files.
+2. `tauri-action` builds the Windows installer, signs it with the updater
+   key, writes `latest.json` and opens a **draft** release.
+3. The Linux and macOS jobs build beside it. `publish` adds their files to
+   the draft and their entries to `latest.json`.
+4. The draft now holds the files in the table below.
 5. You paste the release notes into the draft and publish it. Then set the
    note's `Status` to `Closed` and fill its `Date`.
 6. Publishing is what starts the update. Installed copies read
@@ -18,12 +20,20 @@ One workflow, `.github/workflows/release.yml`, on a `v*` tag.
 
 ## What reaches GitHub
 
-Two files, and nothing else:
+These files, and nothing else:
 
 | file | what it is |
 | --- | --- |
-| `<productName>_<version>_x64-setup.exe` | the installer, about 7 MB |
+| `<productName>_<version>_x64-setup.exe` | the Windows installer |
+| `<productName>_<version>_amd64.AppImage` | the Linux app |
+| `<productName>_<version>_aarch64.dmg` | the macOS disk image, for a download |
+| `<productName>_<version>_aarch64.app.tar.gz` | the macOS app as the updater reads it |
 | `latest.json` | the newest version, where to get it, and its signature |
+
+The macOS app is ad-hoc signed, not notarized. A reader opens it the first
+time through System Settings, Privacy & Security, Open Anyway. A Developer ID
+certificate and notarization remove that step; the secrets they need are in
+the "macOS Support & Build in CI Releases" spec.
 
 The `.sig` file Tauri writes is **not** uploaded (`uploadUpdaterSignatures:
 false`). The signature the app checks is inside `latest.json`; the `.sig` file
