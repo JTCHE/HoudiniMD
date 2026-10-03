@@ -1191,8 +1191,9 @@ button:active kbd.kbd-button {
   scroll-margin-top: calc(var(--page-bar-h, 0px) + 1.5rem);
 }
 
-/* How every small surface opens: a menu, the right-click menu, a tooltip.
-   `scale`, not `transform`, so it composes with a tooltip's own translate. */
+/* How a menu, the right-click menu and a modal open. A tooltip opens at
+   once and only uses pop-out (TooltipBox). `scale`, not `transform`, so it
+   composes with a tooltip's own translate. */
 @keyframes pop-in {
   from {
     opacity: 0;
@@ -1218,6 +1219,10 @@ button:active kbd.kbd-button {
   @media (prefers-reduced-motion: reduce) {
     animation: none;
   }
+}
+
+@utility pop-out {
+  animation: pop-in 120ms cubic-bezier(0.2, 0, 0, 1) reverse forwards;
 }
 
 /* ── Floating TOC — each section title rises into the pill as you pass it ── */

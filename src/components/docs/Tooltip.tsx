@@ -192,12 +192,27 @@ export function TooltipBox({ anchorRef, hoverPosRef, className, children }: Anch
     const x =
       left < margin ? margin - left : left + width > window.innerWidth - margin ? window.innerWidth - margin - (left + width) : 0;
     const below = line.top - 4 - height < margin && line.bottom + 4 + height <= window.innerHeight - margin;
-    // Whole pixels, and a change under one is no change: the pop-in scale
+    // Whole pixels, and a change under one is no change: a scale on the box
     // makes the measured width jitter in the fifth decimal, and an exact
     // compare set the state on every render until React gave up (#185).
     const shift = Math.round(x);
     setPlace((p) => (Math.abs(p.x - shift) < 1 && p.below === below ? p : { x: shift, below }));
   });
+
+  // A tooltip comes at once and goes slowly: the reader waits for the first,
+  // and the second only must not blink. The owner has already dropped the box
+  // when it goes, so a copy of it fades in its place.
+  useLayoutEffect(
+    () => () => {
+      const el = tooltipRef.current;
+      if (!el || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+      const ghost = el.cloneNode(true) as HTMLElement;
+      ghost.classList.add("pop-out");
+      document.body.append(ghost);
+      setTimeout(() => ghost.remove(), 200);
+    },
+    [],
+  );
 
   if (!line) return null;
 
@@ -210,7 +225,7 @@ export function TooltipBox({ anchorRef, hoverPosRef, className, children }: Anch
         transform: `translate(calc(-50% + ${place.x}px), ${place.below ? "0" : "-100%"})`,
       }}
       className={cn(
-        "pop-in [@media(hover:none)]:hidden rounded-lg fixed z-50 bg-background border border-border shadow-lg p-2 text-xs pointer-events-none whitespace-normal",
+        "[@media(hover:none)]:hidden rounded-lg fixed z-50 bg-background border border-border shadow-lg p-2 text-xs pointer-events-none whitespace-normal",
         className,
       )}
     >
