@@ -16,7 +16,7 @@ import { useTrail } from "@/lib/nav";
 import { WindowControls, useWindowFlag } from "./WindowControls";
 import { TitleBarMenu } from "./TitleBarMenu";
 import { appWindow } from "@/lib/backend";
-import { ALT_KEY, BACK_KEYS, COMMAND_KEY, FORWARD_KEYS, IS_MAC, historyStep, isTyping, useHotkey } from "@/lib/hotkeys";
+import { ALT_KEY, BACK_KEYS, COMMAND_KEY, FORWARD_KEYS, IS_MAC, historyStep, useHotkey } from "@/lib/hotkeys";
 import { Hint } from "@/components/ui/Hint";
 import { APP_NAME } from "@/lib/brand";
 import { version } from "../../../src-tauri/tauri.conf.json";
@@ -55,7 +55,7 @@ export function TitleBar({ sidebarOpen, onToggleSidebar, showTrail, bare = false
   const nativeFrame = IS_MAC && appWindow() !== null;
   useHotkey((event) => {
     const step = historyStep(event);
-    if (!step || isTyping(event.target)) return;
+    if (!step) return;
     event.preventDefault();
     if (step < 0 ? canGoBack : canGoForward) void navigate(step);
   });
