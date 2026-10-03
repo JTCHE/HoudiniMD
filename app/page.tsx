@@ -83,15 +83,18 @@ export default function Home() {
         style={{ "--enter": 7 } as React.CSSProperties}
         className="enter relative shrink-0 px-page-x pb-sm text-center text-caption text-muted-foreground"
       >
-        {/* The pages in the frame are ours, not SideFX's: say so under it. */}
+        {/* The pages in the frame are ours, not SideFX's: say so under it. The old
+            name is here, once and beside the disclaimer, so a visitor from
+            houdinimd.com knows the page. Never in the title: SideFX asked for
+            the name to go. */}
         <p className="max-sm:hidden">
           This app is a mockup of the product. Sample pages have been re-written specifically for this site.
         </p>
         <p className="max-sm:hidden">
-          {`${SITE_NAME} is an unofficial, independent project, and isn't affiliated with or endorsed by SideFX.`}
+          {`${SITE_NAME}, formerly HoudiniMD, is an unofficial, independent project, and isn't affiliated with or endorsed by SideFX.`}
         </p>
         {/* A phone has room for the gist only. */}
-        <p className="sm:hidden">A mockup with sample pages. Not affiliated with SideFX.</p>
+        <p className="sm:hidden">Formerly HoudiniMD. A mockup with sample pages. Not affiliated with SideFX.</p>
       </footer>
     </main>
   );
