@@ -212,7 +212,13 @@ fn write_startup_script(root: &Path) -> Result<(), String> {
         Some(file) => std::path::PathBuf::from(file),
         None => std::env::current_exe().map_err(|e| e.to_string())?,
     };
-    let script = startup_script(&exe);
+    // macOS runs an app opened straight from Downloads or from its disk image
+    // out of a random path that is gone when it quits.
+    if exe.to_string_lossy().contains("/AppTranslocation/") {
+        return Err(format!("Move {} to Applications, open it from there, then try again.", crate::APP_NAME));
+    }
+    let record = root.parent().map(|data| data.join(RECORD)).unwrap_or_default();
+    let script = startup_script(&exe, &record);
     for python in PYTHONS {
         write(&root.join(format!("python{python}libs")).join("uiready.py"), &script)?;
     }
@@ -233,21 +239,49 @@ pub fn refresh(data: &Path) {
 
 /// A second launch hands over to the running app and exits, so this script
 /// does not need to know whether the app is already up.
-fn startup_script(exe: &Path) -> String {
+///
+/// An app that was deleted, not uninstalled, leaves F1 pointing at a port that
+/// nothing answers. macOS and an AppImage have no uninstaller, so the script
+/// gives F1 back itself: it puts back what `record` says was there, and
+/// removes the package that loads it.
+fn startup_script(exe: &Path, record: &Path) -> String {
     // Rust's debug form of a string is a valid Python string literal.
     let exe = format!("{:?}", exe.to_string_lossy());
+    let record = format!("{:?}", record.to_string_lossy());
     format!(
         "# Written by {name}. Starts its help server with Houdini, so F1 has an
 # answer. {name} removes the package that loads this when F1 is given back.
-import subprocess, sys
-# DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP: the app outlives this session.
-flags = 0x00000008 | 0x00000200 if sys.platform == \"win32\" else 0
-try:
-    subprocess.Popen([{exe}, \"--background\"], creationflags=flags, close_fds=True)
-except OSError:
-    pass
+import os, subprocess, sys
+exe = {exe}
+if os.path.exists(exe):
+    # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP on Windows, a new session
+    # elsewhere: the app outlives this Houdini.
+    windows = sys.platform == \"win32\"
+    try:
+        subprocess.Popen([exe, \"--background\"], close_fds=True,
+                         creationflags=0x00000008 | 0x00000200 if windows else 0,
+                         start_new_session=not windows)
+    except OSError:
+        pass
+else:
+    import json, hou
+    try:
+        with open({record}) as file:
+            series = \"%d.%d\" % hou.applicationVersion()[:2]
+            before = json.load(file)[\"releases\"][series]
+    except (OSError, ValueError, KeyError):
+        before = {{}}
+    hou.setPreference(\"{use}\", (before.get(\"use_external\") or \"0\").strip('\"'))
+    hou.setPreference(\"{url}\", (before.get(\"url\") or \"\").strip('\"'))
+    try:
+        os.remove(os.path.join(hou.homeHoudiniDirectory(), \"packages\", \"{package}\"))
+    except OSError:
+        pass
 ",
         name = crate::APP_NAME,
+        use = USE_EXTERNAL,
+        url = EXTERNAL_URL,
+        package = PACKAGE,
     )
 }
 
