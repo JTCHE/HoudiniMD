@@ -49,8 +49,8 @@ const TABS: Array<{ id: Tab; label: string; icon: typeof Icons.recent }> = [
  */
 function LibraryRow({ entry, kept, onForget }: { entry: LibraryEntry; kept: boolean; onForget?: () => void }) {
   // Anchored on the name, not the row: the row is as wide as the column, and
-  // the box belongs beside the words it is about.
-  const { anchorRef, pointer, tip } = useRowTip<HTMLSpanElement>(entry.path);
+  // the box belongs over the words it is about.
+  const { anchorRef, pointer, tip } = useRowTip<HTMLSpanElement>(entry.path, "above");
   return (
     <div
       className={cn(

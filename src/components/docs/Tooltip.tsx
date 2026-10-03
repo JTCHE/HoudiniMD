@@ -145,9 +145,8 @@ export function usePageMark(slug: string | null): MetaEntry | null {
 interface Anchored {
   anchorRef: React.RefObject<HTMLElement | null>;
   hoverPosRef?: React.RefObject<{ x: number; y: number } | null>;
-  /** `right` is for a row of a list: beside the row, the box does not cover
-      the name the reader points at. In the sidebar it opens past the panel's
-      edge, so it hides none of the rows the reader may scroll to. */
+  /** `right` is for a row of the sidebar: it opens past the panel's edge, so
+      it hides none of the rows the reader may scroll to. */
   side?: "above" | "right";
 }
 
@@ -262,7 +261,7 @@ export function TooltipBox({ anchorRef, hoverPosRef, side = "above", className, 
 }
 
 /** What a page in the help is called and what it is about. */
-export function DocTooltip({ slug, ...anchored }: Anchored & { slug: string }) {
+export function DocTooltip({ slug, summaryOnly = false, ...anchored }: Anchored & { slug: string; summaryOnly?: boolean }) {
   // undefined while the answer is on its way; null for a page the build does
   // not have.
   const [meta, setMeta] = useState<MetaEntry | null | undefined>(() => known(slug));
@@ -291,6 +290,7 @@ export function DocTooltip({ slug, ...anchored }: Anchored & { slug: string }) {
   if (failed) return null;
 
   const summary = meta?.summary;
+  if (summaryOnly && !summary) return null;
 
   return (
     <TooltipBox {...anchored} className="w-max max-w-[16rem]">
@@ -315,11 +315,12 @@ export function DocTooltip({ slug, ...anchored }: Anchored & { slug: string }) {
   );
 }
 
-/** The page tooltip of a row in a list: it opens when the pointer arrives, sits
-    beside the row, and goes on a press. Spread `pointer` on the link and render
+/** The page tooltip of a row in a list: it opens when the pointer arrives and
+    goes on a press. The row already shows the name, so a page with no summary
+    gets no tooltip. Spread `pointer` on the link and render
     `tip` beside it — not in it: a link sets its ref after the layout effects of
     its children, so a box inside it measures nothing. */
-export function useRowTip<T extends HTMLElement>(slug: string) {
+export function useRowTip<T extends HTMLElement>(slug: string, side: Anchored["side"]) {
   const anchorRef = useRef<T>(null);
   const [shown, setShown] = useState(false);
   return {
@@ -330,7 +331,7 @@ export function useRowTip<T extends HTMLElement>(slug: string) {
       // A press is the answer to the question the tooltip was for.
       onPointerDown: () => setShown(false),
     },
-    tip: shown ? <DocTooltip slug={slug} anchorRef={anchorRef} side="right" /> : null,
+    tip: shown ? <DocTooltip slug={slug} anchorRef={anchorRef} side={side} summaryOnly /> : null,
   };
 }
 

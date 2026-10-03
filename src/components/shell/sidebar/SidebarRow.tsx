@@ -85,7 +85,7 @@ export function SidebarRow({
   // A page row names its page the way a link in the page does: the panel
   // cuts long names short, and the tooltip gives the whole name and what the
   // page is about.
-  const { anchorRef, pointer, tip } = useRowTip<HTMLAnchorElement>((to ?? "").replace(/^\/+/, ""));
+  const { anchorRef, pointer, tip } = useRowTip<HTMLAnchorElement>((to ?? "").replace(/^\/+/, ""), "right");
 
   // A row is a link when it names a page and a button when it opens a branch.
   // The two take different props, so the shared part is the class and the
