@@ -8,7 +8,7 @@
 import { SETTINGS_KEYS, openSettings } from "@/components/settings/SettingsDialog";
 import { cn } from "@/lib/utils";
 import { Icons } from "@/lib/ui/icons";
-import { toggleTheme, useTheme } from "@/lib/ui/theme";
+import { THEME_ICON, THEME_LABEL, cycleTheme, useThemeChoice } from "@/lib/ui/theme";
 import { Hint } from "@/components/ui/Hint";
 import { SidebarRow } from "./SidebarRow";
 
@@ -32,7 +32,8 @@ interface SidebarFooterProps {
 }
 
 export function SidebarFooter({ recentCount, recentsOpen, onToggleRecents, className }: SidebarFooterProps) {
-  const theme = useTheme();
+  const theme = useThemeChoice();
+  const ThemeMark = THEME_ICON[theme];
 
   return (
     <div className={cn("flex flex-col", className)}>
@@ -56,21 +57,16 @@ export function SidebarFooter({ recentCount, recentsOpen, onToggleRecents, class
             <Icons.settings className="size-[18px]" />
           </button>
         </Hint>
-        <Hint label={theme === "dark" ? "Light theme" : "Dark theme"}>
+        {/* Three choices, so the mark is the one in force and a press steps to
+            the next. Settings has the three side by side. */}
+        <Hint label={`${THEME_LABEL[theme]} theme`}>
         <button
           type="button"
-          aria-label={theme === "dark" ? "Switch to the light theme" : "Switch to the dark theme"}
+          aria-label={`Theme: ${THEME_LABEL[theme]}. Press for the next one.`}
           className={FOOTER_BUTTON}
-          onClick={toggleTheme}
+          onClick={cycleTheme}
         >
-          {/* Not one size. A crescent fills less of its box than a sun with
-              eight rays around it, so drawn at the same size the moon reads
-              as the smaller, lighter icon of the two. */}
-          {theme === "dark" ? (
-            <Icons.themeLight className="size-md" />
-          ) : (
-            <Icons.themeDark className="size-md" />
-          )}
+          <ThemeMark className="size-md" />
         </button>
         </Hint>
         <span className="flex-1" />

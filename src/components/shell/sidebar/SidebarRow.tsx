@@ -13,13 +13,12 @@
  * it is the row you are on. Only a group header is bold, and it is bold in
  * every state.
  */
-import { useRef, useState } from "react";
 import { Link } from "react-router";
 import { cn } from "@/lib/utils";
 import { warm } from "@/lib/pages";
 import { Icons } from "@/lib/ui/icons";
 import DocIconClient from "@/components/docs/markdown/DocIconClient";
-import { DocTooltip } from "@/components/docs/Tooltip";
+import { useRowTip } from "@/components/docs/Tooltip";
 
 /** `back` is the row that leaves a branch: the arrow points the other way and
     the row reads as the level above, not as a thing to open. */
@@ -86,8 +85,7 @@ export function SidebarRow({
   // A page row names its page the way a link in the page does: the panel
   // cuts long names short, and the tooltip gives the whole name and what the
   // page is about.
-  const rowRef = useRef<HTMLAnchorElement>(null);
-  const [pointed, setPointed] = useState(false);
+  const { anchorRef, pointer, tip } = useRowTip<HTMLAnchorElement>((to ?? "").replace(/^\/+/, ""));
 
   // A row is a link when it names a page and a button when it opens a branch.
   // The two take different props, so the shared part is the class and the
@@ -190,15 +188,13 @@ export function SidebarRow({
     // down: the trip from one row to the next is longer than the read.
     <>
     <Link
-      ref={rowRef}
+      ref={anchorRef}
       to={to}
+      {...pointer}
       onPointerEnter={() => {
         warm(to.replace(/^\/+/, ""));
-        setPointed(true);
+        pointer.onPointerEnter();
       }}
-      onPointerLeave={() => setPointed(false)}
-      // A press is the answer to the question the tooltip was for.
-      onPointerDown={() => setPointed(false)}
       // The row goes on the press like every other control, and the rule that
       // makes it so is one listener — see lib/ui/press. Nothing to wire here.
       onClick={() => onClick?.()}
@@ -207,9 +203,7 @@ export function SidebarRow({
     >
       {content}
     </Link>
-    {/* Beside the link, not in it: the link sets its ref after the layout
-        effects of its children, so a box inside it measures nothing. */}
-    {pointed && <DocTooltip slug={to.replace(/^\/+/, "")} anchorRef={rowRef} />}
+    {tip}
     </>
   ) : (
     <button

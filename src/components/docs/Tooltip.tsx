@@ -80,16 +80,24 @@ function flush() {
     link merely on screen, waiting to draw its icon — goes behind that, or a
     shelf page of a thousand links puts a thousand slugs in front of the one
     hover that matters. */
+/** What is known of a page with no call: the cache, or the title list in
+    memory, which holds what a call would answer for almost every page. */
+function known(slug: string): MetaEntry | null | undefined {
+  if (!metaCache.has(slug)) {
+    const hit = hitOf(slug);
+    if (hit) metaCache.set(slug, { title: hit.title, summary: hit.summary ?? "", icon: hit.icon ?? null });
+  }
+  return metaCache.get(slug);
+}
+
 function request(
   slug: string,
   onSettled?: (entry: Settled) => void,
   eager = true,
 ) {
-  // The title list already holds what a call would answer for almost every
-  // page. On an index page of two thousand links, the calls held the
-  // database lock, and the next page read waited half a second behind them.
-  const hit = metaCache.has(slug) ? undefined : hitOf(slug);
-  if (hit) metaCache.set(slug, { title: hit.title, summary: hit.summary ?? "", icon: hit.icon ?? null });
+  // On an index page of two thousand links, the calls held the database lock,
+  // and the next page read waited half a second behind them.
+  known(slug);
   if (metaCache.has(slug)) {
     onSettled?.(metaCache.get(slug) ?? null);
     return;
@@ -116,11 +124,7 @@ export function registerSlug(slug: string) {
 export function usePageMark(slug: string | null): MetaEntry | null {
   // The title list in memory already names the page's icon, so a link draws
   // its own mark at once instead of the page glyph, then the icon.
-  const [mark, setMark] = useState<MetaEntry | null>(() => {
-    if (!slug) return null;
-    const hit = hitOf(slug);
-    return metaCache.get(slug) ?? (hit ? { title: hit.title, summary: hit.summary ?? "", icon: hit.icon ?? null } : null);
-  });
+  const [mark, setMark] = useState<MetaEntry | null>(() => (slug ? (known(slug) ?? null) : null));
   useEffect(() => {
     if (!slug) return;
     let live = true;
@@ -141,15 +145,21 @@ export function usePageMark(slug: string | null): MetaEntry | null {
 interface Anchored {
   anchorRef: React.RefObject<HTMLElement | null>;
   hoverPosRef?: React.RefObject<{ x: number; y: number } | null>;
+  /** `right` is for a row of a list: beside the row, the box does not cover
+      the name the reader points at. In the sidebar it opens past the panel's
+      edge, so it hides none of the rows the reader may scroll to. */
+  side?: "above" | "right";
 }
 
 /** The box every tooltip sits in. Fixed, so it escapes any ancestor's
     `overflow: clip` (e.g. the carousel). Over the link, or under it where the
     box does not fit above, and pushed in from the side of the window. */
-export function TooltipBox({ anchorRef, hoverPosRef, className, children }: Anchored & { className: string; children: React.ReactNode }) {
+export function TooltipBox({ anchorRef, hoverPosRef, side = "above", className, children }: Anchored & { className: string; children: React.ReactNode }) {
   const tooltipRef = useRef<HTMLSpanElement>(null);
   const [line, setLine] = useState<DOMRect | null>(null);
   const [place, setPlace] = useState({ x: 0, below: false });
+  // The top of a box on the right, kept inside the window.
+  const [top, setTop] = useState(0);
 
   useLayoutEffect(() => {
     const anchorEl = anchorRef.current;
@@ -158,6 +168,12 @@ export function TooltipBox({ anchorRef, hoverPosRef, className, children }: Anch
     // whole card is clickable — the <a> itself is only the title text. Anchoring
     // to the <a>'s own rect centers the tooltip on that title, well off-center
     // from the visually-clickable card, so anchor to the card instead.
+    if (side === "right") {
+      const rect = anchorEl.getBoundingClientRect();
+      const edge = anchorEl.closest("aside")?.getBoundingClientRect().right ?? rect.right;
+      setLine(new DOMRect(rect.x, rect.y, edge - rect.x, rect.height));
+      return;
+    }
     const card = anchorEl.closest<HTMLElement>(".shelf-grid li");
     if (card) {
       setLine(card.getBoundingClientRect());
@@ -179,7 +195,7 @@ export function TooltipBox({ anchorRef, hoverPosRef, className, children }: Anch
       }
     }
     setLine(rect);
-  }, [anchorRef, hoverPosRef]);
+  }, [anchorRef, hoverPosRef, side]);
 
   // After every render, because the content grows when its answer arrives.
   // An unchanged place returns the same object, so this settles in one pass.
@@ -188,6 +204,12 @@ export function TooltipBox({ anchorRef, hoverPosRef, className, children }: Anch
     if (!el || !line) return;
     const { width, height } = el.getBoundingClientRect();
     const margin = 8;
+    if (side === "right") {
+      const want = Math.round(line.top + line.height / 2 - height / 2);
+      const next = Math.max(margin, Math.min(want, window.innerHeight - margin - height));
+      setTop((t) => (Math.abs(t - next) < 1 ? t : next));
+      return;
+    }
     const left = line.left + line.width / 2 - width / 2;
     const x =
       left < margin ? margin - left : left + width > window.innerWidth - margin ? window.innerWidth - margin - (left + width) : 0;
@@ -219,11 +241,15 @@ export function TooltipBox({ anchorRef, hoverPosRef, className, children }: Anch
   return createPortal(
     <span
       ref={tooltipRef}
-      style={{
-        top: place.below ? line.bottom + 4 : line.top - 4,
-        left: line.left + line.width / 2,
-        transform: `translate(calc(-50% + ${place.x}px), ${place.below ? "0" : "-100%"})`,
-      }}
+      style={
+        side === "right"
+          ? { top, left: line.right + 8 }
+          : {
+              top: place.below ? line.bottom + 4 : line.top - 4,
+              left: line.left + line.width / 2,
+              transform: `translate(calc(-50% + ${place.x}px), ${place.below ? "0" : "-100%"})`,
+            }
+      }
       className={cn(
         "[@media(hover:none)]:hidden rounded-lg fixed z-50 bg-background border border-border shadow-lg p-2 text-xs pointer-events-none whitespace-normal",
         className,
@@ -239,7 +265,7 @@ export function TooltipBox({ anchorRef, hoverPosRef, className, children }: Anch
 export function DocTooltip({ slug, ...anchored }: Anchored & { slug: string }) {
   // undefined while the answer is on its way; null for a page the build does
   // not have.
-  const [meta, setMeta] = useState<MetaEntry | null | undefined>(() => metaCache.get(slug));
+  const [meta, setMeta] = useState<MetaEntry | null | undefined>(() => known(slug));
   const [failed, setFailed] = useState(false);
   const mountedRef = useRef(true);
 
@@ -287,6 +313,39 @@ export function DocTooltip({ slug, ...anchored }: Anchored & { slug: string }) {
       )}
     </TooltipBox>
   );
+}
+
+/** How long the pointer rests on a row before its tooltip opens. A list is
+    crossed on the way to somewhere else, and a box at every row on the way
+    reads as flicker, not as help. */
+const REST_MS = 250;
+
+/** The page tooltip of a row in a list: it opens once the pointer rests, sits
+    beside the row, and goes on a press. Spread `pointer` on the link and render `tip` beside it —
+    not in it: a link sets its ref after the layout effects of its children, so
+    a box inside it measures nothing. */
+export function useRowTip<T extends HTMLElement>(slug: string) {
+  const anchorRef = useRef<T>(null);
+  const [shown, setShown] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const hide = () => {
+    clearTimeout(timer.current);
+    setShown(false);
+  };
+  return {
+    anchorRef,
+    pointer: {
+      onPointerEnter: () => {
+        clearTimeout(timer.current);
+        timer.current = setTimeout(() => setShown(true), REST_MS);
+      },
+      onPointerLeave: hide,
+      // A press is the answer to the question the tooltip was for.
+      onPointerDown: hide,
+    },
+    tip: shown ? <DocTooltip slug={slug} anchorRef={anchorRef} side="right" /> : null,
+  };
 }
 
 function Skeleton() {

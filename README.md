@@ -28,7 +28,7 @@ NodebookMD reads the same pages from your install, indexes them once, and displa
 - **Your build, offline:** The docs come from the Houdini on your disk. Switch between versions from the sidebar.
 - **Copy as Markdown:** <kbd>Ctrl</kbd> <kbd>C</kbd> copies the whole page as clean Markdown, ready for notes or a prompt.
 - **Built for agents:** The [Houdini MCP](https://github.com/JTCHE/houdini-mcp) gives Claude, Codex, Gemini and other agents the same docs, for the exact build you use, next to the tools that drive Houdini.
-- **Light and dark** themes, that can be flipped at any time in the sidebar
+- **Light, dark and system** themes, that can be changed at any time in the sidebar or in Settings
 
 ## Speed
 

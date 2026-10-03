@@ -18,7 +18,7 @@ import { findAnchor, jumpTo } from "@/components/docs/toc/measure";
 import { invoke, inTauri } from "@/lib/backend";
 import { COMMAND_KEY, isCommand, isTyping, useHotkey } from "@/lib/hotkeys";
 import { Icons } from "@/lib/ui/icons";
-import { toggleTheme, useTheme } from "@/lib/ui/theme";
+import { THEME_CHOICES, THEME_ICON, THEME_LABEL, setTheme, useThemeChoice } from "@/lib/ui/theme";
 import { pastedAnchor, pastedPath, recentSearches, rememberSearch, resolve, titles, type Hit } from "@/lib/search";
 import { useSearch } from "@/lib/use-search";
 import { scopedInput } from "@/lib/scope";
@@ -182,15 +182,19 @@ const SearchOverlay = forwardRef<SearchOverlayRef, object>(function SearchOverla
 
   // Commands go above the pages. Their names are generic, so they seldom
   // stand in front of a page the reader wanted.
-  const theme = useTheme();
+  const theme = useThemeChoice();
   const commands = useMemo(() => {
     const all: Command[] = [
       { label: "Home", words: ["start"], icon: Icons.home, run: () => navigate("/") },
       { label: "Bookmarks", words: ["saved"], icon: Icons.bookmark, run: () => navigate("/?tab=bookmarks") },
       { label: "Recent pages", words: ["history"], icon: Icons.recent, run: () => navigate("/?tab=recents") },
-      theme === "dark"
-        ? { label: "Light theme", words: ["theme", "mode"], icon: Icons.themeLight, run: toggleTheme }
-        : { label: "Dark theme", words: ["theme", "mode"], icon: Icons.themeDark, run: toggleTheme },
+      // The two themes not in force.
+      ...THEME_CHOICES.filter((choice) => choice !== theme).map((choice) => ({
+        label: `${THEME_LABEL[choice]} theme`,
+        words: ["theme", "mode", "appearance"],
+        icon: THEME_ICON[choice],
+        run: () => setTheme(choice),
+      })),
     ];
     if (inTauri) {
       all.push({

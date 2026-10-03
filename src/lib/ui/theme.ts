@@ -1,9 +1,10 @@
 /**
  * Light or dark, and who decides.
  *
- * The reader's choice wins and is kept on the machine. Until they make one,
- * the system decides and keeps deciding — a reader who switches Windows to
- * dark at sunset gets a dark window without touching the app.
+ * The reader chooses light, dark or system, and the choice is kept on the
+ * machine. System is the default: the system decides and keeps deciding — a
+ * reader who switches Windows to dark at sunset gets a dark window without
+ * touching the app.
  *
  * The root attribute is the whole of the theme: `globals.css` states the dark
  * ramp under `:root[data-theme="dark"]`, so a switch is one attribute write
@@ -11,8 +12,21 @@
  */
 import { useSyncExternalStore } from "react";
 import { inTauri } from "@/lib/backend";
+import { Icons } from "@/lib/ui/icons";
 
 export type Theme = "light" | "dark";
+export type ThemeChoice = Theme | "system";
+
+/** The choices in the order the footer button steps through them. The
+    settings and the command list read the same list. */
+export const THEME_CHOICES: ThemeChoice[] = ["light", "dark", "system"];
+
+export const THEME_LABEL: Record<ThemeChoice, string> = { light: "Light", dark: "Dark", system: "System" };
+
+export const THEME_ICON = { light: Icons.themeLight, dark: Icons.themeDark, system: Icons.themeSystem } satisfies Record<
+  ThemeChoice,
+  unknown
+>;
 
 const KEY = "houdinimd.theme";
 
@@ -62,17 +76,23 @@ export function startTheme() {
   });
 }
 
-/** The other theme, from now on. */
-export function toggleTheme() {
-  const next: Theme = current() === "dark" ? "light" : "dark";
+/** The reader's choice, from now on. System is no stored value at all. */
+export function setTheme(choice: ThemeChoice) {
   try {
-    window.localStorage.setItem(KEY, next);
+    if (choice === "system") window.localStorage.removeItem(KEY);
+    else window.localStorage.setItem(KEY, choice);
   } catch {
     // A blocked store loses the choice at the end of the session, not the
     // switch itself.
   }
-  paint(next);
+  paint(choice === "system" ? system() : choice);
   for (const notify of listeners) notify();
+}
+
+/** The next choice after the one in force. */
+export function cycleTheme() {
+  const at = THEME_CHOICES.indexOf(stored() ?? "system");
+  setTheme(THEME_CHOICES[(at + 1) % THEME_CHOICES.length]);
 }
 
 function subscribe(notify: () => void) {
@@ -80,11 +100,11 @@ function subscribe(notify: () => void) {
   return () => listeners.delete(notify);
 }
 
-/** The theme on screen, live. */
-export function useTheme(): Theme {
+/** The reader's choice, live. */
+export function useThemeChoice(): ThemeChoice {
   return useSyncExternalStore(
     subscribe,
-    () => (document.documentElement.dataset.theme as Theme) ?? "light",
-    () => "light" as Theme,
+    () => stored() ?? "system",
+    () => "system" as ThemeChoice,
   );
 }

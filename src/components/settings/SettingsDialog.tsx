@@ -20,6 +20,7 @@ import { showToast } from "@/components/ui/toast-notification";
 import { TELEMETRY } from "@/components/onboarding/Onboarding";
 import { VaultPicker } from "@/components/obsidian/ObsidianDialog";
 import { APP_NAME } from "@/lib/brand";
+import { THEME_CHOICES, THEME_LABEL, setTheme, useThemeChoice } from "@/lib/ui/theme";
 import { OBSIDIAN_PICTURES, OBSIDIAN_VAULT, picturesChoice, rememberedVault, type PicturesChoice } from "@/lib/obsidian";
 
 const OPEN = "houdinimd:settings";
@@ -36,6 +37,7 @@ const SECTIONS = [
   { key: "mcp", label: "Houdini MCP", icon: Icons.newWindow },
   { key: "obsidian", label: "Obsidian", icon: Icons.bookmark },
   { key: "usage", label: "Usage data", icon: Icons.recent },
+  { key: "appearance", label: "Appearance", icon: Icons.themeSystem },
 ] as const;
 type SectionKey = (typeof SECTIONS)[number]["key"];
 
@@ -73,7 +75,11 @@ export function SettingsDialog() {
         ))}
       </nav>
       <div className={cn("min-w-0 flex-1 overflow-y-auto px-xl pb-lg", MODAL_TOP)}>
-        {!inTauri ? (
+        {shown === "appearance" ? (
+          // The one setting kept in the browser, so it works in Houdini's
+          // help pane too.
+          <AppearanceSection />
+        ) : !inTauri ? (
           <p className="text-meta text-neutral-500">Settings live in the {APP_NAME} app, not in Houdini's help pane.</p>
         ) : shown === "houdini" ? (
           <HelpSection />
@@ -296,6 +302,23 @@ function ObsidianSection() {
           <span className="text-caption text-neutral-500">Where the pictures go. Obsidian's own vaults are listed first.</span>
         </span>
         <VaultPicker value={vault} onChange={(path) => void keep(path)} />
+      </div>
+    </Section>
+  );
+}
+
+/** Light, dark, or whatever the system is set to. */
+function AppearanceSection() {
+  const theme = useThemeChoice();
+  return (
+    <Section title="Appearance" detail="System follows the light or dark setting of your computer, and changes when it changes.">
+      <div className={cn(ROW, "flex flex-col gap-sm")}>
+        <span className="text-[14px] font-medium text-neutral-950">Theme</span>
+        <div role="radiogroup" aria-label="Theme" className={cn(CHOICE_HANG, "flex flex-wrap gap-sm")}>
+          {THEME_CHOICES.map((choice) => (
+            <ChoiceRow key={choice} compact label={THEME_LABEL[choice]} chosen={theme === choice} onClick={() => setTheme(choice)} />
+          ))}
+        </div>
       </div>
     </Section>
   );

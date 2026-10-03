@@ -37,6 +37,7 @@ import {
   Settings,
   X,
   Moon,
+  Monitor,
   Sun,
   type LucideIcon,
 } from "lucide-react";
@@ -94,6 +95,7 @@ export const Icons = {
   settings: Settings,
   themeLight: Sun,
   themeDark: Moon,
+  themeSystem: Monitor,
   bugReport: Bug,
   search: Search,
   home: House,

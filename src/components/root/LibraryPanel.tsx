@@ -26,6 +26,7 @@ import DocIconClient from "@/components/docs/markdown/DocIconClient";
 import { FadeList } from "@/components/ui/FadeList";
 import { forget, shortAgo, toggleBookmark, useLibrary, type LibraryEntry } from "@/lib/store/library";
 import { warm } from "@/lib/pages";
+import { useRowTip } from "@/components/docs/Tooltip";
 import { ExploreColumns } from "@/components/root/ExploreColumns";
 import { Keycap, SMALL_KEY } from "@/components/ui/Keycap";
 import { COMMAND_KEY } from "@/lib/hotkeys";
@@ -47,6 +48,9 @@ const TABS: Array<{ id: Tab; label: string; icon: typeof Icons.recent }> = [
  * of kept and unkept rows stay on one axis with the clock in the tab above.
  */
 function LibraryRow({ entry, kept, onForget }: { entry: LibraryEntry; kept: boolean; onForget?: () => void }) {
+  // Anchored on the name, not the row: the row is as wide as the column, and
+  // the box belongs beside the words it is about.
+  const { anchorRef, pointer, tip } = useRowTip<HTMLSpanElement>(entry.path);
   return (
     <div
       className={cn(
@@ -64,7 +68,11 @@ function LibraryRow({ entry, kept, onForget }: { entry: LibraryEntry; kept: bool
       <Link
         to={`/${entry.path}`}
         aria-label={entry.title}
-        onPointerEnter={() => warm(entry.path)}
+        {...pointer}
+        onPointerEnter={() => {
+          warm(entry.path);
+          pointer.onPointerEnter();
+        }}
         className="absolute inset-0 cursor-interactive rounded-lg focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
       />
 
@@ -105,9 +113,13 @@ function LibraryRow({ entry, kept, onForget }: { entry: LibraryEntry; kept: bool
       ) : (
         <Icons.page className="pointer-events-none size-[15px] shrink-0 text-neutral-400" />
       )}
-      <span className="pointer-events-none min-w-0 flex-1 truncate text-[13.5px] tracking-[-0.01em] text-neutral-800">
+      {/* As wide as the name, with the space after it apart, so the tooltip
+          measures the words and not the row. */}
+      <span ref={anchorRef} className="pointer-events-none min-w-0 truncate text-[13.5px] tracking-[-0.01em] text-neutral-800">
         {entry.title}
       </span>
+      <span className="flex-1" />
+      {tip}
       <span className="pointer-events-none shrink-0 text-[11.5px] text-neutral-500 tabular-nums">
         {shortAgo(entry.at)}
       </span>
