@@ -318,7 +318,7 @@ export function DocTooltip({ slug, ...anchored }: Anchored & { slug: string }) {
 /** How long the pointer rests on a row before its tooltip opens. A list is
     crossed on the way to somewhere else, and a box at every row on the way
     reads as flicker, not as help. */
-const REST_MS = 250;
+const REST_MS = 100;
 
 /** The page tooltip of a row in a list: it opens once the pointer rests, sits
     beside the row, and goes on a press. Spread `pointer` on the link and render `tip` beside it —
