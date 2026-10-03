@@ -23,8 +23,8 @@
  * hands the request to Next.
  */
 import buildId from "./build-id.json";
-import { PLATFORMS, platformForPath, type Platform } from "./download";
-import { REPO_URL, SITE_NAME } from "./brand";
+import { assetUrl, MANIFEST, platformForPath, type Platform } from "./download";
+import { REPO_URL } from "./brand";
 
 /** `segmentData` stores this one as null when it equals `rsc`. See lib/cache/compressed-r2-cache.ts. */
 const FULL_SEGMENT_KEY = "/_full";
@@ -198,9 +198,8 @@ async function entryFor(path: string, cache: Bucket): Promise<Entry | null> {
  * GitHub has no "latest asset matching a pattern" URL and the bundler writes
  * the version into the file name, so the address has to be resolved on every
  * ask. The version comes from `latest.json`, the manifest the app's updater
- * reads, served from the release files. Not from GitHub's API: it limits
- * anonymous calls per address, a Worker shares its address with other
- * Workers, and every ask fell back to the release page. This ran inside Next: two asks
+ * reads (`MANIFEST`). With GitHub's API, every ask fell back to the release
+ * page. This ran inside Next: two asks
  * in one hour of live log cost 689 and 393 CPU-ms, against 2 ms warm, because
  * each landed on a colo with a cold isolate and paid the whole bootstrap to
  * write one redirect.
@@ -209,7 +208,6 @@ async function entryFor(path: string, cache: Bucket): Promise<Entry | null> {
  * at all. Five minutes is the delay between publishing a
  * release and the link pointing at it.
  */
-const MANIFEST = `${REPO_URL}/releases/latest/download/latest.json`;
 /** Where the reader lands if GitHub cannot be asked. Never a dead link. */
 const RELEASES_PAGE = `${REPO_URL}/releases/latest`;
 
@@ -222,7 +220,7 @@ async function download(platform: Platform): Promise<Response> {
     if (response.ok) {
       const { version } = (await response.json()) as { version?: string };
       if (version) {
-        to = `${REPO_URL}/releases/download/v${version}/${SITE_NAME}_${version}${PLATFORMS[platform].asset}`;
+        to = assetUrl(version, platform);
       }
     }
   } catch {

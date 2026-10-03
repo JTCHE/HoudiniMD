@@ -1,3 +1,5 @@
+import type { Platform } from "./download";
+
 // Features whose front end ships ahead of the part that makes it work.
 //
 // Each one stays `false` until its other half is live. `scripts/check-gates.ts`
@@ -12,8 +14,9 @@ export const FEATURES = {
   macosDownload: false,
 } as const;
 
-/** What each switch needs from the latest GitHub release. */
-export const REQUIRES: Record<keyof typeof FEATURES, { asset?: string; minAppVersion?: string; why: string }> = {
+/** What each switch needs from the latest GitHub release: a platform's file
+    on it, or an app version. */
+export const REQUIRES: Record<keyof typeof FEATURES, { platform?: Platform; minAppVersion?: string; why: string }> = {
   openInApp: { minAppVersion: "0.2.1", why: "the app release that registers the link scheme" },
-  macosDownload: { asset: ".dmg", why: "a macOS build on the release" },
+  macosDownload: { platform: "macos", why: "a macOS build on the release" },
 };

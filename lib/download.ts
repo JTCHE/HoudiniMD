@@ -1,4 +1,4 @@
-import { REPO_URL } from "./brand";
+import { REPO_URL, SITE_NAME } from "./brand";
 import { FEATURES } from "./features";
 
 // Every platform the download key knows, and the release asset each one gets.
@@ -17,6 +17,15 @@ export const PLATFORMS: Record<Platform, { label: string; href: string; asset: s
 
 /** A phone, or a platform with no build yet. */
 export const FALLBACK = { label: "View on GitHub", href: REPO_URL };
+
+/** The updater's manifest, served from the release files. It names the newest
+    version. Read it, not GitHub's API: the API limits anonymous calls per
+    address, and Workers and Cloudflare's build machines share theirs. */
+export const MANIFEST = `${REPO_URL}/releases/latest/download/latest.json`;
+
+/** A platform's file on the release of `version`. */
+export const assetUrl = (version: string, platform: Platform) =>
+  `${REPO_URL}/releases/download/v${version}/${SITE_NAME}_${version}${PLATFORMS[platform].asset}`;
 
 /** The platform named in a `/download/<os>` path, or null. */
 export function platformForPath(pathname: string): Platform | null {
