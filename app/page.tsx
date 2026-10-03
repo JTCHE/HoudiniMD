@@ -3,7 +3,7 @@ import { ViewRecorder } from "@/components/ViewRecorder";
 import { AppIcon } from "@/components/landing/AppIcon";
 import { Showcase } from "@/components/landing/showcase/Showcase";
 import { AsciiBackground } from "@/components/root/AsciiBackground";
-import { DownloadKey } from "@/components/ui/download-key";
+import { DownloadKey, MacInstall } from "@/components/ui/download-key";
 import { MCP_URL, REPO_URL, SITE_NAME } from "@/lib/brand";
 import { SPRING_CSS } from "@/lib/landing/spring";
 
@@ -74,6 +74,7 @@ export default function Home() {
               <ArrowUpRight className="size-3.5 transition-transform group-hover:translate-x-px group-hover:-translate-y-px" />
             </a>
           </div>
+          <MacInstall style={{ "--enter": 4 } as React.CSSProperties} className="enter mt-sm" />
         </header>
 
         <Showcase />

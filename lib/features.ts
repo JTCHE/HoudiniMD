@@ -11,7 +11,7 @@ export const FEATURES = {
   /** "Open in app" beside the download key. Needs an app release that registers the link scheme. */
   openInApp: true,
   /** The macOS download. Needs a `.dmg` on the latest release. */
-  macosDownload: false,
+  macosDownload: true,
 } as const;
 
 /** What each switch needs from the latest GitHub release: a platform's file

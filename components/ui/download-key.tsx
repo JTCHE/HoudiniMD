@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { ControlButton } from "@/components/ui/control-button";
 import { cn } from "@/lib/utils";
 import { FALLBACK, PLATFORMS, type Platform } from "@/lib/download";
@@ -115,6 +115,39 @@ export function DownloadKey({ className, ...rest }: { className?: string } & Rec
     >
       {label}
     </ControlButton>
+  );
+}
+
+/** The one-line install for a Mac: `public/install.sh`. */
+const MAC_INSTALL = "curl -fsSL https://nodebook.md/install.sh | sh";
+
+/**
+ * Under the key on a Mac. The disk image is not notarized, so macOS asks for
+ * "Open Anyway" once; a file from curl carries no download mark and opens at
+ * once. A press copies the line.
+ */
+export function MacInstall({ className, style }: { className?: string; style?: React.CSSProperties }) {
+  const build = useBuild();
+  const [copied, setCopied] = useState(false);
+  if (build?.platform !== "macos") return null;
+  const copy = () => {
+    void navigator.clipboard?.writeText(MAC_INSTALL).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    });
+  };
+  return (
+    <p style={style} className={cn("flex flex-wrap items-center justify-center gap-x-sm gap-y-2xs text-caption text-muted-foreground", className)}>
+      Or in Terminal, with no &ldquo;Open Anyway&rdquo; step:
+      <button
+        type="button"
+        onClick={copy}
+        aria-label="Copy the install command"
+        className="cursor-pointer rounded-md border border-hairline px-sm py-[2px] font-mono text-[12px] text-foreground/80 transition-colors hover:bg-foreground/5 hover:text-foreground"
+      >
+        {copied ? "Copied" : MAC_INSTALL}
+      </button>
+    </p>
   );
 }
 
