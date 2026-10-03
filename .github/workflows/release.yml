@@ -149,22 +149,21 @@ jobs:
       - name: install front-end dependencies
         run: bun install
 
-      # CI is set on the runner, so the disk image skips the Finder script
-      # that lays out its window; that script needs a logged-in desktop.
       - name: build
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
-        run: bun run tauri build --bundles app,dmg
+        run: bun run tauri build --bundles app
 
-      # The tarball takes the disk image's name, so the release page says which
-      # version and which chip each file is for.
-      - name: name the updater bundle
+      # Not Tauri's disk image: its window layout is a Finder script, which
+      # needs a logged-in desktop. The tarball takes the disk image's name, so
+      # the release page says which version and which chip each file is for.
+      - name: pack the disk image and name the updater bundle
         run: |
           bundle=src-tauri/target/release/bundle
-          dmg=$(basename "$bundle"/dmg/*.dmg .dmg)
+          dmg=NodebookMD_$(jq -r .version src-tauri/tauri.conf.json)_aarch64
           mkdir out
-          cp "$bundle"/dmg/*.dmg out/
+          sh src-tauri/dmg/build.sh "$bundle"/macos/NodebookMD.app "out/$dmg.dmg"
           cp "$bundle"/macos/*.app.tar.gz "out/$dmg.app.tar.gz"
           cp "$bundle"/macos/*.app.tar.gz.sig "out/$dmg.app.tar.gz.sig"
           ls -la out
