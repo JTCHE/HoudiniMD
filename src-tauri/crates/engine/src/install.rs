@@ -134,6 +134,11 @@ pub fn find(picked: &[PathBuf]) -> Vec<Install> {
             continue;
         };
         for entry in entries.flatten() {
+            // The macOS installer links `Current` to the newest build, which
+            // the scan also finds by its own name.
+            if cfg!(target_os = "macos") && entry.file_type().is_ok_and(|t| t.is_symlink()) {
+                continue;
+            }
             if let Some(install) = read(hfs(entry.path())) {
                 if !found.iter().any(|i| same_root(&i.root, &install.root)) {
                     found.push(install);

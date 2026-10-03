@@ -1,0 +1,26 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "NodebookMD",
+        "width": 1100,
+        "height": 760,
+        "minWidth": 480,
+        "minHeight": 400,
+        "decorations": true,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "trafficLightPosition": { "x": 14, "y": 18 },
+        "visible": false,
+        "zoomHotkeysEnabled": true
+      }
+    ]
+  },
+  "bundle": {
+    "targets": ["app", "dmg"],
+    "createUpdaterArtifacts": false,
+    "icon": ["icons/128x128@2x.png", "icons/icon.png"]
+  }
+}

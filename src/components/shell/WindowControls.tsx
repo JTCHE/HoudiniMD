@@ -12,6 +12,7 @@ import { useEffect, useState } from "react";
 import { appWindow } from "@/lib/backend";
 import { cn } from "@/lib/utils";
 import { Icons } from "@/lib/ui/icons";
+import { IS_MAC } from "@/lib/hotkeys";
 
 /* Windows' own caption button: a wide, short target with no radius, reaching
    the full height of the bar so the pointer catches it at the screen corner. */
@@ -25,8 +26,9 @@ export function WindowControls({ className }: { className?: string }) {
   const [maximized, setMaximized] = useState(false);
 
   // Houdini's help pane owns its own frame. Drawing these there gives the
-  // reader three buttons that do nothing.
-  const shown = appWindow() !== null;
+  // reader three buttons that do nothing. On macOS the system draws its own
+  // traffic lights over the bar (`tauri.macos.conf.json`).
+  const shown = appWindow() !== null && !IS_MAC;
 
   // The window can be maximized without these buttons — a double-click on the
   // bar, the Win+Up shortcut, a snap gesture — so the glyph follows the
